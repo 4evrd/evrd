@@ -18,7 +18,9 @@ This is a monorepo with three parts:
 `cmd/evrd` and `cmd/evrctl` are thin entrypoints; the real logic lives in
 `internal/`:
 
-- `store` — SQLite persistence (users, networks, buffered history)
+- `store` — persistence (users, networks, buffered history) via GORM behind a
+  `Store` interface. SQLite by default (pure-Go, no CGO); switch to Postgres by
+  changing the DSN — `db postgres://user:pass@host/evrd` — no code change.
 - `irc` — protocol message parse/encode
 - `upstream` — one live IRC connection per network: dial, register, autojoin,
   reconnect, parse + persist + fan out messages, send

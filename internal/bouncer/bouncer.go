@@ -13,7 +13,7 @@ import (
 )
 
 type Bouncer struct {
-	store *store.Store
+	store store.Store
 	log   *slog.Logger
 
 	mu    sync.Mutex
@@ -26,12 +26,12 @@ type entry struct {
 	cancel context.CancelFunc
 }
 
-func New(st *store.Store, log *slog.Logger) *Bouncer {
+func New(st store.Store, log *slog.Logger) *Bouncer {
 	return &Bouncer{store: st, log: log, conns: map[int64]*entry{}}
 }
 
 // Store exposes the persistence layer to callers (the API).
-func (b *Bouncer) Store() *store.Store { return b.store }
+func (b *Bouncer) Store() store.Store { return b.store }
 
 // Start records the governing context and auto-connects enabled networks.
 func (b *Bouncer) Start(ctx context.Context) error {
