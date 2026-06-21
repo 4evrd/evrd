@@ -1,15 +1,19 @@
 import { writable } from 'svelte/store'
-import { api } from '../api/mock.js'
+import { api } from '../api/client.js'
 
-// networksBloc — owns the user's IRC networks (the "servers" you add).
+// networksBloc — owns the user's IRC networks (the "servers" you add), backed
+// by the real evrd API.
 export function createNetworksBloc() {
   const networks = writable([])
   const busy = writable(false)
 
   async function load() {
     busy.set(true)
-    networks.set(await api.listNetworks())
-    busy.set(false)
+    try {
+      networks.set((await api.listNetworks()) ?? [])
+    } finally {
+      busy.set(false)
+    }
   }
 
   async function add(net) {
@@ -24,9 +28,9 @@ export function createNetworksBloc() {
   }
 
   async function toggle(net) {
-    const next = net.status === 'connected' ? 'disconnected' : 'connected'
-    const updated = await api.setStatus(net.id, next)
-    networks.update((l) => l.map((n) => (n.id === net.id ? updated : n)))
+    if (net.status === 'disconnected') await api.connect(net.id)
+    else await api.disconnect(net.id)
+    await load()
   }
 
   return { networks, busy, load, add, remove, toggle }

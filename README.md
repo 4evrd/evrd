@@ -16,7 +16,14 @@ This is a monorepo with three parts:
 | **spa**   | `web/`              | The Svelte web client (Vite + Svelte 5 + Tailwind).             |
 
 `cmd/evrd` and `cmd/evrctl` are thin entrypoints; the real logic lives in
-`internal/` (`config`, `irc`, `bouncer`, `server`) so both binaries share it.
+`internal/`:
+
+- `store` — SQLite persistence (users, networks, buffered history)
+- `irc` — protocol message parse/encode
+- `upstream` — one live IRC connection per network: dial, register, autojoin,
+  reconnect, parse + persist + fan out messages, send
+- `bouncer` — owns the store and the set of running upstream connections
+- `api` — HTTP + WebSocket admin/client API consumed by the web app
 
 ## Develop
 
@@ -30,8 +37,18 @@ make down        # stop it
 ```
 
 - web client → http://localhost:5173
-- evrd WebSocket → ws://localhost:8097
-- evrd IRC → localhost:6697
+- evrd admin/client API → http://localhost:8098
+- evrd IRC (native client attach, WIP) → localhost:6697
+
+Create an account, then sign in on the web client and add a network:
+
+```sh
+docker compose -f docker-compose.dev.yml exec evrd \
+  go run ./cmd/evrctl -db sqlite:/var/lib/evrd/evrd.db user add <name> <password>
+```
+
+In the dev stack, point a network at the internal upstream: host `ircd`, port
+`6667`, TLS off.
 
 The upstream `ircd` ([ergo](https://github.com/ergochat/ergo), a stand-in for the
 production `ngircd-27`) is internal-only — `evrd` reaches it as `ircd:6667` over
@@ -55,6 +72,10 @@ cd web && pnpm dev
 
 ## Status
 
-Early scaffold. The daemon, CLI, and web client build and run; the bouncer
-engine (upstream dialing, buffers, client attach, persistence) is being filled
-in on top of this skeleton.
+Working MVP. You can create an account, add a network, and it really connects:
+the daemon dials the upstream, registers, autojoins channels, stays connected
+(reconnecting with backoff), buffers history, and the web console streams live
+messages both ways.
+
+Next: native IRC-client attach (so Hexchat/irssi can connect to evrd on 6697),
+SASL, and per-channel presence/nick lists.

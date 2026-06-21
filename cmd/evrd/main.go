@@ -10,8 +10,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"code.ircforever.org/ircforever/evrd/internal/api"
 	"code.ircforever.org/ircforever/evrd/internal/bouncer"
 	"code.ircforever.org/ircforever/evrd/internal/config"
+	"code.ircforever.org/ircforever/evrd/internal/store"
 	"code.ircforever.org/ircforever/evrd/internal/version"
 )
 
@@ -37,12 +39,25 @@ func main() {
 		cfg = loaded
 	}
 
+	st, err := store.Open(cfg.DB)
+	if err != nil {
+		log.Error("open store", "dsn", cfg.DB, "err", err)
+		os.Exit(1)
+	}
+	defer st.Close()
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	b := bouncer.New(cfg, log)
-	if err := b.Run(ctx); err != nil && err != context.Canceled {
-		log.Error("evrd exited with error", "err", err)
+	b := bouncer.New(st, log)
+	if err := b.Start(ctx); err != nil {
+		log.Error("start bouncer", "err", err)
+		os.Exit(1)
+	}
+
+	srv := api.NewServer(b, log)
+	if err := srv.ListenAndServe(ctx, cfg.API); err != nil {
+		log.Error("api server", "err", err)
 		os.Exit(1)
 	}
 }

@@ -1,12 +1,11 @@
 # syntax=docker/dockerfile:1
 
 # Builds the evrd daemon and the evrctl CLI.
-FROM golang:1.23-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 
-# Dependencies first for layer caching. (No go.sum yet — stdlib only. Add a
-# `COPY go.sum ./` line here once external modules are introduced.)
-COPY go.mod ./
+# Dependencies first for layer caching.
+COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .

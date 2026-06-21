@@ -24,11 +24,14 @@ services:
     ports:
       - "6697:6697" # IRC
       - "8097:8097" # WebSocket
+      - "8098:8098" # admin/client API (HTTP + WS)
 
   web:
     image: node:22-alpine
     working_dir: /app
     command: sh -c "corepack enable && pnpm install && pnpm dev --host --port 5173"
+    environment:
+      VITE_API_URL: http://localhost:8098
     volumes:
       - ./web:/app
       - web-node-modules:/app/node_modules

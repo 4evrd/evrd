@@ -1,12 +1,17 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import NetworkForm from './NetworkForm.svelte'
 
-  let { networks: bloc } = $props()
+  let { networks: bloc, onopen } = $props()
   const { networks } = bloc
   let adding = $state(false)
+  let timer
 
-  onMount(() => bloc.load())
+  onMount(() => {
+    bloc.load()
+    timer = setInterval(() => bloc.load(), 4000) // keep statuses fresh
+  })
+  onDestroy(() => clearInterval(timer))
 
   async function add(net) {
     await bloc.add(net)
@@ -35,29 +40,35 @@
     <div
       class="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3"
     >
-      <div>
+      <button class="min-w-0 text-left" onclick={() => onopen(net)}>
         <div class="flex items-center gap-2">
           <span class="font-medium">{net.name}</span>
           <span
             class="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide {net.status ===
             'connected'
               ? 'bg-accent/15 text-accent'
-              : 'bg-border text-muted'}"
+              : net.status === 'connecting'
+                ? 'bg-amber-500/15 text-amber-400'
+                : 'bg-border text-muted'}"
           >
             {net.status}
           </span>
         </div>
-        <div class="text-muted mt-0.5 text-xs">
+        <div class="text-muted mt-0.5 truncate text-xs">
           {net.host}:{net.port}{net.tls ? ' · TLS' : ''} · {net.nick}
           {#if net.channels?.length}· {net.channels.join(' ')}{/if}
         </div>
-      </div>
-      <div class="flex items-center gap-2">
+      </button>
+      <div class="flex shrink-0 items-center gap-2">
+        <button
+          class="rounded-md bg-accent/90 px-2 py-1 text-xs font-medium text-bg"
+          onclick={() => onopen(net)}>Open</button
+        >
         <button
           class="rounded-md border border-border px-2 py-1 text-xs hover:border-accent"
           onclick={() => bloc.toggle(net)}
         >
-          {net.status === 'connected' ? 'Disconnect' : 'Connect'}
+          {net.status === 'disconnected' ? 'Connect' : 'Disconnect'}
         </button>
         <button
           class="rounded-md border border-border px-2 py-1 text-xs text-red-400 hover:border-red-400"

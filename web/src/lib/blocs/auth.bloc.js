@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store'
-import { api } from '../api/mock.js'
+import { api } from '../api/client.js'
 
 // authBloc — owns the signed-in session. State out via stores, intent in via
 // methods.

@@ -14,6 +14,8 @@ type Config struct {
 	Listen []string
 	// DB is the storage DSN, e.g. "sqlite:/var/lib/evrd/evrd.db".
 	DB string
+	// API is the HTTP/WebSocket admin API listen address.
+	API string
 }
 
 // Default returns a config with sensible defaults.
@@ -21,6 +23,7 @@ func Default() *Config {
 	return &Config{
 		Listen: []string{"irc+insecure://127.0.0.1:6667"},
 		DB:     "sqlite:evrd.db",
+		API:    ":8098",
 	}
 }
 
@@ -49,6 +52,8 @@ func Load(path string) (*Config, error) {
 			cfg.Listen = append(cfg.Listen, val)
 		case "db":
 			cfg.DB = val
+		case "api":
+			cfg.API = val
 		}
 	}
 	if len(cfg.Listen) == 0 {

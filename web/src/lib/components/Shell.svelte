@@ -1,8 +1,10 @@
 <script>
   import Networks from './Networks.svelte'
+  import Console from './Console.svelte'
 
   let { auth, networks } = $props()
   const { session } = auth
+  let openNet = $state(null)
 </script>
 
 <div class="min-h-dvh">
@@ -22,7 +24,11 @@
     </div>
   </header>
 
-  <main class="mx-auto max-w-3xl p-6">
-    <Networks {networks} />
+  <main class="mx-auto max-w-4xl p-6">
+    {#if openNet}
+      <Console network={openNet} onback={() => (openNet = null)} />
+    {:else}
+      <Networks {networks} onopen={(n) => (openNet = n)} />
+    {/if}
   </main>
 </div>
