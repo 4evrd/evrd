@@ -38,6 +38,7 @@
 <div class="mt-4 space-y-2">
   {#each $networks as net (net.id)}
     <div
+      data-testid="network-row"
       class="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3"
     >
       <button class="min-w-0 text-left" onclick={() => onopen(net)}>

@@ -1,7 +1,7 @@
 VERSION ?= dev
 LDFLAGS := -s -w -X code.ircforever.org/ircforever/evrd/internal/version.Version=$(VERSION)
 
-.PHONY: all build core cli web vet test clean up down
+.PHONY: all build core cli web vet test clean up down up-prod down-prod e2e e2e-setup
 
 all: build web
 
@@ -36,6 +36,16 @@ up-prod:
 
 down-prod:
 	docker compose down
+
+# One-time: install web deps + the Playwright browser.
+e2e-setup:
+	cd web && pnpm install && pnpm exec playwright install chromium
+
+# End-to-end tests (Playwright): brings up the dev stack, then drives the UI
+# against the real daemon. Run `make e2e-setup` once first.
+e2e:
+	docker compose -f docker-compose.dev.yml up -d --build
+	cd web && pnpm exec playwright test
 
 clean:
 	rm -rf bin web/dist

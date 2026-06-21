@@ -61,6 +61,16 @@ To run the built images instead (what CI publishes; web served by nginx on
 make up-prod
 ```
 
+### End-to-end tests
+
+Playwright specs in `web/e2e` drive the UI against the real daemon (login, add
++ connect a network, send a message in the console):
+
+```sh
+make e2e-setup   # one-time: install web deps + the Playwright browser
+make e2e         # brings up the dev stack and runs the specs
+```
+
 ### Without Docker
 
 ```sh

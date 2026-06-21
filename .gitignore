@@ -15,3 +15,8 @@ web/dist/
 
 # air / dev build output
 tmp/
+
+# playwright e2e
+web/test-results/
+web/playwright-report/
+web/.playwright/
