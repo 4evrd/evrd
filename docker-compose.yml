@@ -1,0 +1,37 @@
+name: evrd
+
+services:
+  # Local upstream IRC server. Stands in for the production ngircd-27 so evrd
+  # has a real network to bounce to during development.
+  ircd:
+    image: ghcr.io/ergochat/ergo:stable
+    ports:
+      - "6667:6667"
+
+  # The bouncer core.
+  evrd:
+    build:
+      context: .
+      args:
+        VERSION: dev
+    depends_on:
+      - ircd
+    command: ["-config", "/etc/evrd/evrd.conf"]
+    volumes:
+      - ./deploy/evrd.dev.conf:/etc/evrd/evrd.conf:ro
+      - evrd-data:/var/lib/evrd
+    ports:
+      - "6697:6697" # IRC — clients attach here
+      - "8097:8097" # WebSocket — the web client attaches here
+
+  # The Svelte web client.
+  web:
+    build:
+      context: ./web
+    depends_on:
+      - evrd
+    ports:
+      - "8080:80"
+
+volumes:
+  evrd-data:

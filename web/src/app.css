@@ -1,0 +1,25 @@
+@import 'tailwindcss';
+
+/* evrd shares the IRCForever palette so the web client feels part of the family. */
+@theme {
+  --color-bg: oklch(15% 0.014 252);
+  --color-surface: oklch(19% 0.016 252);
+  --color-border: oklch(28% 0.018 252);
+  --color-fg: oklch(96% 0.004 252);
+  --color-muted: oklch(67% 0.013 252);
+  --color-accent: oklch(83% 0.16 162);
+
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+}

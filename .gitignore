@@ -1,0 +1,13 @@
+# Go build output
+/bin/
+
+# Databases / local state
+*.db
+
+# Node / web build
+node_modules/
+web/dist/
+
+# Misc
+.DS_Store
+.env
