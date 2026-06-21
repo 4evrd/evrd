@@ -1,0 +1,16 @@
+# air config for live-reloading the evrd daemon in development.
+# Rebuilds and restarts the binary whenever a .go file changes.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -buildvcs=false -o ./tmp/evrd ./cmd/evrd"
+  bin = "tmp/evrd"
+  args_bin = ["-config", "deploy/evrd.dev.conf"]
+  include_ext = ["go"]
+  exclude_dir = ["web", "tmp", "bin", ".git", "node_modules"]
+  delay = 500
+  stop_on_error = true
+
+[misc]
+  clean_on_exit = true

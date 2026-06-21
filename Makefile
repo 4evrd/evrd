@@ -22,11 +22,19 @@ test:
 web:
 	cd web && pnpm install && pnpm build
 
-# Whole stack via Docker Compose: upstream ircd + evrd + web client.
+# Dev stack with hot reload (air for the daemon, vite HMR for the web client).
+# web → http://localhost:5173 · evrd ws → ws://localhost:8097 · irc → :6697
 up:
-	docker compose up --build
+	docker compose -f docker-compose.dev.yml up --build
 
 down:
+	docker compose -f docker-compose.dev.yml down
+
+# Built-image stack (the images CI publishes; nginx-served web on :8080).
+up-prod:
+	docker compose up --build
+
+down-prod:
 	docker compose down
 
 clean:

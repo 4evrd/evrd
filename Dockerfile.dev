@@ -1,0 +1,11 @@
+# syntax=docker/dockerfile:1
+
+# Development image for the daemon: the Go toolchain plus air for live rebuilds.
+# Source is bind-mounted at runtime (see docker-compose.dev.yml) — nothing is
+# copied in, so edits on the host trigger a rebuild + restart inside.
+FROM golang:1.23-alpine
+RUN apk add --no-cache git
+RUN go install github.com/air-verse/air@v1.61.7
+WORKDIR /src
+EXPOSE 6697 8097
+CMD ["air", "-c", "dev/air.toml"]

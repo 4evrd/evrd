@@ -5,8 +5,8 @@ services:
   # has a real network to bounce to during development.
   ircd:
     image: ghcr.io/ergochat/ergo:stable
-    ports:
-      - "6667:6667"
+    # Internal upstream only — evrd reaches it as ircd:6667 over the compose
+    # network, so no host port (avoids collisions with other local ircds).
 
   # The bouncer core.
   evrd:

@@ -21,19 +21,28 @@ This is a monorepo with three parts:
 ## Develop
 
 The whole stack — an upstream IRC server, `evrd`, and the web client — runs with
-Docker Compose:
+Docker Compose, with **hot reload** on both services (air rebuilds the daemon on
+`.go` changes; vite HMR reloads the web client on source changes):
 
 ```sh
-make up          # docker compose up --build
+make up          # dev stack with hot reload
+make down        # stop it
 ```
 
-- web client → http://localhost:8080
+- web client → http://localhost:5173
 - evrd WebSocket → ws://localhost:8097
 - evrd IRC → localhost:6697
-- upstream ircd → localhost:6667
 
-The upstream uses [ergo](https://github.com/ergochat/ergo) locally as a stand-in
-for the production `ngircd-27`.
+The upstream `ircd` ([ergo](https://github.com/ergochat/ergo), a stand-in for the
+production `ngircd-27`) is internal-only — `evrd` reaches it as `ircd:6667` over
+the compose network, so it never collides with a host port.
+
+To run the built images instead (what CI publishes; web served by nginx on
+:8080):
+
+```sh
+make up-prod
+```
 
 ### Without Docker
 

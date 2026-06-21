@@ -1,0 +1,42 @@
+name: evrd-dev
+
+# Hot-reload development stack (the default `make up`):
+#   - evrd: air rebuilds + restarts the Go binary on .go changes
+#   - web:  vite dev server with HMR on source changes
+# Both bind-mount the source; named volumes hold caches/node_modules so host
+# files never clobber what's installed inside the containers.
+
+services:
+  ircd:
+    image: ghcr.io/ergochat/ergo:stable # internal upstream (ircd:6667)
+
+  evrd:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    depends_on:
+      - ircd
+    volumes:
+      - .:/src
+      - go-build-cache:/root/.cache/go-build
+      - go-mod-cache:/go/pkg/mod
+      - evrd-data:/var/lib/evrd
+    ports:
+      - "6697:6697" # IRC
+      - "8097:8097" # WebSocket
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "corepack enable && pnpm install && pnpm dev --host --port 5173"
+    volumes:
+      - ./web:/app
+      - web-node-modules:/app/node_modules
+    ports:
+      - "5173:5173"
+
+volumes:
+  go-build-cache:
+  go-mod-cache:
+  evrd-data:
+  web-node-modules:

@@ -12,3 +12,6 @@ web/dist/
 .DS_Store
 .env
 .pnpm-store/
+
+# air / dev build output
+tmp/
