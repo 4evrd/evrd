@@ -61,13 +61,19 @@ Point any IRC client at the bouncer and authenticate with a **server password**
 of `<user>:<password>` (or `<user>/<network>:<password>` to pick a network):
 
 ```
-server:   localhost   port: 6697   (TLS off in dev)
+server:   localhost
+port:     6697 (TLS, self-signed in dev — enable "accept invalid cert")
+          6667 (plaintext)
 password: bncuser:bncpass
 ```
 
 On connect you get the welcome burst, your channels (with names/topic), backlog
-replay, and live traffic — and anything you send shows up in the web console
-too, since both share one upstream connection.
+replay, and live traffic. Anything you send shows up in the web console and on
+your other attached clients too — all sessions share one upstream connection.
+
+For a real TLS cert, set `tls_cert` / `tls_key` in the config. Upstream networks
+authenticate with **SASL PLAIN** when the network has a password and the server
+supports it (falling back to a server `PASS`).
 
 The upstream `ircd` ([ergo](https://github.com/ergochat/ergo), a stand-in for the
 production `ngircd-27`) is internal-only — `evrd` reaches it as `ircd:6667` over
@@ -106,8 +112,9 @@ daemon dials the upstream, registers, autojoins, stays connected (reconnecting
 with backoff), and buffers history. Two ways to use it, sharing one upstream:
 
 - **Web client** — login, manage networks, live console.
-- **Native IRC client** — attach on 6697 with a server password; get backlog +
-  a full-fidelity live feed (names, joins, topics, everyone's messages).
+- **Native IRC client** — attach on 6697 (TLS) or 6667 with a server password;
+  get backlog + a full-fidelity live feed (names, joins, topics, everyone's
+  messages). Multiple clients + the web stay in sync over one upstream.
 
-Next: TLS for the IRC listener (cert config), SASL to upstreams, and
-multi-client presence niceties.
+Upstreams authenticate via SASL PLAIN (or server PASS). The IRC listener does
+TLS (self-signed in dev, or your own cert).

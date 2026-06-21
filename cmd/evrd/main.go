@@ -57,7 +57,7 @@ func main() {
 	}
 
 	// Downstream IRC listener for native clients (Hexchat, irssi, …).
-	go client.NewServer(b, log).ListenAndServe(ctx, cfg.Listen)
+	go client.NewServer(b, log, cfg.TLSCert, cfg.TLSKey).ListenAndServe(ctx, cfg.Listen)
 
 	srv := api.NewServer(b, log)
 	if err := srv.ListenAndServe(ctx, cfg.API); err != nil {

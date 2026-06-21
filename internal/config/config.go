@@ -16,6 +16,10 @@ type Config struct {
 	DB string
 	// API is the HTTP/WebSocket admin API listen address.
 	API string
+	// TLSCert and TLSKey are the cert/key for ircs:// listeners. If empty, a
+	// self-signed cert is generated at startup (fine for dev).
+	TLSCert string
+	TLSKey  string
 }
 
 // Default returns a config with sensible defaults.
@@ -54,6 +58,10 @@ func Load(path string) (*Config, error) {
 			cfg.DB = val
 		case "api":
 			cfg.API = val
+		case "tls_cert":
+			cfg.TLSCert = val
+		case "tls_key":
+			cfg.TLSKey = val
 		}
 	}
 	if len(cfg.Listen) == 0 {

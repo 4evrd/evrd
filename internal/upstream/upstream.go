@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log/slog"
@@ -111,10 +112,9 @@ func (c *Conn) dialAndServe(ctx context.Context) error {
 	c.nick = c.net.Nick
 	c.mu.Unlock()
 
-	// Registration.
-	if c.net.Password != "" {
-		c.send("PASS " + c.net.Password)
-	}
+	// Registration. CAP LS holds registration open so we can negotiate SASL;
+	// CAP END (sent once auth resolves, see handleCap) completes it.
+	c.send("CAP LS 302")
 	c.send("NICK " + c.net.Nick)
 	user := orElse(c.net.Username, c.net.Nick)
 	real := orElse(c.net.Realname, c.net.Nick)
@@ -138,6 +138,17 @@ func (c *Conn) handle(m irc.Message) {
 	switch m.Command {
 	case "PING":
 		c.send("PONG :" + lastParam(m))
+	case "CAP":
+		c.handleCap(m)
+	case "AUTHENTICATE":
+		if len(m.Params) > 0 && m.Params[0] == "+" {
+			c.sendSASL()
+		}
+	case "903": // RPL_SASLSUCCESS
+		c.send("CAP END")
+	case "902", "904", "905", "906", "908": // SASL failures
+		c.log.Warn("SASL failed, continuing unauthenticated", "network", c.net.Name)
+		c.send("CAP END")
 	case "001": // RPL_WELCOME — registration complete
 		c.setStatus(StatusConnected)
 		for _, ch := range c.net.Channels {
@@ -157,6 +168,50 @@ func (c *Conn) handle(m irc.Message) {
 	case "PRIVMSG", "NOTICE":
 		c.handleMessage(m)
 	}
+}
+
+// handleCap drives SASL negotiation. With a password and server SASL support we
+// authenticate via SASL PLAIN; otherwise we fall back to a server PASS. Either
+// way we finish with CAP END to complete registration.
+func (c *Conn) handleCap(m irc.Message) {
+	if len(m.Params) < 2 {
+		return
+	}
+	sub := strings.ToUpper(m.Params[1])
+	caps := ""
+	if len(m.Params) > 2 {
+		caps = m.Params[2]
+	}
+	switch sub {
+	case "LS":
+		if c.net.Password != "" && strings.Contains(caps, "sasl") {
+			c.send("CAP REQ :sasl")
+		} else {
+			if c.net.Password != "" {
+				c.send("PASS " + c.net.Password)
+			}
+			c.send("CAP END")
+		}
+	case "ACK":
+		if strings.Contains(caps, "sasl") {
+			c.send("AUTHENTICATE PLAIN")
+		} else {
+			c.send("CAP END")
+		}
+	case "NAK":
+		if c.net.Password != "" {
+			c.send("PASS " + c.net.Password)
+		}
+		c.send("CAP END")
+	}
+}
+
+// sendSASL responds to an AUTHENTICATE + challenge with a SASL PLAIN payload:
+// base64("\0" + authcid + "\0" + password).
+func (c *Conn) sendSASL() {
+	authcid := orElse(c.net.Username, c.net.Nick)
+	payload := "\x00" + authcid + "\x00" + c.net.Password
+	c.send("AUTHENTICATE " + base64.StdEncoding.EncodeToString([]byte(payload)))
 }
 
 func (c *Conn) handleMessage(m irc.Message) {
@@ -194,7 +249,11 @@ func (c *Conn) handleMessage(m irc.Message) {
 
 // SendMessage sends a PRIVMSG to target and echoes it locally so the sender
 // sees their own line.
-func (c *Conn) SendMessage(target, text string) {
+func (c *Conn) SendMessage(target, text string) { c.SendMessageFrom("", target, text) }
+
+// SendMessageFrom is SendMessage, tagging the echo with the originating session
+// id so other sessions can show it live while the originator avoids a double.
+func (c *Conn) SendMessageFrom(origin, target, text string) {
 	c.send("PRIVMSG " + target + " :" + text)
 	c.mu.Lock()
 	nick := c.nick
@@ -206,6 +265,7 @@ func (c *Conn) SendMessage(target, text string) {
 		Kind:      "message",
 		Text:      text,
 		Time:      time.Now(),
+		Origin:    origin,
 	})
 }
 

@@ -47,6 +47,7 @@ type Message struct {
 	Kind      string // message | notice | action | system
 	Text      string
 	Time      time.Time
+	Origin    string `gorm:"-"` // transient: which session sent it (not persisted)
 }
 
 // Store is the persistence contract. Implementations must be safe for

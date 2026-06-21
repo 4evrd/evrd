@@ -9,9 +9,11 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"log/slog"
 	"net"
 	"strings"
+	"sync"
 
 	"code.ircforever.org/ircforever/evrd/internal/bouncer"
 )
@@ -19,12 +21,18 @@ import (
 const serverName = "evrd"
 
 type Server struct {
-	b   *bouncer.Bouncer
-	log *slog.Logger
+	b       *bouncer.Bouncer
+	log     *slog.Logger
+	tlsCert string
+	tlsKey  string
+
+	tlsOnce sync.Once
+	tlsConf *tls.Config
+	tlsErr  error
 }
 
-func NewServer(b *bouncer.Bouncer, log *slog.Logger) *Server {
-	return &Server{b: b, log: log}
+func NewServer(b *bouncer.Bouncer, log *slog.Logger, tlsCert, tlsKey string) *Server {
+	return &Server{b: b, log: log, tlsCert: tlsCert, tlsKey: tlsKey}
 }
 
 // ListenAndServe binds each IRC listener URL and serves until ctx is cancelled.
@@ -39,19 +47,26 @@ func (s *Server) ListenAndServe(ctx context.Context, listeners []string) error {
 
 func (s *Server) listen(ctx context.Context, url string) {
 	scheme, addr := parseListen(url)
+
+	var ln net.Listener
+	var err error
 	switch scheme {
 	case "irc", "irc+insecure", "tcp":
+		ln, err = net.Listen("tcp", addr)
+	case "ircs", "tls":
+		var conf *tls.Config
+		if conf, err = s.tlsConfig(); err == nil {
+			ln, err = tls.Listen("tcp", addr, conf)
+		}
 	default:
 		s.log.Warn("skipping unsupported IRC listener", "scheme", scheme, "addr", addr)
 		return
 	}
-
-	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		s.log.Error("irc listen", "addr", addr, "err", err)
+		s.log.Error("irc listen", "addr", addr, "scheme", scheme, "err", err)
 		return
 	}
-	s.log.Info("irc listener", "addr", addr)
+	s.log.Info("irc listener", "addr", addr, "scheme", scheme)
 	go func() {
 		<-ctx.Done()
 		ln.Close()

@@ -5,8 +5,10 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -15,7 +17,10 @@ import (
 	"code.ircforever.org/ircforever/evrd/internal/upstream"
 )
 
+var sessionSeq atomic.Int64
+
 type session struct {
+	id   string
 	srv  *Server
 	conn net.Conn
 	r    *bufio.Scanner
@@ -38,6 +43,7 @@ type session struct {
 
 func newSession(srv *Server, conn net.Conn) *session {
 	return &session{
+		id:   strconv.FormatInt(sessionSeq.Add(1), 10),
 		srv:  srv,
 		conn: conn,
 		r:    bufio.NewScanner(conn),
@@ -200,8 +206,10 @@ func (se *session) replayBacklog() {
 // bridge relays the upstream's raw feed to the client and the client's commands
 // back to the upstream, until either side closes.
 func (se *session) bridge(ctx context.Context) {
-	raw, unsub := se.up.SubscribeRaw()
-	defer unsub()
+	raw, unsubRaw := se.up.SubscribeRaw()
+	defer unsubRaw()
+	msgs, unsubMsg := se.up.Subscribe()
+	defer unsubMsg()
 
 	done := make(chan struct{})
 	go func() {
@@ -217,10 +225,21 @@ func (se *session) bridge(ctx context.Context) {
 			if !ok {
 				return
 			}
+			// Incoming traffic + channel state come verbatim from the server.
 			if cmd := command(line); cmd == "PING" || cmd == "PONG" {
 				continue
 			}
 			se.send(line)
+		case m, ok := <-msgs:
+			if !ok {
+				return
+			}
+			// Our own outgoing only — incoming arrives via the raw feed. Skip
+			// what this session sent (already echoed/displayed); forward sends
+			// from other sessions (web, another client) so we stay in sync.
+			if m.Sender == se.unick && m.Origin != se.id {
+				se.send(se.format(m))
+			}
 		case <-done:
 			return
 		case <-ctx.Done():
@@ -238,7 +257,7 @@ func (se *session) handleClient(m irc.Message) {
 	case "PRIVMSG":
 		if len(m.Params) >= 2 {
 			target, text := m.Params[0], m.Params[len(m.Params)-1]
-			se.up.SendMessage(target, text)
+			se.up.SendMessageFrom(se.id, target, text)
 			// The server won't echo our own line back over the raw feed, so
 			// honor echo-message ourselves; plain clients display it locally.
 			if se.caps["echo-message"] {
