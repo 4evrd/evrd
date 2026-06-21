@@ -118,6 +118,16 @@ func (s *gormStore) AddMessage(m Message) error {
 	return s.db.Create(&m).Error
 }
 
+// Buffers returns the distinct targets (channels and PM nicks) that have
+// messages for a network.
+func (s *gormStore) Buffers(networkID int64) ([]string, error) {
+	var targets []string
+	err := s.db.Model(&Message{}).
+		Where("network_id = ?", networkID).
+		Distinct().Pluck("target", &targets).Error
+	return targets, err
+}
+
 func (s *gormStore) RecentMessages(networkID int64, target string, limit int) ([]Message, error) {
 	var msgs []Message
 	err := s.db.Where("network_id = ? AND target = ?", networkID, target).

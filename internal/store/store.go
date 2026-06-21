@@ -69,6 +69,7 @@ type Store interface {
 	// messages
 	AddMessage(m Message) error
 	RecentMessages(networkID int64, target string, limit int) ([]Message, error)
+	Buffers(networkID int64) ([]string, error)
 
 	Close() error
 }

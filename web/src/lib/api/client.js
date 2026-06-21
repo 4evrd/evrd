@@ -61,6 +61,9 @@ export const api = {
   messages(id, target) {
     return req('GET', `/api/networks/${id}/messages?target=${encodeURIComponent(target)}`)
   },
+  buffers(id) {
+    return req('GET', `/api/networks/${id}/buffers`)
+  },
 
   // openStream connects the live message WebSocket for a network. onMessage is
   // called with each incoming message; the returned handle can send + close.

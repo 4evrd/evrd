@@ -62,6 +62,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("POST /api/networks/{id}/connect", s.auth(s.handleConnect))
 	mux.HandleFunc("POST /api/networks/{id}/disconnect", s.auth(s.handleDisconnect))
 	mux.HandleFunc("GET /api/networks/{id}/messages", s.auth(s.handleMessages))
+	mux.HandleFunc("GET /api/networks/{id}/buffers", s.auth(s.handleBuffers))
 	mux.HandleFunc("GET /api/networks/{id}/stream", s.handleStream) // auth via ?token
 	return cors(mux)
 }
@@ -205,6 +206,22 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		out = append(out, messageDTO(m))
 	}
 	writeJSON(w, out)
+}
+
+func (s *Server) handleBuffers(w http.ResponseWriter, r *http.Request) {
+	id := pathID(r)
+	if _, ok := s.ownedNetwork(w, r, id); !ok {
+		return
+	}
+	targets, err := s.b.Store().Buffers(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if targets == nil {
+		targets = []string{}
+	}
+	writeJSON(w, targets)
 }
 
 // handleStream upgrades to a WebSocket: it pushes live messages and accepts

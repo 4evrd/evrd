@@ -37,11 +37,21 @@
     if (m.target === target) scrollDown()
   }
 
-  function send() {
+  async function send() {
     const t = text.trim()
     if (!t) return
-    stream?.send(target, t)
     text = ''
+
+    // /msg <nick> <text> and /query <nick> open a PM buffer.
+    const pm = t.match(/^\/(msg|query)\s+(\S+)\s*(.*)$/i)
+    if (pm) {
+      const [, , nick, body] = pm
+      if (body) stream?.send(nick, body)
+      await select(nick)
+      return
+    }
+
+    stream?.send(target, t)
   }
 
   function onKey(e) {
@@ -65,6 +75,12 @@
       }
     }
     for (const ch of network.channels || []) ensure(ch)
+    // include existing PM/channel buffers from history
+    try {
+      for (const b of (await api.buffers(network.id)) || []) ensure(b)
+    } catch {
+      // ignore — channels still show
+    }
     await loadHistory(target)
     stream = api.openStream(network.id, onMsg)
   })
