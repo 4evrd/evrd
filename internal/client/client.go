@@ -1,0 +1,73 @@
+// Package client is evrd's downstream IRC listener: it accepts native IRC
+// clients (Hexchat, irssi, WeeChat, …), authenticates them against bouncer
+// accounts, attaches them to one of the user's networks, replays backlog, and
+// bridges live traffic to/from the upstream connection.
+//
+// Auth uses the server password (PASS): "user:password", or
+// "user/network:password" to pick a specific network.
+package client
+
+import (
+	"context"
+	"log/slog"
+	"net"
+	"strings"
+
+	"code.ircforever.org/ircforever/evrd/internal/bouncer"
+)
+
+const serverName = "evrd"
+
+type Server struct {
+	b   *bouncer.Bouncer
+	log *slog.Logger
+}
+
+func NewServer(b *bouncer.Bouncer, log *slog.Logger) *Server {
+	return &Server{b: b, log: log}
+}
+
+// ListenAndServe binds each IRC listener URL and serves until ctx is cancelled.
+// Non-IRC schemes (e.g. ws+insecure) are skipped.
+func (s *Server) ListenAndServe(ctx context.Context, listeners []string) error {
+	for _, l := range listeners {
+		go s.listen(ctx, l)
+	}
+	<-ctx.Done()
+	return nil
+}
+
+func (s *Server) listen(ctx context.Context, url string) {
+	scheme, addr := parseListen(url)
+	switch scheme {
+	case "irc", "irc+insecure", "tcp":
+	default:
+		s.log.Warn("skipping unsupported IRC listener", "scheme", scheme, "addr", addr)
+		return
+	}
+
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		s.log.Error("irc listen", "addr", addr, "err", err)
+		return
+	}
+	s.log.Info("irc listener", "addr", addr)
+	go func() {
+		<-ctx.Done()
+		ln.Close()
+	}()
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		go newSession(s, conn).serve(ctx)
+	}
+}
+
+func parseListen(u string) (scheme, addr string) {
+	if i := strings.Index(u, "://"); i >= 0 {
+		return u[:i], u[i+3:]
+	}
+	return "tcp", u
+}

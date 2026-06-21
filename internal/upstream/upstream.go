@@ -41,6 +41,7 @@ type Conn struct {
 	nick     string
 	channels map[string]bool
 	subs     map[chan store.Message]struct{}
+	rawSubs  map[chan string]struct{}
 }
 
 // New creates a connection for a network. persist is called for every message
@@ -54,6 +55,7 @@ func New(n store.Network, log *slog.Logger, persist func(store.Message)) *Conn {
 		nick:     n.Nick,
 		channels: map[string]bool{},
 		subs:     map[chan store.Message]struct{}{},
+		rawSubs:  map[chan string]struct{}{},
 	}
 }
 
@@ -121,7 +123,9 @@ func (c *Conn) dialAndServe(ctx context.Context) error {
 	sc := bufio.NewScanner(conn)
 	sc.Buffer(make([]byte, 0, 4096), 1<<20)
 	for sc.Scan() {
-		c.handle(irc.Parse(sc.Text()))
+		line := sc.Text()
+		c.handle(irc.Parse(line))
+		c.broadcastRaw(line) // full-fidelity feed for attached IRC clients
 	}
 
 	c.mu.Lock()
@@ -235,6 +239,38 @@ func (c *Conn) Subscribe() (<-chan store.Message, func()) {
 	}
 }
 
+// SubscribeRaw returns a channel of raw server lines (verbatim) and an
+// unsubscribe function. Used by attached IRC clients for a full-fidelity feed.
+func (c *Conn) SubscribeRaw() (<-chan string, func()) {
+	ch := make(chan string, 256)
+	c.mu.Lock()
+	c.rawSubs[ch] = struct{}{}
+	c.mu.Unlock()
+	return ch, func() {
+		c.mu.Lock()
+		if _, ok := c.rawSubs[ch]; ok {
+			delete(c.rawSubs, ch)
+			close(ch)
+		}
+		c.mu.Unlock()
+	}
+}
+
+func (c *Conn) broadcastRaw(line string) {
+	c.mu.Lock()
+	for ch := range c.rawSubs {
+		select {
+		case ch <- line:
+		default:
+		}
+	}
+	c.mu.Unlock()
+}
+
+// SendRaw writes a raw line to the upstream server (used to pass through client
+// commands like JOIN/NAMES/WHO/TOPIC).
+func (c *Conn) SendRaw(line string) { c.send(line) }
+
 func (c *Conn) send(line string) {
 	c.mu.Lock()
 	w := c.w
@@ -256,6 +292,13 @@ func (c *Conn) Status() Status {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.status
+}
+
+// Nick returns the connection's current nick.
+func (c *Conn) Nick() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.nick
 }
 
 // Channels returns the channels this connection has joined.

@@ -12,6 +12,7 @@ import (
 
 	"code.ircforever.org/ircforever/evrd/internal/api"
 	"code.ircforever.org/ircforever/evrd/internal/bouncer"
+	"code.ircforever.org/ircforever/evrd/internal/client"
 	"code.ircforever.org/ircforever/evrd/internal/config"
 	"code.ircforever.org/ircforever/evrd/internal/store"
 	"code.ircforever.org/ircforever/evrd/internal/version"
@@ -54,6 +55,9 @@ func main() {
 		log.Error("start bouncer", "err", err)
 		os.Exit(1)
 	}
+
+	// Downstream IRC listener for native clients (Hexchat, irssi, …).
+	go client.NewServer(b, log).ListenAndServe(ctx, cfg.Listen)
 
 	srv := api.NewServer(b, log)
 	if err := srv.ListenAndServe(ctx, cfg.API); err != nil {

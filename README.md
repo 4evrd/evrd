@@ -26,6 +26,9 @@ This is a monorepo with three parts:
   reconnect, parse + persist + fan out messages, send
 - `bouncer` — owns the store and the set of running upstream connections
 - `api` — HTTP + WebSocket admin/client API consumed by the web app
+- `client` — downstream IRC listener: native clients (Hexchat, irssi, …)
+  attach with a server password, get backlog replay, and a full-fidelity live
+  feed bridged to/from the upstream
 
 ## Develop
 
@@ -40,7 +43,7 @@ make down        # stop it
 
 - web client → http://localhost:5173
 - evrd admin/client API → http://localhost:8098
-- evrd IRC (native client attach, WIP) → localhost:6697
+- evrd IRC (native client attach) → localhost:6697 (plaintext in dev)
 
 Create an account, then sign in on the web client and add a network:
 
@@ -51,6 +54,20 @@ docker compose -f docker-compose.dev.yml exec evrd \
 
 In the dev stack, point a network at the internal upstream: host `ircd`, port
 `6667`, TLS off.
+
+### Attaching a native IRC client
+
+Point any IRC client at the bouncer and authenticate with a **server password**
+of `<user>:<password>` (or `<user>/<network>:<password>` to pick a network):
+
+```
+server:   localhost   port: 6697   (TLS off in dev)
+password: bncuser:bncpass
+```
+
+On connect you get the welcome burst, your channels (with names/topic), backlog
+replay, and live traffic — and anything you send shows up in the web console
+too, since both share one upstream connection.
 
 The upstream `ircd` ([ergo](https://github.com/ergochat/ergo), a stand-in for the
 production `ngircd-27`) is internal-only — `evrd` reaches it as `ircd:6667` over
@@ -84,10 +101,13 @@ cd web && pnpm dev
 
 ## Status
 
-Working MVP. You can create an account, add a network, and it really connects:
-the daemon dials the upstream, registers, autojoins channels, stays connected
-(reconnecting with backoff), buffers history, and the web console streams live
-messages both ways.
+Working bouncer. Create an account, add a network, and it really connects: the
+daemon dials the upstream, registers, autojoins, stays connected (reconnecting
+with backoff), and buffers history. Two ways to use it, sharing one upstream:
 
-Next: native IRC-client attach (so Hexchat/irssi can connect to evrd on 6697),
-SASL, and per-channel presence/nick lists.
+- **Web client** — login, manage networks, live console.
+- **Native IRC client** — attach on 6697 with a server password; get backlog +
+  a full-fidelity live feed (names, joins, topics, everyone's messages).
+
+Next: TLS for the IRC listener (cert config), SASL to upstreams, and
+multi-client presence niceties.
