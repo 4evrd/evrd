@@ -174,6 +174,13 @@ func (se *session) welcome() {
 	se.send(fmt.Sprintf(":%s 375 %s :- %s message of the day -", serverName, n, serverName))
 	se.send(fmt.Sprintf(":%s 372 %s :- network %s (%s:%d)", serverName, n, se.net.Name, se.net.Host, se.net.Port))
 	se.send(fmt.Sprintf(":%s 376 %s :End of /MOTD command.", serverName, n))
+
+	// If the client registered under a different nick than the upstream's, tell
+	// it explicitly — otherwise it won't recognize the synthesized self-JOIN and
+	// won't open the channel.
+	if se.nick != "" && se.nick != n {
+		se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.nick, se.nick, serverName, n))
+	}
 }
 
 func (se *session) joinChannels() {
