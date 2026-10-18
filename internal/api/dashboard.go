@@ -481,6 +481,9 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	nodeList := []store.Node{}
 	if s.cl != nil {
 		nodeList = s.cl.Nodes()
+	} else if live, err := s.st().LiveNodes(now.Add(-2 * time.Minute)); err == nil {
+		// Not clustered: still one node, heartbeating and holding everyone.
+		nodeList = live
 	}
 	for _, n := range nodeList {
 		held, up := 0, 0
@@ -532,7 +535,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 		"users": len(users), "admins": admins, "suspended": suspended, "sso": sso, "online": online,
 		"networks": len(allNets), "linksTotal": linksTotal, "linksUp": linksUp,
 		"connectedNetworks": live.Connected, "attachedClients": live.Attached, "accountsAttached": accountsWith,
-		"defaults": s.acc.Defaults(), "nodes": nodes, "placement": placements,
+		"defaults": s.acc.Defaults(), "nodes": nodes, "placement": placements, "clustered": s.cl != nil,
 		"attention": attention, "upstreams": upList, "storage": s.storageHealth(),
 		"ircHost": s.cfg().IRCHost,
 	})

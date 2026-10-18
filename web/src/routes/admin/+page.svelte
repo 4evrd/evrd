@@ -74,7 +74,7 @@
       </div>
       <div class="tile">
         <div class="tile-top"><span class="caps"><Icon name="server" class="i-sm" />Cluster</span>
-          {#if !nodes.length}<span class="chip">Single node</span>{:else if healthy}<span class="chip ok">Healthy</span>{:else}<span class="chip warn">Node stale</span>{/if}</div>
+          {#if !ov.clustered}<span class="chip">Single node</span>{:else if healthy}<span class="chip ok">Healthy</span>{:else}<span class="chip warn">Node stale</span>{/if}</div>
         <div class="od-stat"><span class="n">{Math.max(1, nodes.length)}</span><span class="u">node{nodes.length === 1 || !nodes.length ? '' : 's'} holding {placed.filter((p) => p.node).length} user{placed.filter((p) => p.node).length === 1 ? '' : 's'}</span></div>
         <span class="ubar ice" role="img" aria-label="{nodes.filter(nodeLive).length} of {nodes.length} nodes heartbeating"><span style="transform:scaleX({nodes.length ? ratio(nodes.filter(nodeLive).length, nodes.length) : 1})"></span></span>
       </div>
@@ -91,7 +91,7 @@
           </div>
         </div>
         {#if !nodes.length}
-          <p class="desc">Clustering is off — this evrd holds every account itself. Set <span class="code">cluster</span> in evrd.conf to spread users across nodes.</p>
+          <p class="desc">No node has checked in yet — give it a few seconds after a start.</p>
         {:else}
           <Topology left={leftNodes} right={shown} leftLabel="evrd nodes" rightLabel={label[filter]} empty="No accounts match this filter." strandsPer={6} single>
             {#snippet source(l)}
@@ -99,7 +99,7 @@
               <div class="net-node" style="--net:{n.color}">
                 <div class="head">
                   <span class="mono-badge" aria-hidden="true">{n.id.slice(-1).toUpperCase()}</span>
-                  <span class="od-field od-fill"><span class="od-truncate">{n.id}</span><span class="od-truncate">{n.host} · up {since(n.startedAt)}</span></span>
+                  <span class="od-field od-fill"><span class="od-truncate">{n.id}</span><span class="od-truncate">{n.host || 'this server'} · up {since(n.startedAt)}</span></span>
                   {#if nodeLive(n)}<span class="chip ok live"><span class="dot" aria-hidden="true"></span>Live</span>{:else}<span class="chip warn">Stale</span>{/if}
                 </div>
                 <div class="node-meta">
@@ -119,7 +119,11 @@
               </a>
             {/snippet}
           </Topology>
-          <p class="desc" style="margin-top:var(--s4)">Each account lives on exactly one node, chosen by rendezvous hashing. Accounts with no networks or that are suspended aren’t placed anywhere.</p>
+          {#if ov.clustered}
+            <p class="desc" style="margin-top:var(--s4)">Each account lives on exactly one node, chosen by rendezvous hashing. Accounts with no networks or that are suspended aren’t placed anywhere.</p>
+          {:else}
+            <p class="desc" style="margin-top:var(--s4)">Clustering is off, so this node holds every account. To spread accounts over several nodes, set <span class="code">internal_listen</span> and the other cluster settings on each — see <a href="https://4evrd.github.io/docs.html#clustering">Running several nodes</a>.</p>
+          {/if}
         {/if}
       </section>
 
