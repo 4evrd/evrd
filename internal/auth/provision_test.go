@@ -89,3 +89,28 @@ func TestProvisionRefusesSuspended(t *testing.T) {
 		t.Fatalf("got %q, want suspended", code)
 	}
 }
+
+func TestProvisionClaimsAnAccountMadeForIt(t *testing.T) {
+	m, st, acc := newManager(t, config.Auth{OIDCAutoCreate: true})
+	made, err := acc.Create(accounts.CreateInput{Username: "alice", Email: "Alice@Example.org", SSOClaimable: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Same username, different email: someone else's look-alike — refused.
+	if _, code := m.provision(Claims{Subject: "evil", Username: "alice", Email: "mallory@example.org"}); code != "taken" {
+		t.Fatalf("look-alike: %q", code)
+	}
+	// The owner: same username and email.
+	u, code := m.provision(Claims{Subject: "s1", Username: "alice", Email: "alice@example.org"})
+	if code != "" || u.ID != made.ID {
+		t.Fatalf("claim: %q %+v", code, u)
+	}
+	got, _ := st.UserByID(made.ID)
+	if got.SSOClaimable || got.OIDCSubject == nil || *got.OIDCSubject != "s1" {
+		t.Fatalf("after claim: %+v", got)
+	}
+	// Claimed once: another identity can't take it.
+	if _, code := m.provision(Claims{Subject: "s2", Username: "alice", Email: "alice@example.org"}); code != "taken" {
+		t.Fatalf("second claim: %q", code)
+	}
+}

@@ -128,6 +128,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /auth/logout", s.auth.Logout)
 
 	s.routes(mux)
+	mux.HandleFunc("PUT /api/provision/users/{username}", s.provisionAuth(s.handleProvisionUser))
 	if s.webApp != "" {
 		mux.Handle("/api/", http.NotFoundHandler()) // not the app's index.html
 		mux.Handle("/auth/", http.NotFoundHandler())

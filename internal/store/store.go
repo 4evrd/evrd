@@ -34,6 +34,10 @@ type User struct {
 	// token's "sub"). Nil for local-only accounts.
 	OIDCSubject *string `gorm:"column:oidc_subject;uniqueIndex"`
 	Role        string  `gorm:"not null;default:user"`
+	// SSOClaimable marks an account made ahead of its owner's first sign-in
+	// (by the provisioning API): the first SSO sign-in with the same username
+	// and email links to it, even without oidc_link_existing.
+	SSOClaimable bool `gorm:"not null;default:false"`
 
 	Suspended       bool `gorm:"not null;default:false"`
 	SuspendedReason string

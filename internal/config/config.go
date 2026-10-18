@@ -46,6 +46,10 @@ type Config struct {
 	// evrd handles HTTPS.
 	HTTPSListen string
 	HTTPListen  string
+	// ProvisionToken, when set, turns on the provisioning API
+	// (/api/provision/…) for tools that create accounts and their networks,
+	// like a migration from another bouncer. Callers send it as a bearer token.
+	ProvisionToken string
 	// WebRoot, when set, is the built web app (web/build) for evrd to serve
 	// itself on the API address, so no separate web server is needed.
 	WebRoot string
@@ -419,6 +423,7 @@ func (c *Config) ApplyEnv() error {
 		"EVRD_CLUSTER_SECRET":     &c.Cluster.Secret,
 		"EVRD_SECRET_KEY":         &c.Secrets.Key,
 		"EVRD_SECRET_KEY_FILE":    &c.Secrets.KeyFile,
+		"EVRD_PROVISION_TOKEN":    &c.ProvisionToken,
 		"EVRD_NODE_ID":            &c.Cluster.NodeID,
 		"EVRD_INTERNAL_URL":       &c.Cluster.InternalURL,
 		"EVRD_INTERNAL_IRC_ADDR":  &c.Cluster.InternalIRCAddr,
@@ -467,6 +472,8 @@ func (c *Config) set(key, val string) error {
 		c.HTTPSListen = val
 	case "http_listen":
 		c.HTTPListen = val
+	case "provision_token":
+		c.ProvisionToken = val
 	case "web_root":
 		c.WebRoot = val
 	case "chroot":

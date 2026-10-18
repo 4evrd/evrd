@@ -18,6 +18,7 @@ are stored in the database and win over the file (see below).
 | `https_listen`, `http_listen` | — | evrd serves the web app over HTTPS itself (e.g. `:443`), and redirects plain HTTP (e.g. `:80`) |
 | `web_root` | — | the built web app (`web/build`) for evrd to serve on `api` and `https_listen`, without nginx |
 | `chroot`, `user` | — | confine evrd after startup; see [Confinement](#confinement-chroot-and-user) |
+| `provision_token` (`EVRD_PROVISION_TOKEN`) | — | turns on the [provisioning API](#provisioning-api) for tools that create accounts |
 | `db` (`EVRD_DB`) | `sqlite:evrd.db` | accounts and settings: `postgres://user:pass@host/evrd?sslmode=disable` or `sqlite:/path/evrd.db` |
 | `history` (`EVRD_HISTORY`) | `pebble:history` | chat history: `pebble:/var/lib/evrd/history` (one node) or `scylla://host1,host2:9042/evrd` (shared) |
 | `secret_key` (`EVRD_SECRET_KEY`), `secret_key_file`, `secret_key_old` | — | encrypts saved network passwords; see [Saved passwords](#saved-passwords) |
@@ -239,6 +240,34 @@ and `etc/hosts` there (the OpenBSD rc.d script copies them at every start).
 it creates stay evrd's.
 
 The [OpenBSD installer](openbsd.md) sets all of this up.
+
+## Provisioning API
+
+For tools that bring users in from elsewhere (IRCForever's managebot moves
+ZNC users over with it), evrd can create an account and its networks before
+the owner ever signs in. It's off until `provision_token` is set; every call
+sends that token:
+
+```sh
+curl -X PUT http://127.0.0.1:8098/api/provision/users/alice \
+  -H "Authorization: Bearer $EVRD_PROVISION_TOKEN" \
+  -d '{"email": "alice@example.org", "connect": true,
+       "networks": [{"name": "libera", "host": "irc.libera.chat", "port": 6697, "tls": true,
+                     "nick": "alice", "channels": ["#evrd"], "saslUser": "alice", "password": "…"}]}'
+```
+
+Networks take the same fields as the web app's network editor (`servers`,
+`nick`, `altNick`, `username`, `realname`, `saslUser`, `password`,
+`channels`, `channelSettings`, `trustAllCerts`, `fingerprints`, …). The
+answer lists each network as `created`, `exists` (that name is already there,
+so a call can be repeated) or `failed` with the reason; `connect` connects the
+new ones straight away.
+
+A new account has no password and is **claimable**: the first SSO sign-in
+with the same username *and* email links to it — so the provider account must
+be the owner's, not a look-alike. After that it's an ordinary SSO account.
+Keep the token secret and the API on a local address (or behind your proxy
+with the token); anyone with it can create accounts.
 
 ## Saved passwords
 

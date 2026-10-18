@@ -177,6 +177,9 @@ type CreateInput struct {
 	Temporary bool
 	Role      string
 	Subject   string // optional OIDC subject to link
+	// SSOClaimable lets the owner's first SSO sign-in (same username and
+	// email) take over the account; see store.User.
+	SSOClaimable bool
 }
 
 // Create validates and stores a new user.
@@ -197,7 +200,7 @@ func (s *Service) Create(in CreateInput) (store.User, error) {
 	if role != store.RoleUser && role != store.RoleAdmin {
 		return store.User{}, invalid("role must be user or admin")
 	}
-	u := store.User{Username: name, Email: strings.TrimSpace(in.Email), Role: role, DefaultNick: name}
+	u := store.User{Username: name, Email: strings.TrimSpace(in.Email), Role: role, DefaultNick: name, SSOClaimable: in.SSOClaimable}
 	if in.Password != "" {
 		if u.PasswordHash, err = HashPassword(in.Password); err != nil {
 			return store.User{}, err

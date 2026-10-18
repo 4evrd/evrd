@@ -444,9 +444,10 @@ func (m *Manager) provision(c Claims) (store.User, string) {
 		}
 		existing, err := m.st.UserByUsername(name)
 		switch {
-		case err == nil && m.conf().OIDCLinkExisting && existing.OIDCSubject == nil:
+		case err == nil && existing.OIDCSubject == nil && (m.conf().OIDCLinkExisting || claims(existing, c)):
 			sub := c.Subject
 			existing.OIDCSubject = &sub
+			existing.SSOClaimable = false
 			if err := m.st.UpdateUser(existing); err != nil {
 				return store.User{}, "server"
 			}
@@ -489,6 +490,13 @@ func (m *Manager) provision(c Claims) (store.User, string) {
 		_ = m.st.UpdateUser(u)
 	}
 	return u, ""
+}
+
+// claims reports whether an SSO identity may take over an account made for
+// it ahead of time (store.User.SSOClaimable): the username already matched,
+// and the email must too, so a look-alike registration at the provider can't.
+func claims(u store.User, c Claims) bool {
+	return u.SSOClaimable && u.Email != "" && strings.EqualFold(strings.TrimSpace(c.Email), u.Email)
 }
 
 // --- sign-out ------------------------------------------------------------
