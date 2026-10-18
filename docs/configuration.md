@@ -18,6 +18,7 @@ are stored in the database and win over the file (see below).
 | `https_listen`, `http_listen` | — | evrd serves the web app over HTTPS itself (e.g. `:443`), and redirects plain HTTP (e.g. `:80`) |
 | `web_root` | — | the built web app (`web/build`) for evrd to serve on `api` and `https_listen`, without nginx |
 | `chroot`, `user` | — | confine evrd after startup; see [Confinement](#confinement-chroot-and-user) |
+| `links_socket` (`EVRD_LINKS_SOCKET`) | — | the [connection holder](#connection-holder)'s socket: IRC connections stay up while evrd restarts (one node only) |
 | `provision_token` (`EVRD_PROVISION_TOKEN`) | — | turns on the [provisioning API](#provisioning-api) for tools that create accounts |
 | `db` (`EVRD_DB`) | `sqlite:evrd.db` | accounts and settings: `postgres://user:pass@host/evrd?sslmode=disable` or `sqlite:/path/evrd.db` |
 | `history` (`EVRD_HISTORY`) | `pebble:history` | chat history: `pebble:/var/lib/evrd/history` (one node) or `scylla://host1,host2:9042/evrd` (shared) |
@@ -229,7 +230,8 @@ Started as root, evrd binds its ports (so 80 and 443 work), reads its config,
 `secret_key_file` and `tls_cert`, then chroots into `chroot`, switches to
 `user`, and from then on runs unprivileged. On OpenBSD it also `unveil`s only
 its data, the web app and name resolution, and `pledge`s
-`stdio rpath wpath cpath fattr flock inet dns`: no exec, no other files.
+`stdio rpath wpath cpath fattr flock inet dns` (plus `unix sendfd` with
+`links_socket`): no exec, no other files.
 
 Local paths (`db sqlite:…`, `history pebble:…`, `web_root`) must be under the
 chroot; write them as seen from outside (`sqlite:/var/evrd/data/evrd.db`) and
@@ -240,6 +242,35 @@ and `etc/hosts` there (the OpenBSD rc.d script copies them at every start).
 it creates stay evrd's.
 
 The [OpenBSD installer](openbsd.md) sets all of this up.
+
+## Connection holder
+
+```
+links_socket /var/evrd/run/links.sock
+```
+
+`evrd-links` keeps users' IRC connections open while evrd restarts. Run it
+first, as root, with the same chroot and user:
+
+```
+evrd-links -socket /var/evrd/run/links.sock -chroot /var/evrd -user _evrd
+```
+
+evrd opens each connection to an IRC network itself and hands the socket to
+the holder, which does TLS and passes lines both ways. When evrd stops — to
+upgrade, or for a setting that needs a restart — the holder keeps the
+connections: it answers the servers' pings and buffers what arrives (4 MB per
+network; `-buffer` changes it). The next evrd takes each one back without
+registering or joining again, and replays the buffered lines into history.
+Switching a network off, or deleting it, still quits it.
+
+Without the holder (not running, or `links_socket` unset), evrd connects
+directly, as before. Restarting the holder itself drops the connections, so it
+is built to change rarely; the OpenBSD installer restarts it only when its
+program changed. In Docker, run evrd in the holder's network namespace
+(`network_mode: "service:links"`) so the connections outlive evrd's container.
+The holder is for a single node: in a [cluster](clustering.md), users move
+between nodes instead, and `links_socket` is ignored.
 
 ## Provisioning API
 

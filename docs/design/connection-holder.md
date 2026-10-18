@@ -1,6 +1,6 @@
 # Design: keeping IRC connections up across evrd restarts
 
-Status: proposed · Owner: evrd core · Related: [OpenBSD](../openbsd.md#upgrading)
+Status: implemented (single node) — `cmd/evrd-links`, `internal/links` · Owner: evrd core · Related: [OpenBSD](../openbsd.md#upgrading)
 
 ## Problem
 

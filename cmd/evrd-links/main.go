@@ -51,7 +51,9 @@ func main() {
 		log.Error("listen", "socket", *socket, "err", err)
 		os.Exit(1)
 	}
-	ln.SetUnlinkOnClose(true)
+	// Not unlinked on exit: inside the chroot the path doesn't exist, and
+	// pledge forbids it anyway. The next start removes it (above).
+	ln.SetUnlinkOnClose(false)
 	if err := os.Chmod(*socket, 0o600); err != nil {
 		log.Error("chmod socket", "err", err)
 		os.Exit(1)

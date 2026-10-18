@@ -79,10 +79,12 @@ ftp -o - https://raw.githubusercontent.com/4evrd/evrd/main/deploy/openbsd/instal
 | | |
 |---|---|
 | `/usr/local/bin/evrd`, `evrctl` | the daemon and the admin tool |
+| `/usr/local/bin/evrd-links` | the [connection holder](#upgrading): keeps IRC connections up while evrd restarts |
 | `/etc/evrd/evrd.conf` | the config (`root:_evrd`, 0640) |
 | `/etc/evrd/secret.key` | encrypts saved network passwords and certificate keys — **back it up**, apart from the data |
 | `/var/evrd/` | the chroot: `data/` (database and history, `_evrd` only), `web/` (the web app, read-only), `etc/` (resolv.conf and hosts) |
 | `/etc/rc.d/evrd` | `rcctl start\|stop\|restart evrd`; logs go to `/var/log/daemon` |
+| `/etc/rc.d/evrd_links` | the holder, started before evrd; its socket is `/var/evrd/run/links.sock` |
 | `_evrd` | the user evrd runs as (no shell, no home) |
 | `/usr/local/share/examples/evrd/` | relayd, httpd, acme-client and pf examples for your host names |
 
@@ -97,9 +99,13 @@ key and any certificate files, then:
    name resolution;
 3. **unveils** only `data/`, `tmp/`, `web/` (read-only) and `etc/resolv.conf`,
    `etc/hosts` (read-only);
-4. **pledges** `stdio rpath wpath cpath fattr flock inet dns` — it can't
-   execute anything, change permissions beyond its files, or open other
-   kinds of sockets.
+4. **pledges** `stdio rpath wpath cpath fattr flock inet dns unix sendfd` —
+   it can't execute anything, change permissions beyond its files, or open
+   other kinds of sockets (`unix sendfd` is for handing connections to the
+   holder).
+
+evrd-links is confined the same way, tighter: chrooted to `/var/evrd` as
+`_evrd`, it pledges `stdio inet unix recvfd` — no files at all.
 
 Check it with `ps -o user,pledge -p $(pgrep -x evrd)` and
 `fstat -p $(pgrep -x evrd)` (its root directory is `/var/evrd`).
@@ -147,10 +153,14 @@ when its program actually changed: a release that changes just the web app
 goes live without a restart, so nobody is disconnected. Database changes are
 applied at startup. Pin a version with `-v 0.4.0`.
 
-A restart drops everyone's IRC connections for a moment (evrd reconnects
-them at once, and clients reconnect by themselves); see
-[the connection holder](design/connection-holder.md) for the plan to keep
-them up across upgrades too.
+When evrd does restart, nobody leaves IRC: **evrd-links**, a small
+separate process, holds every connection to the IRC networks while evrd is
+away — it answers the servers' pings and keeps what arrives — and the new
+evrd picks each one up again: no quit, no rejoin, no lost nick, and messages
+from the gap land in history. Users' own clients do reconnect to evrd (they
+reconnect by themselves). evrd-links rarely changes; the installer restarts it
+only when it did, which drops the IRC connections that once.
+See [the design](design/connection-holder.md).
 
 ## Backups
 

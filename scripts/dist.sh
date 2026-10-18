@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds the release archives: evrd_<os>_<arch>.tar.gz for each target, with
-# evrd, evrctl, the built web app (web/), LICENSE and README.md, and SHA256
+# evrd, evrctl, evrd-links, the built web app (web/), LICENSE and README.md, and SHA256
 # with BSD-style checksums (what OpenBSD's sha256 -C and install.sh read).
 #
 #   scripts/dist.sh <version> [os/arch ...]     → dist/
@@ -25,6 +25,9 @@ for t in $targets; do
 	mkdir -p "$stage"
 	CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "$ldflags" -o "$stage/evrd" ./cmd/evrd
 	CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "$ldflags" -o "$stage/evrctl" ./cmd/evrctl
+	# no version stamp: evrd-links stays byte-identical between releases
+	# unless its code changed, so upgrades can leave it (and the links) up
+	CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w" -o "$stage/evrd-links" ./cmd/evrd-links
 	cp -R web/build "$stage/web"
 	cp LICENSE README.md "$stage/"
 	tar -C dist -czf "dist/$name.tar.gz" "$name"

@@ -36,12 +36,15 @@
 #
 # What goes where:
 #	/usr/local/bin/evrd, evrctl	the programs
+#	/usr/local/bin/evrd-links	holds the IRC connections while evrd
+#					restarts, so upgrades don't drop anyone
 #	/etc/evrd/evrd.conf		the config (kept on upgrades)
 #	/etc/evrd/secret.key		encrypts saved network passwords and
 #					certificate keys
 #	/var/evrd			evrd's chroot: data/ (database and
 #					history), web/ (the web app), etc/
 #	/etc/rc.d/evrd			rcctl start|stop|restart evrd
+#	/etc/rc.d/evrd_links		the connection holder, started first
 #	/usr/local/share/examples/evrd	relayd, httpd, acme-client and pf
 #
 # evrd starts as root, binds its ports, reads its config, key and
@@ -195,7 +198,7 @@ is_user() {
 listening() { netstat -an -p tcp | awk '$NF == "LISTEN" { print $4 }' | grep -q "\.$1\$"; }
 
 tmp=$(mktemp -d /tmp/evrd-install.XXXXXXXXXX)
-trap 'stty echo <&3 2>/dev/null; rm -rf "$tmp"' EXIT INT TERM
+trap '{ stty echo <&3; } 2>/dev/null || :; rm -rf "$tmp"' EXIT INT TERM
 
 # --- questions -------------------------------------------------------------
 writeconf=yes
@@ -349,6 +352,7 @@ fi
 # compromised evrd can't change its own web app or name resolution.
 install -d -o root -g wheel -m 755 "$jail" "$jail/etc"
 install -d -o "$user" -g "$user" -m 700 "$jail/data" "$jail/tmp"
+install -d -o root -g "$user" -m 750 "$jail/run"
 install -d -o root -g "$user" -m 750 "$etc"
 
 # --- the programs and the web app ------------------------------------------
@@ -359,6 +363,17 @@ rcctl check evrd >/dev/null 2>&1 && running=yes
 changed=yes
 if [ -f /usr/local/bin/evrd ] && [ "$(sha256 -q /usr/local/bin/evrd)" = "$(sha256 -q "$src/evrd")" ]; then
 	changed=no
+fi
+# The holder keeps everyone's IRC connections while evrd restarts. It
+# rarely changes; when it does, restarting it drops the connections once.
+holder=no links_changed=no links_running=no
+if [ -f "$src/evrd-links" ]; then
+	holder=yes
+	rcctl check evrd_links >/dev/null 2>&1 && links_running=yes
+	if [ ! -f /usr/local/bin/evrd-links ] || [ "$(sha256 -q /usr/local/bin/evrd-links)" != "$(sha256 -q "$src/evrd-links")" ]; then
+		links_changed=yes
+	fi
+	install -o root -g bin -m 555 "$src/evrd-links" /usr/local/bin/
 fi
 install -o root -g bin -m 555 "$src/evrd" "$src/evrctl" /usr/local/bin/
 rm -rf "$jail/web.new" "$jail/web.old"
@@ -385,6 +400,7 @@ key=/etc/ssl/private/$web_host.key
 jtls=$jail/etc/tls
 jcert=$jtls/$web_host.crt
 jkey=$jtls/$web_host.key
+links_sock=$jail/run/links.sock
 if [ "$writeconf" = yes ]; then
 	tls=
 	case $front in
@@ -433,6 +449,11 @@ oidc_admin_role    $oidc_role"
 		sso="$sso
 "
 	fi
+	links=
+	[ "$holder" = no ] || links="
+# IRC connections stay up while evrd restarts, held by evrd-links.
+links_socket $links_sock
+"
 	plain=
 	[ "$plain_port" = none ] || plain="
 listen irc+insecure://:$plain_port   # unencrypted"
@@ -460,7 +481,7 @@ web_root $jail/web
 
 # Encrypts saved network passwords and certificate keys.
 secret_key_file $etc/secret.key
-
+$links
 # evrd binds its ports and reads this file, the key and any certificate
 # files as root, then chroots to $jail and runs as $user, unveiled and
 # pledged.
@@ -495,6 +516,11 @@ else
 		cp -p "$conf" "$conf.bak.tls"
 		sed -i -e "s|^tls_cert[[:space:]].*|tls_cert $jcert|" -e "s|^tls_key[[:space:]].*|tls_key  $jkey|" "$conf"
 		say "tls_cert now points at the copy in the chroot (reloaded on renewal, no restart)"
+		changed=yes
+	fi
+	if [ "$holder" = yes ] && ! grep -q '^links_socket' "$conf"; then
+		printf '\n# IRC connections stay up while evrd restarts, held by evrd-links.\nlinks_socket %s\n' "$links_sock" >>"$conf"
+		say "added links_socket: from now on, restarting evrd doesn't disconnect anyone"
 		changed=yes
 	fi
 fi
@@ -536,6 +562,27 @@ $rc_certs	return 0
 rc_cmd \$1
 EOF
 chmod 555 /etc/rc.d/evrd
+
+if [ "$holder" = yes ]; then
+	cat >/etc/rc.d/evrd_links <<EOF
+#!/bin/ksh
+#
+# evrd-links, which holds evrd's IRC connections while evrd restarts
+# (installed by evrd's install.sh). Restarting it drops them.
+
+daemon="/usr/local/bin/evrd-links"
+daemon_flags="-socket $links_sock -chroot $jail -user $user"
+daemon_logger="daemon.info"
+
+. /etc/rc.d/rc.subr
+
+rc_bg=YES
+rc_reload=NO
+
+rc_cmd \$1
+EOF
+	chmod 555 /etc/rc.d/evrd_links
+fi
 
 # --- examples: relayd, httpd, acme-client, pf --------------------------------
 alt=
@@ -670,6 +717,10 @@ fi
 
 # --- start -------------------------------------------------------------------
 rcctl enable evrd >/dev/null
+if [ "$holder" = yes ]; then
+	rcctl enable evrd_links >/dev/null
+	rcctl order evrd_links evrd >/dev/null # the holder first at boot
+fi
 if [ -n "$admin" ]; then
 	# printf is a shell builtin: the password never shows up in ps
 	printf '%s\n' "$pw" | /usr/local/bin/evrctl -config "$conf" user add -admin "$admin" - ||
@@ -677,9 +728,21 @@ if [ -n "$admin" ]; then
 	pw=
 fi
 if [ "$start" = yes ]; then
+	if [ "$holder" = yes ]; then
+		if [ "$links_running" = no ]; then
+			rcctl start evrd_links >/dev/null
+		elif [ "$links_changed" = yes ]; then
+			# evrd reconnects everyone through the new holder
+			say "the connection holder changed: restarting it (IRC connections drop once)"
+			rcctl restart evrd_links >/dev/null
+			changed=yes
+		fi
+		rcctl check evrd_links >/dev/null || say "evrd-links didn't start — evrd connects directly (see /var/log/daemon)"
+	fi
 	if [ "$running" = yes ] && [ "$changed" = no ] && [ "$writeconf" = no ]; then
 		say "evrd itself is unchanged — the web app is updated, no restart (nobody disconnected)"
 	elif [ "$running" = yes ]; then
+		grep -q '^links_socket' "$conf" && say "restarting evrd — the holder keeps everyone connected"
 		rcctl restart evrd >/dev/null
 	else
 		rcctl start evrd >/dev/null
