@@ -30,9 +30,13 @@ import (
 )
 
 type pebbleStore struct {
-	db     *pebble.DB
-	seq    atomic.Uint32
-	closed atomic.Bool
+	db  *pebble.DB
+	seq atomic.Uint32
+	// life lets Close wait for calls in flight; after it, calls return
+	// ErrClosed instead of panicking inside Pebble (goroutines still
+	// recording messages while the daemon shuts down).
+	life   sync.RWMutex
+	closed bool
 
 	mu    sync.Mutex
 	known map[string]bool // buffer index keys already written
@@ -56,11 +60,28 @@ func openPebble(dir string) (*pebbleStore, error) {
 	return &pebbleStore{db: db, known: map[string]bool{}}, nil
 }
 
+// ErrClosed is returned by a history store used after Close.
+var ErrClosed = errors.New("history: store closed")
+
 func (s *pebbleStore) Close() error {
-	if s.closed.Swap(true) {
+	s.life.Lock()
+	defer s.life.Unlock()
+	if s.closed {
 		return nil
 	}
+	s.closed = true
 	return s.db.Close()
+}
+
+// enter marks a call in flight; it reports false once the store is closed.
+// A true result must be paired with s.life.RUnlock().
+func (s *pebbleStore) enter() bool {
+	s.life.RLock()
+	if s.closed {
+		s.life.RUnlock()
+		return false
+	}
+	return true
 }
 
 // --- keys ------------------------------------------------------------------
@@ -142,6 +163,10 @@ func decode(networkID int64, b []byte) (Message, error) {
 // --- operations --------------------------------------------------------------
 
 func (s *pebbleStore) Add(m Message) error {
+	if !s.enter() {
+		return ErrClosed
+	}
+	defer s.life.RUnlock()
 	if m.Time.IsZero() {
 		m.Time = time.Now()
 	}
@@ -165,6 +190,10 @@ func (s *pebbleStore) Add(m Message) error {
 }
 
 func (s *pebbleStore) Recent(networkID int64, target string, limit int) ([]Message, error) {
+	if !s.enter() {
+		return nil, ErrClosed
+	}
+	defer s.life.RUnlock()
 	prefix := bufferPrefix(networkID, target)
 	it, err := s.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upperBound(prefix)})
 	if err != nil {
@@ -186,6 +215,10 @@ func (s *pebbleStore) Recent(networkID int64, target string, limit int) ([]Messa
 }
 
 func (s *pebbleStore) Buffers(networkID int64) ([]string, error) {
+	if !s.enter() {
+		return nil, ErrClosed
+	}
+	defer s.life.RUnlock()
 	prefix := networkPrefix(prefixBuffer, networkID)
 	it, err := s.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upperBound(prefix)})
 	if err != nil {
@@ -200,6 +233,10 @@ func (s *pebbleStore) Buffers(networkID int64) ([]string, error) {
 }
 
 func (s *pebbleStore) Prune(networkID int64, keep int) error {
+	if !s.enter() {
+		return ErrClosed
+	}
+	defer s.life.RUnlock()
 	if keep <= 0 {
 		return nil
 	}
@@ -236,6 +273,10 @@ func (s *pebbleStore) Prune(networkID int64, keep int) error {
 }
 
 func (s *pebbleStore) DeleteNetwork(networkID int64) error {
+	if !s.enter() {
+		return ErrClosed
+	}
+	defer s.life.RUnlock()
 	for _, kind := range []byte{prefixMsg, prefixBuffer} {
 		p := networkPrefix(kind, networkID)
 		if err := s.db.DeleteRange(p, upperBound(p), pebble.NoSync); err != nil {
@@ -254,6 +295,10 @@ func (s *pebbleStore) DeleteNetwork(networkID int64) error {
 }
 
 func (s *pebbleStore) Networks() ([]int64, error) {
+	if !s.enter() {
+		return nil, ErrClosed
+	}
+	defer s.life.RUnlock()
 	var out []int64
 	it, err := s.db.NewIter(&pebble.IterOptions{LowerBound: []byte{prefixBuffer}, UpperBound: []byte{prefixBuffer + 1}})
 	if err != nil {
@@ -282,6 +327,10 @@ func (pebbleLogger) Fatalf(format string, args ...any) {
 }
 
 func (s *pebbleStore) Count(networkID int64, target string, max int) (int, error) {
+	if !s.enter() {
+		return 0, ErrClosed
+	}
+	defer s.life.RUnlock()
 	prefix := bufferPrefix(networkID, target)
 	it, err := s.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upperBound(prefix)})
 	if err != nil {
@@ -295,4 +344,10 @@ func (s *pebbleStore) Count(networkID int64, target string, max int) (int, error
 	return n, it.Error()
 }
 
-func (s *pebbleStore) Ping() error { return nil }
+func (s *pebbleStore) Ping() error {
+	if !s.enter() {
+		return ErrClosed
+	}
+	s.life.RUnlock()
+	return nil
+}

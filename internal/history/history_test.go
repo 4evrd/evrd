@@ -4,6 +4,7 @@ package history
 // EVRD_TEST_SCYLLA names one (e.g. EVRD_TEST_SCYLLA=localhost:9042).
 
 import (
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -266,4 +267,23 @@ func TestCount(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+}
+
+// Goroutines can still be recording when the daemon shuts the store down:
+// after Close, calls fail instead of panicking.
+func TestPebbleAfterClose(t *testing.T) {
+	s := mustOpen(t, "pebble:"+t.TempDir())
+	s.Close()
+	if err := s.Add(Message{NetworkID: 1, Target: "#x", Text: "late", Time: time.Now()}); !errors.Is(err, ErrClosed) {
+		t.Fatalf("Add after Close: %v", err)
+	}
+	if _, err := s.Recent(1, "#x", 10); !errors.Is(err, ErrClosed) {
+		t.Fatalf("Recent after Close: %v", err)
+	}
+	if err := s.Ping(); !errors.Is(err, ErrClosed) {
+		t.Fatalf("Ping after Close: %v", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
 }
