@@ -129,14 +129,14 @@ test('delete account', async ({ page }) => {
   expect(res.some((x) => x.username === u.name)).toBe(false)
 })
 
-test('the only admin can’t delete their account', async ({ page }) => {
-  // e2eadmin always has company (admin) — so check the copy for an admin
+test('an admin is told who keeps admin rights', async ({ page }) => {
+  // e2eadmin always exists, so this admin is never the only one
   const a = await freshUser('adm', { admin: true })
   try {
     await page.getByRole('button', { name: 'Sign out' }).click()
     await login(page, a.name, a.password)
     await page.goto('/account#danger')
-    await expect(page.getByText(/Admin rights stay with the other admins/)).toBeVisible()
+    await expect(page.getByText(/Admin rights stay with the other admins?[,:]/)).toBeVisible()
     await expect(page.getByRole('button', { name: 'Delete my account' })).toBeEnabled()
   } finally { await a.cleanup() }
 })
