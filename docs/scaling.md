@@ -49,9 +49,10 @@ user_leases  (user_id PK, node_id, epoch, expires_at)
   leases in one batched statement per heartbeat, and lease TTL is 20 s.
 - **Fencing:** a node that can't renew (lost Postgres) stops its users'
   connections at TTL/2, before anyone else may take over — so two nodes never
-  hold the same nick on a network. `epoch` increments on each takeover and is
-  checked by the internal API, so a late request from the old owner is
-  refused.
+  hold the same nick on a network. `epoch` increments on each takeover. Forwarded
+  work is only done by the current owner: a node that has let a user go
+  answers a forwarded request with "moving — try again in a moment" (HTTP 421,
+  or 464 to an IRC client), and the client's retry lands on the new owner.
 
 ### Routing
 
@@ -63,10 +64,11 @@ user_leases  (user_id PK, node_id, epoch, expires_at)
   authenticates the client as usual. IRC has no redirect, so proxying is the
   only option; it costs one in-datacenter hop.
 - **Web app** requests hit any node (L7 load balancer, sessions are in
-  Postgres). Reads that only need Postgres/ScyllaDB are served locally:
-  account pages, admin, network settings, history. Live operations — connect,
-  disconnect, status, the chat WebSocket, `*status` from the web — are
-  reverse-proxied to the owner's internal HTTP port.
+  Postgres). A signed-in user's API requests are handled by their owner —
+  reverse-proxied to its internal HTTP port when they land elsewhere — since
+  almost every page shows live state (link status, unread counts, the chat
+  WebSocket, `*status` from the web). Signing in, `/api/config` and the admin
+  pages about everyone are served wherever they land.
 - **Admin effects** on another user (`/api/admin/users/{id}…`: suspend,
   delete, password reset, limits, sign-outs) are forwarded to that user's
   owner like any other request about the user, so live connections react

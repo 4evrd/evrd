@@ -67,8 +67,7 @@ cd evrd/deploy/docker
 `docker-compose.yml`, `evrd.conf` and `.env.example`.)
 
 The images are published to GitHub's registry as `ghcr.io/4evrd/evrd` and
-`ghcr.io/4evrd/evrd-web`. While the repository is private, log in first with a
-token that can read packages: `docker login ghcr.io`.
+`ghcr.io/4evrd/evrd-web` (amd64 and arm64), no login needed.
 
 **2. Set the secrets**
 
