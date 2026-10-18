@@ -7,7 +7,7 @@
   "packageManager": "pnpm@11.8.0",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "vite build && node scripts/externalize-boot.js",
     "preview": "vite preview --host --port 4173",
     "prepare": "svelte-kit sync || true",
     "e2e": "playwright test",

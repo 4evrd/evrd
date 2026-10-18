@@ -209,6 +209,11 @@ same ones and nothing is written to disk.
   — leave `https_listen` unset; the proxy terminates TLS and forwards to
   `api`. evrd's certificate then only matters for the IRC TLS ports.
 
+The web app has no inline scripts, so a proxy that sets a strict
+Content-Security-Policy on every site (`script-src 'self'`, no
+`'unsafe-inline'`) doesn't break it; it only needs `connect-src 'self'` for
+its API and WebSocket.
+
 The settings page says which of the two is in use and shows each
 certificate's issuer, names and expiry (or why getting one failed).
 
