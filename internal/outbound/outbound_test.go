@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -187,5 +188,42 @@ func TestPrefixOnLinux(t *testing.T) {
 			t.Fatalf("user %d connected from %s, want %s", uid, from, want)
 		}
 		t.Logf("user %d connected from %s", uid, from)
+	}
+}
+
+func TestDialFromBindHost(t *testing.T) {
+	d, _ := New(Config{Bind: []netip.Addr{netip.MustParseAddr("192.0.2.200")}})
+	d.resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
+		switch host {
+		case "vhost.example.org":
+			return []netip.Addr{netip.MustParseAddr("192.0.2.5")}, nil
+		default:
+			return []netip.Addr{netip.MustParseAddr("2001:db8::1"), netip.MustParseAddr("198.51.100.1")}, nil
+		}
+	}
+	var local, remote netip.AddrPort
+	d.dial = func(_ context.Context, l, r netip.AddrPort, _ bool) (net.Conn, error) {
+		local, remote = l, r
+		a, _ := net.Pipe()
+		return a, nil
+	}
+	conn, err := d.DialFrom(context.Background(), 1, "vhost.example.org", "irc.example.org", 6697)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.Close()
+	// the bind host (not the node's bind list) and a destination of its family
+	if local.Addr().String() != "192.0.2.5" || remote.String() != "198.51.100.1:6697" {
+		t.Fatalf("dialed %s -> %s", local, remote)
+	}
+
+	d.resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
+		if host == "v6only" {
+			return []netip.Addr{netip.MustParseAddr("2001:db8::5")}, nil
+		}
+		return []netip.Addr{netip.MustParseAddr("198.51.100.1")}, nil
+	}
+	if _, err := d.DialFrom(context.Background(), 1, "v6only", "irc.example.org", 6697); err == nil || !strings.Contains(err.Error(), "same family") {
+		t.Fatalf("an IPv6 bind host can't reach an IPv4-only server: %v", err)
 	}
 }

@@ -9,6 +9,7 @@ package store
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -46,9 +47,36 @@ type User struct {
 	DefaultNick     string
 	DefaultAltNick  string // tried when the nick is taken
 	DefaultRealname string
+	DefaultIdent    string
+	// QuitMsg is sent when a network is disconnected (networks can override).
+	QuitMsg string
+	// BindHost is the default local address networks connect from.
+	BindHost string
+	// DenySetBindHost stops the user choosing a bind host (admins set it).
+	DenySetBindHost bool `gorm:"not null;default:false"`
 	// AutoAway marks the user away on every network while no client (IRC or
 	// web) is attached.
 	AutoAway bool `gorm:"not null;default:false"`
+
+	// Playback to IRC clients: how many lines per channel and query, and
+	// whether a buffer, once played back, starts empty next time (only lines
+	// since the last playback are sent).
+	PlaybackLines        int  `gorm:"not null;default:50"`
+	AutoClearChanBuffer  bool `gorm:"not null;default:false"`
+	AutoClearQueryBuffer bool `gorm:"not null;default:true"`
+	// Timestamps for clients without server-time: the time is added to the
+	// text (before or after) in TimestampFormat (strftime) and Timezone.
+	PrependTimestamp bool   `gorm:"not null;default:true"`
+	AppendTimestamp  bool   `gorm:"not null;default:false"`
+	TimestampFormat  string `gorm:"not null;default:'[%H:%M:%S]'"`
+	Timezone         string
+	// CTCPReplies answers CTCP requests (VERSION, TIME, …) for every network
+	// with a fixed text; an empty text blocks the request.
+	CTCPReplies map[string]string `gorm:"serializer:json"`
+	// AllowedHosts restricts where clients may sign in from (IPs, CIDRs or
+	// wildcards like 192.168.*); empty allows anywhere.
+	AllowedHosts []string `gorm:"serializer:json"`
+
 	// MustChangePassword is set for a temporary password an admin chose.
 	MustChangePassword bool `gorm:"not null;default:false"`
 
@@ -90,18 +118,86 @@ type ClientPassword struct {
 
 // Network is one IRC network configured by a user.
 type Network struct {
-	ID       int64 `gorm:"primaryKey"`
-	UserID   int64 `gorm:"index;not null"`
-	Name     string
-	Host     string
-	Port     int
-	TLS      bool
+	ID     int64 `gorm:"primaryKey"`
+	UserID int64 `gorm:"index;not null"`
+	Name   string
+	// Host, Port and TLS mirror the first entry of Servers (kept as columns
+	// for listings and older rows).
+	Host string
+	Port int
+	TLS  bool
+	// Servers are tried in order: each reconnect moves on to the next one.
+	Servers []Server `gorm:"serializer:secretservers"`
+
 	Nick     string
-	Username string
+	AltNick  string // tried when Nick is taken; empty = the user's default
+	Username string // ident: the user part of nick!user@host
 	Realname string
-	Password string
-	Channels []string `gorm:"serializer:json"`
-	Enabled  bool
+	QuitMsg  string // empty = the user's default
+	// BindHost is the local address (or a hostname for one) to connect
+	// from; empty = the user's default, then the server's policy.
+	BindHost string
+
+	// Password is the SASL PLAIN password; SASLUser the account name (empty =
+	// the ident, then the nick). Without SASL support it's sent as PASS.
+	Password string `gorm:"serializer:secret"`
+	SASLUser string
+
+	// Server certificates: accepted if the SHA-256 fingerprint is listed, or
+	// TrustAllCerts is set, or (TrustPKI) the chain verifies for the host.
+	TrustAllCerts bool
+	TrustPKI      bool     `gorm:"not null;default:true"`
+	Fingerprints  []string `gorm:"serializer:json"` // lowercase hex, no colons
+
+	// Encoding is a charset name for networks that don't speak UTF-8.
+	// "^name" only decodes incoming text that isn't valid UTF-8 and sends
+	// UTF-8; "name" decodes and sends in that charset.
+	Encoding string
+
+	// FloodRate is lines per second sent once FloodBurst lines have gone out
+	// at once; 0 turns flood protection off.
+	FloodRate  float64 `gorm:"not null;default:2"`
+	FloodBurst int     `gorm:"not null;default:9"`
+	JoinDelay  int     // seconds to wait after connecting before joining
+
+	Channels        []string                   `gorm:"serializer:json"`
+	ChannelSettings map[string]ChannelSettings `gorm:"serializer:json"` // by lowercased name
+	Enabled         bool
+}
+
+// Server is one of a network's servers.
+type Server struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	TLS      bool   `json:"tls"`
+	Password string `json:"password,omitempty"` // sent as PASS
+}
+
+// ChannelSettings are per-channel options.
+type ChannelSettings struct {
+	Key string `json:"key,omitempty"`
+	// Detached channels stay joined but are hidden from IRC clients until
+	// they /join them again.
+	Detached bool `json:"detached,omitempty"`
+	// Disabled channels keep their settings but aren't joined on connect.
+	Disabled bool `json:"disabled,omitempty"`
+}
+
+// ServerList is the network's servers, falling back to Host/Port/TLS for
+// rows saved before Servers existed.
+func (n Network) ServerList() []Server {
+	if len(n.Servers) > 0 {
+		return n.Servers
+	}
+	if n.Host == "" {
+		return nil
+	}
+	return []Server{{Host: n.Host, Port: n.Port, TLS: n.TLS}}
+}
+
+// Channel returns a channel's settings.
+func (n Network) Channel(name string) ChannelSettings {
+	return n.ChannelSettings[strings.ToLower(name)]
 }
 
 // ReadMarker is how far a user has read a buffer.
@@ -200,6 +296,9 @@ type Store interface {
 	DeleteNetwork(userID, id int64) error
 	SetNetworkEnabled(id int64, enabled bool) error
 	SetNetworkChannels(id int64, channels []string) error
+	SetNetworkChannelSettings(id int64, settings map[string]ChannelSettings) error
+	// EncryptSecrets re-encrypts network secrets under the current key.
+	EncryptSecrets() (int, error)
 	// UpdateNetwork saves a network's editable settings (not Enabled).
 	UpdateNetwork(n Network) error
 

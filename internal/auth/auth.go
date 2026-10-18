@@ -297,6 +297,11 @@ func (m *Manager) PasswordLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.fails.reset(key)
+	if !accounts.HostAllowed(u, clientIP(r)) {
+		telemetry.WebLogins.Add(r.Context(), 1, telemetry.Attrs("method", "password", "result", "host_denied"))
+		writeErr(w, http.StatusForbidden, "signing in from your address isn't allowed for this account")
+		return
+	}
 	if err := m.startSession(w, r, u, "password", ""); err != nil {
 		writeErr(w, http.StatusInternalServerError, "couldn't start a session")
 		return
@@ -382,6 +387,10 @@ func (m *Manager) Callback(w http.ResponseWriter, r *http.Request) {
 	u, code := m.provision(c)
 	if code != "" {
 		fail(code)
+		return
+	}
+	if !accounts.HostAllowed(u, clientIP(r)) {
+		fail("host_denied")
 		return
 	}
 	if err := m.startSession(w, r, u, "oidc", rawID); err != nil {

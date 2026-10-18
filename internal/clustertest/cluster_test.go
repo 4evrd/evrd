@@ -357,9 +357,13 @@ func TestWebRequestsAreServedByTheOwner(t *testing.T) {
 		t.Fatalf("websocket through the other node: %v (%v)", err, res)
 	}
 	defer ws.Close()
-	ws.WriteJSON(map[string]string{"target": "#c", "text": "hello across nodes"})
 	ws.SetReadDeadline(time.Now().Add(3 * time.Second))
 	var m map[string]any
+	// The owner says when it's subscribed, through the proxy too.
+	if err := ws.ReadJSON(&m); err != nil || m["type"] != "ready" {
+		t.Fatalf("ready: %v %v", m, err)
+	}
+	ws.WriteJSON(map[string]string{"target": "#c", "text": "hello across nodes"})
 	if err := ws.ReadJSON(&m); err != nil || m["text"] != "hello across nodes" {
 		t.Fatalf("echo: %v %v", m, err)
 	}

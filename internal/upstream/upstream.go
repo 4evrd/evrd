@@ -70,6 +70,11 @@ type Health struct {
 	RetryIn     time.Duration `json:"retryIn"`  // wait before the next attempt
 	ConnectedAt time.Time     `json:"connectedAt"`
 	Lag         time.Duration `json:"lag"` // -1 while unknown
+	// Server is the host:port of the server in use (or being tried).
+	Server string `json:"server"`
+	// UntrustedFingerprint is the SHA-256 of the last certificate refused,
+	// so the user can choose to trust it.
+	UntrustedFingerprint string `json:"untrustedFingerprint,omitempty"`
 }
 
 // Event is something worth telling the user about.
@@ -121,6 +126,18 @@ type Conn struct {
 	// pending holds lines users send before registration completes (a client
 	// attaching while the upstream is still connecting); 001 flushes them.
 	pending []string
+
+	// Settings that can change while connected (Reconfigure).
+	quitMsg      string
+	joinDelay    time.Duration
+	chanSettings map[string]store.ChannelSettings
+	ctcpReplies  map[string]string
+	flood        flood
+	codec        codec
+	serverIdx    int
+	serverPass   string // the current server's PASS (then no SASL-fallback PASS)
+	idle         func() bool
+	version      string
 }
 
 // maxPending caps the lines held for an upstream that isn't registered yet.
@@ -138,8 +155,19 @@ type Options struct {
 	// Dial opens the TCP connection (TLS is added on top). The bouncer uses
 	// it to pace connects and pick the source address; nil dials directly.
 	Dial func(ctx context.Context, host string, port int) (net.Conn, error)
-	// AltNick is tried when the nick is taken while registering.
+	// AltNick is tried when the nick is taken while registering (the
+	// network's own alternate nick wins).
 	AltNick string
+	// QuitMsg is sent when the network is switched off (the network's own
+	// quit message wins); empty sends a plain QUIT.
+	QuitMsg string
+	// CTCPReplies answers CTCP requests with fixed text; "" blocks one.
+	CTCPReplies map[string]string
+	// Idle reports whether no client is attached, in which case evrd itself
+	// answers CTCP VERSION, PING and TIME. Nil: never.
+	Idle func() bool
+	// Version is evrd's version, for CTCP VERSION.
+	Version string
 	// PingInterval and ReadTimeout override the link supervision defaults.
 	PingInterval, ReadTimeout time.Duration
 }
@@ -153,27 +181,34 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		}
 	}
 	c := &Conn{
-		net:         n,
-		log:         log,
-		persist:     opts.Persist,
-		onChannels:  opts.OnChannels,
-		onEvent:     opts.OnEvent,
-		dial:        opts.Dial,
-		altNick:     strings.TrimSpace(opts.AltNick),
-		pingEvery:   opts.PingInterval,
-		readLimit:   opts.ReadTimeout,
-		userAttr:    strconv.FormatInt(n.UserID, 10),
-		netAttr:     strconv.FormatInt(n.ID, 10),
-		nick:        n.Nick,
-		saved:       saved,
-		channels:    map[string]bool{},
-		members:     map[string]map[string]*Member{},
-		topics:      map[string]string{},
-		prefixModes: "ov",
-		prefixChars: "@+",
-		health:      Health{Status: StatusDisconnected, Lag: -1},
-		subs:        map[chan history.Message]struct{}{},
-		rawSubs:     map[chan string]struct{}{},
+		net:          n,
+		log:          log,
+		persist:      opts.Persist,
+		onChannels:   opts.OnChannels,
+		onEvent:      opts.OnEvent,
+		dial:         opts.Dial,
+		altNick:      orElse(strings.TrimSpace(n.AltNick), strings.TrimSpace(opts.AltNick)),
+		quitMsg:      orElse(n.QuitMsg, opts.QuitMsg),
+		joinDelay:    time.Duration(n.JoinDelay) * time.Second,
+		chanSettings: n.ChannelSettings,
+		ctcpReplies:  upperKeys(opts.CTCPReplies),
+		codec:        newCodec(n.Encoding),
+		idle:         opts.Idle,
+		version:      opts.Version,
+		pingEvery:    opts.PingInterval,
+		readLimit:    opts.ReadTimeout,
+		userAttr:     strconv.FormatInt(n.UserID, 10),
+		netAttr:      strconv.FormatInt(n.ID, 10),
+		nick:         n.Nick,
+		saved:        saved,
+		channels:     map[string]bool{},
+		members:      map[string]map[string]*Member{},
+		topics:       map[string]string{},
+		prefixModes:  "ov",
+		prefixChars:  "@+",
+		health:       Health{Status: StatusDisconnected, Lag: -1},
+		subs:         map[chan history.Message]struct{}{},
+		rawSubs:      map[chan string]struct{}{},
 	}
 	if c.pingEvery <= 0 {
 		c.pingEvery = DefaultPingInterval
@@ -181,7 +216,55 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 	if c.readLimit <= 0 {
 		c.readLimit = DefaultReadTimeout
 	}
+	c.flood.set(n.FloodRate, n.FloodBurst)
 	return c
+}
+
+// Reconfigure applies settings that don't need a new connection: quit
+// message, join delay, channel options, flood protection and CTCP replies.
+func (c *Conn) Reconfigure(n store.Network, defaultQuit string, ctcp map[string]string) {
+	c.mu.Lock()
+	c.quitMsg = orElse(n.QuitMsg, defaultQuit)
+	c.joinDelay = time.Duration(n.JoinDelay) * time.Second
+	c.chanSettings = n.ChannelSettings
+	c.ctcpReplies = upperKeys(ctcp)
+	c.mu.Unlock()
+	c.flood.set(n.FloodRate, n.FloodBurst)
+}
+
+// ChannelSettings returns a channel's options.
+func (c *Conn) ChannelSettings(ch string) store.ChannelSettings {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.chanSettings[strings.ToLower(ch)]
+}
+
+// SetChannelSettings changes a channel's options (detach / attach) and
+// returns the new map for saving.
+func (c *Conn) SetChannelSettings(ch string, f func(*store.ChannelSettings)) map[string]store.ChannelSettings {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	m := make(map[string]store.ChannelSettings, len(c.chanSettings)+1)
+	for k, v := range c.chanSettings {
+		m[k] = v
+	}
+	cs := m[strings.ToLower(ch)]
+	f(&cs)
+	if cs == (store.ChannelSettings{}) {
+		delete(m, strings.ToLower(ch))
+	} else {
+		m[strings.ToLower(ch)] = cs
+	}
+	c.chanSettings = m
+	return m
+}
+
+func upperKeys(m map[string]string) map[string]string {
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[strings.ToUpper(strings.TrimSpace(k))] = v
+	}
+	return out
 }
 
 // Run keeps the connection alive until ctx is cancelled, reconnecting with
@@ -240,26 +323,40 @@ func (c *Conn) Run(ctx context.Context) {
 func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	dctxDial, cancelDial := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelDial()
+	// Each attempt moves on to the next server (failover, ZNC-style).
+	servers := c.net.ServerList()
+	if len(servers) == 0 {
+		return false, errors.New("no servers configured")
+	}
+	c.mu.Lock()
+	sv := servers[c.serverIdx%len(servers)]
+	c.serverIdx++
+	c.serverPass = sv.Password
+	c.health.Server = net.JoinHostPort(sv.Host, strconv.Itoa(sv.Port))
+	c.mu.Unlock()
 	var conn net.Conn
 	var err error
 	if c.dial != nil {
-		conn, err = c.dial(dctxDial, c.net.Host, c.net.Port)
+		conn, err = c.dial(dctxDial, sv.Host, sv.Port)
 	} else {
 		d := &net.Dialer{}
-		conn, err = d.DialContext(dctxDial, "tcp", net.JoinHostPort(c.net.Host, strconv.Itoa(c.net.Port)))
+		conn, err = d.DialContext(dctxDial, "tcp", net.JoinHostPort(sv.Host, strconv.Itoa(sv.Port)))
 	}
 	if err != nil {
 		telemetry.UpstreamConnects.Add(ctx, 1, telemetry.Result("error"))
 		return false, err
 	}
-	if c.net.TLS {
-		tc := tls.Client(conn, &tls.Config{ServerName: c.net.Host})
+	if sv.TLS {
+		tc := tls.Client(conn, c.tlsConfig(sv.Host))
 		if err := tc.HandshakeContext(dctxDial); err != nil {
 			conn.Close()
 			telemetry.UpstreamConnects.Add(ctx, 1, telemetry.Result("error"))
 			return false, err
 		}
 		conn = tc
+		c.mu.Lock()
+		c.health.UntrustedFingerprint = ""
+		c.mu.Unlock()
 	}
 	telemetry.UpstreamConnects.Add(ctx, 1, telemetry.Result("ok"))
 	defer conn.Close()
@@ -269,6 +366,18 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	defer dcancel()
 	go func() {
 		<-dctx.Done()
+		// Switched off (not just this link ending): say goodbye first.
+		if ctx.Err() != nil && c.Status() == StatusConnected {
+			c.mu.Lock()
+			quit := c.quitMsg
+			c.mu.Unlock()
+			conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+			if quit != "" {
+				io.WriteString(conn, c.codec.encode("QUIT :"+quit)+"\r\n")
+			} else {
+				io.WriteString(conn, "QUIT\r\n")
+			}
+		}
 		conn.Close()
 	}()
 
@@ -287,6 +396,9 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 
 	// Registration. CAP LS holds registration open so we can negotiate SASL;
 	// CAP END (sent once auth resolves, see handleCap) completes it.
+	if sv.Password != "" {
+		c.send("PASS " + sv.Password)
+	}
 	c.send("CAP LS 302")
 	c.send("NICK " + c.net.Nick)
 	user := orElse(c.net.Username, c.net.Nick)
@@ -298,8 +410,12 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	conn.SetReadDeadline(time.Now().Add(c.readLimit))
 	for sc.Scan() {
 		conn.SetReadDeadline(time.Now().Add(c.readLimit))
-		line := sc.Text()
-		c.handle(irc.Parse(line))
+		line := c.codec.decode(sc.Bytes())
+		m := irc.Parse(line)
+		if m.Command == "PRIVMSG" && len(m.Params) == 2 && c.ctcp(m.Prefix, m.Params[0], m.Params[1]) {
+			continue // answered (or blocked) here
+		}
+		c.handle(m)
 		c.broadcastRaw(line) // full-fidelity feed for attached IRC clients
 	}
 
@@ -366,12 +482,23 @@ func (c *Conn) handle(m irc.Message) {
 			c.nick = m.Params[0] // the server's word on our nick
 		}
 		saved := append([]string(nil), c.saved...)
+		settings, delay0 := c.chanSettings, c.joinDelay
 		away := c.away
 		c.health.Status, c.health.ConnectedAt = StatusConnected, time.Now()
 		c.health.Attempts, c.health.RetryIn, c.health.Lag = 0, 0, -1
 		c.mu.Unlock()
-		for _, ch := range saved {
-			c.send("JOIN " + ch)
+		joins := joinLines(saved, settings)
+		if delay0 > 0 {
+			go func() {
+				time.Sleep(delay0)
+				for _, l := range joins {
+					c.send(l)
+				}
+			}()
+		} else {
+			for _, l := range joins {
+				c.send(l)
+			}
 		}
 		if away != "" {
 			c.send("AWAY :" + away)
@@ -675,7 +802,7 @@ func (c *Conn) handleCap(m irc.Message) {
 		if c.net.Password != "" && strings.Contains(caps, "sasl") {
 			c.send("CAP REQ :sasl")
 		} else {
-			if c.net.Password != "" {
+			if c.net.Password != "" && c.serverPass == "" {
 				c.send("PASS " + c.net.Password)
 			}
 			c.send("CAP END")
@@ -687,7 +814,7 @@ func (c *Conn) handleCap(m irc.Message) {
 			c.send("CAP END")
 		}
 	case "NAK":
-		if c.net.Password != "" {
+		if c.net.Password != "" && c.serverPass == "" {
 			c.send("PASS " + c.net.Password)
 		}
 		c.send("CAP END")
@@ -697,7 +824,7 @@ func (c *Conn) handleCap(m irc.Message) {
 // sendSASL responds to an AUTHENTICATE + challenge with a SASL PLAIN payload:
 // base64("\0" + authcid + "\0" + password).
 func (c *Conn) sendSASL() {
-	authcid := orElse(c.net.Username, c.net.Nick)
+	authcid := orElse(c.net.SASLUser, orElse(c.net.Username, c.net.Nick))
 	payload := "\x00" + authcid + "\x00" + c.net.Password
 	c.send("AUTHENTICATE " + base64.StdEncoding.EncodeToString([]byte(payload)))
 }
@@ -875,11 +1002,15 @@ func (c *Conn) sendUser(line string) {
 func (c *Conn) send(line string) {
 	c.mu.Lock()
 	w := c.w
+	registered := c.health.Status == StatusConnected
 	c.mu.Unlock()
 	if w == nil {
 		return
 	}
-	io.WriteString(w, line+"\r\n")
+	if registered && !exempt(line) {
+		c.flood.wait()
+	}
+	io.WriteString(w, c.codec.encode(line)+"\r\n")
 }
 
 func (c *Conn) update(f func(*Health)) {

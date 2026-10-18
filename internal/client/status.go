@@ -6,6 +6,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -37,7 +38,14 @@ func init() {
 		{"addnetwork", "<name> <host> [[+]port] [nick]", "Add a network. +port means TLS (default +6697).", (*session).cmdAddNetwork},
 		{"delnetwork", "<network>", "Remove a network and its saved history.", (*session).cmdDelNetwork},
 		{"show", "[network]", "A network's settings (default: this one).", (*session).cmdShow},
-		{"set", "[network] <setting> <value>", "Change a setting: name, host, port ([+]port), tls on|off, nick, ident, realname, password (- clears).", (*session).cmdSet},
+		{"set", "[network] <setting> <value>", "Change a setting: " + strings.Join(settingNames, ", ") + " (- clears).", (*session).cmdSet},
+		{"listservers", "", "This network's servers, in failover order.", (*session).cmdListServers},
+		{"addserver", "<host> [[+]port] [password]", "Add a server (tried in turn when the link drops). +port means TLS.", (*session).cmdAddServer},
+		{"delserver", "<host> [port]", "Remove a server.", (*session).cmdDelServer},
+		{"listfingerprints", "", "Certificate fingerprints trusted for this network.", (*session).cmdListFingerprints},
+		{"addfingerprint", "<sha-256>", "Trust a server certificate by its SHA-256 fingerprint.", (*session).cmdAddFingerprint},
+		{"delfingerprint", "<sha-256>", "Stop trusting a certificate fingerprint.", (*session).cmdDelFingerprint},
+		{"detach", "<#channel>[,…]", "Hide channels from IRC clients; evrd stays in them and keeps logging. /join brings them back.", (*session).cmdDetach},
 		{"channels", "", "The channels saved for this network (JOIN and PART update it).", (*session).cmdChannels},
 		{"playback", "<channel|nick> [lines]", fmt.Sprintf("Replay a buffer's last lines (default 50, up to %d).", maxPlayback), (*session).cmdPlayback},
 		{"info", "", "Your account, limits and attached clients.", (*session).cmdInfo},
@@ -50,6 +58,8 @@ var statusAliases = map[string]string{
 	"listnetworks": "networks", "listnets": "networks", "jumpnetwork": "jump",
 	"addnet": "addnetwork", "delnet": "delnetwork", "listchans": "channels",
 	"shownetwork": "show", "setnetwork": "set",
+	"addtrustedserverfingerprint": "addfingerprint", "deltrustedserverfingerprint": "delfingerprint",
+	"listtrustedserverfingerprints": "listfingerprints",
 }
 
 func (se *session) statusCommand(text string) {
@@ -290,24 +300,46 @@ func (se *session) cmdShow(args []string) {
 	if !ok {
 		return
 	}
-	tls, pw := "off", "not set"
-	if n.TLS {
-		tls = "on"
-	}
+	pw := "not set"
 	if n.Password != "" {
 		pw = "set"
 	}
 	se.statusf("%s — %s", n.Name, se.srv.b.Status(n.ID))
-	se.statusf("  host %s · port %d · tls %s", n.Host, n.Port, tls)
-	se.statusf("  nick %s · ident %s · realname %s", n.Nick, orElse(n.Username, "(nick)"), orElse(n.Realname, "(nick)"))
-	se.statusf("  password %s · channels %s", pw, orElse(strings.Join(n.Channels, " "), "none"))
+	for i, sv := range n.ServerList() {
+		tls := ""
+		if sv.TLS {
+			tls = " (TLS)"
+		}
+		se.statusf("  server %d: %s:%d%s", i+1, sv.Host, sv.Port, tls)
+	}
+	se.statusf("  nick %s · altnick %s · ident %s · realname %s", n.Nick, orElse(n.AltNick, "(default)"),
+		orElse(n.Username, "(nick)"), orElse(n.Realname, "(nick)"))
+	se.statusf("  sasl password %s · sasl user %s · bindhost %s", pw, orElse(n.SASLUser, "(ident)"), orElse(n.BindHost, "(default)"))
+	se.statusf("  quitmsg %s · encoding %s", orElse(n.QuitMsg, "(default)"), orElse(n.Encoding, "UTF-8"))
+	se.statusf("  trustallcerts %s · trustpki %s · %d trusted fingerprint(s)", onOff(n.TrustAllCerts), onOff(n.TrustPKI), len(n.Fingerprints))
+	se.statusf("  floodrate %g · floodburst %d · joindelay %ds", n.FloodRate, n.FloodBurst, n.JoinDelay)
+	se.statusf("  channels %s", orElse(strings.Join(n.Channels, " "), "none"))
 }
 
-// settings are the fields set can change.
-var settings = map[string]bool{
-	"name": true, "host": true, "port": true, "tls": true,
-	"nick": true, "ident": true, "realname": true, "password": true,
+func onOff(b bool) string {
+	if b {
+		return "on"
+	}
+	return "off"
 }
+
+// settingNames are the fields set can change, in help order.
+var settingNames = []string{"name", "host", "port", "tls", "nick", "altnick", "ident", "realname",
+	"password", "sasluser", "bindhost", "quitmsg", "encoding", "trustallcerts", "trustpki",
+	"floodrate", "floodburst", "joindelay"}
+
+var settings = func() map[string]bool {
+	m := map[string]bool{}
+	for _, n := range settingNames {
+		m[n] = true
+	}
+	return m
+}()
 
 func (se *session) cmdSet(args []string) {
 	usage := func() {
@@ -334,30 +366,87 @@ func (se *session) cmdSet(args []string) {
 	before := n
 	value := strings.Join(args[1:], " ")
 	clear := value == "-"
+	n.Servers = append([]store.Server(nil), n.ServerList()...) // host/port/tls edit the first
+	bool_ := func(dst *bool) bool {
+		switch strings.ToLower(value) {
+		case "on", "yes", "true":
+			*dst = true
+		case "off", "no", "false":
+			*dst = false
+		default:
+			se.statusf("%s is on or off.", field)
+			return false
+		}
+		return true
+	}
+	text := func(dst *string) {
+		*dst = value
+		if clear {
+			*dst = ""
+		}
+	}
 	switch field {
 	case "name":
 		n.Name = value
 	case "host":
-		n.Host = value
+		n.Servers[0].Host = value
 	case "port":
 		port, err := strconv.Atoi(strings.TrimPrefix(value, "+"))
 		if err != nil || port < 1 || port > 65535 {
 			se.statusf("%q isn't a port — use e.g. 6667, or +6697 for TLS.", value)
 			return
 		}
-		n.Port = port
+		n.Servers[0].Port = port
 		if strings.HasPrefix(value, "+") {
-			n.TLS = true
+			n.Servers[0].TLS = true
 		}
 	case "tls":
-		switch strings.ToLower(value) {
-		case "on", "yes", "true":
-			n.TLS = true
-		case "off", "no", "false":
-			n.TLS = false
-		default:
-			se.statusf("tls is on or off.")
+		if !bool_(&n.Servers[0].TLS) {
 			return
+		}
+	case "altnick":
+		text(&n.AltNick)
+	case "sasluser":
+		text(&n.SASLUser)
+	case "quitmsg":
+		text(&n.QuitMsg)
+	case "encoding":
+		text(&n.Encoding)
+	case "bindhost":
+		text(&n.BindHost)
+		u, err := se.srv.b.Store().UserByID(se.uid)
+		if err == nil {
+			err = se.srv.acc.CheckBindHost(u, n.BindHost)
+		}
+		if err != nil {
+			se.statusf("%s.", capitalize(err.Error()))
+			return
+		}
+	case "trustallcerts":
+		if !bool_(&n.TrustAllCerts) {
+			return
+		}
+	case "trustpki":
+		if !bool_(&n.TrustPKI) {
+			return
+		}
+	case "floodrate":
+		v, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			se.statusf("floodrate is lines per second, e.g. 2 (0 turns it off).")
+			return
+		}
+		n.FloodRate = v
+	case "floodburst", "joindelay":
+		v, err := strconv.Atoi(value)
+		if err != nil {
+			se.statusf("%s is a whole number.", field)
+			return
+		}
+		if field == "floodburst" {
+			n.FloodBurst = v
+		} else {
+			n.JoinDelay = v
 		}
 	case "nick":
 		n.Nick = value
@@ -397,6 +486,7 @@ func (se *session) cmdSet(args []string) {
 	if n.ID == se.net.ID {
 		se.net = n
 	}
+	se.srv.b.Reconfigure(n)
 	shown := value
 	if field == "password" {
 		shown = "(hidden)"
@@ -487,4 +577,164 @@ func capitalize(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// --- servers, fingerprints, detach ----------------------------------------------
+
+// saveNetwork validates and saves n, reconnecting when needed.
+func (se *session) saveNetwork(before, n store.Network, done string) {
+	if err := accounts.NormalizeNetwork(&n); err != nil {
+		se.statusf("%s.", capitalize(err.Error()))
+		return
+	}
+	if err := se.srv.b.Store().UpdateNetwork(n); err != nil {
+		se.statusf("Couldn't save: %v", err)
+		return
+	}
+	if n.ID == se.net.ID {
+		se.net = n
+	}
+	se.srv.b.Reconfigure(n)
+	if accounts.NeedsReconnect(before, n) && se.srv.b.Status(n.ID) != upstream.StatusDisconnected {
+		if err := se.srv.b.Reconnect(n.ID); err != nil {
+			se.statusf("%s But reconnecting failed: %v", done, err)
+			return
+		}
+		se.statusf("%s Reconnecting to apply it…", done)
+		return
+	}
+	se.statusf("%s", done)
+}
+
+func (se *session) cmdListServers([]string) {
+	n, ok := se.network(nil)
+	if !ok {
+		return
+	}
+	for i, sv := range n.ServerList() {
+		extra := ""
+		if sv.TLS {
+			extra += " TLS"
+		}
+		if sv.Password != "" {
+			extra += " (password set)"
+		}
+		se.statusf("%d. %s %d%s", i+1, sv.Host, sv.Port, extra)
+	}
+}
+
+func (se *session) cmdAddServer(args []string) {
+	if len(args) < 1 || len(args) > 3 {
+		se.statusf("Usage: addserver <host> [[+]port] [password]")
+		return
+	}
+	n, ok := se.network(nil)
+	if !ok {
+		return
+	}
+	sv := store.Server{Host: args[0], Port: 6697, TLS: true}
+	if len(args) >= 2 {
+		port, err := strconv.Atoi(strings.TrimPrefix(args[1], "+"))
+		if err != nil || port < 1 || port > 65535 {
+			se.statusf("%q isn't a port — use e.g. 6667, or +6697 for TLS.", args[1])
+			return
+		}
+		sv.Port, sv.TLS = port, strings.HasPrefix(args[1], "+")
+	}
+	if len(args) == 3 {
+		sv.Password = args[2]
+	}
+	before := n
+	n.Servers = append(append([]store.Server(nil), n.ServerList()...), sv)
+	se.saveNetwork(before, n, fmt.Sprintf("Added %s:%d to %s. It's used when the link drops.", sv.Host, sv.Port, n.Name))
+}
+
+func (se *session) cmdDelServer(args []string) {
+	if len(args) < 1 || len(args) > 2 {
+		se.statusf("Usage: delserver <host> [port]")
+		return
+	}
+	n, ok := se.network(nil)
+	if !ok {
+		return
+	}
+	before := n
+	var kept []store.Server
+	removed := 0
+	for _, sv := range n.ServerList() {
+		if strings.EqualFold(sv.Host, args[0]) && (len(args) == 1 || args[1] == strconv.Itoa(sv.Port) || args[1] == "+"+strconv.Itoa(sv.Port)) {
+			removed++
+			continue
+		}
+		kept = append(kept, sv)
+	}
+	switch {
+	case removed == 0:
+		se.statusf("%s has no server %s.", n.Name, args[0])
+		return
+	case len(kept) == 0:
+		se.statusf("That's %s's only server — add another first.", n.Name)
+		return
+	}
+	n.Servers = kept
+	se.saveNetwork(before, n, fmt.Sprintf("Removed %s from %s.", args[0], n.Name))
+}
+
+func (se *session) cmdListFingerprints([]string) {
+	n, ok := se.network(nil)
+	if !ok {
+		return
+	}
+	if len(n.Fingerprints) == 0 {
+		se.statusf("No trusted fingerprints on %s.", n.Name)
+		return
+	}
+	for _, f := range n.Fingerprints {
+		se.statusf("%s", upstream.ColonHex(f))
+	}
+}
+
+func (se *session) cmdAddFingerprint(args []string) {
+	if len(args) != 1 {
+		se.statusf("Usage: addfingerprint <sha-256>")
+		return
+	}
+	n, ok := se.network(nil)
+	if !ok {
+		return
+	}
+	before := n
+	n.Fingerprints = append(append([]string(nil), n.Fingerprints...), args[0])
+	se.saveNetwork(before, n, fmt.Sprintf("Trusting that certificate on %s.", n.Name))
+}
+
+func (se *session) cmdDelFingerprint(args []string) {
+	if len(args) != 1 {
+		se.statusf("Usage: delfingerprint <sha-256>")
+		return
+	}
+	n, ok := se.network(nil)
+	if !ok {
+		return
+	}
+	before := n
+	want := accounts.NormalizeFingerprint(args[0])
+	n.Fingerprints = slices.DeleteFunc(append([]string(nil), n.Fingerprints...), func(f string) bool { return f == want })
+	if len(n.Fingerprints) == len(before.Fingerprints) {
+		se.statusf("That fingerprint isn't trusted on %s.", n.Name)
+		return
+	}
+	se.saveNetwork(before, n, fmt.Sprintf("No longer trusting that certificate on %s.", n.Name))
+}
+
+func (se *session) cmdDetach(args []string) {
+	if se.web != nil {
+		se.statusf("Detaching hides channels from IRC clients; the web chat shows everything.")
+		return
+	}
+	if len(args) != 1 {
+		se.statusf("Usage: detach <#channel>[,…]")
+		return
+	}
+	se.detach(strings.Split(args[0], ","))
 }

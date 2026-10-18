@@ -8,6 +8,8 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"net/netip"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -77,9 +79,36 @@ func HashPassword(pw string) (string, error) {
 
 // Service applies the rules against the store.
 type Service struct {
-	st       store.Store
-	defaults config.Limits
-	now      func() time.Time
+	st        store.Store
+	defaults  config.Limits
+	now       func() time.Time
+	bindHosts []string
+}
+
+// SetBindHosts sets the bind hosts users may choose from.
+func (s *Service) SetBindHosts(hosts []string) { s.bindHosts = hosts }
+
+// BindHosts are the bind hosts users may choose from.
+func (s *Service) BindHosts() []string { return append([]string(nil), s.bindHosts...) }
+
+// CheckBindHost reports whether u may connect from bind ("" always may).
+// Admins may use any address; users pick from the server's list unless
+// their bind host is locked (DenySetBindHost).
+func (s *Service) CheckBindHost(u store.User, bind string) error {
+	switch {
+	case bind == "" || u.IsAdmin():
+		return nil
+	case u.DenySetBindHost:
+		return invalid("your bind host is set by an admin")
+	case len(s.bindHosts) == 0:
+		return invalid("this bouncer doesn't offer bind hosts")
+	}
+	for _, h := range s.bindHosts {
+		if strings.EqualFold(h, bind) {
+			return nil
+		}
+	}
+	return invalid("%s isn't one of this bouncer's bind hosts (%s)", bind, strings.Join(s.bindHosts, ", "))
 }
 
 func New(st store.Store, defaults config.Limits) *Service {
@@ -316,4 +345,54 @@ func (s *Service) GuardAdminChange(before store.User, stillAdmin bool) error {
 		return ErrLastAdmin
 	}
 	return nil
+}
+
+// HostAllowed reports whether a client at ip may sign in as u: anywhere when
+// the user's allowed list is empty, else an entry must match — an IP, a CIDR
+// range, or a wildcard such as 192.168.* or 2001:db8:*.
+func HostAllowed(u store.User, ip string) bool {
+	if len(u.AllowedHosts) == 0 {
+		return true
+	}
+	addr, err := netip.ParseAddr(ip)
+	if err == nil {
+		addr = addr.Unmap()
+		ip = addr.String()
+	}
+	for _, h := range u.AllowedHosts {
+		h = strings.TrimSpace(h)
+		if p, err := netip.ParsePrefix(h); err == nil && addr.IsValid() {
+			if p.Contains(addr) {
+				return true
+			}
+			continue
+		}
+		if ok, _ := path.Match(strings.ToLower(h), strings.ToLower(ip)); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// NormalizeAllowedHosts checks an allowed-hosts list.
+func NormalizeAllowedHosts(hosts []string) ([]string, error) {
+	out := []string{}
+	for _, h := range hosts {
+		if h = strings.TrimSpace(h); h == "" {
+			continue
+		}
+		if _, err := netip.ParsePrefix(h); err == nil {
+			out = append(out, h)
+			continue
+		}
+		if _, err := netip.ParseAddr(h); err == nil {
+			out = append(out, h)
+			continue
+		}
+		if strings.Trim(h, "0123456789abcdefABCDEF.:*?[]-") != "" || !strings.ContainsAny(h, "*?") {
+			return nil, invalid("%q isn't an IP, a CIDR range or a wildcard like 192.168.*", h)
+		}
+		out = append(out, h)
+	}
+	return out, nil
 }

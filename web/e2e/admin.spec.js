@@ -186,7 +186,7 @@ test('bouncer overview: tiles, placement, upstreams and storage', async ({ page 
     await expect(page.getByRole('heading', { name: 'Bouncer overview' })).toBeVisible()
     const all = (await (await session(ADMIN, ADMIN_PASS)).get('/api/admin/users')).length
     await expect(page.getByTestId('ov-users')).toHaveText(String(all))
-    await expect(page.getByText('nodes holding')).toBeVisible()
+    await expect(page.getByText(/nodes? holding/)).toBeVisible()
     // every placed account hangs off a node; the new one is there, linked
     const node = page.locator('.user-node', { hasText: u.name })
     await expect(node).toContainText('1/1 links')

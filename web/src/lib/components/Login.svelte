@@ -15,6 +15,7 @@
     expired: 'That sign-in took too long or was already used. Try again.',
     cancelled: 'Sign-in was cancelled.',
     sso_off: 'Single sign-on isn’t set up on this server.',
+    host_denied: 'Signing in from your current address isn’t allowed for this account.',
   }
   const code = new URLSearchParams(location.search).get('login_error')
   let ssoErr = $state(code ? SSO_ERRORS[code] || 'Signing in didn’t work. Try again in a moment.' : '')

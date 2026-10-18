@@ -111,6 +111,10 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 			MaxClients   *int `json:"maxClients"`
 			BacklogLines *int `json:"backlogLines"`
 		} `json:"limits"`
+		// Bouncer settings, as the user edits them; admins may use any bind
+		// host and lock it (denySetBindHost).
+		Settings        *userSettingsInput `json:"settings"`
+		DenySetBindHost *bool              `json:"denySetBindHost"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -152,6 +156,15 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	if in.Settings != nil {
+		if err := in.Settings.apply(&u); err != nil {
+			s.fail(w, err)
+			return
+		}
+	}
+	if in.DenySetBindHost != nil {
+		u.DenySetBindHost = *in.DenySetBindHost
+	}
 	if err := s.st().UpdateUser(u); err != nil {
 		s.fail(w, err)
 		return
@@ -165,6 +178,9 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	case !u.Suspended && before.Suspended:
 		s.b.ResumeUser(u.ID)
 		s.log.Info("unsuspended user", "admin", me.Username, "user", u.Username)
+	}
+	if in.Settings != nil {
+		s.b.ReconfigureUser(u.ID)
 	}
 	writeJSON(w, http.StatusOK, s.adminUserDTO(u))
 }

@@ -70,6 +70,9 @@ services:
       EVRD_INTERNAL_URL: http://evrd:8099
       EVRD_INTERNAL_IRC_ADDR: evrd:6699
       EVRD_CLUSTER_SECRET: dev-cluster-secret
+      # Encrypts saved network passwords. A dev-only key: make your own with
+      # `evrctl genkey` for anything real.
+      EVRD_SECRET_KEY: lziNkka9EHHENdp2LKv88ym6zYCRfH8cMo6rZj/Ihi4=
     depends_on:
       ircd:
         condition: service_started
@@ -94,6 +97,9 @@ services:
       EVRD_INTERNAL_URL: http://evrd2:8099
       EVRD_INTERNAL_IRC_ADDR: evrd2:6699
       EVRD_CLUSTER_SECRET: dev-cluster-secret
+      # Encrypts saved network passwords. A dev-only key: make your own with
+      # `evrctl genkey` for anything real.
+      EVRD_SECRET_KEY: lziNkka9EHHENdp2LKv88ym6zYCRfH8cMo6rZj/Ihi4=
     depends_on:
       ircd:
         condition: service_started

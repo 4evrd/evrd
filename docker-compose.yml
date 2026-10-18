@@ -72,6 +72,10 @@ services:
       EVRD_INTERNAL_URL: http://evrd:8099
       EVRD_INTERNAL_IRC_ADDR: evrd:6699
       EVRD_CLUSTER_SECRET: change-me-to-a-long-random-secret
+      # Encrypts saved network passwords (NickServ/SASL, server passwords).
+      # Generate one with `evrctl genkey`, keep it out of backups of the
+      # database, and give every node the same one.
+      EVRD_SECRET_KEY: ${EVRD_SECRET_KEY:?set EVRD_SECRET_KEY (evrctl genkey makes one)}
 
   evrd2:
     <<: *evrd
@@ -80,6 +84,10 @@ services:
       EVRD_INTERNAL_URL: http://evrd2:8099
       EVRD_INTERNAL_IRC_ADDR: evrd2:6699
       EVRD_CLUSTER_SECRET: change-me-to-a-long-random-secret
+      # Encrypts saved network passwords (NickServ/SASL, server passwords).
+      # Generate one with `evrctl genkey`, keep it out of backups of the
+      # database, and give every node the same one.
+      EVRD_SECRET_KEY: ${EVRD_SECRET_KEY:?set EVRD_SECRET_KEY (evrctl genkey makes one)}
 
   # Round-robin load balancer for IRC and the API (deploy/lb.conf). The web
   # container reaches the API through it as evrd-api.

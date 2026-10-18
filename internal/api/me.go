@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/store"
 )
@@ -23,6 +24,7 @@ func (s *Server) userDTO(u store.User) map[string]any {
 		"limits":      s.acc.LimitsFor(u),
 		"usage":       map[string]any{"networks": nets, "clients": s.b.Clients(u.ID), "attached": s.b.Attached(u.ID)},
 		"otherAdmins": s.otherAdmins(u),
+		"settings":    settingsDTO(u),
 	}
 }
 
@@ -54,14 +56,32 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	u := auth.User(r)
 	var in struct {
-		Email           *string `json:"email"`
-		DefaultNick     *string `json:"defaultNick"`
-		DefaultRealname *string `json:"defaultRealname"`
-		DefaultAltNick  *string `json:"defaultAltNick"`
-		AutoAway        *bool   `json:"autoAway"`
+		Email           *string            `json:"email"`
+		DefaultNick     *string            `json:"defaultNick"`
+		DefaultRealname *string            `json:"defaultRealname"`
+		DefaultAltNick  *string            `json:"defaultAltNick"`
+		AutoAway        *bool              `json:"autoAway"`
+		Settings        *userSettingsInput `json:"settings"`
 	}
 	if !decode(w, r, &in) {
 		return
+	}
+	before := u
+	if in.Settings != nil {
+		if err := in.Settings.apply(&u); err != nil {
+			s.fail(w, err)
+			return
+		}
+		if u.BindHost != before.BindHost {
+			if err := s.acc.CheckBindHost(before, u.BindHost); err != nil {
+				s.fail(w, err)
+				return
+			}
+		}
+		if ip := clientAddr(r); ip != "" && !accounts.HostAllowed(u, ip) {
+			writeErr(w, http.StatusUnprocessableEntity, "that list doesn't include the address you're using now ("+ip+") — you'd lock yourself out")
+			return
+		}
 	}
 	if in.Email != nil && u.OIDCSubject == nil {
 		e := strings.TrimSpace(*in.Email)
@@ -100,6 +120,9 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	if awayChanged {
 		s.b.RefreshAway(u.ID)
+	}
+	if in.Settings != nil {
+		s.b.ReconfigureUser(u.ID)
 	}
 	writeJSON(w, http.StatusOK, s.userDTO(u))
 }

@@ -7,6 +7,7 @@
   import Switch from '$lib/components/Switch.svelte'
   import StatusChip from '$lib/components/StatusChip.svelte'
   import Copy from '$lib/components/Copy.svelte'
+  import BouncerSettings from '$lib/components/BouncerSettings.svelte'
   import { api } from '$lib/api.js'
   import { session, refreshMe } from '$lib/session.svelte.js'
   import { toast, confirmDialog, openDrawer, closeDrawers, drawers } from '$lib/ui.svelte.js'
@@ -88,6 +89,11 @@
     saving = true
     if (await patch({ limits: { maxNetworks: num(lim.maxNetworks), maxClients: num(lim.maxClients), backlogLines: num(lim.backlogLines) } }, `Saved limits for ${cur.username}`)) closeDrawers()
     saving = false
+  }
+  async function saveBouncer(settings, denySetBindHost) {
+    const d = await api.admin.updateUser(cur.id, { settings, denySetBindHost })
+    cur = { ...cur, ...d, networks: cur.networks }
+    return d.settings
   }
   async function resetPassword() {
     if (!(await confirmDialog({ title: `Reset ${cur.username}’s password?`, body: 'evrd makes a one-time temporary password for you to pass on. Their old password stops working and they’re signed out of the web app; they choose a new password at next sign-in.', action: 'Reset password', danger: false }))) return
@@ -230,6 +236,12 @@
       </div>
     {/if}
   </form>
+  {#if cur?.settings}
+    <details class="drawer-body bouncer-admin">
+      <summary class="caps">Bouncer settings</summary>
+      {#key cur.id}<BouncerSettings value={cur.settings} save={saveBouncer} admin compact />{/key}
+    </details>
+  {/if}
   {#snippet foot()}
     {#if !self}<button class="btn btn-danger-ghost left" type="button" onclick={del}><Icon name="trash" />Delete</button>{/if}
     <button class="btn btn-ghost" type="button" onclick={closeDrawers}>Cancel</button>
@@ -265,6 +277,8 @@
   .detail-hero .avatar { width: 48px; height: 48px; font-size: var(--fs-lg); }
   .action-list { display: grid; gap: var(--s2); }
   .action-list .row { --cols: minmax(0, 1fr) auto; }
+  .bouncer-admin { padding-top: 0; }
+  .bouncer-admin summary { cursor: pointer; padding: var(--s2) 0; }
   .limit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
   @media (max-width: 639px) { .limit-grid { grid-template-columns: minmax(0, 1fr); } }
 </style>

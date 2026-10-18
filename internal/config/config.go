@@ -3,6 +3,9 @@ package config
 
 import (
 	"bufio"
+	"encoding/base64"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/netip"
 	"os"
@@ -42,6 +45,58 @@ type Config struct {
 	Cluster  Cluster
 	Outbound Outbound
 	Metrics  Metrics
+	Secrets  Secrets
+}
+
+// Secrets configures encryption of saved network passwords. Every node must
+// have the same key; keep it out of the database and its backups.
+type Secrets struct {
+	// Key is 32 bytes, base64 or hex (evrctl genkey makes one). KeyFile
+	// reads it from a file instead (EVRD_SECRET_KEY works too).
+	Key     string
+	KeyFile string
+	// Old keys still decrypt (for rotating); evrd re-encrypts everything
+	// under Key at startup.
+	Old []string
+}
+
+// SecretKeys decodes the configured keys. A nil current key means secrets
+// are stored unencrypted.
+func (c *Config) SecretKeys() (current []byte, old [][]byte, err error) {
+	key := c.Secrets.Key
+	if key == "" && c.Secrets.KeyFile != "" {
+		b, err := os.ReadFile(c.Secrets.KeyFile)
+		if err != nil {
+			return nil, nil, fmt.Errorf("secret_key_file: %w", err)
+		}
+		key = strings.TrimSpace(string(b))
+	}
+	if key != "" {
+		if current, err = decodeKey(key); err != nil {
+			return nil, nil, fmt.Errorf("secret_key: %w", err)
+		}
+	}
+	for _, o := range c.Secrets.Old {
+		k, err := decodeKey(o)
+		if err != nil {
+			return nil, nil, fmt.Errorf("secret_key_old: %w", err)
+		}
+		old = append(old, k)
+	}
+	return current, old, nil
+}
+
+func decodeKey(s string) ([]byte, error) {
+	s = strings.TrimSpace(s)
+	for _, dec := range []func(string) ([]byte, error){
+		hex.DecodeString, base64.StdEncoding.DecodeString, base64.RawStdEncoding.DecodeString,
+		base64.URLEncoding.DecodeString, base64.RawURLEncoding.DecodeString,
+	} {
+		if b, err := dec(s); err == nil && len(b) == 32 {
+			return b, nil
+		}
+	}
+	return nil, errors.New("want 32 bytes, base64 or hex (evrctl genkey makes one)")
 }
 
 // Metrics configures OpenTelemetry export and the store dashboards read
@@ -81,6 +136,9 @@ type Cluster struct {
 
 // Outbound configures connections to IRC networks.
 type Outbound struct {
+	// BindHosts are the local addresses (or host names for them) users may
+	// pick to connect from, like ZNC's BindHost list. Admins may set any.
+	BindHosts []string
 	// ConnectRate is the most connects per second to one server host (0 =
 	// unlimited), so failovers and netsplit recoveries reconnect gradually.
 	ConnectRate float64
@@ -219,6 +277,8 @@ func (c *Config) ApplyEnv() error {
 	for env, dst := range map[string]*string{
 		"EVRD_OIDC_CLIENT_SECRET": &c.Auth.OIDCClientSecret,
 		"EVRD_CLUSTER_SECRET":     &c.Cluster.Secret,
+		"EVRD_SECRET_KEY":         &c.Secrets.Key,
+		"EVRD_SECRET_KEY_FILE":    &c.Secrets.KeyFile,
 		"EVRD_NODE_ID":            &c.Cluster.NodeID,
 		"EVRD_INTERNAL_URL":       &c.Cluster.InternalURL,
 		"EVRD_INTERNAL_IRC_ADDR":  &c.Cluster.InternalIRCAddr,
@@ -290,6 +350,14 @@ func (c *Config) set(key, val string) error {
 		c.Cluster.LeaseTTL, err = time.ParseDuration(val)
 	case "connect_rate":
 		c.Outbound.ConnectRate, err = strconv.ParseFloat(val, 64)
+	case "bindhost": // repeatable, or several per line
+		c.Outbound.BindHosts = append(c.Outbound.BindHosts, strings.Fields(val)...)
+	case "secret_key":
+		c.Secrets.Key = val
+	case "secret_key_file":
+		c.Secrets.KeyFile = val
+	case "secret_key_old":
+		c.Secrets.Old = append(c.Secrets.Old, strings.Fields(val)...)
 	case "upstream_bind":
 		err = c.addBind(val)
 	case "upstream_prefix6":

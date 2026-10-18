@@ -45,6 +45,7 @@ type session struct {
 	// Attached state. After registration, only the bridge goroutine touches
 	// these, so jumping networks needs no locking.
 	uid      int64
+	acct     store.User // as loaded at attach (LastSeenAt is the previous visit)
 	net      store.Network
 	up       *upstream.Conn
 	unick    string
@@ -213,7 +214,12 @@ func (se *session) attach() bool {
 		se.numeric("464", ":Invalid credentials")
 		return false
 	}
-	se.uid = u.ID
+	se.uid, se.acct = u.ID, u
+	if ip := se.clientIP(); ip != "" && !accounts.HostAllowed(u, ip) {
+		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("host_denied"))
+		se.numeric("464", ":Signing in from "+ip+" isn't allowed for this account")
+		return false
+	}
 	if !se.srv.b.Owns(u.ID) {
 		se.numeric("464", ":"+movingMsg)
 		return false
@@ -317,6 +323,9 @@ func (se *session) welcome() {
 
 func (se *session) joinChannels() {
 	for _, ch := range se.up.Channels() {
+		if se.up.ChannelSettings(ch).Detached {
+			continue
+		}
 		// Make the client open the buffer, then ask the upstream for the real
 		// names/topic — the replies stream back over the raw feed.
 		se.send(fmt.Sprintf(":%s!%s@%s JOIN %s", se.unick, se.unick, serverName, ch))
@@ -325,20 +334,59 @@ func (se *session) joinChannels() {
 	}
 }
 
+// replayBacklog plays back each attached channel and each private buffer:
+// the last PlaybackLines lines, or — when the user auto-clears that kind of
+// buffer — only what arrived since they were last here, ZNC-style.
 func (se *session) replayBacklog() {
+	n := se.acct.PlaybackLines
+	if n <= 0 {
+		return
+	}
+	var since time.Time
+	if se.acct.LastSeenAt != nil {
+		since = *se.acct.LastSeenAt
+	}
+	cutoff := func(auto bool) time.Time {
+		if auto {
+			return since
+		}
+		return time.Time{}
+	}
 	for _, ch := range se.up.Channels() {
-		se.playback(ch, 50)
+		if se.up.ChannelSettings(ch).Detached {
+			continue
+		}
+		se.playbackSince(ch, n, cutoff(se.acct.AutoClearChanBuffer))
+	}
+	bufs, _ := se.srv.b.History().Buffers(se.net.ID)
+	for _, b := range bufs {
+		if isChannelName(b) {
+			continue
+		}
+		se.playbackSince(b, n, cutoff(se.acct.AutoClearQueryBuffer))
 	}
 }
 
 // playback sends the last n lines of a buffer.
 func (se *session) playback(target string, n int) int {
-	msgs, _ := se.srv.b.History().Recent(se.net.ID, target, n)
-	for _, m := range msgs {
-		se.send(se.format(m))
-	}
-	return len(msgs)
+	return se.playbackSince(target, n, time.Time{})
 }
+
+// playbackSince sends the last n lines of a buffer newer than since.
+func (se *session) playbackSince(target string, n int, since time.Time) int {
+	msgs, _ := se.srv.b.History().Recent(se.net.ID, target, n)
+	sent := 0
+	for _, m := range msgs {
+		if !m.Time.After(since) {
+			continue
+		}
+		se.send(se.format(m))
+		sent++
+	}
+	return sent
+}
+
+func isChannelName(s string) bool { return s != "" && strings.ContainsRune("#&+!", rune(s[0])) }
 
 // jump moves the session to another of the user's networks: the client
 // leaves the old network's channels and gets the new one's, with backlog.
@@ -413,7 +461,7 @@ func (se *session) bridge(ctx context.Context) {
 			// what this session sent (already echoed/displayed); forward sends
 			// from other sessions (web, another client) so we stay in sync.
 			if isChat(m.Kind) && strings.EqualFold(m.Sender, se.unick) && m.Origin != se.id {
-				se.send(se.format(m))
+				se.send(se.formatAs(m, false))
 			}
 		case <-follow.C:
 			if conn, ok := se.srv.b.ConnFor(se.net.ID); ok && conn != se.up {
@@ -450,7 +498,45 @@ func (se *session) relay(line string) {
 			se.unick = m.Params[0]
 		}
 	}
+	if ch := lineChannel(m); ch != "" && se.up.ChannelSettings(ch).Detached {
+		return // detached: kept and logged, not shown
+	}
 	se.send(line)
+}
+
+// lineChannel is the channel a server line is about, if any.
+func lineChannel(m irc.Message) string {
+	for i, p := range m.Params {
+		if i > 2 {
+			break
+		}
+		// numerics start with our nick; 353 has a "=" before the channel
+		if isChannelName(p) && !strings.Contains(p, " ") {
+			return p
+		}
+	}
+	return ""
+}
+
+// detach hides channels from IRC clients (they stay joined and logged);
+// attach brings them back.
+func (se *session) detach(chans []string) {
+	for _, ch := range chans {
+		if !se.up.Joined(ch) {
+			se.statusf("You're not on %s.", ch)
+			continue
+		}
+		se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Detached = true })
+		se.send(fmt.Sprintf(":%s!%s@%s PART %s :Detached — /join %s to come back", se.unick, se.unick, serverName, ch, ch))
+	}
+}
+
+func (se *session) attachChannel(ch string) {
+	se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Detached = false })
+	se.send(fmt.Sprintf(":%s!%s@%s JOIN %s", se.unick, se.unick, serverName, ch))
+	se.up.SendRaw("NAMES " + ch)
+	se.up.SendRaw("TOPIC " + ch)
+	se.playback(ch, max(se.acct.PlaybackLines, 1))
 }
 
 func (se *session) handleClient(m irc.Message) {
@@ -484,6 +570,38 @@ func (se *session) handleClient(m irc.Message) {
 		if len(m.Params) > 0 {
 			se.up.SendRaw("NICK " + m.Params[0])
 		}
+	case "JOIN":
+		if len(m.Params) == 0 {
+			se.up.SendRaw(m.String())
+			return
+		}
+		chans := strings.Split(m.Params[0], ",")
+		var keys []string
+		if len(m.Params) > 1 {
+			keys = strings.Split(m.Params[1], ",")
+		}
+		var rest, restKeys []string
+		for i, ch := range chans {
+			if se.up.Joined(ch) && se.up.ChannelSettings(ch).Detached {
+				se.attachChannel(ch)
+				continue
+			}
+			rest = append(rest, ch)
+			if i < len(keys) {
+				restKeys = append(restKeys, keys[i])
+			}
+		}
+		if len(rest) > 0 {
+			line := "JOIN " + strings.Join(rest, ",")
+			if len(restKeys) > 0 {
+				line += " " + strings.Join(restKeys, ",")
+			}
+			se.up.SendRaw(line)
+		}
+	case "DETACH": // ZNC's client command: /detach #chan[,#chan]
+		if len(m.Params) > 0 {
+			se.detach(strings.Split(m.Params[0], ","))
+		}
 	case "CAP":
 		se.handleCap(m)
 	case "USER", "PASS":
@@ -500,20 +618,37 @@ func (se *session) handleClient(m irc.Message) {
 // server-time when the client negotiated it. Channel events (joins, parts, …)
 // come from *buffextras as plain text, the way ZNC's module replays them, so
 // replay never touches the client's idea of who is in the channel.
-func (se *session) format(m history.Message) string {
+func (se *session) format(m history.Message) string { return se.formatAs(m, true) }
+
+// formatAs renders m; playback lines (not live ones) carry the user's
+// timestamp for clients without server-time.
+func (se *session) formatAs(m history.Message, playback bool) string {
 	var b strings.Builder
 	if se.caps["server-time"] {
 		b.WriteString("@time=" + m.Time.UTC().Format("2006-01-02T15:04:05.000Z") + " ")
 	}
+	stamp := func(text string) string { return text }
+	if playback && !se.caps["server-time"] && (se.acct.PrependTimestamp || se.acct.AppendTimestamp) {
+		ts := se.timestamp(m.Time)
+		stamp = func(text string) string {
+			if se.acct.PrependTimestamp {
+				text = ts + " " + text
+			}
+			if se.acct.AppendTimestamp {
+				text = text + " " + ts
+			}
+			return text
+		}
+	}
 	if !isChat(m.Kind) {
-		b.WriteString(fmt.Sprintf(":*buffextras!buffextras@%s PRIVMSG %s :%s", serverName, m.Target, describe(m)))
+		b.WriteString(fmt.Sprintf(":*buffextras!buffextras@%s PRIVMSG %s :%s", serverName, m.Target, stamp(describe(m))))
 		return b.String()
 	}
 	sender := m.Sender
 	if sender == "" {
 		sender = "*"
 	}
-	text := m.Text
+	text := stamp(m.Text)
 	cmd := "PRIVMSG"
 	switch m.Kind {
 	case "notice":

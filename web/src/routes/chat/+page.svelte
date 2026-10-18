@@ -122,11 +122,11 @@
   function openStream() {
     stream?.close()
     const id = netId
+    live = false
     stream = api.openStream(id, onMsg, () => {
       live = false
       if (!closed && id === netId) setTimeout(() => !closed && id === netId && openStream(), 3000)
-    })
-    live = true
+    }, () => { if (id === netId) live = true })
   }
 
   // want: a buffer to open instead of the first unread one (opening a buffer
@@ -252,7 +252,7 @@
 <svelte:head><title>{buf ? `${buf} · ${net?.name}` : 'Chat'} · evrd</title></svelte:head>
 
 {#if !nets.length}
-  <div style="padding:var(--s7)"><div class="empty card"><span class="ic"><Icon name="globe" /></span><h3>No networks yet</h3><p>Add a network to start chatting.</p><a class="btn btn-primary btn-sm" href="/networks#add"><Icon name="plus" />Add network</a></div></div>
+  <div style="padding:var(--s7)"><div class="empty card"><span class="ic"><Icon name="globe" /></span><h3>No networks yet</h3><p>Add a network to start chatting.</p><a class="btn btn-primary btn-sm" href="/networks/new"><Icon name="plus" />Add network</a></div></div>
 {:else}
   <div class="chat">
     <nav class="buffers" class:open={showPane} id="buffers" aria-label="Buffers">
@@ -310,7 +310,7 @@
         <span class="live" class:on={live} title={live ? 'Live' : 'Reconnecting…'}><span class="dot" aria-hidden="true"></span>{live ? 'Live' : 'Offline'}</span>
         <div class="actions">
           <button class="icon-btn hide-sm" type="button" aria-label="Mark all as read" onclick={markAllRead}><Icon name="check" /></button>
-          <a class="icon-btn" href="/networks#edit-{netId}" aria-label="Network settings"><Icon name="sliders" /></a>
+          <a class="icon-btn" href="/networks/{netId}" aria-label="Network settings"><Icon name="sliders" /></a>
         </div>
       </header>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->

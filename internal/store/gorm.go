@@ -55,6 +55,10 @@ func (s *gormStore) CreateUser(u User) (User, error) {
 	if u.Role == "" {
 		u.Role = RoleUser
 	}
+	if u.TimestampFormat == "" { // a new user: ZNC-like playback defaults
+		u.PlaybackLines, u.AutoClearQueryBuffer = 50, true
+		u.PrependTimestamp, u.TimestampFormat = true, "[%H:%M:%S]"
+	}
 	if err := s.db.Create(&u).Error; err != nil {
 		return User{}, err
 	}
@@ -211,10 +215,22 @@ func (s *gormStore) NetworkByID(id int64) (Network, error) {
 }
 
 func (s *gormStore) CreateNetwork(n Network) (Network, error) {
-	if err := s.db.Create(&n).Error; err != nil {
+	// Create skips zero values of columns that have a default (TrustPKI,
+	// FloodRate…), so write the settings again explicitly.
+	// (Create also copies those defaults back into the struct, so keep the
+	// values asked for.)
+	want := n
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&n).Error; err != nil {
+			return err
+		}
+		want.ID = n.ID
+		return tx.Model(&Network{ID: n.ID}).Select("*").Omit("id", "user_id").Updates(&want).Error
+	})
+	if err != nil {
 		return Network{}, err
 	}
-	return n, nil
+	return want, nil
 }
 
 func (s *gormStore) DeleteNetwork(userID, id int64) error {
@@ -232,9 +248,12 @@ func (s *gormStore) SetNetworkEnabled(id int64, enabled bool) error {
 }
 
 func (s *gormStore) UpdateNetwork(n Network) error {
-	return s.db.Model(&Network{ID: n.ID}).
-		Select("name", "host", "port", "tls", "nick", "username", "realname", "password", "channels").
-		Updates(&n).Error
+	// Everything but ownership and the on/off switch (SetNetworkEnabled).
+	return s.db.Model(&Network{ID: n.ID}).Select("*").Omit("id", "user_id", "enabled").Updates(&n).Error
+}
+
+func (s *gormStore) SetNetworkChannelSettings(id int64, settings map[string]ChannelSettings) error {
+	return s.db.Model(&Network{ID: id}).Select("channel_settings").Updates(&Network{ChannelSettings: settings}).Error
 }
 
 func (s *gormStore) SetNetworkChannels(id int64, channels []string) error {

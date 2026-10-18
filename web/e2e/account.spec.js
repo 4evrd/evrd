@@ -35,7 +35,7 @@ test('profile: email, nicks and auto-away are saved', async ({ page }) => {
 
   // the new default nick pre-fills the add-network form
   await page.goto('/networks#add')
-  await expect(page.getByRole('form', { name: 'Add a network' }).getByLabel('Nickname')).toHaveValue(u.name + 'x')
+  await expect(page.locator('#nick')).toHaveValue(u.name + 'x')
 })
 
 test('tabs: keyboard and deep links', async ({ page }) => {
@@ -49,7 +49,7 @@ test('tabs: keyboard and deep links', async ({ page }) => {
   await expect(page.getByRole('tab', { name: 'Profile' })).toHaveAttribute('aria-selected', 'true')
   await page.keyboard.press('ArrowLeft')
   await expect(page.getByRole('tab', { name: 'Delete account' })).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByRole('tab')).toHaveCount(4)
+  await expect(page.getByRole('tab')).toHaveCount(5)
   // the user pill leads here
   await page.goto('/')
   await page.getByRole('link', { name: `Account: ${u.name}` }).click()
@@ -139,4 +139,42 @@ test('an admin is told who keeps admin rights', async ({ page }) => {
     await expect(page.getByText(/Admin rights stay with the other admins?[,:]/)).toBeVisible()
     await expect(page.getByRole('button', { name: 'Delete my account' })).toBeEnabled()
   } finally { await a.cleanup() }
+})
+
+test('bouncer settings: defaults, playback, timestamps, CTCP and allowed hosts', async ({ page }) => {
+  await page.goto('/account#bouncer')
+  await expect(page.getByRole('tab', { name: 'Bouncer' })).toHaveAttribute('aria-selected', 'true')
+  const b = page.getByRole('form', { name: 'Bouncer settings' })
+  await b.getByLabel('Ident').fill('myident')
+  await b.getByLabel('Quit message').fill('bye all')
+  await b.getByLabel('Lines per buffer').fill('120')
+  await b.getByRole('switch', { name: 'Only new channel lines' }).click()
+  await b.getByLabel('Format').fill('%H:%M')
+  await expect(b.getByText(/^\d\d:\d\d hello$/)).toBeVisible() // live preview
+  await b.getByLabel('Time zone').fill('Mars/Olympus')
+  await b.getByRole('button', { name: 'Save bouncer settings' }).click()
+  await expect(b.getByText('Pick a time zone from the list')).toBeVisible()
+  await b.getByLabel('Time zone').fill('Europe/Berlin')
+  await b.getByRole('button', { name: 'Add a reply' }).click()
+  await b.getByLabel('Request').fill('version')
+  await b.getByLabel('Reply', { exact: true }).fill('my irc client')
+  await b.getByRole('button', { name: 'Add a reply' }).click()
+  await b.getByLabel('Request').nth(1).fill('TIME')
+  // an allowed-hosts list that leaves out this browser is refused (lockout)
+  await b.getByLabel('Add an address').fill('10.0.0.0/8')
+  await b.getByLabel('Add an address').press('Enter')
+  await b.getByRole('button', { name: 'Save bouncer settings' }).click()
+  await expect(b.getByRole('alert')).toContainText('lock yourself out')
+  await b.getByRole('button', { name: 'Remove 10.0.0.0/8' }).click()
+  await b.getByRole('button', { name: 'Save bouncer settings' }).click()
+  await expect(page.getByText('Bouncer settings saved')).toBeVisible()
+
+  const s = (await u.api.get('/api/me')).settings
+  expect(s).toMatchObject({
+    defaultIdent: 'myident', quitMsg: 'bye all', playbackLines: 120, autoClearChanBuffer: true,
+    timestampFormat: '%H:%M', timezone: 'Europe/Berlin', ctcpReplies: { VERSION: 'my irc client', TIME: '' }, allowedHosts: [],
+  })
+  // a new network's ident placeholder comes from the default
+  await page.goto('/networks/new')
+  await expect(page.locator('#username')).toHaveAttribute('placeholder', 'myident')
 })

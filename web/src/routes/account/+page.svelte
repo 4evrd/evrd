@@ -4,6 +4,7 @@
   import Field from '$lib/components/Field.svelte'
   import Switch from '$lib/components/Switch.svelte'
   import ChangePassword from '$lib/components/ChangePassword.svelte'
+  import BouncerSettings from '$lib/components/BouncerSettings.svelte'
   import { api } from '$lib/api.js'
   import { session, refreshMe } from '$lib/session.svelte.js'
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
@@ -11,7 +12,7 @@
   import { check } from '$lib/validate.js'
 
   const me = $derived(session.me)
-  const TABS = [['profile', 'Profile'], ['security', 'Security'], ['sessions', 'Sessions'], ['danger', 'Delete account']]
+  const TABS = [['profile', 'Profile'], ['bouncer', 'Bouncer'], ['security', 'Security'], ['sessions', 'Sessions'], ['danger', 'Delete account']]
   let tab = $state(TABS.some(([k]) => '#' + k === location.hash) ? location.hash.slice(1) : 'profile')
   function pick(k) { tab = k; history.replaceState(null, '', '#' + k) }
   function tabKey(e, i) {
@@ -58,6 +59,11 @@
     try { await api.revokeOtherSessions(); await loadSessions(); toast('Signed out other sessions') } catch (e) { toast(e.message, 'bad') }
   }
   const others = $derived(sessions ? sessions.filter((s) => !s.current).length : 0)
+  const myIP = $derived(sessions?.find((s) => s.current)?.ip || '')
+  async function saveBouncer(settings) {
+    session.me = await api.updateMe({ settings })
+    return session.me.settings
+  }
 
 
   async function deleteAccount() {
@@ -109,6 +115,10 @@
         </div>
         <div class="form-foot"><button class="btn btn-primary" type="submit" disabled={saving}>{#if saving}<span class="spinner" aria-hidden="true"></span>Saving…{:else}<Icon name="check" />Save profile{/if}</button></div>
       </form>
+    </div>
+  {:else if tab === 'bouncer'}
+    <div role="tabpanel" id="bouncer" aria-labelledby="t-bouncer" class="card">
+      <BouncerSettings value={me.settings} save={saveBouncer} {myIP} />
     </div>
   {:else if tab === 'security'}
     <div role="tabpanel" id="security" aria-labelledby="t-security" class="card">

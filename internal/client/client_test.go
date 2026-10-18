@@ -238,7 +238,7 @@ func TestJumpAndNetworkManagement(t *testing.T) {
 	// the message and the server's JOIN, once both are saved
 	eventually(t, "#two history saved", func() bool { m, _ := r.hist.Recent(n.ID, "#two", 10); return len(m) == 2 })
 	ic.send("PRIVMSG *status :playback #two")
-	ic.expect("PRIVMSG #two :hi two")
+	ic.expect("] hi two") // playback carries a timestamp for clients without server-time
 	ic.expect("Replayed 2 line(s) of #two")
 }
 
@@ -296,7 +296,7 @@ func TestStatusShowAndSet(t *testing.T) {
 	ic.send("PRIVMSG *status :set port +7000")
 	ic.expect("Saved port = +7000")
 	ic.send("PRIVMSG *status :show")
-	ic.expect("port 7000 · tls on")
+	ic.expect("server 1: 127.0.0.1:7000 (TLS)")
 	ic.expect("realname Alice Liddell")
 	ic.send("PRIVMSG *status :set nick bad nick!")
 	ic.expect("Nicks can't contain")

@@ -102,6 +102,52 @@ func (d *Dialer) Dial(ctx context.Context, userID int64, host string, port int) 
 	return nil, lastErr
 }
 
+// DialFrom is Dial from a chosen local address: bind is an IP or a host name
+// for one (a "bind host"). Destinations of the address family bind has are
+// used; an empty bind is plain Dial.
+func (d *Dialer) DialFrom(ctx context.Context, userID int64, bind, host string, port int) (net.Conn, error) {
+	if bind == "" {
+		return d.Dial(ctx, userID, host, port)
+	}
+	locals, err := d.resolve(ctx, bind)
+	if err != nil {
+		return nil, fmt.Errorf("bind host %s: %w", bind, err)
+	}
+	if err := d.pace.wait(ctx, host); err != nil {
+		return nil, err
+	}
+	addrs, err := d.resolve(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	var lastErr error
+	for _, remote := range addrs {
+		remote = remote.Unmap()
+		var local netip.Addr
+		for _, l := range locals {
+			if l = l.Unmap(); l.Is4() == remote.Is4() {
+				local = l
+				break
+			}
+		}
+		if !local.IsValid() {
+			continue
+		}
+		conn, err := d.dial(ctx, netip.AddrPortFrom(local, 0), netip.AddrPortFrom(remote, uint16(port)), false)
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("bind host %s has no address of the same family as %s", bind, host)
+	}
+	return nil, lastErr
+}
+
 // order puts the destinations we have a source of our own for first: IPv6
 // when there's a prefix or IPv6 binds, IPv4 when there are only IPv4 binds.
 func (d *Dialer) order(addrs []netip.Addr) []netip.Addr {

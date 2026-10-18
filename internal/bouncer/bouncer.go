@@ -13,12 +13,14 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
+	"github.com/4evrd/evrd/internal/version"
 )
 
 // ErrSuspended is returned when connecting a suspended user's network.
@@ -48,13 +50,14 @@ type Bouncer struct {
 	// owns reports whether this node runs a user; nil means every user (a
 	// node outside a cluster, or a test).
 	owns func(userID int64) bool
-	// dial opens upstream connections for a user; nil dials directly.
-	dial func(ctx context.Context, userID int64, host string, port int) (net.Conn, error)
+	// dial opens upstream connections for a user from a bind host ("" =
+	// the node's policy); nil dials directly (ignoring bind hosts).
+	dial func(ctx context.Context, userID int64, bind, host string, port int) (net.Conn, error)
 }
 
 // SetDialer sets how upstream connections are opened (pacing, source
-// addresses — see internal/outbound). Call it before Start.
-func (b *Bouncer) SetDialer(dial func(ctx context.Context, userID int64, host string, port int) (net.Conn, error)) {
+// addresses, bind hosts — see internal/outbound). Call it before Start.
+func (b *Bouncer) SetDialer(dial func(ctx context.Context, userID int64, bind, host string, port int) (net.Conn, error)) {
 	b.dial = dial
 }
 
@@ -170,9 +173,9 @@ func (b *Bouncer) Connect(networkID int64) error {
 	cctx, cancel := context.WithCancel(parent)
 	var dial func(ctx context.Context, host string, port int) (net.Conn, error)
 	if b.dial != nil {
-		userID := n.UserID
+		userID, bind := n.UserID, orElse(n.BindHost, u.BindHost)
 		dial = func(ctx context.Context, host string, port int) (net.Conn, error) {
-			return b.dial(ctx, userID, host, port)
+			return b.dial(ctx, userID, bind, host, port)
 		}
 	}
 	var conn *upstream.Conn
@@ -183,8 +186,12 @@ func (b *Bouncer) Connect(networkID int64) error {
 			}
 			b.observe(n, conn.Nick(), m)
 		},
-		OnEvent: func(e upstream.Event) { b.AddEvent(n.UserID, e.Kind, e.Title, e.Detail) },
-		AltNick: u.DefaultAltNick,
+		OnEvent:     func(e upstream.Event) { b.AddEvent(n.UserID, e.Kind, e.Title, e.Detail) },
+		AltNick:     u.DefaultAltNick,
+		QuitMsg:     u.QuitMsg,
+		CTCPReplies: u.CTCPReplies,
+		Idle:        func() bool { return b.idle(n.UserID) },
+		Version:     version.Version,
 		OnChannels: func(channels []string) {
 			if err := b.store.SetNetworkChannels(networkID, channels); err != nil {
 				b.log.Warn("save channels", "network", n.Name, "err", err)
@@ -212,6 +219,64 @@ func (b *Bouncer) Disconnect(networkID int64) error {
 		e.cancel()
 	}
 	return b.store.SetNetworkEnabled(networkID, false)
+}
+
+// Reconfigure pushes settings that apply without reconnecting (quit
+// message, flood protection, channel options, CTCP replies) to a running
+// network.
+func (b *Bouncer) Reconfigure(n store.Network) {
+	conn, ok := b.ConnFor(n.ID)
+	if !ok {
+		return
+	}
+	u, err := b.store.UserByID(n.UserID)
+	if err != nil {
+		return
+	}
+	conn.Reconfigure(n, u.QuitMsg, u.CTCPReplies)
+}
+
+// ReconfigureUser pushes a user's settings (quit message, CTCP replies) to
+// all their running networks.
+func (b *Bouncer) ReconfigureUser(userID int64) {
+	nets, err := b.store.ListNetworks(userID)
+	if err != nil {
+		return
+	}
+	for _, n := range nets {
+		b.Reconfigure(n)
+	}
+}
+
+// SetChannelSettings changes one channel's options on a network (running
+// or not) and saves them.
+func (b *Bouncer) SetChannelSettings(networkID int64, ch string, f func(*store.ChannelSettings)) error {
+	if conn, ok := b.ConnFor(networkID); ok {
+		return b.store.SetNetworkChannelSettings(networkID, conn.SetChannelSettings(ch, f))
+	}
+	n, err := b.store.NetworkByID(networkID)
+	if err != nil {
+		return err
+	}
+	m := map[string]store.ChannelSettings{}
+	for k, v := range n.ChannelSettings {
+		m[k] = v
+	}
+	cs := m[strings.ToLower(ch)]
+	f(&cs)
+	if cs == (store.ChannelSettings{}) {
+		delete(m, strings.ToLower(ch))
+	} else {
+		m[strings.ToLower(ch)] = cs
+	}
+	return b.store.SetNetworkChannelSettings(networkID, m)
+}
+
+// idle reports whether a user has no client attached (IRC or web).
+func (b *Bouncer) idle(userID int64) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.clients[userID])+len(b.streams[userID]) == 0
 }
 
 // Reconnect restarts a running network's connection so new settings take
@@ -450,4 +515,11 @@ func (b *Bouncer) dropOrphanHistory(users []store.User) {
 			}
 		}
 	}
+}
+
+func orElse(s, fallback string) string {
+	if s != "" {
+		return s
+	}
+	return fallback
 }

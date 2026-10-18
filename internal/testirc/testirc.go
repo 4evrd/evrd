@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -13,6 +14,35 @@ import (
 // address. It registers clients, echoes JOIN, PART and NICK back the way a
 // real server confirms them, and sends "SIMULATE <line>" back verbatim.
 func Start(t testing.TB) string {
+	t.Helper()
+	return StartLogged(t, nil)
+}
+
+// Log records the lines a fake server received.
+type Log struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+// Lines returns what was received so far.
+func (l *Log) Lines() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.lines...)
+}
+
+// Has reports whether a received line contains s.
+func (l *Log) Has(s string) bool {
+	for _, x := range l.Lines() {
+		if strings.Contains(x, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// StartLogged is Start, recording every line received in log (if not nil).
+func StartLogged(t testing.TB, log *Log) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -31,6 +61,11 @@ func Start(t testing.TB) string {
 				sc := bufio.NewScanner(c)
 				out := func(f string, a ...any) { fmt.Fprintf(c, f+"\r\n", a...) }
 				for sc.Scan() {
+					if log != nil {
+						log.mu.Lock()
+						log.lines = append(log.lines, sc.Text())
+						log.mu.Unlock()
+					}
 					f := strings.Fields(sc.Text())
 					if len(f) == 0 {
 						continue

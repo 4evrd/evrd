@@ -28,38 +28,158 @@ func (s *Server) handleListNetworks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// networkInput is the editable part of a network, shared by create and
+// update. Fields left out (nil) are unchanged; for passwords, "" clears.
+type networkInput struct {
+	Name          *string                           `json:"name"`
+	Host          *string                           `json:"host"` // single-server shorthand
+	Port          *int                              `json:"port"`
+	TLS           *bool                             `json:"tls"`
+	Servers       *[]serverInput                    `json:"servers"`
+	Nick          *string                           `json:"nick"`
+	AltNick       *string                           `json:"altNick"`
+	Username      *string                           `json:"username"` // ident
+	Realname      *string                           `json:"realname"`
+	QuitMsg       *string                           `json:"quitMsg"`
+	BindHost      *string                           `json:"bindHost"`
+	Password      *string                           `json:"password"` // SASL
+	SASLUser      *string                           `json:"saslUser"`
+	TrustAllCerts *bool                             `json:"trustAllCerts"`
+	TrustPKI      *bool                             `json:"trustPKI"`
+	Fingerprints  *[]string                         `json:"fingerprints"`
+	Encoding      *string                           `json:"encoding"`
+	FloodRate     *float64                          `json:"floodRate"`
+	FloodBurst    *int                              `json:"floodBurst"`
+	JoinDelay     *int                              `json:"joinDelay"`
+	Channels      *[]string                         `json:"channels"`
+	ChannelOpts   *map[string]store.ChannelSettings `json:"channelSettings"`
+}
+
+// serverInput is a server in an edit; a nil password keeps the one saved
+// for that host:port.
+type serverInput struct {
+	Host     string  `json:"host"`
+	Port     int     `json:"port"`
+	TLS      bool    `json:"tls"`
+	Password *string `json:"password"`
+}
+
+// apply copies the set fields onto n.
+func (in networkInput) apply(n *store.Network) {
+	str := func(dst *string, v *string) {
+		if v != nil {
+			*dst = *v
+		}
+	}
+	str(&n.Name, in.Name)
+	str(&n.Nick, in.Nick)
+	str(&n.AltNick, in.AltNick)
+	str(&n.Username, in.Username)
+	str(&n.Realname, in.Realname)
+	str(&n.QuitMsg, in.QuitMsg)
+	str(&n.BindHost, in.BindHost)
+	str(&n.Password, in.Password)
+	str(&n.SASLUser, in.SASLUser)
+	str(&n.Encoding, in.Encoding)
+	if in.Servers != nil {
+		old := n.ServerList()
+		var list []store.Server
+		for _, sv := range *in.Servers {
+			ns := store.Server{Host: sv.Host, Port: sv.Port, TLS: sv.TLS}
+			if sv.Password != nil {
+				ns.Password = *sv.Password
+			} else {
+				for _, o := range old {
+					if strings.EqualFold(o.Host, sv.Host) && o.Port == sv.Port {
+						ns.Password = o.Password
+					}
+				}
+			}
+			list = append(list, ns)
+		}
+		n.Servers = list
+		if len(list) == 0 {
+			n.Host = "" // an empty list is no servers, not "keep the old one"
+		}
+	} else if in.Host != nil || in.Port != nil || in.TLS != nil {
+		// the single-server shorthand edits the first server
+		list := append([]store.Server(nil), n.ServerList()...)
+		if len(list) == 0 {
+			list = []store.Server{{}}
+		}
+		str(&list[0].Host, in.Host)
+		if in.Port != nil {
+			list[0].Port = *in.Port
+		}
+		if in.TLS != nil {
+			list[0].TLS = *in.TLS
+		}
+		n.Servers = list
+	}
+	if in.TrustAllCerts != nil {
+		n.TrustAllCerts = *in.TrustAllCerts
+	}
+	if in.TrustPKI != nil {
+		n.TrustPKI = *in.TrustPKI
+	}
+	if in.Fingerprints != nil {
+		n.Fingerprints = *in.Fingerprints
+	}
+	if in.FloodRate != nil {
+		n.FloodRate = *in.FloodRate
+	}
+	if in.FloodBurst != nil {
+		n.FloodBurst = *in.FloodBurst
+	}
+	if in.JoinDelay != nil {
+		n.JoinDelay = *in.JoinDelay
+	}
+	if in.Channels != nil {
+		n.Channels = *in.Channels
+	}
+	if in.ChannelOpts != nil {
+		m := map[string]store.ChannelSettings{}
+		for k, v := range *in.ChannelOpts {
+			m[strings.ToLower(k)] = v
+		}
+		n.ChannelSettings = m
+	}
+}
+
+// checkNetwork validates n for u (including whether u may use its bind host).
+func (s *Server) checkNetwork(u store.User, n *store.Network, before *store.Network) error {
+	if err := accounts.NormalizeNetwork(n); err != nil {
+		return err
+	}
+	if before == nil || n.BindHost != before.BindHost {
+		if err := s.acc.CheckBindHost(u, n.BindHost); err != nil {
+			return err
+		}
+	}
+	id := int64(0)
+	if before != nil {
+		id = before.ID
+	}
+	return s.acc.CheckNetworkName(n.UserID, n.Name, id)
+}
+
 func (s *Server) handleCreateNetwork(w http.ResponseWriter, r *http.Request) {
 	u := auth.User(r)
-	var req struct {
-		Name, Host                         string
-		Port                               int
-		TLS                                bool
-		Nick, Username, Realname, Password string
-		Channels                           []string
-	}
-	if !decode(w, r, &req) {
+	var in networkInput
+	if !decode(w, r, &in) {
 		return
 	}
+	// New networks start from the user's defaults and ZNC's flood settings.
 	n := store.Network{
-		UserID: u.ID, Name: req.Name, Host: req.Host, Port: req.Port, TLS: req.TLS,
-		Nick: req.Nick, Username: req.Username, Realname: req.Realname,
-		Password: req.Password, Channels: req.Channels,
+		UserID: u.ID, Nick: u.DefaultNick, AltNick: "", Username: u.DefaultIdent,
+		Realname: u.DefaultRealname, TrustPKI: true, FloodRate: 2, FloodBurst: 9,
 	}
-	if strings.TrimSpace(n.Nick) == "" {
-		n.Nick = u.DefaultNick
-	}
-	if strings.TrimSpace(n.Realname) == "" {
-		n.Realname = u.DefaultRealname
-	}
-	if err := accounts.NormalizeNetwork(&n); err != nil {
+	in.apply(&n)
+	if err := s.checkNetwork(u, &n, nil); err != nil {
 		s.fail(w, err)
 		return
 	}
 	if err := s.acc.CanCreateNetwork(u); err != nil {
-		s.fail(w, err)
-		return
-	}
-	if err := s.acc.CheckNetworkName(u.ID, n.Name, 0); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -71,53 +191,29 @@ func (s *Server) handleCreateNetwork(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.networkDTO(n))
 }
 
+func (s *Server) handleGetNetwork(w http.ResponseWriter, r *http.Request) {
+	n, ok := s.ownedNetwork(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, s.networkDTO(n))
+}
+
 // handleUpdateNetwork edits a network. Fields left out are unchanged; a
-// password of "" clears it. A connected network reconnects to apply.
+// password of "" clears it. Settings that need a new connection reconnect a
+// running network; the rest apply live.
 func (s *Server) handleUpdateNetwork(w http.ResponseWriter, r *http.Request) {
 	n, ok := s.ownedNetwork(w, r)
 	if !ok {
 		return
 	}
-	var in struct {
-		Name     *string   `json:"name"`
-		Host     *string   `json:"host"`
-		Port     *int      `json:"port"`
-		TLS      *bool     `json:"tls"`
-		Nick     *string   `json:"nick"`
-		Username *string   `json:"username"`
-		Realname *string   `json:"realname"`
-		Password *string   `json:"password"`
-		Channels *[]string `json:"channels"`
-	}
+	var in networkInput
 	if !decode(w, r, &in) {
 		return
 	}
 	before := n
-	set := func(dst *string, v *string) {
-		if v != nil {
-			*dst = *v
-		}
-	}
-	set(&n.Name, in.Name)
-	set(&n.Host, in.Host)
-	set(&n.Nick, in.Nick)
-	set(&n.Username, in.Username)
-	set(&n.Realname, in.Realname)
-	set(&n.Password, in.Password)
-	if in.Port != nil {
-		n.Port = *in.Port
-	}
-	if in.TLS != nil {
-		n.TLS = *in.TLS
-	}
-	if in.Channels != nil {
-		n.Channels = *in.Channels
-	}
-	if err := accounts.NormalizeNetwork(&n); err != nil {
-		s.fail(w, err)
-		return
-	}
-	if err := s.acc.CheckNetworkName(n.UserID, n.Name, n.ID); err != nil {
+	in.apply(&n)
+	if err := s.checkNetwork(auth.User(r), &n, &before); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -125,6 +221,7 @@ func (s *Server) handleUpdateNetwork(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	s.b.Reconfigure(n)
 	reconnected := false
 	if accounts.NeedsReconnect(before, n) && s.b.Status(n.ID) != "disconnected" {
 		if err := s.b.Reconnect(n.ID); err != nil {
@@ -136,6 +233,15 @@ func (s *Server) handleUpdateNetwork(w http.ResponseWriter, r *http.Request) {
 	d := s.networkDTO(n)
 	d["reconnected"] = reconnected
 	writeJSON(w, http.StatusOK, d)
+}
+
+// handleBindHosts lists the bind hosts the caller may pick.
+func (s *Server) handleBindHosts(w http.ResponseWriter, r *http.Request) {
+	u := auth.User(r)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"hosts": orEmpty(s.acc.BindHosts()), "locked": u.DenySetBindHost && !u.IsAdmin(), "any": u.IsAdmin(),
+		"current": u.BindHost,
+	})
 }
 
 func (s *Server) handleDeleteNetwork(w http.ResponseWriter, r *http.Request) {
@@ -302,6 +408,10 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	sub, unsub := conn.Subscribe()
 	defer unsub()
+	// Tell the page it's subscribed: nothing sent from now on is missed.
+	if err := ws.WriteJSON(map[string]string{"type": "ready"}); err != nil {
+		return
+	}
 
 	// *status replies, written by the select loop below (the only writer).
 	replies := make(chan history.Message, 256)
@@ -399,6 +509,7 @@ func (s *Server) networkDTO(n store.Network) map[string]any {
 		health = map[string]any{
 			"status": string(h.Status), "lastError": h.LastError, "lastErrorAt": unixT(h.LastErrorAt),
 			"attempts": h.Attempts, "retryIn": int(h.RetryIn.Seconds()), "connectedAt": unixT(h.ConnectedAt),
+			"server": h.Server, "untrustedFingerprint": h.UntrustedFingerprint,
 		}
 		if h.Lag >= 0 {
 			health["lag"] = h.Lag.Milliseconds()
@@ -415,7 +526,12 @@ func (s *Server) networkDTO(n store.Network) map[string]any {
 		"tls": n.TLS, "nick": n.Nick, "username": n.Username,
 		"realname": n.Realname, "channels": ch, "enabled": n.Enabled,
 		"hasPassword": n.Password != "",
-		"unread":      unread, "mentions": mentions,
+		"servers":     serversDTO(n.ServerList()),
+		"altNick":     n.AltNick, "quitMsg": n.QuitMsg, "bindHost": n.BindHost, "saslUser": n.SASLUser,
+		"trustAllCerts": n.TrustAllCerts, "trustPKI": n.TrustPKI, "fingerprints": orEmpty(n.Fingerprints),
+		"encoding": n.Encoding, "floodRate": n.FloodRate, "floodBurst": n.FloodBurst, "joinDelay": n.JoinDelay,
+		"channelSettings": orEmptyMap(n.ChannelSettings),
+		"unread":          unread, "mentions": mentions,
 	}
 	for k, v := range health {
 		d[k] = v
@@ -477,4 +593,27 @@ func clientAddr(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// serversDTO hides server passwords (it says whether one is set).
+func serversDTO(list []store.Server) []map[string]any {
+	out := make([]map[string]any, 0, len(list))
+	for _, sv := range list {
+		out = append(out, map[string]any{"host": sv.Host, "port": sv.Port, "tls": sv.TLS, "hasPassword": sv.Password != ""})
+	}
+	return out
+}
+
+func orEmpty(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
+func orEmptyMap(m map[string]store.ChannelSettings) map[string]store.ChannelSettings {
+	if m == nil {
+		return map[string]store.ChannelSettings{}
+	}
+	return m
 }

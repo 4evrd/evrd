@@ -115,7 +115,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	// networks
 	mux.HandleFunc("GET /api/networks", user(s.handleListNetworks))
 	mux.HandleFunc("POST /api/networks", user(s.handleCreateNetwork))
+	mux.HandleFunc("GET /api/networks/{id}", user(s.handleGetNetwork))
 	mux.HandleFunc("PATCH /api/networks/{id}", user(s.handleUpdateNetwork))
+	mux.HandleFunc("GET /api/bindhosts", user(s.handleBindHosts))
 	mux.HandleFunc("DELETE /api/networks/{id}", user(s.handleDeleteNetwork))
 	mux.HandleFunc("POST /api/networks/{id}/connect", user(s.handleConnect))
 	mux.HandleFunc("POST /api/networks/{id}/disconnect", user(s.handleDisconnect))

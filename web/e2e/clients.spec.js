@@ -86,7 +86,7 @@ test('a native client gets backlog and stays in sync with the web', async ({ pag
 
     // attaching plays back what was missed
     const c = await attach()
-    await c.waitFor(/PRIVMSG \S+ :said while you were away/)
+    await c.waitFor(/PRIVMSG \S+ :(\[[^\]]*\] )?said while you were away/)
 
     // what the native client says shows in the web chat, and vice versa
     await page.goto(`/chat?net=${net.id}&buf=${encodeURIComponent(chan)}`)

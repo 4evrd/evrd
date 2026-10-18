@@ -62,7 +62,7 @@
   </div>
   <div class="od-cluster">
     <a class="btn" href="/clients"><Icon name="plug" />Connect a client</a>
-    <a class="btn btn-primary" href="/networks#add"><Icon name="plus" />Add network</a>
+    <a class="btn btn-primary" href="/networks/new"><Icon name="plus" />Add network</a>
   </div>
 </div>
 
@@ -108,7 +108,7 @@
   {#if !ov}
     <div class="skel"></div><div class="skel" style="margin-top:8px"></div>
   {:else if !nets.length}
-    <div class="empty"><span class="ic"><Icon name="globe" /></span><h3>No networks yet</h3><p>Add the IRC networks you use — evrd connects and stays connected for you.</p><a class="btn btn-primary btn-sm" href="/networks#add"><Icon name="plus" />Add network</a></div>
+    <div class="empty"><span class="ic"><Icon name="globe" /></span><h3>No networks yet</h3><p>Add the IRC networks you use — evrd connects and stays connected for you.</p><a class="btn btn-primary btn-sm" href="/networks/new"><Icon name="plus" />Add network</a></div>
   {:else}
     <Topology left={nets.map((n) => ({ id: n.id, color: n.color }))} right={shown} leftLabel="Upstream networks" rightLabel={chanLabel[filter]}
       empty={filter === 'all' ? 'No channels joined yet.' : 'Nothing waiting — every channel is read.'}>

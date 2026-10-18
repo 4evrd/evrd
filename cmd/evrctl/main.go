@@ -7,6 +7,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -27,6 +29,7 @@ func usage() {
 
 commands:
   version                                  print evrctl version
+  genkey                                   print a new secret_key (EVRD_SECRET_KEY) for encrypting saved passwords
   user add [-admin] [-email e] <name> [password]
                                            create an account (no password = SSO / client passwords only)
   user list                                list accounts
@@ -55,6 +58,14 @@ func main() {
 	case "version":
 		fmt.Println("evrctl", version.Version)
 		return
+	case "genkey":
+		// A key for secret_key / EVRD_SECRET_KEY.
+		k := make([]byte, 32)
+		if _, err := rand.Read(k); err != nil {
+			fatal("%v", err)
+		}
+		fmt.Println(base64.StdEncoding.EncodeToString(k))
+		return
 	case "history":
 		historyCmd(args[1:])
 	case "user":
@@ -81,6 +92,13 @@ func userCmd(cfg *config.Config, args []string) {
 	if len(args) == 0 {
 		usage()
 		os.Exit(2)
+	}
+	cur, oldKeys, err := cfg.SecretKeys()
+	if err == nil {
+		err = store.SetSecretKeys(cur, oldKeys...)
+	}
+	if err != nil {
+		fatal("secret key: %v", err)
 	}
 	st, err := store.Open(cfg.DB)
 	if err != nil {

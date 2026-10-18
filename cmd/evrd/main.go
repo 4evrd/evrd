@@ -54,12 +54,29 @@ func main() {
 		cfg = loaded
 	}
 
+	cur, old, err := cfg.SecretKeys()
+	if err == nil {
+		err = store.SetSecretKeys(cur, old...)
+	}
+	if err != nil {
+		log.Error("secret key", "err", err)
+		os.Exit(1)
+	}
+	if cur == nil {
+		log.Warn("no secret_key set: network passwords are stored unencrypted (evrctl genkey makes a key)")
+	}
 	st, err := store.Open(cfg.DB)
 	if err != nil {
 		log.Error("open store", "dsn", cfg.DB, "err", err)
 		os.Exit(1)
 	}
 	defer st.Close()
+	if n, err := st.EncryptSecrets(); err != nil {
+		log.Error("encrypt saved secrets", "err", err)
+		os.Exit(1)
+	} else if n > 0 {
+		log.Info("re-encrypted saved secrets", "networks", n)
+	}
 
 	hist, err := history.Open(cfg.History)
 	if err != nil {
@@ -86,6 +103,7 @@ func main() {
 	defer stop()
 
 	acc := accounts.New(st, cfg.Limits)
+	acc.SetBindHosts(cfg.Outbound.BindHosts)
 	am, err := auth.New(ctx, st, acc, cfg.Auth, cfg.PublicURL, log)
 	if err != nil {
 		log.Error("set up sign-in", "issuer", cfg.Auth.OIDCIssuer, "err", err)
@@ -125,7 +143,7 @@ func main() {
 		log.Error("outbound", "err", err)
 		os.Exit(1)
 	}
-	b.SetDialer(ob.Dial)
+	b.SetDialer(ob.DialFrom)
 	if len(cfg.Outbound.Bind) > 0 || cfg.Outbound.Prefix6.IsValid() {
 		log.Info("outbound addresses", "bind", cfg.Outbound.Bind, "prefix6", cfg.Outbound.Prefix6)
 	}

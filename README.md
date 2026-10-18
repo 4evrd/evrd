@@ -225,6 +225,63 @@ upstream_prefix6 2001:db8:42::/64     # or: an IPv6 address of their own for eve
 `EVRD_UPSTREAM_PREFIX6`). A prefix needs Linux and a local route for it:
 `ip -6 route add local 2001:db8:42::/64 dev lo`.
 
+**Bind hosts** (ZNC's BindHost): `bindhost 192.0.2.20 vhost.example.org`
+(repeatable) lists local addresses users may pick to connect from, for their
+whole account or per network. Admins may use any address and can lock a
+user's choice (DenySetBindHost).
+
+### Network settings (ZNC-style)
+
+Each network has its own page in the web app (`/networks/<id>`), with what
+ZNC offers without modules:
+
+- **Servers** — several, each with host, port, TLS and an optional server
+  password (PASS). evrd connects to the first and moves on to the next each
+  time the link drops.
+- **Identity** — nick, alternate nick, ident, real name, quit message, bind host
+  (empty fields use the account defaults).
+- **Authentication** — SASL PLAIN account and password (sent as PASS if the
+  network has no SASL).
+- **Certificates** — verify with the system CAs (TrustPKI), trust everything
+  (TrustAllCerts), and trusted SHA-256 fingerprints. A refused certificate's
+  fingerprint is shown with a button to trust it.
+- **Channels** — key, detached (joined and logged, hidden from IRC clients
+  until they `/join`; `/detach #chan` from a client), join-on-connect.
+- **Advanced** — encoding for non-UTF-8 networks (`^charset`: only decode
+  invalid UTF-8; `charset`: decode and send in it), flood protection (lines
+  per second and burst), join delay.
+
+Per-user settings (Account → Bouncer): default ident, quit message and bind
+host; playback lines and whether channels / private messages only play back
+what arrived since you were last attached (AutoClearChanBuffer /
+AutoClearQueryBuffer); timestamps prepended/appended for clients without
+server-time (strftime format, time zone); fixed CTCP replies (an empty reply
+blocks the request; with no client attached evrd answers VERSION, PING and
+TIME itself); and the addresses allowed to sign in, web and IRC.
+
+`*status` has the same: `listservers`, `addserver`, `delserver`,
+`listfingerprints`, `addfingerprint`, `delfingerprint` (and ZNC's
+`AddTrustedServerFingerprint` names), `detach`, and `set` for altnick,
+sasluser, bindhost, quitmsg, encoding, trustallcerts, trustpki, floodrate,
+floodburst, joindelay.
+
+### Saved passwords
+
+Network passwords (SASL/NickServ and server passwords) are encrypted in the
+database with AES-256-GCM under a key that lives outside it:
+
+```
+secret_key      <32 bytes, base64>   # or EVRD_SECRET_KEY, or secret_key_file /path
+secret_key_old  <previous key>       # optional: still decrypts while rotating
+```
+
+`evrctl genkey` makes a key. Every node needs the same one; keep it out of
+database backups. At startup evrd encrypts anything saved before a key was
+set and re-encrypts anything under an old key, so rotating is: set the new
+`secret_key`, move the old one to `secret_key_old`, restart, then drop it.
+Without a key evrd still runs and warns that these are stored in plaintext.
+Account passwords and client passwords are bcrypt hashes either way.
+
 ## Accounts and sign-in
 
 Every user has an evrd account with a role (`user` or `admin`), per-user

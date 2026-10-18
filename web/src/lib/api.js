@@ -47,6 +47,8 @@ export const api = {
   overview: () => req('GET', '/api/overview'),
 
   networks: () => req('GET', '/api/networks'),
+  network: (id) => req('GET', `/api/networks/${id}`),
+  bindHosts: () => req('GET', '/api/bindhosts'),
   addNetwork: (net) => req('POST', '/api/networks', net),
   updateNetwork: (id, patch) => req('PATCH', `/api/networks/${id}`, patch),
   removeNetwork: (id) => req('DELETE', `/api/networks/${id}`),
@@ -59,10 +61,18 @@ export const api = {
 
   // openStream connects a network's live message WebSocket (same origin, so
   // the session cookie authenticates it). onMessage gets each message.
-  openStream(id, onMessage, onClose) {
+  // onReady runs once the server confirms the subscription ({type:
+  // "ready"}); only then is nothing missed.
+  openStream(id, onMessage, onClose, onReady) {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(`${proto}//${location.host}/api/networks/${id}/stream`)
-    ws.onmessage = (e) => { try { onMessage(JSON.parse(e.data)) } catch { /* ignore malformed frames */ } }
+    ws.onmessage = (e) => {
+      let m
+      try { m = JSON.parse(e.data) } catch { return /* ignore malformed frames */ }
+      if (m.type === 'ready') { onReady?.(); return }
+      if (m.type) return // other control frames
+      onMessage(m)
+    }
     ws.onclose = () => onClose?.()
     const out = (frame) => ws.readyState === WebSocket.OPEN && (ws.send(JSON.stringify(frame)), true)
     return {
