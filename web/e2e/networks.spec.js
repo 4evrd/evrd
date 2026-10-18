@@ -1,0 +1,170 @@
+import { test, expect } from '@playwright/test'
+import { login, confirm, freshUser, addNetwork } from './helpers.js'
+
+let u
+test.beforeEach(async ({ page }) => {
+  u = await freshUser('net')
+  await login(page, u.name, u.password)
+})
+test.afterEach(async () => { await u.cleanup() })
+
+const form = (page, name = 'Add a network') => page.getByRole('form', { name })
+async function fillNetwork(page, { name, host = 'ircd', port = '6667', nick, channels = '#e2e' }) {
+  const f = form(page)
+  await f.getByRole('textbox', { name: 'Name', exact: true }).fill(name)
+  await f.getByLabel('Server').fill(host)
+  const tls = f.getByRole('switch', { name: 'Use TLS' })
+  if ((await tls.getAttribute('aria-checked')) === 'true') await tls.click()
+  await f.getByLabel('Port').fill(port)
+  if (nick) await f.getByLabel('Nickname').fill(nick)
+  await f.getByLabel('Channels to join').fill(channels)
+}
+const card = (page, name) => page.getByTestId('network-row').filter({ has: page.getByRole('heading', { name, exact: true }) })
+
+test('add a network: it connects and shows on the list', async ({ page }) => {
+  await page.goto('/networks')
+  await expect(page.getByText('No networks yet').or(page.getByRole('button', { name: /Add a network/ }))).toBeVisible()
+  await page.getByRole('button', { name: 'Add network' }).first().click()
+  // a new network starts from your default nick
+  await expect(form(page).getByLabel('Nickname')).toHaveValue(u.name)
+  await fillNetwork(page, { name: 'Dev' })
+  await page.getByRole('button', { name: 'Add and connect' }).click()
+  await expect(page.getByText('Added Dev — connecting…')).toBeVisible()
+  const row = card(page, 'Dev')
+  await expect(row.getByText('Connected', { exact: true })).toBeVisible({ timeout: 20000 })
+  await expect(row.getByText('ircd:6667')).toBeVisible()
+  await expect(row.getByText(u.name, { exact: true })).toBeVisible()
+  await expect(page.getByTestId('net-count')).toHaveText('1 of ∞ used')
+})
+
+test('the form explains what is wrong before saving', async ({ page }) => {
+  await page.goto('/networks#add')
+  await form(page).getByLabel('Nickname').fill('')
+  await page.getByRole('button', { name: 'Add and connect' }).click()
+  const summary = page.locator('#nf-summary')
+  await expect(summary).toContainText('Fix 3 things before saving')
+  await expect(summary).toContainText('Name')
+  await expect(summary).toContainText('Server')
+  await expect(summary).toContainText('Nickname')
+
+  await fillNetwork(page, { name: 'has space', host: 'not a host!', port: '99999', channels: 'nohash' })
+  await page.getByRole('button', { name: 'Add and connect' }).click()
+  await expect(summary).toContainText('No spaces')
+  await expect(summary).toContainText('doesn’t look like a hostname')
+  await expect(summary).toContainText('Ports are whole numbers')
+  await expect(summary).toContainText('Separate channels with commas')
+  await expect(page.getByTestId('network-row')).toHaveCount(0)
+})
+
+test('TLS switches the default port', async ({ page }) => {
+  await page.goto('/networks#add')
+  const f = form(page)
+  await expect(f.getByLabel('Port')).toHaveValue('6697')
+  await f.getByRole('switch', { name: 'Use TLS' }).click()
+  await expect(f.getByLabel('Port')).toHaveValue('6667')
+  await f.getByRole('switch', { name: 'Use TLS' }).click()
+  await expect(f.getByLabel('Port')).toHaveValue('6697')
+  // a custom port is left alone
+  await f.getByLabel('Port').fill('7000')
+  await f.getByRole('switch', { name: 'Use TLS' }).click()
+  await expect(f.getByLabel('Port')).toHaveValue('7000')
+})
+
+test('the server refuses a duplicate name', async ({ page }) => {
+  await addNetwork(u.api, { name: 'Dup', nick: u.name })
+  await page.goto('/networks#add')
+  await fillNetwork(page, { name: 'Dup' })
+  await page.getByRole('button', { name: 'Add and connect' }).click()
+  await expect(form(page).getByRole('alert').filter({ hasText: 'already have a network called Dup' })).toBeVisible()
+})
+
+test('switch a network off and on again', async ({ page }) => {
+  await addNetwork(u.api, { name: 'Flip', nick: u.name })
+  await page.goto('/networks')
+  const row = card(page, 'Flip')
+  await expect(row.getByText('Connected', { exact: true })).toBeVisible()
+  await row.getByRole('switch', { name: 'Disconnect Flip' }).click()
+  await expect(page.getByText('Disconnected from Flip. Settings kept.')).toBeVisible()
+  await expect(row.getByText('Disconnected', { exact: true })).toBeVisible({ timeout: 10000 })
+  await expect(row.getByRole('link', { name: /Open chat/ })).toHaveAttribute('aria-disabled', 'true')
+  await row.getByRole('switch', { name: 'Connect Flip' }).click()
+  await expect(row.getByText('Connected', { exact: true })).toBeVisible({ timeout: 20000 })
+})
+
+test('edit a network: nick, channels and the SASL password', async ({ page }) => {
+  await addNetwork(u.api, { name: 'Edit', nick: u.name, channels: ['#e2e'] })
+  await page.goto('/networks')
+  await page.getByRole('button', { name: 'Edit Edit' }).click()
+  const f = form(page, 'Edit Edit')
+  await expect(f.getByLabel('Channels to join')).toHaveValue('#e2e')
+  await f.getByLabel('Nickname').fill(u.name + '_x')
+  await f.getByLabel('Channels to join').fill('#e2e, #more')
+  await f.getByLabel('SASL password').fill('nickserv-pw')
+  await page.getByRole('button', { name: 'Save changes' }).click()
+  await expect(page.getByText(/Saved Edit/)).toBeVisible()
+  const row = card(page, 'Edit')
+  await expect(row.getByText(u.name + '_x', { exact: true })).toBeVisible({ timeout: 20000 })
+
+  await page.getByRole('button', { name: 'Edit Edit' }).click()
+  await expect(f.getByLabel('Channels to join')).toHaveValue('#e2e, #more')
+  await expect(f.getByText('A password is saved.')).toBeVisible()
+  await f.getByRole('switch', { name: 'Remove the saved password' }).click()
+  await expect(f.getByLabel('SASL password')).toBeDisabled()
+  await page.getByRole('button', { name: 'Save changes' }).click()
+  await expect(page.locator('#net-drawer')).not.toHaveClass(/open/)
+  await expect.poll(async () => (await u.api.get('/api/networks'))[0].hasPassword).toBe(false)
+  await page.reload()
+  await page.getByRole('button', { name: 'Edit Edit' }).click()
+  await expect(f.getByText('Logs you in to NickServ')).toBeVisible()
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.locator('#net-drawer')).not.toHaveClass(/open/)
+})
+
+test('remove a network', async ({ page }) => {
+  await addNetwork(u.api, { name: 'Temp', nick: u.name })
+  await page.goto('/networks')
+  await page.getByRole('button', { name: 'Edit Temp' }).click()
+  await page.getByRole('button', { name: 'Remove' }).click()
+  await expect(page.locator('dialog.confirm[open]')).toContainText('Remove Temp?')
+  await confirm(page)
+  await expect(page.getByText('Removed Temp')).toBeVisible()
+  await expect(page.getByTestId('network-row')).toHaveCount(0)
+})
+
+test('search and filter the list', async ({ page }) => {
+  await addNetwork(u.api, { name: 'Alpha', nick: u.name })
+  const b = await addNetwork(u.api, { name: 'Bravo', nick: u.name + 'b' })
+  await u.api.post(`/api/networks/${b.id}/disconnect`)
+  await page.goto('/networks')
+  await expect(page.getByTestId('network-row')).toHaveCount(2)
+
+  await page.locator('#page-search').fill('alp')
+  await expect(page.getByTestId('network-row')).toHaveCount(1)
+  await expect(card(page, 'Alpha')).toBeVisible()
+  await page.locator('#page-search').fill('zzz')
+  await expect(page.getByText('No networks match')).toBeVisible()
+  await page.getByRole('button', { name: 'Clear filters' }).click()
+  await expect(page.getByTestId('network-row')).toHaveCount(2)
+
+  const chips = page.getByRole('group', { name: 'Filter by status' })
+  await chips.getByRole('button', { name: /^Off/ }).click()
+  await expect(page.getByTestId('network-row')).toHaveCount(1)
+  await expect(card(page, 'Bravo')).toBeVisible()
+  await chips.getByRole('button', { name: /^Connected/ }).click()
+  await expect(card(page, 'Alpha')).toBeVisible()
+  await expect(page.getByTestId('network-row')).toHaveCount(1)
+  await chips.getByRole('button', { name: /^Without TLS/ }).click()
+  await expect(page.getByTestId('network-row')).toHaveCount(2)
+  // ?filter= deep links straight to a filter
+  await page.goto('/networks?filter=disconnected')
+  await expect(page.getByTestId('network-row')).toHaveCount(1)
+})
+
+test('deep links open the add and edit forms', async ({ page }) => {
+  const n = await addNetwork(u.api, { name: 'Deep', nick: u.name })
+  await page.goto(`/networks#edit-${n.id}`)
+  await expect(form(page, 'Edit Deep')).toBeVisible()
+  await page.goto('/')
+  await page.getByRole('link', { name: 'Add network' }).first().click()
+  await expect(form(page)).toBeVisible()
+})

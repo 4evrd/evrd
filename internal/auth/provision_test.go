@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"code.ircforever.org/ircforever/evrd/internal/accounts"
-	"code.ircforever.org/ircforever/evrd/internal/config"
-	"code.ircforever.org/ircforever/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/store"
 )
 
 func newManager(t *testing.T, a config.Auth) (*Manager, store.Store, *accounts.Service) {

@@ -17,12 +17,11 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strconv"
-	"sync"
 	"time"
 
-	"code.ircforever.org/ircforever/evrd/internal/auth"
-	"code.ircforever.org/ircforever/evrd/internal/cluster"
-	"code.ircforever.org/ircforever/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/cluster"
+	"github.com/4evrd/evrd/internal/store"
 )
 
 // Cluster is what the API needs from internal/cluster.
@@ -116,61 +115,5 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, node store.Node
 	p.ServeHTTP(w, r)
 }
 
-// usage is one node's live numbers.
-type usage struct {
-	Clients   map[int64]int `json:"clients"` // attached IRC clients per user
-	Connected int           `json:"connected"`
-	Attached  int           `json:"attached"`
-}
-
-func (s *Server) localUsage() usage {
-	u := s.b.Usage()
-	return usage{Clients: s.b.ClientsByUser(), Connected: u.ConnectedNetworks, Attached: u.AttachedClients}
-}
-
-func (s *Server) handleInternalUsage(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.localUsage())
-}
-
-// clusterUsage adds up every live node's numbers. A node that doesn't answer
-// in time is left out.
-func (s *Server) clusterUsage(ctx context.Context) usage {
-	total := s.localUsage()
-	if s.cl == nil {
-		return total
-	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	for _, n := range s.cl.Nodes() {
-		if n.ID == s.cl.Self().ID || n.HTTPURL == "" {
-			continue
-		}
-		wg.Add(1)
-		go func(n store.Node) {
-			defer wg.Done()
-			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, n.HTTPURL+"/internal/usage", nil)
-			req.Header.Set(auth.HeaderSecret, s.secret)
-			res, err := http.DefaultClient.Do(req)
-			if err != nil {
-				s.log.Warn("usage from node", "node", n.ID, "err", err)
-				return
-			}
-			defer res.Body.Close()
-			var u usage
-			if res.StatusCode != http.StatusOK || json.NewDecoder(res.Body).Decode(&u) != nil {
-				return
-			}
-			mu.Lock()
-			for uid, c := range u.Clients {
-				total.Clients[uid] += c
-			}
-			total.Connected += u.Connected
-			total.Attached += u.Attached
-			mu.Unlock()
-		}(n)
-	}
-	wg.Wait()
-	return total
-}
+// decodeJSON reads a JSON response body.
+func decodeJSON(res *http.Response, v any) error { return json.NewDecoder(res.Body).Decode(v) }

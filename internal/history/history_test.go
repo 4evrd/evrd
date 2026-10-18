@@ -252,3 +252,18 @@ func sorted(ids []int64) []int64 {
 	}
 	return out
 }
+
+func TestCount(t *testing.T) {
+	each(t, func(t *testing.T, s Store, _ func() Store) {
+		add(t, s, 1, "#a", 7, time.Now())
+		if n, _ := s.Count(1, "#a", 100); n != 7 {
+			t.Fatalf("count: %d", n)
+		}
+		if n, _ := s.Count(1, "#A", 5); n != 5 {
+			t.Fatalf("capped count: %d", n)
+		}
+		if err := s.Ping(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}

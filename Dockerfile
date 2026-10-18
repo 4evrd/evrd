@@ -11,8 +11,8 @@ RUN go mod download
 COPY . .
 ARG VERSION=dev
 ENV CGO_ENABLED=0
-RUN go build -ldflags "-s -w -X code.ircforever.org/ircforever/evrd/internal/version.Version=${VERSION}" -o /out/evrd ./cmd/evrd && \
-    go build -ldflags "-s -w -X code.ircforever.org/ircforever/evrd/internal/version.Version=${VERSION}" -o /out/evrctl ./cmd/evrctl
+RUN go build -ldflags "-s -w -X github.com/4evrd/evrd/internal/version.Version=${VERSION}" -o /out/evrd ./cmd/evrd && \
+    go build -ldflags "-s -w -X github.com/4evrd/evrd/internal/version.Version=${VERSION}" -o /out/evrctl ./cmd/evrctl
 
 FROM alpine:3.20
 RUN adduser -D -u 1000 evrd && \

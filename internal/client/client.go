@@ -17,8 +17,8 @@ import (
 	"strings"
 	"sync"
 
-	"code.ircforever.org/ircforever/evrd/internal/accounts"
-	"code.ircforever.org/ircforever/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/bouncer"
 )
 
 const serverName = "evrd"

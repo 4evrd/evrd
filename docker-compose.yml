@@ -13,6 +13,18 @@ services:
       retries: 60
     # internal only — evrd reaches it as scylla:9042
 
+  # Metrics: evrd pushes OpenTelemetry (OTLP) here and reads it back for the
+  # dashboards. Prometheus naming makes evrd.irc.lines evrd_irc_lines_total.
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.102.1
+    command:
+      - -retentionPeriod=90d
+      - -storageDataPath=/storage
+      - -opentelemetry.usePrometheusNaming
+    volumes:
+      - vm-data:/storage
+    # internal only — evrd reaches it as victoriametrics:8428
+
   postgres:
     image: postgres:17-alpine
     environment:
@@ -96,5 +108,6 @@ services:
       - "8080:80"
 
 volumes:
+  vm-data:
   pg-data:
   scylla-data:

@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"code.ircforever.org/ircforever/evrd/internal/history"
-	"code.ircforever.org/ircforever/evrd/internal/store"
-	"code.ircforever.org/ircforever/evrd/internal/upstream"
+	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/upstream"
 )
 
 // ErrSuspended is returned when connecting a suspended user's network.
@@ -42,6 +42,9 @@ type Bouncer struct {
 	clients map[int64]map[*client]struct{} // user id -> attached IRC clients
 	streams map[int64]map[*client]struct{} // user id -> open web chat sockets
 
+	rmu   sync.Mutex
+	reads map[int64]*netReads // network id -> unread state (networks run here)
+
 	// owns reports whether this node runs a user; nil means every user (a
 	// node outside a cluster, or a test).
 	owns func(userID int64) bool
@@ -61,12 +64,11 @@ type entry struct {
 	cancel context.CancelFunc
 }
 
-type client struct{ close func() }
-
 func New(st store.Store, hist history.Store, log *slog.Logger) *Bouncer {
 	return &Bouncer{
 		store: st, history: hist, log: log, conns: map[int64]*entry{},
 		clients: map[int64]map[*client]struct{}{}, streams: map[int64]map[*client]struct{}{},
+		reads: map[int64]*netReads{},
 	}
 }
 
@@ -86,6 +88,7 @@ func (b *Bouncer) History() history.Store { return b.history }
 // DeleteNetwork disconnects a network and deletes it with its history.
 func (b *Bouncer) DeleteNetwork(userID, networkID int64) error {
 	b.Disconnect(networkID)
+	b.dropReads(networkID)
 	if err := b.store.DeleteNetwork(userID, networkID); err != nil {
 		return err
 	}
@@ -141,7 +144,8 @@ func (b *Bouncer) Connect(networkID int64) error {
 	if err != nil {
 		return err
 	}
-	if u, err := b.store.UserByID(n.UserID); err != nil {
+	u, err := b.store.UserByID(n.UserID)
+	if err != nil {
 		return err
 	} else if u.Suspended {
 		return ErrSuspended
@@ -149,6 +153,10 @@ func (b *Bouncer) Connect(networkID int64) error {
 	if !b.Owns(n.UserID) {
 		return ErrNotOwner
 	}
+	if _, ok := b.ConnFor(networkID); ok {
+		return nil
+	}
+	b.initReads(n)
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -167,12 +175,16 @@ func (b *Bouncer) Connect(networkID int64) error {
 			return b.dial(ctx, userID, host, port)
 		}
 	}
-	conn := upstream.New(n, b.log, upstream.Options{
+	var conn *upstream.Conn
+	conn = upstream.New(n, b.log, upstream.Options{
 		Persist: func(m history.Message) {
 			if err := b.history.Add(m); err != nil {
 				b.log.Warn("persist message", "err", err)
 			}
+			b.observe(n, conn.Nick(), m)
 		},
+		OnEvent: func(e upstream.Event) { b.AddEvent(n.UserID, e.Kind, e.Title, e.Detail) },
+		AltNick: u.DefaultAltNick,
 		OnChannels: func(channels []string) {
 			if err := b.store.SetNetworkChannels(networkID, channels); err != nil {
 				b.log.Warn("save channels", "network", n.Name, "err", err)
@@ -181,6 +193,9 @@ func (b *Bouncer) Connect(networkID int64) error {
 		Dial: dial,
 	})
 	b.conns[networkID] = &entry{conn: conn, userID: n.UserID, cancel: cancel}
+	if u.AutoAway && len(b.clients[n.UserID])+len(b.streams[n.UserID]) == 0 {
+		conn.SetAway(AwayMessage) // applied once registered
+	}
 	go conn.Run(cctx)
 	b.log.Info("connecting network", "network", n.Name, "host", n.Host)
 
@@ -232,6 +247,7 @@ func (b *Bouncer) StopUser(userID int64) {
 	b.mu.Unlock()
 	for _, e := range stop {
 		e.cancel()
+		b.dropReads(e.conn.NetworkID())
 	}
 	for _, c := range kick {
 		c.close()
@@ -277,48 +293,41 @@ func (b *Bouncer) Status(networkID int64) upstream.Status {
 
 // AttachClient registers an attached IRC client for a user, refusing it when
 // the user already has max clients (0 = unlimited). close is called to kick
-// the client; the returned release must be called when it detaches.
-func (b *Bouncer) AttachClient(userID int64, max int, close func()) (release func(), err error) {
+// the client; Release the attachment when it detaches.
+func (b *Bouncer) AttachClient(userID int64, max int, info ClientInfo, close func()) (*Attachment, error) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	set := b.clients[userID]
 	if max > 0 && len(set) >= max {
+		b.mu.Unlock()
 		return nil, ErrTooManyClients
 	}
 	if set == nil {
 		set = map[*client]struct{}{}
 		b.clients[userID] = set
 	}
-	c := &client{close: close}
+	info.ID, info.Kind, info.Since = nextClientID(), "irc", time.Now()
+	c := &client{close: close, info: info}
 	set[c] = struct{}{}
-	return func() {
-		b.mu.Lock()
-		defer b.mu.Unlock()
-		delete(b.clients[userID], c)
-		if len(b.clients[userID]) == 0 {
-			delete(b.clients, userID)
-		}
-	}, nil
+	b.mu.Unlock()
+	b.seen(userID)
+	b.refreshAway(userID)
+	return &Attachment{b: b, userID: userID, c: c}, nil
 }
 
-// TrackStream registers an open web chat socket, so StopUser can close it.
-// The returned release must be called when it closes.
-func (b *Bouncer) TrackStream(userID int64, close func()) (release func()) {
+// TrackStream registers an open web chat socket, so StopUser can close it
+// and it counts as attached. Release it when the socket closes.
+func (b *Bouncer) TrackStream(userID int64, info ClientInfo, close func()) *Attachment {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	if b.streams[userID] == nil {
 		b.streams[userID] = map[*client]struct{}{}
 	}
-	c := &client{close: close}
+	info.ID, info.Kind, info.Since = nextClientID(), "web", time.Now()
+	c := &client{close: close, info: info}
 	b.streams[userID][c] = struct{}{}
-	return func() {
-		b.mu.Lock()
-		defer b.mu.Unlock()
-		delete(b.streams[userID], c)
-		if len(b.streams[userID]) == 0 {
-			delete(b.streams, userID)
-		}
-	}
+	b.mu.Unlock()
+	b.seen(userID)
+	b.refreshAway(userID)
+	return &Attachment{b: b, userID: userID, c: c, web: true}
 }
 
 // Clients is the number of IRC clients a user has attached.
@@ -404,6 +413,9 @@ func (b *Bouncer) prune(backlog func(store.User) int, leader bool) {
 		return
 	}
 	b.dropOrphanHistory(users)
+	if err := b.store.PruneUserEvents(time.Now().AddDate(0, 0, -30)); err != nil {
+		b.log.Warn("prune activity feed", "err", err)
+	}
 	if err := b.store.DeleteExpiredSessions(time.Now()); err != nil {
 		b.log.Warn("expire sessions", "err", err)
 	}

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"code.ircforever.org/ircforever/evrd/internal/history"
-	"code.ircforever.org/ircforever/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/store"
 )
 
 func TestHistoryFollowsNetworksAndUsers(t *testing.T) {

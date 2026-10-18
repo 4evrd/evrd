@@ -13,17 +13,19 @@ import (
 	"syscall"
 	"time"
 
-	"code.ircforever.org/ircforever/evrd/internal/accounts"
-	"code.ircforever.org/ircforever/evrd/internal/api"
-	"code.ircforever.org/ircforever/evrd/internal/auth"
-	"code.ircforever.org/ircforever/evrd/internal/bouncer"
-	"code.ircforever.org/ircforever/evrd/internal/client"
-	"code.ircforever.org/ircforever/evrd/internal/cluster"
-	"code.ircforever.org/ircforever/evrd/internal/config"
-	"code.ircforever.org/ircforever/evrd/internal/history"
-	"code.ircforever.org/ircforever/evrd/internal/outbound"
-	"code.ircforever.org/ircforever/evrd/internal/store"
-	"code.ircforever.org/ircforever/evrd/internal/version"
+	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/api"
+	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/client"
+	"github.com/4evrd/evrd/internal/cluster"
+	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/metricsq"
+	"github.com/4evrd/evrd/internal/outbound"
+	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/telemetry"
+	"github.com/4evrd/evrd/internal/version"
 )
 
 func main() {
@@ -140,9 +142,43 @@ func main() {
 	go func() { cl.Run(ctx); close(clusterDone) }()
 	go b.PruneLoop(ctx, 10*time.Minute, func(u store.User) int { return acc.LimitsFor(u).BacklogLines }, cl.Leader)
 
+	// Metrics: pushed over OTLP (to VictoriaMetrics), read back for the
+	// dashboards from metrics_url.
+	stopTelemetry, err := telemetry.Setup(ctx, telemetry.Config{
+		Endpoint: cfg.Metrics.OTLPEndpoint, Interval: cfg.Metrics.Interval, NodeID: cc.NodeID, Version: version.Version,
+	})
+	if err != nil {
+		log.Error("telemetry", "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		stopTelemetry(sctx)
+	}()
+	gauges := telemetry.Gauges{
+		Upstreams: b.UpstreamsByStatus,
+		Links:     b.Links,
+		Clients:   func() int64 { return int64(b.Usage().AttachedClients) },
+		Streams:   b.Streams,
+		Users:     func() int64 { return int64(cl.HeldCount()) },
+		Nodes:     func() int64 { return int64(len(cl.Nodes())) },
+	}
+	if p, ok := hist.(interface{ Pending() int64 }); ok {
+		gauges.Queue = p.Pending
+	}
+	if err := telemetry.RegisterGauges(gauges); err != nil {
+		log.Error("telemetry gauges", "err", err)
+		os.Exit(1)
+	}
+	if cfg.Metrics.OTLPEndpoint != "" {
+		log.Info("exporting metrics", "endpoint", cfg.Metrics.OTLPEndpoint)
+	}
+
 	// Downstream IRC listener for native clients (Hexchat, irssi, …).
 	irc := client.NewServer(b, acc, log, cfg.TLSCert, cfg.TLSKey)
 	srv := api.NewServer(b, acc, am, cfg, irc, log)
+	srv.SetMetrics(metricsq.New(cfg.Metrics.QueryURL))
 	if cc.Enabled() {
 		irc.SetCluster(cl, cc.Secret)
 		srv.SetCluster(cl, cc.Secret)

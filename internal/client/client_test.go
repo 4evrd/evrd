@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"code.ircforever.org/ircforever/evrd/internal/accounts"
-	"code.ircforever.org/ircforever/evrd/internal/bouncer"
-	"code.ircforever.org/ircforever/evrd/internal/config"
-	"code.ircforever.org/ircforever/evrd/internal/history"
-	"code.ircforever.org/ircforever/evrd/internal/store"
-	"code.ircforever.org/ircforever/evrd/internal/testirc"
+	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/testirc"
 )
 
 type rig struct {
@@ -235,6 +235,8 @@ func TestJumpAndNetworkManagement(t *testing.T) {
 	ic.send("PRIVMSG *status :delnetwork three")
 	ic.expect("Removed three")
 
+	// the message and the server's JOIN, once both are saved
+	eventually(t, "#two history saved", func() bool { m, _ := r.hist.Recent(n.ID, "#two", 10); return len(m) == 2 })
 	ic.send("PRIVMSG *status :playback #two")
 	ic.expect("PRIVMSG #two :hi two")
 	ic.expect("Replayed 2 line(s) of #two")

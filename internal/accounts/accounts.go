@@ -16,12 +16,12 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"code.ircforever.org/ircforever/evrd/internal/config"
-	"code.ircforever.org/ircforever/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/store"
 )
 
 // MinPasswordLen is the shortest password accepted.
-const MinPasswordLen = 8
+const MinPasswordLen = 10
 
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
@@ -118,8 +118,10 @@ type CreateInput struct {
 	Username string
 	Email    string
 	Password string // optional: empty means SSO / client passwords only
-	Role     string
-	Subject  string // optional OIDC subject to link
+	// Temporary makes the password one the user must change at first sign-in.
+	Temporary bool
+	Role      string
+	Subject   string // optional OIDC subject to link
 }
 
 // Create validates and stores a new user.
@@ -145,6 +147,7 @@ func (s *Service) Create(in CreateInput) (store.User, error) {
 		if u.PasswordHash, err = HashPassword(in.Password); err != nil {
 			return store.User{}, err
 		}
+		u.MustChangePassword = in.Temporary
 	}
 	if in.Subject != "" {
 		sub := in.Subject
@@ -153,14 +156,48 @@ func (s *Service) Create(in CreateInput) (store.User, error) {
 	return s.st.CreateUser(u)
 }
 
-// SetPassword replaces a user's local password.
+// SetPassword replaces a user's local password (and clears a pending
+// must-change).
 func (s *Service) SetPassword(u *store.User, pw string) error {
 	h, err := HashPassword(pw)
 	if err != nil {
 		return err
 	}
-	u.PasswordHash = h
+	u.PasswordHash, u.MustChangePassword = h, false
 	return s.st.UpdateUser(*u)
+}
+
+// SetTemporaryPassword gives a user a password they must change at their
+// next web sign-in. An empty pw generates one, which is returned.
+func (s *Service) SetTemporaryPassword(u *store.User, pw string) (string, error) {
+	if pw == "" {
+		var err error
+		if pw, err = RandomPassword(); err != nil {
+			return "", err
+		}
+	}
+	if err := s.SetPassword(u, pw); err != nil {
+		return "", err
+	}
+	u.MustChangePassword = true
+	return pw, s.st.UpdateUser(*u)
+}
+
+// RandomPassword is a readable random password (xxxxx-xxxxx-xxxxx-xxxxx).
+func RandomPassword() (string, error) {
+	const chars = "abcdefghjkmnpqrstuvwxyz23456789"
+	b := make([]byte, 20)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	var sb strings.Builder
+	for i, v := range b {
+		if i > 0 && i%5 == 0 {
+			sb.WriteByte('-')
+		}
+		sb.WriteByte(chars[int(v)%len(chars)])
+	}
+	return sb.String(), nil
 }
 
 // ChangePassword is the self-service change: the current password must match.
@@ -191,34 +228,36 @@ func (s *Service) PasswordLogin(username, password string) (store.User, error) {
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("evrd-timing-dummy"), bcrypt.DefaultCost)
 
 // IRCLogin checks the secret a native IRC client sent with PASS: the user's
-// local password, or one of their client passwords.
-func (s *Service) IRCLogin(username, secret string) (store.User, error) {
+// local password, or one of their client passwords. It also returns the
+// client password's name ("" for the account password).
+func (s *Service) IRCLogin(username, secret string) (store.User, string, error) {
 	u, err := s.st.UserByUsername(strings.ToLower(username))
 	if err != nil {
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(secret))
-		return store.User{}, ErrInvalidCredentials
+		return store.User{}, "", ErrInvalidCredentials
 	}
+	device := ""
 	ok := u.PasswordHash != "" && bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(secret)) == nil
 	if !ok {
 		cps, err := s.st.ListClientPasswords(u.ID)
 		if err != nil {
-			return store.User{}, err
+			return store.User{}, "", err
 		}
 		for _, cp := range cps {
 			if bcrypt.CompareHashAndPassword([]byte(cp.Hash), []byte(secret)) == nil {
 				_ = s.st.TouchClientPassword(cp.ID, s.now())
-				ok = true
+				ok, device = true, cp.Name
 				break
 			}
 		}
 	}
 	if !ok {
-		return store.User{}, ErrInvalidCredentials
+		return store.User{}, "", ErrInvalidCredentials
 	}
 	if u.Suspended {
-		return store.User{}, ErrSuspended
+		return store.User{}, "", ErrSuspended
 	}
-	return u, nil
+	return u, device, nil
 }
 
 // NewClientPassword creates an IRC client password and returns its secret,

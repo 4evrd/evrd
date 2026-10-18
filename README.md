@@ -62,6 +62,7 @@ make down        # stop it
 - evrd IRC (native client attach) → localhost:6697 (TLS, self-signed) / 6667
 - Postgres → internal only (`postgres:5432`) — accounts and settings
 - ScyllaDB → internal only (`scylla:9042`) — chat history
+- VictoriaMetrics → internal only (`victoriametrics:8428`) — metrics over OTLP
 
 Create an admin, then sign in on the web app and add a network:
 
@@ -142,13 +143,27 @@ cluster tests against it (CI runs it too). Against an existing one:
 
 ### End-to-end tests
 
-Playwright specs in `web/e2e` drive the UI against the real daemon (login, add
-+ connect a network, send a message in the console):
+Playwright specs in `web/e2e` drive every page against the real stack: sign-in
+and forced password changes, networks, chat (unread counts, mentions, members,
+topics, commands, `*status`), IRC clients (attaching a native client with a
+client password, backlog playback, web ↔ client sync, limits), the account
+page, admin users and the bouncer overview, and the traffic chart read back
+from VictoriaMetrics. `e2e/irc.js` is a raw IRC client that attaches to evrd
+like irssi would, so tests can play other people in a channel. Each test makes
+its own throwaway account.
 
 ```sh
 make e2e-setup   # one-time: install web deps + the Playwright browser
 make e2e         # brings up the dev stack and runs the specs
 ```
+
+### CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull
+request: gofmt, vet, build and Go tests; the ScyllaDB suite; svelte-check and
+the web build; and the Playwright suite against the full dev stack. Pushes to
+`main` and `v*` tags publish multi-arch images to `ghcr.io/4evrd/evrd` and
+`ghcr.io/4evrd/evrd-web`.
 
 ### Without Docker
 
@@ -236,15 +251,38 @@ oidc_admin_role   evrd-admin  # optional: provider role that makes an evrd admin
 ```
 
 **Limits** (server defaults; admins override per user, 0 = unlimited):
-`max_networks 5`, `max_clients 5` (attached IRC clients at once),
+`max_networks 0` (unlimited by default), `max_clients 5` (attached IRC clients at once),
 `backlog_lines 2000` (kept per channel, pruned every 10 minutes).
 
 **Suspending** a user signs them out everywhere, drops their IRC clients and
 disconnects their networks; lifting it reconnects them. The last active admin
 can't be demoted, suspended or deleted.
 
+Passwords need at least 10 characters. A password an admin sets — or the
+one-time password **Reset** generates on the Users page — is temporary: the
+user picks their own at next sign-in.
+
 Other directives: `session_ttl 720h`, `cookie_secure yes` (turn off only for
 plain-HTTP dev), `irc_host` (the hostname shown to users for attaching).
+
+## Metrics
+
+evrd exports OpenTelemetry metrics over OTLP/HTTP and reads them back from
+VictoriaMetrics for the dashboard's traffic chart and health numbers:
+
+```
+otel_endpoint http://victoriametrics:8428/opentelemetry/v1/metrics
+otel_interval 15s
+metrics_url   http://victoriametrics:8428   # PromQL API the dashboard queries
+```
+
+(`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` and `EVRD_METRICS_URL` work too.) Run
+VictoriaMetrics with `-opentelemetry.usePrometheusNaming` so names come out as
+`evrd_irc_lines_total{user,network,direction}`, `evrd_upstream_up`,
+`evrd_upstream_lag_seconds`, `evrd_upstream_disconnects_total`,
+`evrd_irc_clients`, `evrd_web_streams`, `evrd_cluster_users`,
+`evrd_history_queue` and friends (`user`/`network` are ids). Without
+`metrics_url` the dashboard still works; the chart says metrics are off.
 
 ## Status
 

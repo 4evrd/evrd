@@ -280,3 +280,19 @@ func (pebbleLogger) Fatalf(format string, args ...any) {
 	slog.Error("history store: " + fmt.Sprintf(format, args...))
 	os.Exit(1)
 }
+
+func (s *pebbleStore) Count(networkID int64, target string, max int) (int, error) {
+	prefix := bufferPrefix(networkID, target)
+	it, err := s.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upperBound(prefix)})
+	if err != nil {
+		return 0, err
+	}
+	defer it.Close()
+	n := 0
+	for ok := it.Last(); ok && n < max; ok = it.Prev() {
+		n++
+	}
+	return n, it.Error()
+}
+
+func (s *pebbleStore) Ping() error { return nil }

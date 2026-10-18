@@ -1,4 +1,4 @@
-// Toasts and the confirm dialog, rendered once by the layout.
+// Toasts, the confirm dialog and drawers, rendered once by the layout.
 export const toasts = $state([])
 let nextId = 1
 
@@ -12,19 +12,30 @@ export function toast(text, kind = 'ok') {
       const i = toasts.findIndex((x) => x.id === id)
       if (i >= 0) toasts.splice(i, 1)
     }, 160)
-  }, 4000)
+  }, 3600)
 }
 
-// dialog.current is the open confirm, or null. body is trusted HTML built by
-// the caller with esc() around any user data.
+// dialog.current is the open confirm, or null.
 export const dialog = $state({ current: null })
 
-export function confirmDialog({ title, body, confirmLabel = 'Confirm', danger = false, requireText = '' }) {
+// confirmDialog resolves true when the (destructive) action is confirmed.
+// typed: text the user must type to enable the action.
+export function confirmDialog({ title, body, action = 'Delete', typed = '', danger = true }) {
   return new Promise((resolve) => {
-    dialog.current = { title, body, confirmLabel, danger, requireText, resolve }
+    dialog.current = { title, body, action, typed, danger, resolve }
   })
 }
 
-export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+// drawers.open is the id of the open drawer, or ''.
+export const drawers = $state({ open: '' })
+let lastFocus = null
+export function openDrawer(id) {
+  lastFocus = document.activeElement
+  drawers.open = id
+}
+export function closeDrawers() {
+  drawers.open = ''
+  lastFocus?.focus?.()
+}
 
 export const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches

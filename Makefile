@@ -2,7 +2,7 @@ VERSION ?= dev
 # Pure Go (no cgo): the SQLite driver and Pebble both have pure-Go builds.
 export CGO_ENABLED := 0
 
-LDFLAGS := -s -w -X code.ircforever.org/ircforever/evrd/internal/version.Version=$(VERSION)
+LDFLAGS := -s -w -X github.com/4evrd/evrd/internal/version.Version=$(VERSION)
 
 .PHONY: all build core cli web vet test clean up down up-prod down-prod e2e e2e-setup
 

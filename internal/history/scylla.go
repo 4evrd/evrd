@@ -436,3 +436,35 @@ func (s *scyllaStore) Close() error {
 	s.s.Close()
 	return nil
 }
+
+func (s *scyllaStore) Count(networkID int64, target string, max int) (int, error) {
+	buf := strings.ToLower(target)
+	buckets, err := s.buckets(networkID, buf)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, b := range buckets {
+		if n >= max {
+			break
+		}
+		it := s.s.Query(`SELECT ts FROM lines WHERE network_id = ? AND buffer = ? AND bucket = ? LIMIT ?`,
+			networkID, buf, b, max-n).PageSize(1000).Iter()
+		var ts int64
+		for it.Scan(&ts) {
+			n++
+		}
+		if err := it.Close(); err != nil {
+			return n, err
+		}
+	}
+	return n, nil
+}
+
+func (s *scyllaStore) Ping() error {
+	var now string
+	return s.s.Query(`SELECT release_version FROM system.local`).Scan(&now)
+}
+
+// Pending is the number of writes waiting in the queue.
+func (s *scyllaStore) Pending() int64 { return s.pending.Load() }

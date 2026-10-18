@@ -14,12 +14,12 @@ import (
 	"strings"
 	"testing"
 
-	"code.ircforever.org/ircforever/evrd/internal/accounts"
-	"code.ircforever.org/ircforever/evrd/internal/auth"
-	"code.ircforever.org/ircforever/evrd/internal/bouncer"
-	"code.ircforever.org/ircforever/evrd/internal/config"
-	"code.ircforever.org/ircforever/evrd/internal/history"
-	"code.ircforever.org/ircforever/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/store"
 )
 
 type env struct {
@@ -229,16 +229,16 @@ func TestClientPasswords(t *testing.T) {
 		t.Fatalf("create: %d %v", code, cp)
 	}
 	secret := cp["password"].(string)
-	if _, err := e.acc.IRCLogin("alice", secret); err != nil {
+	if _, err := ircLogin(e.acc, "alice", secret); err != nil {
 		t.Fatalf("IRC login with the client password: %v", err)
 	}
-	if _, err := e.acc.IRCLogin("alice", "alice-password"); err != nil {
+	if _, err := ircLogin(e.acc, "alice", "alice-password"); err != nil {
 		t.Fatalf("IRC login with the account password: %v", err)
 	}
 	if code, _ := c.do("DELETE", "/api/me/client-passwords/"+strconv.Itoa(int(cp["id"].(float64))), nil); code != 204 {
 		t.Fatalf("delete: %d", code)
 	}
-	if _, err := e.acc.IRCLogin("alice", secret); err == nil {
+	if _, err := ircLogin(e.acc, "alice", secret); err == nil {
 		t.Fatal("deleted client password still works")
 	}
 }
@@ -276,7 +276,7 @@ func TestSuspendCutsOffAndLastAdminIsKept(t *testing.T) {
 	if code, _ := e.anon().do("POST", "/auth/password", map[string]string{"username": "alice", "password": "alice-password"}); code != 403 {
 		t.Fatal("suspended user can sign in")
 	}
-	if _, err := e.acc.IRCLogin("alice", "alice-password"); err != accounts.ErrSuspended {
+	if _, err := ircLogin(e.acc, "alice", "alice-password"); err != accounts.ErrSuspended {
 		t.Fatalf("suspended user's IRC login: %v", err)
 	}
 
@@ -363,4 +363,9 @@ func TestUpdateNetwork(t *testing.T) {
 	if code, _ := bob.do("PATCH", path, map[string]any{"nick": "x"}); code != 404 {
 		t.Fatalf("someone else's network: got %d", code)
 	}
+}
+
+func ircLogin(acc *accounts.Service, user, secret string) (store.User, error) {
+	u, _, err := acc.IRCLogin(user, secret)
+	return u, err
 }

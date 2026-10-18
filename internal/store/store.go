@@ -44,11 +44,20 @@ type User struct {
 
 	// Defaults that prefill a new network.
 	DefaultNick     string
+	DefaultAltNick  string // tried when the nick is taken
 	DefaultRealname string
+	// AutoAway marks the user away on every network while no client (IRC or
+	// web) is attached.
+	AutoAway bool `gorm:"not null;default:false"`
+	// MustChangePassword is set for a temporary password an admin chose.
+	MustChangePassword bool `gorm:"not null;default:false"`
 
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	LastLoginAt *time.Time
+	// LastSeenAt is the last time a client attached or detached, or the web
+	// app was used.
+	LastSeenAt *time.Time
 }
 
 // IsAdmin reports whether the user has the admin role.
@@ -93,6 +102,24 @@ type Network struct {
 	Password string
 	Channels []string `gorm:"serializer:json"`
 	Enabled  bool
+}
+
+// ReadMarker is how far a user has read a buffer.
+type ReadMarker struct {
+	NetworkID int64  `gorm:"primaryKey;autoIncrement:false"`
+	Buffer    string `gorm:"primaryKey;size:255"` // lowercased
+	ReadAt    time.Time
+}
+
+// UserEvent is an entry in a user's activity feed (network lost, netsplit,
+// client attached…).
+type UserEvent struct {
+	ID     int64     `gorm:"primaryKey"`
+	UserID int64     `gorm:"index:idx_user_event,priority:1;not null"`
+	At     time.Time `gorm:"index:idx_user_event,priority:2"`
+	Kind   string
+	Title  string
+	Detail string
 }
 
 // Node is an evrd process in the cluster, as it advertises itself.
@@ -167,6 +194,7 @@ type Store interface {
 	// NetworkCounts is the number of networks per user ID.
 	NetworkCounts() (map[int64]int64, error)
 	AllEnabledNetworks() ([]Network, error)
+	AllNetworks() ([]Network, error)
 	NetworkByID(id int64) (Network, error)
 	CreateNetwork(n Network) (Network, error)
 	DeleteNetwork(userID, id int64) error
@@ -174,6 +202,24 @@ type Store interface {
 	SetNetworkChannels(id int64, channels []string) error
 	// UpdateNetwork saves a network's editable settings (not Enabled).
 	UpdateNetwork(n Network) error
+
+	// read markers
+	SetReadMarker(networkID int64, buffer string, at time.Time) error
+	// ReadMarkers is how far each of a network's buffers is read (by
+	// lowercased buffer name).
+	ReadMarkers(networkID int64) (map[string]time.Time, error)
+
+	// activity feed
+	AddUserEvent(e UserEvent) error
+	// UserEvents lists a user's newest events since since, newest first.
+	UserEvents(userID int64, since time.Time, limit int) ([]UserEvent, error)
+	// PruneUserEvents drops events older than before.
+	PruneUserEvents(before time.Time) error
+
+	TouchUserSeen(userID int64, at time.Time) error
+
+	// Ping checks the database is reachable.
+	Ping() error
 
 	// cluster: nodes and user leases
 	UpsertNode(n Node) error
@@ -191,6 +237,8 @@ type Store interface {
 	HeldLeases(node string, now time.Time) ([]int64, error)
 	// ReleaseLease expires node's lease on a user so another node can take it.
 	ReleaseLease(userID int64, node string, now time.Time) error
+	// Leases lists every unexpired lease.
+	Leases(now time.Time) ([]UserLease, error)
 	// LeaseOwner is the node holding a user's unexpired lease, if any.
 	LeaseOwner(userID int64, now time.Time) (Node, UserLease, bool, error)
 	// DeleteOrphanLeases drops leases of users that no longer exist.

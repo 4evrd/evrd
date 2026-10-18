@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"code.ircforever.org/ircforever/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/store"
 )
 
 // fakeClock is shared by every node in a test.

@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"code.ircforever.org/ircforever/evrd/internal/accounts"
-	"code.ircforever.org/ircforever/evrd/internal/store"
-	"code.ircforever.org/ircforever/evrd/internal/upstream"
-	"code.ircforever.org/ircforever/evrd/internal/version"
+	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/upstream"
+	"github.com/4evrd/evrd/internal/version"
 )
 
 const statusNick = "*status"

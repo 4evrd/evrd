@@ -33,9 +33,10 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"code.ircforever.org/ircforever/evrd/internal/accounts"
-	"code.ircforever.org/ircforever/evrd/internal/config"
-	"code.ircforever.org/ircforever/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/telemetry"
 )
 
 const cookieName = "evrd_session"
@@ -286,9 +287,11 @@ func (m *Manager) PasswordLogin(w http.ResponseWriter, r *http.Request) {
 	u, err := m.acc.PasswordLogin(in.Username, in.Password)
 	switch {
 	case errors.Is(err, accounts.ErrSuspended):
+		telemetry.WebLogins.Add(r.Context(), 1, telemetry.Attrs("method", "password", "result", "suspended"))
 		writeErr(w, http.StatusForbidden, "this account is suspended")
 		return
 	case err != nil:
+		telemetry.WebLogins.Add(r.Context(), 1, telemetry.Attrs("method", "password", "result", "invalid"))
 		m.fails.add(key)
 		writeErr(w, http.StatusUnauthorized, "wrong username or password")
 		return
@@ -299,6 +302,7 @@ func (m *Manager) PasswordLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.log.Info("sign-in", "user", u.Username, "method", "password")
+	telemetry.WebLogins.Add(r.Context(), 1, telemetry.Attrs("method", "password", "result", "ok"))
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -334,7 +338,10 @@ type Claims struct {
 
 // Callback handles GET /auth/callback from the provider.
 func (m *Manager) Callback(w http.ResponseWriter, r *http.Request) {
-	fail := func(code string) { http.Redirect(w, r, "/?login_error="+code, http.StatusFound) }
+	fail := func(code string) {
+		telemetry.WebLogins.Add(r.Context(), 1, telemetry.Attrs("method", "oidc", "result", code))
+		http.Redirect(w, r, "/?login_error="+code, http.StatusFound)
+	}
 	if m.oidc == nil {
 		fail("sso_off")
 		return
@@ -382,6 +389,7 @@ func (m *Manager) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.log.Info("sign-in", "user", u.Username, "method", "oidc")
+	telemetry.WebLogins.Add(r.Context(), 1, telemetry.Attrs("method", "oidc", "result", "ok"))
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 

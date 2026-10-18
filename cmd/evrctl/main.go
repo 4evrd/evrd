@@ -15,11 +15,11 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"code.ircforever.org/ircforever/evrd/internal/accounts"
-	"code.ircforever.org/ircforever/evrd/internal/config"
-	"code.ircforever.org/ircforever/evrd/internal/history"
-	"code.ircforever.org/ircforever/evrd/internal/store"
-	"code.ircforever.org/ircforever/evrd/internal/version"
+	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/version"
 )
 
 func usage() {

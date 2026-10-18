@@ -35,7 +35,7 @@ func Open(dsn string) (Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &UserEvent{}); err != nil {
 		return nil, err
 	}
 	return &gormStore{db: db}, nil
@@ -89,7 +89,16 @@ func (s *gormStore) UpdateUser(u User) error {
 
 func (s *gormStore) DeleteUser(id int64) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		for _, m := range []any{&Network{}, &Session{}, &ClientPassword{}} {
+		var netIDs []int64
+		if err := tx.Model(&Network{}).Where("user_id = ?", id).Pluck("id", &netIDs).Error; err != nil {
+			return err
+		}
+		if len(netIDs) > 0 {
+			if err := tx.Where("network_id IN ?", netIDs).Delete(&ReadMarker{}).Error; err != nil {
+				return err
+			}
+		}
+		for _, m := range []any{&Network{}, &Session{}, &ClientPassword{}, &UserEvent{}} {
 			if err := tx.Where("user_id = ?", id).Delete(m).Error; err != nil {
 				return err
 			}
@@ -186,6 +195,11 @@ func (s *gormStore) NetworkCounts() (map[int64]int64, error) {
 	return out, err
 }
 
+func (s *gormStore) AllNetworks() ([]Network, error) {
+	var nets []Network
+	return nets, s.db.Order("id").Find(&nets).Error
+}
+
 func (s *gormStore) AllEnabledNetworks() ([]Network, error) {
 	var nets []Network
 	return nets, s.db.Where("enabled = ?", true).Order("id").Find(&nets).Error
@@ -204,7 +218,13 @@ func (s *gormStore) CreateNetwork(n Network) (Network, error) {
 }
 
 func (s *gormStore) DeleteNetwork(userID, id int64) error {
-	return s.db.Where("id = ? AND user_id = ?", id, userID).Delete(&Network{}).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		res := tx.Where("id = ? AND user_id = ?", id, userID).Delete(&Network{})
+		if res.Error != nil || res.RowsAffected == 0 {
+			return res.Error
+		}
+		return tx.Where("network_id = ?", id).Delete(&ReadMarker{}).Error
+	})
 }
 
 func (s *gormStore) SetNetworkEnabled(id int64, enabled bool) error {
@@ -224,7 +244,58 @@ func (s *gormStore) SetNetworkChannels(id int64, channels []string) error {
 	return s.db.Model(&Network{ID: id}).Select("channels").Updates(&Network{Channels: channels}).Error
 }
 
+// --- read markers, activity, presence --------------------------------------
+
+func (s *gormStore) SetReadMarker(networkID int64, buffer string, at time.Time) error {
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "network_id"}, {Name: "buffer"}},
+		DoUpdates: clause.AssignmentColumns([]string{"read_at"}),
+	}).Create(&ReadMarker{NetworkID: networkID, Buffer: strings.ToLower(buffer), ReadAt: at}).Error
+}
+
+func (s *gormStore) ReadMarkers(networkID int64) (map[string]time.Time, error) {
+	var rows []ReadMarker
+	if err := s.db.Where("network_id = ?", networkID).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]time.Time, len(rows))
+	for _, r := range rows {
+		out[r.Buffer] = r.ReadAt
+	}
+	return out, nil
+}
+
+func (s *gormStore) AddUserEvent(e UserEvent) error {
+	return s.db.Create(&e).Error
+}
+
+func (s *gormStore) UserEvents(userID int64, since time.Time, limit int) ([]UserEvent, error) {
+	var out []UserEvent
+	return out, s.db.Where("user_id = ? AND at >= ?", userID, since).Order("at DESC").Limit(limit).Find(&out).Error
+}
+
+func (s *gormStore) PruneUserEvents(before time.Time) error {
+	return s.db.Where("at < ?", before).Delete(&UserEvent{}).Error
+}
+
+func (s *gormStore) TouchUserSeen(userID int64, at time.Time) error {
+	return s.db.Model(&User{}).Where("id = ?", userID).Update("last_seen_at", at).Error
+}
+
+func (s *gormStore) Ping() error {
+	db, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+	return db.Ping()
+}
+
 // --- cluster -------------------------------------------------------------
+
+func (s *gormStore) Leases(now time.Time) ([]UserLease, error) {
+	var out []UserLease
+	return out, s.db.Where("expires_at > ?", now).Find(&out).Error
+}
 
 func (s *gormStore) UpsertNode(n Node) error {
 	return s.db.Clauses(clause.OnConflict{

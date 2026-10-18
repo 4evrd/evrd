@@ -25,6 +25,8 @@ async function req(method, path, body) {
   return data
 }
 
+const q = (o) => new URLSearchParams(o).toString()
+
 export const api = {
   config: () => req('GET', '/api/config'),
   passwordLogin: (username, password) => req('POST', '/auth/password', { username, password }),
@@ -40,6 +42,9 @@ export const api = {
   clientPasswords: () => req('GET', '/api/me/client-passwords'),
   createClientPassword: (name) => req('POST', '/api/me/client-passwords', { name }),
   deleteClientPassword: (id) => req('DELETE', `/api/me/client-passwords/${id}`),
+  clients: () => req('GET', '/api/me/clients'),
+  events: (limit = 50) => req('GET', `/api/me/events?limit=${limit}`),
+  overview: () => req('GET', '/api/overview'),
 
   networks: () => req('GET', '/api/networks'),
   addNetwork: (net) => req('POST', '/api/networks', net),
@@ -47,8 +52,10 @@ export const api = {
   removeNetwork: (id) => req('DELETE', `/api/networks/${id}`),
   connect: (id) => req('POST', `/api/networks/${id}/connect`),
   disconnect: (id) => req('POST', `/api/networks/${id}/disconnect`),
-  messages: (id, target) => req('GET', `/api/networks/${id}/messages?target=${encodeURIComponent(target)}`),
+  messages: (id, target) => req('GET', `/api/networks/${id}/messages?${q({ target })}`),
   buffers: (id) => req('GET', `/api/networks/${id}/buffers`),
+  channel: (id, target) => req('GET', `/api/networks/${id}/channel?${q({ target })}`),
+  markRead: (id, target = '') => req('POST', `/api/networks/${id}/read`, { target }),
 
   // openStream connects a network's live message WebSocket (same origin, so
   // the session cookie authenticates it). onMessage gets each message.
@@ -76,7 +83,8 @@ export const api = {
     user: (id) => req('GET', `/api/admin/users/${id}`),
     updateUser: (id, patch) => req('PATCH', `/api/admin/users/${id}`, patch),
     deleteUser: (id) => req('DELETE', `/api/admin/users/${id}`),
-    setPassword: (id, password) => req('POST', `/api/admin/users/${id}/password`, { password }),
+    // no password: one is generated and returned; either way it's temporary
+    resetPassword: (id, password) => req('POST', `/api/admin/users/${id}/password`, password ? { password } : undefined),
     revokeSessions: (id) => req('POST', `/api/admin/users/${id}/sessions/revoke`),
   },
 }

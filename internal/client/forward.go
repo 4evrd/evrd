@@ -23,9 +23,10 @@ import (
 	"sync"
 	"time"
 
-	"code.ircforever.org/ircforever/evrd/internal/cluster"
-	"code.ircforever.org/ircforever/evrd/internal/irc"
-	"code.ircforever.org/ircforever/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/cluster"
+	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/telemetry"
 )
 
 const movingMsg = "Your bouncer is moving to another server — reconnect in a moment"
@@ -78,6 +79,7 @@ func (se *session) acceptForwarded() bool {
 		se.srv.log.Warn("refused an internal irc connection", "from", se.conn.RemoteAddr())
 		return false
 	}
+	se.fromIP = m.Params[1]
 	if m.Params[2] != "-" {
 		for _, c := range strings.Split(m.Params[2], ",") {
 			if supportedCaps[c] {
@@ -108,6 +110,7 @@ func (se *session) forwardIfElsewhere(ctx context.Context) bool {
 		se.numeric("464", ":"+movingMsg)
 		return true
 	}
+	telemetry.Forwarded.Add(ctx, 1, telemetry.Attrs("kind", "irc"))
 	if err := se.splice(node); err != nil {
 		se.srv.log.Warn("forward irc client", "node", node.ID, "err", err)
 		se.numeric("464", ":"+movingMsg)

@@ -1,8 +1,13 @@
 <script>
-  import { cap } from '$lib/format.js'
-  // status: a network's connection status (connected | connecting | disconnected | …)
+  const STATUS = {
+    connected: { cls: 'ok live', label: 'Connected' },
+    reconnecting: { cls: 'warn', label: 'Reconnecting' },
+    connecting: { cls: 'warn', label: 'Connecting' },
+    disconnected: { cls: '', label: 'Disconnected' },
+    error: { cls: 'bad', label: 'Error' },
+  }
   let { status } = $props()
-  const kind = $derived(status === 'connected' ? 'ok' : status === 'disconnected' ? '' : status === 'error' ? 'bad' : 'warn')
+  const s = $derived(STATUS[status] || STATUS.disconnected)
 </script>
 
-<span class="chip {kind}" class:live={kind === 'ok'} data-testid="status-chip"><span class="dot" aria-hidden="true"></span>{cap(status || 'unknown')}</span>
+<span class="chip {s.cls}" data-testid="status-chip"><span class="dot" aria-hidden="true"></span>{s.label}</span>

@@ -13,12 +13,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"code.ircforever.org/ircforever/evrd/internal/accounts"
-	"code.ircforever.org/ircforever/evrd/internal/bouncer"
-	"code.ircforever.org/ircforever/evrd/internal/history"
-	"code.ircforever.org/ircforever/evrd/internal/irc"
-	"code.ircforever.org/ircforever/evrd/internal/store"
-	"code.ircforever.org/ircforever/evrd/internal/upstream"
+	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/telemetry"
+	"github.com/4evrd/evrd/internal/upstream"
 )
 
 var sessionSeq atomic.Int64
@@ -52,6 +53,8 @@ type session struct {
 	unsubRaw func()
 	unsubMsg func()
 	release  func() // frees this client's slot in the user's client limit
+	att      *bouncer.Attachment
+	fromIP   string // the client's address when another node forwarded it
 
 	// web is set for a *status command from the web chat: replies go to it
 	// instead of an IRC connection, and IRC-only commands say so.
@@ -199,12 +202,14 @@ func (se *session) attach() bool {
 
 	// The secret is the account password or one of the user's IRC client
 	// passwords (the only option for accounts that sign in through SSO).
-	u, err := se.srv.acc.IRCLogin(username, password)
+	u, device, err := se.srv.acc.IRCLogin(username, password)
 	switch {
 	case errors.Is(err, accounts.ErrSuspended):
+		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("suspended"))
 		se.numeric("465", ":This account is suspended")
 		return false
 	case err != nil:
+		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("invalid"))
 		se.numeric("464", ":Invalid credentials")
 		return false
 	}
@@ -229,12 +234,16 @@ func (se *session) attach() bool {
 		chosen = n
 	}
 
-	release, err := se.srv.b.AttachClient(u.ID, se.srv.acc.LimitsFor(u).MaxClients, func() { se.conn.Close() })
+	att, err := se.srv.b.AttachClient(u.ID, se.srv.acc.LimitsFor(u).MaxClients,
+		bouncer.ClientInfo{Device: device, Networks: []string{chosen.Name}, IP: se.clientIP()},
+		func() { se.conn.Close() })
 	if errors.Is(err, bouncer.ErrTooManyClients) {
+		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("too_many_clients"))
 		se.numeric("464", fmt.Sprintf(":Too many clients attached (limit %d) — detach one first", se.srv.acc.LimitsFor(u).MaxClients))
 		return false
 	}
-	se.release = release
+	se.att = att
+	se.release = att.Release
 
 	if err := se.bind(chosen); err != nil {
 		se.release()
@@ -242,9 +251,24 @@ func (se *session) attach() bool {
 		return false
 	}
 	se.unick = orElse(se.up.Nick(), chosen.Nick)
+	telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("ok"))
 	se.welcome()
 	se.joinChannels()
 	se.replayBacklog()
+	// Ask the client what it is (shown on the clients page and in the
+	// activity feed); the reply arrives as a NOTICE to *status.
+	se.send(fmt.Sprintf(":%s!status@%s PRIVMSG %s :\x01VERSION\x01", statusNick, serverName, se.unick))
+	uid, ip, netName := u.ID, se.clientIP(), chosen.Name
+	go func() {
+		time.Sleep(3 * time.Second)
+		sw := "IRC client"
+		for _, c := range se.srv.b.ClientsOf(uid) {
+			if c.ID == att.ID() && c.Software != "" {
+				sw = c.Software
+			}
+		}
+		se.srv.b.AddEvent(uid, "attached", sw+" attached", strings.TrimSpace(username+"/"+netName+" · "+ip))
+	}()
 	return true
 }
 
@@ -330,6 +354,9 @@ func (se *session) jump(n store.Network) error {
 	if nick := orElse(se.up.Nick(), n.Nick); nick != se.unick {
 		se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, serverName, nick))
 		se.unick = nick
+	}
+	if se.att != nil {
+		se.att.Update(func(ci *bouncer.ClientInfo) { ci.Networks = []string{n.Name} })
 	}
 	se.statusf("Jumped from %s to %s.", oldName, n.Name)
 	se.joinChannels()
@@ -440,6 +467,8 @@ func (se *session) handleClient(m irc.Message) {
 		if strings.EqualFold(target, statusNick) {
 			if m.Command == "PRIVMSG" {
 				se.statusCommand(text)
+			} else if v, ok := strings.CutPrefix(text, "\x01VERSION "); ok && se.att != nil {
+				se.att.Update(func(ci *bouncer.ClientInfo) { ci.Software = clientName(strings.TrimSuffix(v, "\x01")) })
 			}
 			return
 		}
@@ -538,6 +567,28 @@ func (se *session) send(line string) {
 func (se *session) numeric(code, trailing string) {
 	n := orElse(se.unick, orElse(se.nick, "*"))
 	se.send(fmt.Sprintf(":%s %s %s %s", serverName, code, n, trailing))
+}
+
+// clientIP is the client's address (the original one, if forwarded).
+func (se *session) clientIP() string {
+	if se.fromIP != "" && se.fromIP != "-" {
+		return se.fromIP
+	}
+	return remoteHost(se.conn)
+}
+
+// clientName boils a CTCP VERSION reply down to the client's name:
+// "HexChat 2.16.1 [x86_64] / Linux" -> "HexChat", "irssi v1.4.5 - …" -> "irssi".
+func clientName(version string) string {
+	f := strings.Fields(version)
+	if len(f) == 0 {
+		return ""
+	}
+	name := strings.TrimRight(f[0], ":,")
+	if len(name) > 32 {
+		name = name[:32]
+	}
+	return name
 }
 
 func nickFromPrefix(prefix string) string {

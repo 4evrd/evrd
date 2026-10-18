@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -23,12 +24,13 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"code.ircforever.org/ircforever/evrd/internal/accounts"
-	"code.ircforever.org/ircforever/evrd/internal/auth"
-	"code.ircforever.org/ircforever/evrd/internal/bouncer"
-	"code.ircforever.org/ircforever/evrd/internal/config"
-	"code.ircforever.org/ircforever/evrd/internal/store"
-	"code.ircforever.org/ircforever/evrd/internal/version"
+	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/metricsq"
+	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/version"
 )
 
 // StatusRunner runs a *status command for the web chat (the IRC listener
@@ -38,15 +40,16 @@ type StatusRunner interface {
 }
 
 type Server struct {
-	b      *bouncer.Bouncer
-	status StatusRunner // nil: *status isn't available in the web chat
-	cl     Cluster      // nil: a single node that serves every user
-	secret string       // the cluster secret
-	acc    *accounts.Service
-	auth   *auth.Manager
-	cfg    *config.Config
-	log    *slog.Logger
-	up     websocket.Upgrader
+	b       *bouncer.Bouncer
+	status  StatusRunner     // nil: *status isn't available in the web chat
+	cl      Cluster          // nil: a single node that serves every user
+	secret  string           // the cluster secret
+	metrics *metricsq.Client // nil: dashboards show no charts
+	acc     *accounts.Service
+	auth    *auth.Manager
+	cfg     *config.Config
+	log     *slog.Logger
+	up      websocket.Upgrader
 }
 
 func NewServer(b *bouncer.Bouncer, acc *accounts.Service, am *auth.Manager, cfg *config.Config, status StatusRunner, log *slog.Logger) *Server {
@@ -118,6 +121,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/networks/{id}/disconnect", user(s.handleDisconnect))
 	mux.HandleFunc("GET /api/networks/{id}/messages", user(s.handleMessages))
 	mux.HandleFunc("GET /api/networks/{id}/buffers", user(s.handleBuffers))
+	mux.HandleFunc("GET /api/networks/{id}/channel", user(s.handleChannel))
+	mux.HandleFunc("POST /api/networks/{id}/read", user(s.handleMarkRead))
+	mux.HandleFunc("GET /api/me/clients", user(s.handleMyClients))
+	mux.HandleFunc("GET /api/me/events", user(s.handleMyEvents))
+	mux.HandleFunc("GET /api/overview", user(s.handleOverview))
 	mux.HandleFunc("GET /api/networks/{id}/stream", user(s.handleStream))
 
 	// administration
@@ -204,6 +212,14 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		s.log.Error("api", "err", err)
 		writeErr(w, http.StatusInternalServerError, "something went wrong")
 	}
+}
+
+// decodeOptional reads a JSON body if there is one.
+func decodeOptional(r *http.Request, v any) error {
+	if r.ContentLength == 0 {
+		return nil
+	}
+	return json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(v)
 }
 
 func pathID(r *http.Request) int64 {

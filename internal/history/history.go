@@ -49,6 +49,10 @@ type Store interface {
 	// Networks lists the network IDs that have history, so history of
 	// networks deleted elsewhere can be found and dropped.
 	Networks() ([]int64, error)
+	// Count counts a buffer's lines, stopping at max.
+	Count(networkID int64, target string, max int) (int, error)
+	// Ping checks the store is reachable.
+	Ping() error
 	// Close finishes pending writes and closes the store.
 	Close() error
 }

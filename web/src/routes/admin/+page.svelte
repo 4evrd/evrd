@@ -1,181 +1,215 @@
 <script>
-  import { onMount } from 'svelte'
-  import { goto } from '$app/navigation'
+  import { onMount, onDestroy } from 'svelte'
   import Icon from '$lib/components/Icon.svelte'
-  import Field from '$lib/components/Field.svelte'
-  import ErrorSummary from '$lib/components/ErrorSummary.svelte'
+  import Topology from '$lib/components/Topology.svelte'
   import { api } from '$lib/api.js'
   import { session } from '$lib/session.svelte.js'
-  import { toast } from '$lib/ui.svelte.js'
-  import { ago, limit, cap } from '$lib/format.js'
-  import { usernameError, passwordError, onBlurCheck } from '$lib/validate.js'
+  import { ago, since, clock, date, limit, ratio, netColor } from '$lib/format.js'
 
   const isAdmin = $derived(session.me?.role === 'admin')
   let ov = $state(null)
-  let users = $state(null)
   let err = $state('')
-  let q = $state('')
-  let filter = $state('all')
-
+  let timer
   async function load() {
-    try { [ov, users] = await Promise.all([api.admin.overview(), api.admin.users()]); err = '' } catch (e) { err = e.message }
+    try { ov = await api.admin.overview(); err = '' } catch (e) { err = e.message }
   }
-  onMount(() => { if (isAdmin) load() })
+  onMount(() => { if (!isAdmin) return; load(); timer = setInterval(load, 15000) })
+  onDestroy(() => clearInterval(timer))
 
-  const FILTERS = [['all', 'All'], ['admin', 'Admins'], ['suspended', 'Suspended'], ['sso', 'SSO']]
-  const shown = $derived((users || []).filter((u) => {
-    if (filter === 'admin' && u.role !== 'admin') return false
-    if (filter === 'suspended' && !u.suspended) return false
-    if (filter === 'sso' && !u.sso) return false
-    const s = q.trim().toLowerCase()
-    return !s || u.username.includes(s) || (u.email || '').toLowerCase().includes(s)
-  }))
+  const nodes = $derived((ov?.nodes || []).map((n, i) => ({ ...n, color: netColor(i) })))
+  const now = () => Date.now() / 1000
+  const nodeLive = (n) => now() - n.heartbeatAt < 30
+  const healthy = $derived(nodes.length > 0 && nodes.every(nodeLive))
+  const placed = $derived((ov?.placement || []).filter((p) => p.node || p.status === 'suspended'))
 
-  // --- create ---
-  let nu = $state({ username: '', email: '', password: '', role: 'user' })
-  let ue = $state(''), pe = $state(''), formErr = $state('')
-  let summary = $state([])
-  let creating = $state(false)
-  let userIn = $state(), passIn = $state()
-  const vUser = () => (ue = usernameError(nu.username.trim().toLowerCase()))
-  const vPass = () => (pe = passwordError(nu.password))
-  async function create(e) {
-    e.preventDefault()
-    formErr = ''
-    vUser(); vPass()
-    summary = [['nu-name', ue], ['nu-pass', pe]].filter(([, m]) => m)
-    if (summary.length) { (ue ? userIn : passIn).focus(); return }
-    creating = true
-    try {
-      const u = await api.admin.createUser({ ...nu, username: nu.username.trim().toLowerCase() })
-      toast(`${u.username} created`)
-      nu = { username: '', email: '', password: '', role: 'user' }
-      await load()
-    } catch (err2) {
-      if (err2.status === 409 || /username/i.test(err2.message)) { ue = cap(err2.message); userIn.focus() }
-      else formErr = cap(err2.message)
-    } finally { creating = false }
-  }
+  let filter = $state('all')
+  const match = { all: () => true, online: (p) => p.status === 'online', issue: (p) => !!p.issue }
+  const label = { all: 'Accounts', online: 'Online now', issue: 'Accounts with an issue' }
+  const shown = $derived((ov?.placement || []).filter(match[filter]).map((p) => ({ ...p, key: p.id, source: p.node || '-', dashed: p.status !== 'online' })))
+  const leftNodes = $derived(nodes.map((n) => ({ id: n.id, color: n.color })))
+
+  const attnIcon = { network: ['alert', 'signal'], limit: ['sliders', 'warn'], suspended: ['ban', 'bad'], inactive: ['user', 'warn'] }
+  const maxUsers = $derived(Math.max(1, ...(ov?.upstreams || []).map((u) => u.users)))
+  const storageOk = $derived(ov && ov.storage.accounts.up && ov.storage.history.up)
+  const queueLevel = (q) => (q > 5000 ? ['bad', 'Backed up'] : q > 500 ? ['warn', 'Busy'] : ['', 'Normal'])
+  const kindName = { postgres: 'PostgreSQL', sqlite: 'SQLite', scylla: 'ScyllaDB', pebble: 'Pebble' }
 </script>
 
-<svelte:head><title>Users · evrd admin</title></svelte:head>
+<svelte:head><title>Bouncer overview · evrd admin</title></svelte:head>
 
 {#if !isAdmin}
-  <div class="callout err enter" role="alert"><Icon name="lock" /><div class="body"><p><b>Admins only.</b> Your account doesn’t have access to user management.</p></div></div>
+  <div class="callout bad" role="alert"><Icon name="lock" /><span><b>Admins only.</b> Your account doesn’t have access to the bouncer overview.</span></div>
 {:else}
   <div class="page-head enter">
     <div class="titles">
-      <h1>Users</h1>
-      <p>Everyone with an evrd account: their role, limits and status. Server defaults apply unless you override them per user.</p>
+      <h1>Bouncer overview</h1>
+      <p>Everything running on {ov?.ircHost || session.config.ircHost} across all accounts: who’s online, which node holds them, and what needs a look.</p>
     </div>
-    <a class="btn btn-primary" href="#new-user" onclick={(e) => { e.preventDefault(); document.getElementById('nu-name')?.focus() }}><Icon name="plus" />New user</a>
-  </div>
-
-  <div class="tiles">
-    <div class="tile">
-      <div class="tile-top"><span class="tile-label"><Icon name="users" />Users</span></div>
-      <div class="tile-bottom">
-        <div class="tile-num"><span class="n" data-testid="tile-users">{ov ? ov.users : '–'}</span><span class="u">{ov ? `${ov.admins} admin${ov.admins === 1 ? '' : 's'} · ${ov.sso} via SSO` : 'accounts'}</span></div>
-        <span class="tile-ic blue"><Icon name="user" /></span>
-      </div>
-    </div>
-    <div class="tile">
-      <div class="tile-top"><span class="tile-label"><Icon name="globe" />Networks</span></div>
-      <div class="tile-bottom">
-        <div class="tile-num"><span class="n">{ov ? ov.connectedNetworks : '–'}<span class="unit">/ {ov ? ov.networks : '–'}</span></span><span class="u">connected right now</span></div>
-        <span class="tile-ic ok"><Icon name="activity" /></span>
-      </div>
-    </div>
-    <div class="tile">
-      <div class="tile-top"><span class="tile-label"><Icon name="plug" />Clients</span></div>
-      <div class="tile-bottom">
-        <div class="tile-num"><span class="n">{ov ? ov.attachedClients : '–'}</span><span class="u">IRC clients attached</span></div>
-        <span class="tile-ic"><Icon name="monitor" /></span>
-      </div>
-    </div>
-    <div class="tile">
-      <div class="tile-top"><span class="tile-label"><Icon name="ban" />Suspended</span>{#if ov?.suspended}<button class="link-btn" type="button" onclick={() => (filter = 'suspended')}>Show</button>{/if}</div>
-      <div class="tile-bottom">
-        <div class="tile-num"><span class="n">{ov ? ov.suspended : '–'}</span><span class="u">accounts</span></div>
-        <span class="tile-ic {ov?.suspended ? 'warn' : ''}"><Icon name="lock" /></span>
-      </div>
+    <div class="od-cluster">
+      <a class="btn" href="/admin/users"><Icon name="users" />Manage users</a>
+      <a class="btn btn-primary" href="/admin/users#new"><Icon name="plus" />New user</a>
     </div>
   </div>
 
-  <section class="card enter" aria-labelledby="users-h">
-    <div class="section-head">
-      <h2 id="users-h"><Icon name="users" />Accounts</h2>
-      {#if ov}<span class="chip" title="Server defaults">Defaults: {limit(ov.defaults.maxNetworks)} networks · {limit(ov.defaults.maxClients)} clients · {limit(ov.defaults.backlogLines)} lines</span>{/if}
-    </div>
-    <div class="ptools">
-      <div class="search"><Icon name="search" /><input class="input" type="search" placeholder="Search username or email" aria-label="Search users" bind:value={q} /></div>
-      <div class="tabs" role="group" aria-label="Filter">
-        {#each FILTERS as [k, l]}<button class="tab" type="button" aria-pressed={filter === k} onclick={() => (filter = k)}>{l}</button>{/each}
+  {#if err}<div class="callout bad"><Icon name="alert" /><span>Couldn’t load the overview: {err}</span></div>{/if}
+  {#if !ov}
+    {#if !err}<div class="tiles"><div class="skel tile"></div><div class="skel tile"></div><div class="skel tile"></div><div class="skel tile"></div></div>{/if}
+  {:else}
+    <div class="tiles enter">
+      <a class="tile" href="/admin/users">
+        <div class="tile-top"><span class="caps"><Icon name="users" class="i-sm" />Accounts</span><span class="chip">{ov.admins} admin{ov.admins === 1 ? '' : 's'}</span></div>
+        <div class="od-stat"><span class="n" data-testid="ov-users">{ov.users}</span><span class="u">{ov.sso} sign in with SSO · {ov.suspended} suspended</span></div>
+        <span class="ubar ice" role="img" aria-label="{ov.online} of {ov.users} accounts online"><span style="transform:scaleX({ratio(ov.online, ov.users)})"></span></span>
+      </a>
+      <div class="tile">
+        <div class="tile-top"><span class="caps"><Icon name="globe" class="i-sm" />Upstream links</span>
+          {#if ov.linksTotal - ov.linksUp > 0}<span class="chip warn">{ov.linksTotal - ov.linksUp} down</span>{:else}<span class="chip ok">All up</span>{/if}</div>
+        <div class="od-stat"><span class="n">{ov.linksUp}<small>/ {ov.linksTotal}</small></span><span class="u">connected right now</span></div>
+        <span class="comb" style="--fill:{Math.round(ratio(ov.linksUp, ov.linksTotal) * 100)}%;width:100%" role="img" aria-label="{ov.linksUp} of {ov.linksTotal} upstream links connected"></span>
+      </div>
+      <div class="tile">
+        <div class="tile-top"><span class="caps"><Icon name="monitor" class="i-sm" />Clients</span><span class="chip ok live"><span class="dot" aria-hidden="true"></span>Live</span></div>
+        <div class="od-stat"><span class="n">{ov.attachedClients}</span><span class="u">attached across {ov.accountsAttached} account{ov.accountsAttached === 1 ? '' : 's'}</span></div>
+        <span class="ubar" role="img" aria-label="{ov.attachedClients} clients attached"><span style="transform:scaleX({ratio(ov.accountsAttached, ov.users)});background:var(--nick)"></span></span>
+      </div>
+      <div class="tile">
+        <div class="tile-top"><span class="caps"><Icon name="server" class="i-sm" />Cluster</span>
+          {#if !nodes.length}<span class="chip">Single node</span>{:else if healthy}<span class="chip ok">Healthy</span>{:else}<span class="chip warn">Node stale</span>{/if}</div>
+        <div class="od-stat"><span class="n">{Math.max(1, nodes.length)}</span><span class="u">node{nodes.length === 1 || !nodes.length ? '' : 's'} holding {placed.filter((p) => p.node).length} user{placed.filter((p) => p.node).length === 1 ? '' : 's'}</span></div>
+        <span class="ubar ice" role="img" aria-label="{nodes.filter(nodeLive).length} of {nodes.length} nodes heartbeating"><span style="transform:scaleX({nodes.length ? ratio(nodes.filter(nodeLive).length, nodes.length) : 1})"></span></span>
       </div>
     </div>
-    <div class="rows">
-      {#if err}
-        <p class="desc">Couldn’t load users: {err}</p>
-      {:else if !users}
-        <div class="skel"></div><div class="skel"></div><div class="skel"></div>
-      {:else if !shown.length}
-        <div class="empty"><span class="ic"><Icon name="search" /></span><h4>No users match</h4><p>Try a different search or filter.</p></div>
-      {:else}
-        <div class="row-head" aria-hidden="true" style="--cols:minmax(0,1fr) 7rem 8rem 11rem"><span>User</span><span>Networks</span><span>Last sign-in</span><span></span></div>
-        {#each shown as u (u.id)}
-          <a class="row user-row" href="/admin/users/{u.id}" style="--cols:minmax(0,1fr) 7rem 8rem 11rem" data-testid="user-row">
-            <span class="main">
-              <span class="name">{u.username}</span>
-              <span class="sub">{u.email || 'no email'}</span>
-            </span>
-            <span class="cell">{u.networks}{u.clients ? ` · ${u.clients} attached` : ''}</span>
-            <span class="cell">{ago(u.lastLoginAt)}</span>
-            <span class="meta">
-              {#if u.suspended}<span class="chip bad"><Icon name="ban" />Suspended</span>{/if}
-              {#if u.role === 'admin'}<span class="chip ok"><Icon name="crown" />Admin</span>{/if}
-              {#if u.sso}<span class="tag">SSO</span>{/if}
-              <Icon name="chevron" class="go" />
-            </span>
-          </a>
-        {/each}
-      {/if}
-    </div>
-  </section>
 
-  <section class="card enter" aria-labelledby="nu-h" id="new-user">
-    <h3 id="nu-h"><Icon name="plus" />New user</h3>
-    <p class="desc">{session.config.sso ? `People who sign in with ${session.config.ssoLabel} get an account automatically — create one here for someone who’ll use a password instead.` : 'They sign in with this username and password, and can use the same password for IRC clients.'}</p>
-    <ErrorSummary errs={summary} />
-    {#if formErr}<div class="callout err" role="alert"><Icon name="alert" /><div class="body"><p>{formErr}</p></div></div>{/if}
-    <form class="form" novalidate onsubmit={create}>
-      <div class="nu-grid">
-        <Field id="nu-name" label="Username" required err={ue}>
-          <input id="nu-name" class="input" autocapitalize="none" spellcheck="false" autocomplete="off" bind:value={nu.username} bind:this={userIn} aria-invalid={ue ? 'true' : undefined} aria-describedby="nu-name-err" onblur={onBlurCheck(() => nu.username && vUser())} />
-        </Field>
-        <Field id="nu-email" label="Email">
-          <input id="nu-email" class="input" type="email" autocomplete="off" bind:value={nu.email} />
-        </Field>
-        <Field id="nu-pass" label="Password" required help="At least 8 characters. Share it with them privately." err={pe}>
-          <input id="nu-pass" class="input" type="text" autocomplete="new-password" spellcheck="false" bind:value={nu.password} bind:this={passIn} aria-invalid={pe ? 'true' : undefined} aria-describedby="nu-pass-help nu-pass-err" onblur={onBlurCheck(() => nu.password && vPass())} />
-        </Field>
-        <Field id="nu-role" label="Role">
-          <select id="nu-role" class="input" bind:value={nu.role}><option value="user">User</option><option value="admin">Admin</option></select>
-        </Field>
+    <div class="grid-main-side">
+      <section class="card card-sheen enter" aria-labelledby="cl-h">
+        <div class="section-head">
+          <div class="od-stack"><span class="caps">Cluster placement</span><h2 id="cl-h">Nodes → users</h2></div>
+          <div class="tabs status-tabs" role="tablist" aria-label="User filter">
+            {#each Object.keys(label) as f}
+              <button class="tab" role="tab" aria-selected={filter === f} onclick={() => (filter = f)}>{f === 'all' ? 'All' : f === 'online' ? 'Online' : 'Issues'} <span class="n">{(ov.placement || []).filter(match[f]).length}</span></button>
+            {/each}
+          </div>
+        </div>
+        {#if !nodes.length}
+          <p class="desc">Clustering is off — this evrd holds every account itself. Set <span class="code">cluster</span> in evrd.conf to spread users across nodes.</p>
+        {:else}
+          <Topology left={leftNodes} right={shown} leftLabel="evrd nodes" rightLabel={label[filter]} empty="No accounts match this filter." strandsPer={6} single>
+            {#snippet source(l)}
+              {@const n = nodes.find((x) => x.id === l.id)}
+              <div class="net-node" style="--net:{n.color}">
+                <div class="head">
+                  <span class="mono-badge" aria-hidden="true">{n.id.slice(-1).toUpperCase()}</span>
+                  <span class="od-field od-fill"><span class="od-truncate">{n.id}</span><span class="od-truncate">{n.host} · up {since(n.startedAt)}</span></span>
+                  {#if nodeLive(n)}<span class="chip ok live"><span class="dot" aria-hidden="true"></span>Live</span>{:else}<span class="chip warn">Stale</span>{/if}
+                </div>
+                <div class="node-meta">
+                  <div class="od-stat"><span>{n.users}</span><span>Users</span></div>
+                  <div class="od-stat"><span>{n.linksUp}</span><span>Links up</span></div>
+                  <div class="od-stat"><span>{ago(n.heartbeatAt)}</span><span>Heartbeat</span></div>
+                </div>
+              </div>
+            {/snippet}
+            {#snippet item(u)}
+              <a class="chan-node user-node" class:off={u.status === 'suspended'} href="/admin/users?user={encodeURIComponent(u.username)}" style={nodes.find((n) => n.id === u.node) ? `--net:${nodes.find((n) => n.id === u.node).color}` : ''}>
+                <span class="avatar" aria-hidden="true">{u.username[0].toUpperCase()}</span>
+                <span class="od-field"><span class="od-truncate">{u.username}</span><span class="sub"><span class="od-nowrap">{u.node ? `${u.up}/${u.nets} links · ${u.status}` : 'not placed'}</span>{#if u.issue && u.status !== 'suspended'}<span class="od-nowrap" style="color:var(--signal)">{u.issue}</span>{/if}</span></span>
+                {#if u.status === 'suspended'}<span class="chip bad"><Icon name="ban" />Suspended</span>
+                {:else if u.issue}<span class="count hot" aria-label="Issue: {u.issue}">!</span>
+                {:else}<span class="count calm" aria-label="{u.clients} clients attached">{u.clients}</span>{/if}
+              </a>
+            {/snippet}
+          </Topology>
+          <p class="desc" style="margin-top:var(--s4)">Each account lives on exactly one node, chosen by rendezvous hashing. Accounts with no networks or that are suspended aren’t placed anywhere.</p>
+        {/if}
+      </section>
+
+      <div class="side-stack">
+        <section class="anomaly" aria-labelledby="attn-h">
+          <div class="od-row-top" style="justify-content:space-between">
+            <h2 id="attn-h" class="title">Needs<br />attention</h2>
+            <span class="count {ov.attention.length ? 'mention' : 'calm'}" data-testid="attn-count">{ov.attention.length}</span>
+          </div>
+          <div class="rows">
+            {#each ov.attention as a}
+              {@const [ic, tone] = attnIcon[a.kind] || ['alert', 'warn']}
+              <a class="row attn-row" href={a.user ? `/admin/users?user=${encodeURIComponent(a.user)}` : '/admin/users'}>
+                <span class="ic {tone}"><Icon name={ic} class="i-sm" /></span>
+                <span class="od-field"><span class="name">{a.title}</span><span class="sub">{a.detail}{a.since ? ' · since ' + (now() - a.since > 86400 ? date(a.since) : clock(a.since)) : ''}</span></span>
+                <Icon name="chevron" class="i-sm" />
+              </a>
+            {:else}
+              <p class="desc">Nothing needs a look. Every link is up and nobody is stuck.</p>
+            {/each}
+          </div>
+        </section>
+
+        <section class="card tight card-sheen" aria-labelledby="def-h">
+          <div class="section-head" style="margin-bottom:var(--s3)"><h2 id="def-h" class="caps">Server defaults</h2><span class="chip">evrd.conf</span></div>
+          <div class="kv-list">
+            <div class="kv"><div class="od-field"><span class="k">Networks per user</span><span class="v">{limit(ov.defaults.maxNetworks)}</span></div></div>
+            <div class="kv"><div class="od-field"><span class="k">Clients per user</span><span class="v">{limit(ov.defaults.maxClients)}</span></div></div>
+            <div class="kv"><div class="od-field"><span class="k">Backlog per channel</span><span class="v">{ov.defaults.backlogLines ? ov.defaults.backlogLines.toLocaleString('en') + ' lines' : 'Unlimited'}</span></div></div>
+          </div>
+          <p class="desc" style="margin-top:var(--s3);font-size:var(--fs-xs)">Change these in evrd.conf. Per-user limits override them on the Users page.</p>
+        </section>
       </div>
-      <div><button class="btn btn-primary" type="submit" disabled={creating}>
-        {#if creating}<span class="spin" aria-hidden="true"></span>Creating…{:else}Create user{/if}
-      </button></div>
-    </form>
-  </section>
+    </div>
+
+    <div class="grid-main-side">
+      <section class="card enter" aria-labelledby="up-h">
+        <div class="section-head">
+          <div class="od-stack"><span class="caps">Upstream networks</span><h2 id="up-h">Where your users connect</h2></div>
+          <span class="chip">{ov.upstreams.length} network{ov.upstreams.length === 1 ? '' : 's'} · {ov.networks} link{ov.networks === 1 ? '' : 's'}</span>
+        </div>
+        <div class="rows">
+          {#each ov.upstreams as u (u.host)}
+            <div class="row up-row" title={u.error || ''}>
+              <span class="od-field"><span class="name">{u.name}</span><span>{u.host}</span></span>
+              <span class="bar"><span class="comb" style="--fill:{Math.round((u.users / maxUsers) * 100)}%;width:100%" role="img" aria-label="{u.users} of {ov.users} users connect here"></span><span class="faint od-nowrap" style="font-size:var(--fs-xs)">{u.users} user{u.users === 1 ? '' : 's'} · {u.up} connected</span></span>
+              {#if !u.enabled}<span class="chip">Off</span>
+              {:else if !u.up}<span class="chip warn">All down</span>
+              {:else if u.enabled - u.up > 0}<span class="chip warn">{u.enabled - u.up} down</span>
+              {:else}<span class="chip ok">All up</span>{/if}
+            </div>
+          {:else}
+            <p class="desc">No one has added a network yet.</p>
+          {/each}
+        </div>
+      </section>
+
+      <section class="card tight card-sheen enter" aria-labelledby="st-h">
+        <div class="section-head" style="margin-bottom:var(--s3)">
+          <h2 id="st-h" class="caps">Storage</h2>
+          {#if storageOk}<span class="chip ok"><span class="dot" aria-hidden="true"></span>OK</span>{:else}<span class="chip bad">Problem</span>{/if}
+        </div>
+        <div class="kv-list">
+          <div class="kv"><div class="od-field"><span class="k">Accounts</span><span class="v">{kindName[ov.storage.accounts.kind] || ov.storage.accounts.kind}{ov.storage.accounts.addr ? ' · ' + ov.storage.accounts.addr : ''}</span></div><span class="chip {ov.storage.accounts.up ? 'ok' : 'bad'}">{ov.storage.accounts.up ? 'Up' : 'Down'}</span></div>
+          <div class="kv"><div class="od-field"><span class="k">Chat history</span><span class="v">{kindName[ov.storage.history.kind] || ov.storage.history.kind}{ov.storage.history.addr ? ' · ' + ov.storage.history.addr : ''}</span></div><span class="chip {ov.storage.history.up ? 'ok' : 'bad'}">{ov.storage.history.up ? 'Up' : 'Down'}</span></div>
+          {#if ov.storage.history.queue != null}
+            {@const [tone, word] = queueLevel(ov.storage.history.queue)}
+            <div class="kv"><div class="od-field"><span class="k">History write queue</span><span class="v">{ov.storage.history.queue.toLocaleString('en')} pending</span></div><span class="chip {tone}">{word}</span></div>
+          {/if}
+        </div>
+      </section>
+    </div>
+  {/if}
 {/if}
 
 <style>
-  .user-row { color: inherit; text-decoration: none; }
-  .user-row:hover .name { color: var(--link); }
-  .user-row :global(.go) { color: var(--faint); }
-  .cell { font-size: var(--fs-sm); color: var(--muted); white-space: nowrap; }
-  .chip :global(svg.i) { width: 14px; height: 14px; }
-  .nu-grid { display: grid; gap: var(--s4); grid-template-columns: minmax(0, 1fr); }
-  @media (min-width: 768px) { .nu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 639px) { .cell { display: none; } }
+  .side-stack { display: grid; gap: var(--s6); align-content: start; }
+  :global(.user-node) { grid-template-columns: 32px minmax(0, 1fr) auto; }
+  :global(.user-node .avatar) { width: 32px; height: 32px; font-size: var(--fs-xs); }
+  :global(.user-node.off) { opacity: 0.55; }
+  .node-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
+  .node-meta .od-stat { padding: var(--s2) var(--s3); border-radius: var(--r-field); background: oklch(14% 0.011 215 / 0.55); }
+  .node-meta .od-stat span:first-child { font-family: var(--font-mono); font-size: var(--fs-sm); white-space: nowrap; }
+  .node-meta .od-stat span:last-child { font-size: var(--fs-2xs); color: var(--faint); text-transform: uppercase; letter-spacing: var(--track-caps); font-weight: var(--fw-med); }
+  .attn-row { --cols: 32px minmax(0, 1fr) auto; color: var(--fg); }
+  .attn-row:hover { text-decoration: none; }
+  .attn-row .ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--bg-deep); }
+  .attn-row .ic.bad { color: var(--bad); } .attn-row .ic.warn { color: var(--warn); } .attn-row .ic.signal { color: var(--signal); }
+  .up-row { --cols: minmax(120px, 1.2fr) minmax(0, 2fr) auto; }
+  .up-row .bar { display: grid; gap: 6px; }
+  .up-row .od-field span:last-child { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--muted); }
+  @media (max-width: 639px) { .up-row { --cols: minmax(0, 1fr) auto; } .up-row .bar { grid-column: 1 / -1; grid-row: 2; } }
 </style>

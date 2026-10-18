@@ -27,16 +27,16 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"code.ircforever.org/ircforever/evrd/internal/accounts"
-	"code.ircforever.org/ircforever/evrd/internal/api"
-	"code.ircforever.org/ircforever/evrd/internal/auth"
-	"code.ircforever.org/ircforever/evrd/internal/bouncer"
-	"code.ircforever.org/ircforever/evrd/internal/client"
-	"code.ircforever.org/ircforever/evrd/internal/cluster"
-	"code.ircforever.org/ircforever/evrd/internal/config"
-	"code.ircforever.org/ircforever/evrd/internal/history"
-	"code.ircforever.org/ircforever/evrd/internal/store"
-	"code.ircforever.org/ircforever/evrd/internal/testirc"
+	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/api"
+	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/client"
+	"github.com/4evrd/evrd/internal/cluster"
+	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/testirc"
 )
 
 const secret = "test-cluster-secret"
@@ -439,7 +439,8 @@ func TestAdminActionsReachTheOwner(t *testing.T) {
 	dialIRC(t, other.irc, u.Username+":"+u.Username+"-password").expect("Welcome to evrd")
 	eventually(t, "overview counts the client", func() bool {
 		_, ov := b.do("GET", "/api/admin/overview", nil)
-		return ov["attachedClients"] == 1.0 && ov["nodes"] == 2.0
+		nodes, _ := ov["nodes"].([]any)
+		return ov["attachedClients"] == 1.0 && len(nodes) == 2
 	})
 	_, list := b.do("GET", "/api/admin/users", nil)
 	for _, row := range list["list"].([]map[string]any) {

@@ -41,6 +41,19 @@ type Config struct {
 	Limits   Limits
 	Cluster  Cluster
 	Outbound Outbound
+	Metrics  Metrics
+}
+
+// Metrics configures OpenTelemetry export and the store dashboards read
+// back from (VictoriaMetrics: it accepts OTLP and answers PromQL).
+type Metrics struct {
+	// OTLPEndpoint is the OTLP/HTTP metrics URL, e.g.
+	// http://victoriametrics:8428/opentelemetry/v1/metrics. Empty: no export.
+	OTLPEndpoint string
+	Interval     time.Duration
+	// QueryURL is the Prometheus-compatible query API, e.g.
+	// http://victoriametrics:8428. Empty: dashboards show no charts.
+	QueryURL string
 }
 
 // Cluster configures running several evrd nodes against the same database.
@@ -135,7 +148,7 @@ func Default() *Config {
 			OIDCLabel:      "single sign-on",
 			OIDCAutoCreate: true,
 		},
-		Limits:   Limits{MaxNetworks: 5, MaxClients: 5, BacklogLines: 2000},
+		Limits:   Limits{MaxNetworks: 0, MaxClients: 5, BacklogLines: 2000},
 		Outbound: Outbound{ConnectRate: 5},
 	}
 }
@@ -209,6 +222,9 @@ func (c *Config) ApplyEnv() error {
 		"EVRD_NODE_ID":            &c.Cluster.NodeID,
 		"EVRD_INTERNAL_URL":       &c.Cluster.InternalURL,
 		"EVRD_INTERNAL_IRC_ADDR":  &c.Cluster.InternalIRCAddr,
+		// the standard OpenTelemetry variable
+		"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": &c.Metrics.OTLPEndpoint,
+		"EVRD_METRICS_URL":                    &c.Metrics.QueryURL,
 	} {
 		if v := os.Getenv(env); v != "" {
 			*dst = v
@@ -278,6 +294,12 @@ func (c *Config) set(key, val string) error {
 		err = c.addBind(val)
 	case "upstream_prefix6":
 		c.Outbound.Prefix6, err = netip.ParsePrefix(val)
+	case "otel_endpoint":
+		c.Metrics.OTLPEndpoint = val
+	case "otel_interval":
+		c.Metrics.Interval, err = time.ParseDuration(val)
+	case "metrics_url":
+		c.Metrics.QueryURL = strings.TrimRight(val, "/")
 	case "max_networks":
 		c.Limits.MaxNetworks, err = strconv.Atoi(val)
 	case "max_clients":

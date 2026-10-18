@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"code.ircforever.org/ircforever/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/store"
 )
 
 // Timing follows the lease length (how long a dead node's users wait to move):
@@ -95,6 +95,13 @@ func (c *Cluster) Owns(userID int64) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.held[userID]
+}
+
+// HeldCount is the number of users this node runs.
+func (c *Cluster) HeldCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.held)
 }
 
 // Owner is the node holding the user's lease.

@@ -19,6 +19,18 @@ services:
       retries: 60
     # internal only — evrd reaches it as scylla:9042
 
+  # Metrics: evrd pushes OpenTelemetry (OTLP) here and reads it back for the
+  # dashboards. Prometheus naming makes evrd.irc.lines evrd_irc_lines_total.
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.102.1
+    command:
+      - -retentionPeriod=90d
+      - -storageDataPath=/storage
+      - -opentelemetry.usePrometheusNaming
+    volumes:
+      - vm-data:/storage
+    # internal only — evrd reaches it as victoriametrics:8428
+
   postgres:
     image: postgres:17-alpine
     environment:
@@ -35,11 +47,17 @@ services:
 
   ircd:
     image: ghcr.io/ergochat/ergo:stable # internal upstream (ircd:6667)
-    environment:
-      # Every evrd user connects from evrd's one address: don't throttle it
-      # (the e2e suite alone opens dozens of connections).
-      ERGO__SERVER__IP_LIMITS__COUNT: "false"
-      ERGO__SERVER__IP_LIMITS__THROTTLE: "false"
+    # Every evrd user connects from evrd's one address: turn off ergo's
+    # per-IP connection count and throttle (the e2e suite alone opens dozens
+    # of connections). Its env overrides don't reach these, so edit the config
+    # the image generates before starting it.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        [ -f /ircd/ircd.yaml ] || sed 's/path: languages/path: \/ircd-bin\/languages/' /ircd-bin/default.yaml > /ircd/ircd.yaml
+        sed -i 's/^        count: true/        count: false/; s/^        throttle: true/        throttle: false/' /ircd/ircd.yaml
+        exec /ircd-bin/run.sh
 
   # Two evrd nodes, both live-reloading from the source. Users are spread
   # across them; the load balancer sends anyone anywhere.
@@ -114,6 +132,7 @@ services:
       - "5173:5173"
 
 volumes:
+  vm-data:
   pg-data:
   scylla-data:
   go-build-cache:

@@ -4,49 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"code.ircforever.org/ircforever/evrd/internal/accounts"
-	"code.ircforever.org/ircforever/evrd/internal/auth"
-	"code.ircforever.org/ircforever/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/store"
 )
-
-func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
-	users, err := s.st().ListUsers()
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	counts, err := s.st().NetworkCounts()
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	var admins, suspended, sso int
-	for _, u := range users {
-		if u.IsAdmin() {
-			admins++
-		}
-		if u.Suspended {
-			suspended++
-		}
-		if u.OIDCSubject != nil {
-			sso++
-		}
-	}
-	var nets int64
-	for _, n := range counts {
-		nets += n
-	}
-	live := s.clusterUsage(r.Context())
-	nodes := 1
-	if s.cl != nil {
-		nodes = len(s.cl.Nodes())
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"users": len(users), "admins": admins, "suspended": suspended, "sso": sso,
-		"networks": nets, "connectedNetworks": live.Connected, "attachedClients": live.Attached,
-		"defaults": s.acc.Defaults(), "nodes": nodes,
-	})
-}
 
 // adminUserDTO adds what only an admin sees: the raw per-user overrides
 // (null = server default).
@@ -65,14 +26,23 @@ func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	counts, _ := s.st().NetworkCounts()
-	clients := s.clusterUsage(r.Context()).Clients
+	live := s.clusterUsage(r.Context())
 	out := make([]map[string]any, 0, len(users))
 	for _, u := range users {
+		lim := s.acc.LimitsFor(u)
+		status := "offline"
+		switch {
+		case u.Suspended:
+			status = "suspended"
+		case live.Online[u.ID] > 0:
+			status = "online"
+		}
 		out = append(out, map[string]any{
 			"id": u.ID, "username": u.Username, "email": u.Email, "role": u.Role,
 			"suspended": u.Suspended, "sso": u.OIDCSubject != nil,
-			"createdAt": u.CreatedAt.Unix(), "lastLoginAt": unix(u.LastLoginAt),
-			"networks": counts[u.ID], "clients": clients[u.ID],
+			"createdAt": u.CreatedAt.Unix(), "lastLoginAt": unix(u.LastLoginAt), "lastSeenAt": unix(u.LastSeenAt),
+			"networks": counts[u.ID], "clients": live.Clients[u.ID], "online": live.Online[u.ID],
+			"status": status, "limits": lim,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -83,7 +53,9 @@ func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	u, err := s.acc.Create(accounts.CreateInput{Username: in.Username, Email: in.Email, Password: in.Password, Role: in.Role})
+	// An admin-chosen password is temporary: the user changes it at first
+	// sign-in.
+	u, err := s.acc.Create(accounts.CreateInput{Username: in.Username, Email: in.Email, Password: in.Password, Role: in.Role, Temporary: in.Password != ""})
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -202,11 +174,12 @@ func (s *Server) handleAdminSetPassword(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	// With no password given, a random one is generated and returned once.
+	// Either way it's temporary: the user must change it at next sign-in.
 	var in struct{ Password string }
-	if !decode(w, r, &in) {
-		return
-	}
-	if err := s.acc.SetPassword(&u, in.Password); err != nil {
+	_ = decodeOptional(r, &in)
+	pw, err := s.acc.SetTemporaryPassword(&u, in.Password)
+	if err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -215,8 +188,12 @@ func (s *Server) handleAdminSetPassword(w http.ResponseWriter, r *http.Request) 
 		keep = auth.SessionOf(r).ID
 	}
 	_ = s.st().DeleteUserSessions(u.ID, keep)
-	s.log.Info("admin set password", "admin", auth.User(r).Username, "user", u.Username)
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	s.log.Info("admin set a temporary password", "admin", auth.User(r).Username, "user", u.Username)
+	out := map[string]any{"ok": true}
+	if in.Password == "" {
+		out["password"] = pw
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleAdminRevokeSessions(w http.ResponseWriter, r *http.Request) {

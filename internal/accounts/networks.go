@@ -3,7 +3,7 @@ package accounts
 import (
 	"strings"
 
-	"code.ircforever.org/ircforever/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/store"
 )
 
 // NormalizeNetwork trims and checks a network's settings, filling in the

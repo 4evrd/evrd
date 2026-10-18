@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"code.ircforever.org/ircforever/evrd/internal/auth"
-	"code.ircforever.org/ircforever/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/store"
 )
 
 // userDTO is what a user sees about their own account (and what an admin
@@ -17,11 +17,32 @@ func (s *Server) userDTO(u store.User) map[string]any {
 		"id": u.ID, "username": u.Username, "email": u.Email, "role": u.Role,
 		"suspended": u.Suspended, "suspendedReason": u.SuspendedReason,
 		"hasPassword": u.PasswordHash != "", "sso": u.OIDCSubject != nil,
-		"defaultNick": u.DefaultNick, "defaultRealname": u.DefaultRealname,
-		"createdAt": u.CreatedAt.Unix(), "lastLoginAt": unix(u.LastLoginAt),
-		"limits": s.acc.LimitsFor(u),
-		"usage":  map[string]any{"networks": nets, "clients": s.b.Clients(u.ID)},
+		"defaultNick": u.DefaultNick, "defaultAltNick": u.DefaultAltNick, "defaultRealname": u.DefaultRealname,
+		"autoAway": u.AutoAway, "mustChangePassword": u.MustChangePassword,
+		"createdAt": u.CreatedAt.Unix(), "lastLoginAt": unix(u.LastLoginAt), "lastSeenAt": unix(u.LastSeenAt),
+		"limits":      s.acc.LimitsFor(u),
+		"usage":       map[string]any{"networks": nets, "clients": s.b.Clients(u.ID), "attached": s.b.Attached(u.ID)},
+		"otherAdmins": s.otherAdmins(u),
 	}
+}
+
+// otherAdmins lists the admins besides u (shown before an admin deletes
+// their own account).
+func (s *Server) otherAdmins(u store.User) []string {
+	if !u.IsAdmin() {
+		return []string{}
+	}
+	users, err := s.st().ListUsers()
+	if err != nil {
+		return []string{}
+	}
+	out := []string{}
+	for _, o := range users {
+		if o.IsAdmin() && !o.Suspended && o.ID != u.ID {
+			out = append(out, o.Username)
+		}
+	}
+	return out
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +57,8 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		Email           *string `json:"email"`
 		DefaultNick     *string `json:"defaultNick"`
 		DefaultRealname *string `json:"defaultRealname"`
+		DefaultAltNick  *string `json:"defaultAltNick"`
+		AutoAway        *bool   `json:"autoAway"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -59,9 +82,24 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	if in.DefaultRealname != nil {
 		u.DefaultRealname = strings.TrimSpace(*in.DefaultRealname)
 	}
+	if in.DefaultAltNick != nil {
+		alt := strings.TrimSpace(*in.DefaultAltNick)
+		if strings.ContainsAny(alt, " ,*?!@#:") || utf8.RuneCountInString(alt) > 30 {
+			writeErr(w, http.StatusUnprocessableEntity, "nicks can't contain spaces or , * ? ! @ # : and are at most 30 characters")
+			return
+		}
+		u.DefaultAltNick = alt
+	}
+	awayChanged := in.AutoAway != nil && *in.AutoAway != u.AutoAway
+	if in.AutoAway != nil {
+		u.AutoAway = *in.AutoAway
+	}
 	if err := s.st().UpdateUser(u); err != nil {
 		s.fail(w, err)
 		return
+	}
+	if awayChanged {
+		s.b.RefreshAway(u.ID)
 	}
 	writeJSON(w, http.StatusOK, s.userDTO(u))
 }

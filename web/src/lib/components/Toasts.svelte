@@ -5,8 +5,8 @@
 
 <div class="toasts" role="status" aria-live="polite">
   {#each toasts as t (t.id)}
-    <div class="toast" class:err={t.kind === 'err'} class:out={t.out}>
-      <Icon name={t.kind === 'err' ? 'alert' : 'check'} /><span>{t.text}</span>
+    <div class="toast {t.kind === 'err' || t.kind === 'bad' ? 'bad' : ''}" class:out={t.out}>
+      <Icon name={t.kind === 'err' || t.kind === 'bad' ? 'alert' : 'check'} /><span>{t.text}</span>
     </div>
   {/each}
 </div>
