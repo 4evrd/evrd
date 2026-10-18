@@ -1,37 +1,100 @@
 name: evrd
 
 services:
+  scylla:
+    image: scylladb/scylla:6.2
+    # One small node for development: one core, little memory, no tuning checks.
+    command: --smp 1 --memory 750M --overprovisioned 1 --developer-mode 1
+    volumes:
+      - scylla-data:/var/lib/scylla
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES' >/dev/null"]
+      interval: 5s
+      retries: 60
+    # internal only — evrd reaches it as scylla:9042
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: evrd
+      POSTGRES_PASSWORD: evrd
+      POSTGRES_DB: evrd
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "evrd"]
+      interval: 2s
+      retries: 30
+
   # Local upstream IRC server. Stands in for the production ngircd-27 so evrd
   # has a real network to bounce to during development.
   ircd:
     image: ghcr.io/ergochat/ergo:stable
+    environment:
+      # Every evrd user connects from evrd's one address: don't throttle it
+      # (the e2e suite alone opens dozens of connections).
+      ERGO__SERVER__IP_LIMITS__COUNT: "false"
+      ERGO__SERVER__IP_LIMITS__THROTTLE: "false"
     # Internal upstream only — evrd reaches it as ircd:6667 over the compose
     # network, so no host port (avoids collisions with other local ircds).
 
-  # The bouncer core.
-  evrd:
+  # The bouncer: two nodes from the same image. Users are spread across them,
+  # and either can take any connection — it forwards to the user's owner.
+  evrd: &evrd
     build:
       context: .
       args:
         VERSION: dev
     depends_on:
-      - ircd
+      ircd:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      scylla:
+        condition: service_healthy
     command: ["-config", "/etc/evrd/evrd.conf"]
     volumes:
       - ./deploy/evrd.dev.conf:/etc/evrd/evrd.conf:ro
-      - evrd-data:/var/lib/evrd
+    environment:
+      EVRD_NODE_ID: node-a
+      EVRD_INTERNAL_URL: http://evrd:8099
+      EVRD_INTERNAL_IRC_ADDR: evrd:6699
+      EVRD_CLUSTER_SECRET: change-me-to-a-long-random-secret
+
+  evrd2:
+    <<: *evrd
+    environment:
+      EVRD_NODE_ID: node-b
+      EVRD_INTERNAL_URL: http://evrd2:8099
+      EVRD_INTERNAL_IRC_ADDR: evrd2:6699
+      EVRD_CLUSTER_SECRET: change-me-to-a-long-random-secret
+
+  # Round-robin load balancer for IRC and the API (deploy/lb.conf). The web
+  # container reaches the API through it as evrd-api.
+  lb:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./deploy/lb.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - evrd
+      - evrd2
+    networks:
+      default:
+        aliases: [evrd-api]
     ports:
       - "6697:6697" # IRC — clients attach here
-      - "8097:8097" # WebSocket — the web client attaches here
+    # The API (:8098) stays internal: the web container proxies /api + /auth.
 
-  # The Svelte web client.
+  # The Svelte web app, served by nginx, which also proxies the API so both
+  # share an origin. For SSO, public_url in the config must be this address.
   web:
     build:
       context: ./web
     depends_on:
-      - evrd
+      - lb
     ports:
       - "8080:80"
 
 volumes:
-  evrd-data:
+  pg-data:
+  scylla-data:

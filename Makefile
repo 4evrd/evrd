@@ -1,4 +1,7 @@
 VERSION ?= dev
+# Pure Go (no cgo): the SQLite driver and Pebble both have pure-Go builds.
+export CGO_ENABLED := 0
+
 LDFLAGS := -s -w -X code.ircforever.org/ircforever/evrd/internal/version.Version=$(VERSION)
 
 .PHONY: all build core cli web vet test clean up down up-prod down-prod e2e e2e-setup
@@ -23,7 +26,7 @@ web:
 	cd web && pnpm install && pnpm build
 
 # Dev stack with hot reload (air for the daemon, vite HMR for the web client).
-# web → http://localhost:5173 · evrd ws → ws://localhost:8097 · irc → :6697
+# web → http://localhost:5173 (proxies the API on :8098) · irc → :6667 / :6697
 up:
 	docker compose -f docker-compose.dev.yml up --build
 

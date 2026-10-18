@@ -3,15 +3,19 @@ package client
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
-	"golang.org/x/crypto/bcrypt"
-
+	"code.ircforever.org/ircforever/evrd/internal/accounts"
+	"code.ircforever.org/ircforever/evrd/internal/bouncer"
+	"code.ircforever.org/ircforever/evrd/internal/history"
 	"code.ircforever.org/ircforever/evrd/internal/irc"
 	"code.ircforever.org/ircforever/evrd/internal/store"
 	"code.ircforever.org/ircforever/evrd/internal/upstream"
@@ -23,7 +27,7 @@ type session struct {
 	id   string
 	srv  *Server
 	conn net.Conn
-	r    *bufio.Scanner
+	r    *bufio.Reader
 
 	wmu sync.Mutex
 	w   *bufio.Writer
@@ -34,45 +38,92 @@ type session struct {
 	user           string
 	capNegotiating bool
 	caps           map[string]bool
+	regLines       []string // PASS/NICK/USER as sent, replayed when forwarding
+	internal       bool     // forwarded here by another node (already vetted)
 
-	// attached state
-	net  store.Network
-	up   *upstream.Conn
-	unick string
+	// Attached state. After registration, only the bridge goroutine touches
+	// these, so jumping networks needs no locking.
+	uid      int64
+	net      store.Network
+	up       *upstream.Conn
+	unick    string
+	raw      <-chan string
+	msgs     <-chan history.Message
+	unsubRaw func()
+	unsubMsg func()
+	release  func() // frees this client's slot in the user's client limit
+
+	// web is set for a *status command from the web chat: replies go to it
+	// instead of an IRC connection, and IRC-only commands say so.
+	web func(string)
 }
+
+// supportedCaps are the IRCv3 capabilities a client may request.
+var supportedCaps = map[string]bool{"echo-message": true, "server-time": true}
 
 func newSession(srv *Server, conn net.Conn) *session {
 	return &session{
 		id:   strconv.FormatInt(sessionSeq.Add(1), 10),
 		srv:  srv,
 		conn: conn,
-		r:    bufio.NewScanner(conn),
+		r:    bufio.NewReaderSize(conn, 4096),
 		w:    bufio.NewWriter(conn),
 		caps: map[string]bool{},
 	}
 }
 
+// maxLine bounds one IRC line (512 bytes plus up to 8 KiB of tags, with room).
+const maxLine = 16 << 10
+
+// readLine reads one line without its line ending.
+func (se *session) readLine() (string, error) {
+	var line []byte
+	for {
+		chunk, err := se.r.ReadSlice('\n')
+		line = append(line, chunk...)
+		if len(line) > maxLine {
+			return "", errors.New("line too long")
+		}
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimRight(string(line), "\r\n"), nil
+	}
+}
+
 func (se *session) serve(ctx context.Context) {
 	defer se.conn.Close()
-	se.r.Buffer(make([]byte, 0, 4096), 1<<20)
+	if se.internal && !se.acceptForwarded() {
+		return
+	}
 
 	// Registration: gather CAP / PASS / NICK / USER.
-	for se.r.Scan() {
-		m := irc.Parse(se.r.Text())
+	for {
+		line, err := se.readLine()
+		if err != nil {
+			return
+		}
+		m := irc.Parse(line)
 		switch m.Command {
 		case "CAP":
 			se.handleCap(m)
 		case "PASS":
 			if len(m.Params) > 0 {
 				se.pass = m.Params[0]
+				se.regLines = append(se.regLines, line)
 			}
 		case "NICK":
 			if len(m.Params) > 0 {
 				se.nick = m.Params[0]
+				se.regLines = append(se.regLines, line)
 			}
 		case "USER":
 			if len(m.Params) > 0 {
 				se.user = m.Params[0]
+				se.regLines = append(se.regLines, line)
 			}
 		case "QUIT":
 			return
@@ -81,32 +132,56 @@ func (se *session) serve(ctx context.Context) {
 			break
 		}
 	}
-	if se.r.Err() != nil || se.nick == "" {
+	if se.forwardIfElsewhere(ctx) {
 		return
 	}
 	if !se.attach() {
 		return
 	}
+	defer se.release()
+	defer se.unsubscribe()
 	se.bridge(ctx)
 }
 
+// handleCap answers CAP during and after registration. A REQ is all or
+// nothing: ACK only when every capability in it is supported.
 func (se *session) handleCap(m irc.Message) {
 	if len(m.Params) == 0 {
 		return
 	}
+	nick := orElse(se.nick, "*")
 	switch strings.ToUpper(m.Params[0]) {
 	case "LS":
-		se.capNegotiating = true
-		se.send("CAP * LS :echo-message server-time")
-	case "REQ":
-		if len(m.Params) > 1 {
-			for _, c := range strings.Fields(m.Params[1]) {
-				if c == "echo-message" || c == "server-time" {
-					se.caps[c] = true
-				}
-			}
-			se.send("CAP * ACK :" + m.Params[1])
+		if se.up == nil {
+			se.capNegotiating = true
 		}
+		se.send(fmt.Sprintf(":%s CAP %s LS :echo-message server-time", serverName, nick))
+	case "LIST":
+		var on []string
+		for c := range se.caps {
+			on = append(on, c)
+		}
+		sort.Strings(on)
+		se.send(fmt.Sprintf(":%s CAP %s LIST :%s", serverName, nick, strings.Join(on, " ")))
+	case "REQ":
+		if len(m.Params) < 2 {
+			return
+		}
+		req := strings.Fields(m.Params[1])
+		for _, c := range req {
+			if !supportedCaps[strings.TrimPrefix(c, "-")] {
+				se.send(fmt.Sprintf(":%s CAP %s NAK :%s", serverName, nick, m.Params[1]))
+				return
+			}
+		}
+		for _, c := range req {
+			if name, off := strings.CutPrefix(c, "-"); off {
+				delete(se.caps, name)
+			} else {
+				se.caps[c] = true
+			}
+		}
+		se.send(fmt.Sprintf(":%s CAP %s ACK :%s", serverName, nick, m.Params[1]))
 	case "END":
 		se.capNegotiating = false
 	}
@@ -122,47 +197,79 @@ func (se *session) attach() bool {
 	}
 	username, network, _ := strings.Cut(login, "/")
 
-	u, err := se.srv.b.Store().UserByUsername(username)
-	if err != nil || bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
+	// The secret is the account password or one of the user's IRC client
+	// passwords (the only option for accounts that sign in through SSO).
+	u, err := se.srv.acc.IRCLogin(username, password)
+	switch {
+	case errors.Is(err, accounts.ErrSuspended):
+		se.numeric("465", ":This account is suspended")
+		return false
+	case err != nil:
 		se.numeric("464", ":Invalid credentials")
+		return false
+	}
+	se.uid = u.ID
+	if !se.srv.b.Owns(u.ID) {
+		se.numeric("464", ":"+movingMsg)
 		return false
 	}
 
 	nets, _ := se.srv.b.Store().ListNetworks(u.ID)
 	if len(nets) == 0 {
-		se.numeric("464", ":No networks configured — add one in the web UI first")
+		se.numeric("464", ":No networks configured — add one in the web app first")
 		return false
 	}
 	chosen := nets[0]
 	if network != "" {
-		match := false
-		for _, n := range nets {
-			if strings.EqualFold(n.Name, network) {
-				chosen, match = n, true
-				break
-			}
-		}
-		if !match {
+		n, ok := findNetwork(nets, network)
+		if !ok {
 			se.numeric("464", ":Unknown network "+network)
 			return false
 		}
+		chosen = n
 	}
-	se.net = chosen
 
-	// Ensure the upstream is connected, then grab it.
-	se.srv.b.Connect(chosen.ID)
-	conn, ok := se.srv.b.ConnFor(chosen.ID)
-	if !ok {
-		se.numeric("464", ":Network unavailable")
+	release, err := se.srv.b.AttachClient(u.ID, se.srv.acc.LimitsFor(u).MaxClients, func() { se.conn.Close() })
+	if errors.Is(err, bouncer.ErrTooManyClients) {
+		se.numeric("464", fmt.Sprintf(":Too many clients attached (limit %d) — detach one first", se.srv.acc.LimitsFor(u).MaxClients))
 		return false
 	}
-	se.up = conn
-	se.unick = orElse(conn.Nick(), chosen.Nick)
+	se.release = release
 
+	if err := se.bind(chosen); err != nil {
+		se.release()
+		se.numeric("464", ":Network unavailable: "+err.Error())
+		return false
+	}
+	se.unick = orElse(se.up.Nick(), chosen.Nick)
 	se.welcome()
 	se.joinChannels()
 	se.replayBacklog()
 	return true
+}
+
+// bind connects n if needed and subscribes this session to its feeds.
+func (se *session) bind(n store.Network) error {
+	if err := se.srv.b.Connect(n.ID); err != nil {
+		return err
+	}
+	conn, ok := se.srv.b.ConnFor(n.ID)
+	if !ok {
+		return errors.New("not connected")
+	}
+	se.unsubscribe()
+	se.net, se.up = n, conn
+	se.raw, se.unsubRaw = conn.SubscribeRaw()
+	se.msgs, se.unsubMsg = conn.Subscribe()
+	return nil
+}
+
+func (se *session) unsubscribe() {
+	if se.unsubRaw != nil {
+		se.unsubRaw()
+		se.unsubMsg()
+		se.unsubRaw, se.unsubMsg = nil, nil
+	}
 }
 
 func (se *session) welcome() {
@@ -173,6 +280,7 @@ func (se *session) welcome() {
 	se.send(fmt.Sprintf(":%s 004 %s %s evrd o o", serverName, n, serverName))
 	se.send(fmt.Sprintf(":%s 375 %s :- %s message of the day -", serverName, n, serverName))
 	se.send(fmt.Sprintf(":%s 372 %s :- network %s (%s:%d)", serverName, n, se.net.Name, se.net.Host, se.net.Port))
+	se.send(fmt.Sprintf(":%s 372 %s :- /msg *status help for bouncer commands", serverName, n))
 	se.send(fmt.Sprintf(":%s 376 %s :End of /MOTD command.", serverName, n))
 
 	// If the client registered under a different nick than the upstream's, tell
@@ -184,11 +292,7 @@ func (se *session) welcome() {
 }
 
 func (se *session) joinChannels() {
-	for _, ch := range se.net.Channels {
-		ch = strings.TrimSpace(ch)
-		if ch == "" {
-			continue
-		}
+	for _, ch := range se.up.Channels() {
 		// Make the client open the buffer, then ask the upstream for the real
 		// names/topic — the replies stream back over the raw feed.
 		se.send(fmt.Sprintf(":%s!%s@%s JOIN %s", se.unick, se.unick, serverName, ch))
@@ -198,94 +302,183 @@ func (se *session) joinChannels() {
 }
 
 func (se *session) replayBacklog() {
-	for _, ch := range se.net.Channels {
-		ch = strings.TrimSpace(ch)
-		if ch == "" {
-			continue
-		}
-		msgs, _ := se.srv.b.Store().RecentMessages(se.net.ID, ch, 50)
-		for _, m := range msgs {
-			se.send(se.format(m))
-		}
+	for _, ch := range se.up.Channels() {
+		se.playback(ch, 50)
 	}
 }
 
-// bridge relays the upstream's raw feed to the client and the client's commands
-// back to the upstream, until either side closes.
-func (se *session) bridge(ctx context.Context) {
-	raw, unsubRaw := se.up.SubscribeRaw()
-	defer unsubRaw()
-	msgs, unsubMsg := se.up.Subscribe()
-	defer unsubMsg()
+// playback sends the last n lines of a buffer.
+func (se *session) playback(target string, n int) int {
+	msgs, _ := se.srv.b.History().Recent(se.net.ID, target, n)
+	for _, m := range msgs {
+		se.send(se.format(m))
+	}
+	return len(msgs)
+}
 
+// jump moves the session to another of the user's networks: the client
+// leaves the old network's channels and gets the new one's, with backlog.
+func (se *session) jump(n store.Network) error {
+	old := se.up.Channels()
+	oldName := se.net.Name
+	if err := se.bind(n); err != nil {
+		return err
+	}
+	for _, ch := range old {
+		se.send(fmt.Sprintf(":%s!%s@%s PART %s :jumped to %s", se.unick, se.unick, serverName, ch, n.Name))
+	}
+	if nick := orElse(se.up.Nick(), n.Nick); nick != se.unick {
+		se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, serverName, nick))
+		se.unick = nick
+	}
+	se.statusf("Jumped from %s to %s.", oldName, n.Name)
+	se.joinChannels()
+	se.replayBacklog()
+	return nil
+}
+
+// bridge relays the upstream's raw feed to the client and the client's commands
+// back to the upstream, until either side closes. Everything runs on this
+// goroutine; the reader only parses lines and hands them over.
+func (se *session) bridge(ctx context.Context) {
+	in := make(chan irc.Message, 16)
 	done := make(chan struct{})
+	defer close(done)
 	go func() {
-		defer close(done)
-		for se.r.Scan() {
-			se.handleClient(irc.Parse(se.r.Text()))
+		defer close(in)
+		for {
+			line, err := se.readLine()
+			if err != nil {
+				return
+			}
+			select {
+			case in <- irc.Parse(line):
+			case <-done:
+				return
+			}
 		}
 	}()
 
+	// The network's connection is replaced when it's disconnected and
+	// connected again (from *status or the web app); follow it.
+	follow := time.NewTicker(3 * time.Second)
+	defer follow.Stop()
+
 	for {
 		select {
-		case line, ok := <-raw:
+		case m, ok := <-in:
 			if !ok {
 				return
 			}
-			// Incoming traffic + channel state come verbatim from the server.
-			if cmd := command(line); cmd == "PING" || cmd == "PONG" {
+			se.handleClient(m)
+		case line, ok := <-se.raw:
+			if !ok {
+				se.raw = nil
 				continue
 			}
-			se.send(line)
-		case m, ok := <-msgs:
+			se.relay(line)
+		case m, ok := <-se.msgs:
 			if !ok {
-				return
+				se.msgs = nil
+				continue
 			}
 			// Our own outgoing only — incoming arrives via the raw feed. Skip
 			// what this session sent (already echoed/displayed); forward sends
 			// from other sessions (web, another client) so we stay in sync.
-			if m.Sender == se.unick && m.Origin != se.id {
+			if isChat(m.Kind) && strings.EqualFold(m.Sender, se.unick) && m.Origin != se.id {
 				se.send(se.format(m))
 			}
-		case <-done:
-			return
+		case <-follow.C:
+			if conn, ok := se.srv.b.ConnFor(se.net.ID); ok && conn != se.up {
+				se.unsubscribe()
+				se.up = conn
+				se.raw, se.unsubRaw = conn.SubscribeRaw()
+				se.msgs, se.unsubMsg = conn.Subscribe()
+			}
 		case <-ctx.Done():
 			return
 		}
 	}
 }
 
+// relay forwards one raw upstream line, keeping the session's view of its
+// nick in step and hiding what only makes sense to the bouncer.
+func (se *session) relay(line string) {
+	m := irc.Parse(line)
+	switch m.Command {
+	case "PING", "PONG", "CAP", "AUTHENTICATE":
+		return
+	case "001":
+		// The upstream re-registered (it reconnected). Don't replay the
+		// welcome; just bring the client's nick along if it changed.
+		if len(m.Params) > 0 && m.Params[0] != se.unick {
+			se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, serverName, m.Params[0]))
+			se.unick = m.Params[0]
+		}
+		return
+	case "002", "003", "004", "005":
+		return
+	case "NICK":
+		if len(m.Params) > 0 && strings.EqualFold(nickFromPrefix(m.Prefix), se.unick) {
+			se.unick = m.Params[0]
+		}
+	}
+	se.send(line)
+}
+
 func (se *session) handleClient(m irc.Message) {
 	switch m.Command {
 	case "PING":
-		se.send("PONG :" + lastParam(m))
+		se.send(fmt.Sprintf(":%s PONG %s :%s", serverName, serverName, lastParam(m)))
 	case "QUIT":
 		se.conn.Close()
-	case "PRIVMSG":
-		if len(m.Params) >= 2 {
-			target, text := m.Params[0], m.Params[len(m.Params)-1]
-			se.up.SendMessageFrom(se.id, target, text)
-			// The server won't echo our own line back over the raw feed, so
-			// honor echo-message ourselves; plain clients display it locally.
-			if se.caps["echo-message"] {
-				se.send(fmt.Sprintf(":%s!%s@%s PRIVMSG %s :%s", se.unick, se.unick, serverName, target, text))
-			}
+	case "PRIVMSG", "NOTICE":
+		if len(m.Params) < 2 {
+			return
 		}
-	case "CAP", "NICK", "USER", "PASS":
-		// registration leftovers — ignore post-attach
+		target, text := m.Params[0], m.Params[len(m.Params)-1]
+		if strings.EqualFold(target, statusNick) {
+			if m.Command == "PRIVMSG" {
+				se.statusCommand(text)
+			}
+			return
+		}
+		se.up.SendFrom(se.id, m.Command, target, text)
+		// The server won't echo our own line back over the raw feed, so
+		// honor echo-message ourselves; plain clients display it locally.
+		if se.caps["echo-message"] {
+			se.send(fmt.Sprintf(":%s!%s@%s %s %s :%s", se.unick, se.unick, serverName, m.Command, target, text))
+		}
+	case "NICK":
+		// The server's NICK reply comes back over the raw feed and updates
+		// both the upstream's and this session's nick.
+		if len(m.Params) > 0 {
+			se.up.SendRaw("NICK " + m.Params[0])
+		}
+	case "CAP":
+		se.handleCap(m)
+	case "USER", "PASS":
+		se.numeric("462", ":You're already registered")
 	default:
 		// Everything else (JOIN, PART, MODE, WHO, NAMES, TOPIC, LIST, …) goes
-		// straight to the upstream; replies come back over the raw feed.
+		// straight to the upstream; replies come back over the raw feed. The
+		// upstream saves joins and parts to the network's channel list.
 		se.up.SendRaw(m.String())
 	}
 }
 
 // format renders a stored message as an IRC line for replay, tagged with
-// server-time when the client negotiated it.
-func (se *session) format(m store.Message) string {
+// server-time when the client negotiated it. Channel events (joins, parts, …)
+// come from *buffextras as plain text, the way ZNC's module replays them, so
+// replay never touches the client's idea of who is in the channel.
+func (se *session) format(m history.Message) string {
 	var b strings.Builder
 	if se.caps["server-time"] {
 		b.WriteString("@time=" + m.Time.UTC().Format("2006-01-02T15:04:05.000Z") + " ")
+	}
+	if !isChat(m.Kind) {
+		b.WriteString(fmt.Sprintf(":*buffextras!buffextras@%s PRIVMSG %s :%s", serverName, m.Target, describe(m)))
+		return b.String()
 	}
 	sender := m.Sender
 	if sender == "" {
@@ -303,6 +496,38 @@ func (se *session) format(m store.Message) string {
 	return b.String()
 }
 
+// isChat reports whether a stored kind is something someone said.
+func isChat(kind string) bool {
+	return kind == "message" || kind == "notice" || kind == "action" || kind == ""
+}
+
+// describe is a channel event as a sentence.
+func describe(m history.Message) string {
+	why := func(s string) string {
+		if s == "" {
+			return ""
+		}
+		return " (" + s + ")"
+	}
+	switch m.Kind {
+	case "join":
+		return m.Sender + " joined"
+	case "part":
+		return m.Sender + " left" + why(m.Text)
+	case "quit":
+		return m.Sender + " quit" + why(m.Text)
+	case "kick":
+		return m.Sender + " kicked " + m.Extra + why(m.Text)
+	case "nick":
+		return m.Sender + " is now known as " + m.Extra
+	case "topic":
+		return m.Sender + " changed the topic to: " + m.Text
+	case "mode":
+		return m.Sender + " set mode " + m.Text
+	}
+	return m.Sender + " " + m.Kind + " " + m.Text
+}
+
 func (se *session) send(line string) {
 	se.wmu.Lock()
 	defer se.wmu.Unlock()
@@ -311,28 +536,22 @@ func (se *session) send(line string) {
 }
 
 func (se *session) numeric(code, trailing string) {
-	n := se.nick
-	if n == "" {
-		n = "*"
-	}
+	n := orElse(se.unick, orElse(se.nick, "*"))
 	se.send(fmt.Sprintf(":%s %s %s %s", serverName, code, n, trailing))
 }
 
-func command(line string) string {
-	if strings.HasPrefix(line, "@") {
-		if i := strings.IndexByte(line, ' '); i >= 0 {
-			line = line[i+1:]
+func nickFromPrefix(prefix string) string {
+	nick, _, _ := strings.Cut(prefix, "!")
+	return nick
+}
+
+func findNetwork(nets []store.Network, name string) (store.Network, bool) {
+	for _, n := range nets {
+		if strings.EqualFold(n.Name, name) {
+			return n, true
 		}
 	}
-	if strings.HasPrefix(line, ":") {
-		if i := strings.IndexByte(line, ' '); i >= 0 {
-			line = line[i+1:]
-		}
-	}
-	if i := strings.IndexByte(line, ' '); i >= 0 {
-		return strings.ToUpper(line[:i])
-	}
-	return strings.ToUpper(line)
+	return store.Network{}, false
 }
 
 func lastParam(m irc.Message) string {

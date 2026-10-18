@@ -1,0 +1,12 @@
+# Traefik static config for evrd (an alternative to deploy/lb.conf). See
+# dynamic.yml for the routes.
+entryPoints:
+  irc:
+    address: ":6667"
+  ircs:
+    address: ":6697"
+  api:
+    address: ":8098"
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml

@@ -3,10 +3,12 @@ package store
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/glebarez/sqlite" // pure-Go SQLite (no CGO), via modernc
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 )
 
@@ -33,7 +35,7 @@ func Open(dsn string) (Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&User{}, &Network{}, &Message{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}); err != nil {
 		return nil, err
 	}
 	return &gormStore{db: db}, nil
@@ -49,26 +51,114 @@ func (s *gormStore) Close() error {
 
 // --- users ---------------------------------------------------------------
 
-func (s *gormStore) CreateUser(username, passwordHash string) (User, error) {
-	u := User{Username: username, PasswordHash: passwordHash}
+func (s *gormStore) CreateUser(u User) (User, error) {
+	if u.Role == "" {
+		u.Role = RoleUser
+	}
 	if err := s.db.Create(&u).Error; err != nil {
 		return User{}, err
 	}
 	return u, nil
 }
 
+func (s *gormStore) UserByID(id int64) (User, error) {
+	var u User
+	return u, notFound(s.db.First(&u, id).Error)
+}
+
 func (s *gormStore) UserByUsername(username string) (User, error) {
 	var u User
-	err := s.db.Where("username = ?", username).First(&u).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return User{}, ErrNotFound
-	}
-	return u, err
+	return u, notFound(s.db.Where("username = ?", username).First(&u).Error)
+}
+
+func (s *gormStore) UserBySubject(subject string) (User, error) {
+	var u User
+	return u, notFound(s.db.Where("oidc_subject = ?", subject).First(&u).Error)
 }
 
 func (s *gormStore) ListUsers() ([]User, error) {
 	var users []User
 	return users, s.db.Order("username").Find(&users).Error
+}
+
+// UpdateUser saves every field, including zero values (Select("*")), so
+// clearing a limit or un-suspending sticks.
+func (s *gormStore) UpdateUser(u User) error {
+	return s.db.Model(&u).Select("*").Omit("created_at").Updates(&u).Error
+}
+
+func (s *gormStore) DeleteUser(id int64) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		for _, m := range []any{&Network{}, &Session{}, &ClientPassword{}} {
+			if err := tx.Where("user_id = ?", id).Delete(m).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Delete(&User{}, id).Error
+	})
+}
+
+func (s *gormStore) CountAdmins() (int64, error) {
+	var n int64
+	return n, s.db.Model(&User{}).Where("role = ? AND suspended = ?", RoleAdmin, false).Count(&n).Error
+}
+
+// --- sessions ------------------------------------------------------------
+
+func (s *gormStore) CreateSession(sess Session) error {
+	return s.db.Create(&sess).Error
+}
+
+func (s *gormStore) SessionByID(id string) (Session, error) {
+	var sess Session
+	return sess, notFound(s.db.Where("id = ?", id).First(&sess).Error)
+}
+
+func (s *gormStore) TouchSession(id string, at time.Time) error {
+	return s.db.Model(&Session{}).Where("id = ?", id).Update("last_seen_at", at).Error
+}
+
+func (s *gormStore) ListSessions(userID int64) ([]Session, error) {
+	var out []Session
+	return out, s.db.Where("user_id = ?", userID).Order("last_seen_at DESC").Find(&out).Error
+}
+
+func (s *gormStore) DeleteSession(userID int64, id string) error {
+	return s.db.Where("id = ? AND user_id = ?", id, userID).Delete(&Session{}).Error
+}
+
+func (s *gormStore) DeleteUserSessions(userID int64, keep string) error {
+	return s.db.Where("user_id = ? AND id <> ?", userID, keep).Delete(&Session{}).Error
+}
+
+func (s *gormStore) DeleteExpiredSessions(now time.Time) error {
+	return s.db.Where("expires_at < ?", now).Delete(&Session{}).Error
+}
+
+// --- IRC client passwords --------------------------------------------------
+
+func (s *gormStore) CreateClientPassword(c ClientPassword) (ClientPassword, error) {
+	if err := s.db.Create(&c).Error; err != nil {
+		return ClientPassword{}, err
+	}
+	return c, nil
+}
+
+func (s *gormStore) ListClientPasswords(userID int64) ([]ClientPassword, error) {
+	var out []ClientPassword
+	return out, s.db.Where("user_id = ?", userID).Order("id").Find(&out).Error
+}
+
+func (s *gormStore) DeleteClientPassword(userID, id int64) error {
+	res := s.db.Where("id = ? AND user_id = ?", id, userID).Delete(&ClientPassword{})
+	if res.Error == nil && res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return res.Error
+}
+
+func (s *gormStore) TouchClientPassword(id int64, at time.Time) error {
+	return s.db.Model(&ClientPassword{}).Where("id = ?", id).Update("last_used_at", at).Error
 }
 
 // --- networks ------------------------------------------------------------
@@ -78,6 +168,24 @@ func (s *gormStore) ListNetworks(userID int64) ([]Network, error) {
 	return nets, s.db.Where("user_id = ?", userID).Order("id").Find(&nets).Error
 }
 
+func (s *gormStore) CountNetworks(userID int64) (int64, error) {
+	var n int64
+	return n, s.db.Model(&Network{}).Where("user_id = ?", userID).Count(&n).Error
+}
+
+func (s *gormStore) NetworkCounts() (map[int64]int64, error) {
+	var rows []struct {
+		UserID int64
+		N      int64
+	}
+	err := s.db.Model(&Network{}).Select("user_id, count(*) as n").Group("user_id").Scan(&rows).Error
+	out := make(map[int64]int64, len(rows))
+	for _, r := range rows {
+		out[r.UserID] = r.N
+	}
+	return out, err
+}
+
 func (s *gormStore) AllEnabledNetworks() ([]Network, error) {
 	var nets []Network
 	return nets, s.db.Where("enabled = ?", true).Order("id").Find(&nets).Error
@@ -85,11 +193,7 @@ func (s *gormStore) AllEnabledNetworks() ([]Network, error) {
 
 func (s *gormStore) NetworkByID(id int64) (Network, error) {
 	var n Network
-	err := s.db.First(&n, id).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Network{}, ErrNotFound
-	}
-	return n, err
+	return n, notFound(s.db.First(&n, id).Error)
 }
 
 func (s *gormStore) CreateNetwork(n Network) (Network, error) {
@@ -100,44 +204,132 @@ func (s *gormStore) CreateNetwork(n Network) (Network, error) {
 }
 
 func (s *gormStore) DeleteNetwork(userID, id int64) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("network_id = ?", id).Delete(&Message{}).Error; err != nil {
-			return err
-		}
-		return tx.Where("id = ? AND user_id = ?", id, userID).Delete(&Network{}).Error
-	})
+	return s.db.Where("id = ? AND user_id = ?", id, userID).Delete(&Network{}).Error
 }
 
 func (s *gormStore) SetNetworkEnabled(id int64, enabled bool) error {
 	return s.db.Model(&Network{}).Where("id = ?", id).Update("enabled", enabled).Error
 }
 
-// --- messages ------------------------------------------------------------
-
-func (s *gormStore) AddMessage(m Message) error {
-	return s.db.Create(&m).Error
+func (s *gormStore) UpdateNetwork(n Network) error {
+	return s.db.Model(&Network{ID: n.ID}).
+		Select("name", "host", "port", "tls", "nick", "username", "realname", "password", "channels").
+		Updates(&n).Error
 }
 
-// Buffers returns the distinct targets (channels and PM nicks) that have
-// messages for a network.
-func (s *gormStore) Buffers(networkID int64) ([]string, error) {
-	var targets []string
-	err := s.db.Model(&Message{}).
-		Where("network_id = ?", networkID).
-		Distinct().Pluck("target", &targets).Error
-	return targets, err
+func (s *gormStore) SetNetworkChannels(id int64, channels []string) error {
+	if channels == nil {
+		channels = []string{}
+	}
+	return s.db.Model(&Network{ID: id}).Select("channels").Updates(&Network{Channels: channels}).Error
 }
 
-func (s *gormStore) RecentMessages(networkID int64, target string, limit int) ([]Message, error) {
-	var msgs []Message
-	err := s.db.Where("network_id = ? AND target = ?", networkID, target).
-		Order("id DESC").Limit(limit).Find(&msgs).Error
-	if err != nil {
-		return nil, err
+// --- cluster -------------------------------------------------------------
+
+func (s *gormStore) UpsertNode(n Node) error {
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"http_url", "irc_addr", "started_at", "heartbeat_at"}),
+	}).Create(&n).Error
+}
+
+func (s *gormStore) DeleteNodesBefore(t time.Time) error {
+	return s.db.Where("heartbeat_at < ?", t).Delete(&Node{}).Error
+}
+
+func (s *gormStore) LiveNodes(since time.Time) ([]Node, error) {
+	var out []Node
+	return out, s.db.Where("heartbeat_at > ?", since).Order("id").Find(&out).Error
+}
+
+func (s *gormStore) AcquireLease(userID int64, node string, until, now time.Time) (bool, error) {
+	res := s.db.Clauses(clause.OnConflict{DoNothing: true}).
+		Create(&UserLease{UserID: userID, NodeID: node, Epoch: 1, ExpiresAt: until})
+	if res.Error != nil {
+		return false, res.Error
 	}
-	// reverse to oldest-first
-	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
-		msgs[i], msgs[j] = msgs[j], msgs[i]
+	if res.RowsAffected > 0 {
+		return true, nil
 	}
-	return msgs, nil
+	// Taken before: take it over if it's expired, or extend it if it's ours.
+	// The WHERE is re-checked under the row lock, so two nodes can't both win.
+	res = s.db.Model(&UserLease{}).
+		Where("user_id = ? AND (expires_at < ? OR node_id = ?)", userID, now, node).
+		Updates(map[string]any{
+			"epoch":      gorm.Expr("CASE WHEN node_id = ? THEN epoch ELSE epoch + 1 END", node),
+			"node_id":    node,
+			"expires_at": until,
+		})
+	return res.RowsAffected > 0, res.Error
+}
+
+func (s *gormStore) RenewLeases(node string, until, now time.Time) error {
+	return s.db.Model(&UserLease{}).Where("node_id = ? AND expires_at > ?", node, now).
+		Update("expires_at", until).Error
+}
+
+func (s *gormStore) HeldLeases(node string, now time.Time) ([]int64, error) {
+	var ids []int64
+	return ids, s.db.Model(&UserLease{}).Where("node_id = ? AND expires_at > ?", node, now).
+		Pluck("user_id", &ids).Error
+}
+
+func (s *gormStore) ReleaseLease(userID int64, node string, now time.Time) error {
+	return s.db.Model(&UserLease{}).Where("user_id = ? AND node_id = ?", userID, node).
+		Update("expires_at", now).Error
+}
+
+func (s *gormStore) LeaseOwner(userID int64, now time.Time) (Node, UserLease, bool, error) {
+	var l UserLease
+	err := s.db.Where("user_id = ? AND expires_at > ?", userID, now).First(&l).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return Node{}, UserLease{}, false, nil
+	} else if err != nil {
+		return Node{}, UserLease{}, false, err
+	}
+	var n Node
+	if err := s.db.Where("id = ?", l.NodeID).First(&n).Error; err != nil {
+		return Node{}, UserLease{}, false, notFound(err)
+	}
+	return n, l, true, nil
+}
+
+func (s *gormStore) DeleteOrphanLeases() error {
+	return s.db.Where("user_id NOT IN (?)", s.db.Model(&User{}).Select("id")).Delete(&UserLease{}).Error
+}
+
+// --- legacy history ------------------------------------------------------
+
+func (s *gormStore) MigrateLegacyMessages(fn func(LegacyMessage) error) (int, error) {
+	const table = "messages"
+	if !s.db.Migrator().HasTable(table) {
+		return 0, nil
+	}
+	n, lastID := 0, int64(0)
+	for {
+		var rows []LegacyMessage
+		err := s.db.Table(table).Where("id > ?", lastID).Order("id").Limit(1000).Find(&rows).Error
+		if err != nil {
+			return n, err
+		}
+		if len(rows) == 0 {
+			break
+		}
+		for _, r := range rows {
+			if err := fn(r); err != nil {
+				return n, err
+			}
+		}
+		n += len(rows)
+		lastID = rows[len(rows)-1].ID
+	}
+	return n, s.db.Migrator().DropTable(table)
+}
+
+// notFound maps GORM's missing-row error to ErrNotFound.
+func notFound(err error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrNotFound
+	}
+	return err
 }

@@ -20,3 +20,6 @@ tmp/
 web/test-results/
 web/playwright-report/
 web/.playwright/
+
+# chat history from a bare (non-docker) run
+/history/

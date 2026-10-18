@@ -13,11 +13,13 @@ on:
 jobs:
   core:
     runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0" # pure Go, like the image
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version: "1.26"
       - name: Vet
         run: go vet ./...
       - name: Build core + cli
@@ -26,6 +28,21 @@ jobs:
           go build ./cmd/evrctl
       - name: Test
         run: go test ./...
+
+  # History and cluster tests against a real ScyllaDB (dev/ci-scylla.sh starts
+  # one in Docker and runs the tests next to it).
+  scylla:
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_API_VERSION: "1.44"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Docker CLI
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends docker.io
+      - name: Test against ScyllaDB
+        run: dev/ci-scylla.sh
 
   web:
     runs-on: ubuntu-latest

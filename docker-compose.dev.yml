@@ -7,32 +7,106 @@ name: evrd-dev
 # files never clobber what's installed inside the containers.
 
 services:
+  scylla:
+    image: scylladb/scylla:6.2
+    # One small node for development: one core, little memory, no tuning checks.
+    command: --smp 1 --memory 750M --overprovisioned 1 --developer-mode 1
+    volumes:
+      - scylla-data:/var/lib/scylla
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES' >/dev/null"]
+      interval: 5s
+      retries: 60
+    # internal only — evrd reaches it as scylla:9042
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: evrd
+      POSTGRES_PASSWORD: evrd
+      POSTGRES_DB: evrd
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "evrd"]
+      interval: 2s
+      retries: 30
+    # internal only — evrd reaches it as postgres:5432
+
   ircd:
     image: ghcr.io/ergochat/ergo:stable # internal upstream (ircd:6667)
+    environment:
+      # Every evrd user connects from evrd's one address: don't throttle it
+      # (the e2e suite alone opens dozens of connections).
+      ERGO__SERVER__IP_LIMITS__COUNT: "false"
+      ERGO__SERVER__IP_LIMITS__THROTTLE: "false"
 
+  # Two evrd nodes, both live-reloading from the source. Users are spread
+  # across them; the load balancer sends anyone anywhere.
   evrd:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    environment:
+      EVRD_NODE_ID: node-a
+      EVRD_INTERNAL_URL: http://evrd:8099
+      EVRD_INTERNAL_IRC_ADDR: evrd:6699
+      EVRD_CLUSTER_SECRET: dev-cluster-secret
     depends_on:
-      - ircd
+      ircd:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      scylla:
+        condition: service_healthy
     volumes:
       - .:/src
       - go-build-cache:/root/.cache/go-build
       - go-mod-cache:/go/pkg/mod
       - evrd-data:/var/lib/evrd
+
+  evrd2:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    # Its own build directory, so the two nodes' rebuilds don't collide.
+    command: ["air", "-c", "dev/air.toml", "-tmp_dir", "tmp/b", "-build.cmd", "go build -buildvcs=false -o ./tmp/b/evrd ./cmd/evrd", "-build.bin", "tmp/b/evrd"]
+    environment:
+      EVRD_NODE_ID: node-b
+      EVRD_INTERNAL_URL: http://evrd2:8099
+      EVRD_INTERNAL_IRC_ADDR: evrd2:6699
+      EVRD_CLUSTER_SECRET: dev-cluster-secret
+    depends_on:
+      ircd:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      scylla:
+        condition: service_healthy
+    volumes:
+      - .:/src
+      - go-build-cache:/root/.cache/go-build
+      - go-mod-cache:/go/pkg/mod
+
+  # Round-robin load balancer for IRC and the API (deploy/lb.conf).
+  lb:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./deploy/lb.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - evrd
+      - evrd2
     ports:
       - "6667:6667"
       - "6697:6697" # IRC
-      - "8097:8097" # WebSocket
-      - "8098:8098" # admin/client API (HTTP + WS)
+      - "8098:8098" # HTTP/WebSocket API (the web app reaches it through vite)
 
   web:
     image: node:22-alpine
     working_dir: /app
     command: sh -c "corepack enable && pnpm install && pnpm dev --host --port 5173"
     environment:
-      VITE_API_URL: http://localhost:8098
+      EVRD_API: http://lb:8098 # vite proxies /api + /auth here, via the load balancer
     volumes:
       - ./web:/app
       - web-node-modules:/app/node_modules
@@ -40,6 +114,8 @@ services:
       - "5173:5173"
 
 volumes:
+  pg-data:
+  scylla-data:
   go-build-cache:
   go-mod-cache:
   evrd-data:

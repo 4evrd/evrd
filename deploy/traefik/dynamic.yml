@@ -1,0 +1,53 @@
+# Traefik routes for an evrd cluster. Round-robin is right: any node takes
+# any connection and forwards it to the user's owner.
+#
+# Needs a Traefik with TCP health checks (tested with 3.7.15; 3.5 rejects
+# them). Without them Traefik keeps sending every other IRC connection to a
+# dead node.
+tcp:
+  routers:
+    # HostSNI(`*`) with no tls section: plain TCP passthrough. On 6697 TLS
+    # passes through untouched and terminates at evrd.
+    irc:
+      entryPoints: [irc]
+      rule: "HostSNI(`*`)"
+      service: evrd-irc
+    ircs:
+      entryPoints: [ircs]
+      rule: "HostSNI(`*`)"
+      service: evrd-ircs
+  services:
+    evrd-irc:
+      loadBalancer:
+        servers:
+          - address: "evrd:6667"
+          - address: "evrd2:6667"
+        healthCheck:
+          interval: 3s
+          timeout: 2s
+    evrd-ircs:
+      loadBalancer:
+        servers:
+          - address: "evrd:6697"
+          - address: "evrd2:6697"
+        healthCheck:
+          interval: 3s
+          timeout: 2s
+
+http:
+  routers:
+    api:
+      entryPoints: [api]
+      rule: "PathPrefix(`/`)"
+      service: evrd-api
+  services:
+    evrd-api:
+      loadBalancer:
+        servers:
+          - url: "http://evrd:8098"
+          - url: "http://evrd2:8098"
+        # Takes a dead node out of rotation within seconds.
+        healthCheck:
+          path: /api/config
+          interval: 3s
+          timeout: 2s

@@ -1,16 +1,18 @@
 import { execSync } from 'node:child_process'
 
-// Ensure the e2e account exists. Best-effort: it's created via evrctl inside the
-// running evrd container. If it already exists (or the stack is managed
-// elsewhere) this is a no-op — the tests just need the account present.
+// Ensure the e2e accounts exist (a user and an admin). Best-effort: they're
+// created via evrctl inside the running evrd container; if they already exist
+// this is a no-op — the tests just need them present.
 export default function globalSetup() {
-  try {
-    execSync(
-      'docker compose -f ../docker-compose.dev.yml exec -T evrd ' +
-        'go run ./cmd/evrctl -db sqlite:/var/lib/evrd/evrd.db user add e2e e2epass',
-      { stdio: 'ignore' },
-    )
-  } catch {
-    // already exists, or seeded out-of-band — fine
+  for (const args of ['user add e2e e2epass1', 'user add -admin e2eadmin e2eadminpass']) {
+    try {
+      execSync(
+        'docker compose -f ../docker-compose.dev.yml exec -T evrd ' +
+          `go run ./cmd/evrctl -config deploy/evrd.dev.conf ${args}`,
+        { stdio: 'ignore' },
+      )
+    } catch {
+      // already exists, or seeded out-of-band — fine
+    }
   }
 }

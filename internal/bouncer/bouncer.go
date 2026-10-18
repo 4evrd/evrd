@@ -1,43 +1,126 @@
-// Package bouncer is the core of evrd: it owns the store and the set of live
-// upstream connections, auto-connecting enabled networks on startup and
-// connecting/disconnecting on demand.
+// Package bouncer is the core of evrd: it owns the set of live upstream
+// connections on this node, connecting and disconnecting on demand. It also
+// tracks attached IRC clients and web chat sockets per user, so the client
+// limit can be enforced and a user stopped everywhere at once.
+//
+// In a cluster a user's connections run only on the node that owns the user
+// (see internal/cluster): SetOwnership tells the bouncer which users those
+// are, and the cluster starts and stops users as ownership moves.
 package bouncer
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net"
 	"sync"
+	"time"
 
+	"code.ircforever.org/ircforever/evrd/internal/history"
 	"code.ircforever.org/ircforever/evrd/internal/store"
 	"code.ircforever.org/ircforever/evrd/internal/upstream"
 )
 
-type Bouncer struct {
-	store store.Store
-	log   *slog.Logger
+// ErrSuspended is returned when connecting a suspended user's network.
+var ErrSuspended = errors.New("account suspended")
 
-	mu    sync.Mutex
-	ctx   context.Context
-	conns map[int64]*entry
+// ErrTooManyClients is returned when a user is at their client limit.
+var ErrTooManyClients = errors.New("too many clients attached")
+
+// ErrNotOwner is returned when connecting a network of a user this node
+// doesn't own.
+var ErrNotOwner = errors.New("this user is served by another node")
+
+type Bouncer struct {
+	store   store.Store
+	history history.Store
+	log     *slog.Logger
+
+	mu      sync.Mutex
+	ctx     context.Context
+	conns   map[int64]*entry               // network id -> live connection
+	clients map[int64]map[*client]struct{} // user id -> attached IRC clients
+	streams map[int64]map[*client]struct{} // user id -> open web chat sockets
+
+	// owns reports whether this node runs a user; nil means every user (a
+	// node outside a cluster, or a test).
+	owns func(userID int64) bool
+	// dial opens upstream connections for a user; nil dials directly.
+	dial func(ctx context.Context, userID int64, host string, port int) (net.Conn, error)
+}
+
+// SetDialer sets how upstream connections are opened (pacing, source
+// addresses — see internal/outbound). Call it before Start.
+func (b *Bouncer) SetDialer(dial func(ctx context.Context, userID int64, host string, port int) (net.Conn, error)) {
+	b.dial = dial
 }
 
 type entry struct {
 	conn   *upstream.Conn
+	userID int64
 	cancel context.CancelFunc
 }
 
-func New(st store.Store, log *slog.Logger) *Bouncer {
-	return &Bouncer{store: st, log: log, conns: map[int64]*entry{}}
+type client struct{ close func() }
+
+func New(st store.Store, hist history.Store, log *slog.Logger) *Bouncer {
+	return &Bouncer{
+		store: st, history: hist, log: log, conns: map[int64]*entry{},
+		clients: map[int64]map[*client]struct{}{}, streams: map[int64]map[*client]struct{}{},
+	}
 }
 
-// Store exposes the persistence layer to callers (the API).
+// SetOwnership makes the bouncer run only the users owns reports. Call it
+// before Start.
+func (b *Bouncer) SetOwnership(owns func(userID int64) bool) { b.owns = owns }
+
+// Owns reports whether this node runs the user.
+func (b *Bouncer) Owns(userID int64) bool { return b.owns == nil || b.owns(userID) }
+
+// Store exposes the account database to callers (the API).
 func (b *Bouncer) Store() store.Store { return b.store }
 
-// Start records the governing context and auto-connects enabled networks.
+// History exposes the chat history store.
+func (b *Bouncer) History() history.Store { return b.history }
+
+// DeleteNetwork disconnects a network and deletes it with its history.
+func (b *Bouncer) DeleteNetwork(userID, networkID int64) error {
+	b.Disconnect(networkID)
+	if err := b.store.DeleteNetwork(userID, networkID); err != nil {
+		return err
+	}
+	return b.history.DeleteNetwork(networkID)
+}
+
+// DeleteUser stops a user's connections and deletes the account, its
+// networks and their history.
+func (b *Bouncer) DeleteUser(userID int64) error {
+	b.StopUser(userID)
+	nets, err := b.store.ListNetworks(userID)
+	if err != nil {
+		return err
+	}
+	if err := b.store.DeleteUser(userID); err != nil {
+		return err
+	}
+	for _, n := range nets {
+		if err := b.history.DeleteNetwork(n.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Start records the governing context. Outside a cluster it also connects
+// every enabled network of users who aren't suspended; in one, the cluster
+// starts each user as this node takes them on.
 func (b *Bouncer) Start(ctx context.Context) error {
 	b.mu.Lock()
 	b.ctx = ctx
 	b.mu.Unlock()
+	if b.owns != nil {
+		return nil
+	}
 
 	nets, err := b.store.AllEnabledNetworks()
 	if err != nil {
@@ -58,6 +141,14 @@ func (b *Bouncer) Connect(networkID int64) error {
 	if err != nil {
 		return err
 	}
+	if u, err := b.store.UserByID(n.UserID); err != nil {
+		return err
+	} else if u.Suspended {
+		return ErrSuspended
+	}
+	if !b.Owns(n.UserID) {
+		return ErrNotOwner
+	}
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -69,12 +160,27 @@ func (b *Bouncer) Connect(networkID int64) error {
 		parent = context.Background()
 	}
 	cctx, cancel := context.WithCancel(parent)
-	conn := upstream.New(n, b.log, func(m store.Message) {
-		if err := b.store.AddMessage(m); err != nil {
-			b.log.Warn("persist message", "err", err)
+	var dial func(ctx context.Context, host string, port int) (net.Conn, error)
+	if b.dial != nil {
+		userID := n.UserID
+		dial = func(ctx context.Context, host string, port int) (net.Conn, error) {
+			return b.dial(ctx, userID, host, port)
 		}
+	}
+	conn := upstream.New(n, b.log, upstream.Options{
+		Persist: func(m history.Message) {
+			if err := b.history.Add(m); err != nil {
+				b.log.Warn("persist message", "err", err)
+			}
+		},
+		OnChannels: func(channels []string) {
+			if err := b.store.SetNetworkChannels(networkID, channels); err != nil {
+				b.log.Warn("save channels", "network", n.Name, "err", err)
+			}
+		},
+		Dial: dial,
 	})
-	b.conns[networkID] = &entry{conn: conn, cancel: cancel}
+	b.conns[networkID] = &entry{conn: conn, userID: n.UserID, cancel: cancel}
 	go conn.Run(cctx)
 	b.log.Info("connecting network", "network", n.Name, "host", n.Host)
 
@@ -91,6 +197,63 @@ func (b *Bouncer) Disconnect(networkID int64) error {
 		e.cancel()
 	}
 	return b.store.SetNetworkEnabled(networkID, false)
+}
+
+// Reconnect restarts a running network's connection so new settings take
+// effect; a network that isn't running stays down.
+func (b *Bouncer) Reconnect(networkID int64) error {
+	if _, ok := b.ConnFor(networkID); !ok {
+		return nil
+	}
+	b.Disconnect(networkID)
+	return b.Connect(networkID)
+}
+
+// StopUser drops every upstream connection, attached client and web chat
+// socket of a user — for suspension, deletion, and handing the user to
+// another node. Networks stay enabled, so ResumeUser (here or on the next
+// owner) brings them back.
+func (b *Bouncer) StopUser(userID int64) {
+	b.mu.Lock()
+	var stop []*entry
+	for id, e := range b.conns {
+		if e.userID == userID {
+			stop = append(stop, e)
+			delete(b.conns, id)
+		}
+	}
+	var kick []*client
+	for c := range b.clients[userID] {
+		kick = append(kick, c)
+	}
+	for c := range b.streams[userID] {
+		kick = append(kick, c)
+	}
+	b.mu.Unlock()
+	for _, e := range stop {
+		e.cancel()
+	}
+	for _, c := range kick {
+		c.close()
+	}
+}
+
+// ResumeUser reconnects a user's enabled networks, if this node runs them.
+func (b *Bouncer) ResumeUser(userID int64) {
+	if !b.Owns(userID) {
+		return // the owner, if any, starts them
+	}
+	nets, err := b.store.ListNetworks(userID)
+	if err != nil {
+		return
+	}
+	for _, n := range nets {
+		if n.Enabled {
+			if err := b.Connect(n.ID); err != nil {
+				b.log.Warn("resume network", "network", n.Name, "err", err)
+			}
+		}
+	}
 }
 
 // ConnFor returns the running connection for a network, if any.
@@ -110,4 +273,169 @@ func (b *Bouncer) Status(networkID int64) upstream.Status {
 		return c.Status()
 	}
 	return upstream.StatusDisconnected
+}
+
+// AttachClient registers an attached IRC client for a user, refusing it when
+// the user already has max clients (0 = unlimited). close is called to kick
+// the client; the returned release must be called when it detaches.
+func (b *Bouncer) AttachClient(userID int64, max int, close func()) (release func(), err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	set := b.clients[userID]
+	if max > 0 && len(set) >= max {
+		return nil, ErrTooManyClients
+	}
+	if set == nil {
+		set = map[*client]struct{}{}
+		b.clients[userID] = set
+	}
+	c := &client{close: close}
+	set[c] = struct{}{}
+	return func() {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		delete(b.clients[userID], c)
+		if len(b.clients[userID]) == 0 {
+			delete(b.clients, userID)
+		}
+	}, nil
+}
+
+// TrackStream registers an open web chat socket, so StopUser can close it.
+// The returned release must be called when it closes.
+func (b *Bouncer) TrackStream(userID int64, close func()) (release func()) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.streams[userID] == nil {
+		b.streams[userID] = map[*client]struct{}{}
+	}
+	c := &client{close: close}
+	b.streams[userID][c] = struct{}{}
+	return func() {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		delete(b.streams[userID], c)
+		if len(b.streams[userID]) == 0 {
+			delete(b.streams, userID)
+		}
+	}
+}
+
+// Clients is the number of IRC clients a user has attached.
+func (b *Bouncer) Clients(userID int64) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.clients[userID])
+}
+
+// ClientsByUser is the number of attached IRC clients per user.
+func (b *Bouncer) ClientsByUser() map[int64]int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make(map[int64]int, len(b.clients))
+	for uid, set := range b.clients {
+		out[uid] = len(set)
+	}
+	return out
+}
+
+// Usage is a server-wide snapshot for the admin overview.
+type Usage struct {
+	ConnectedNetworks int `json:"connectedNetworks"`
+	AttachedClients   int `json:"attachedClients"`
+}
+
+func (b *Bouncer) Usage() Usage {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	u := Usage{}
+	for _, e := range b.conns {
+		if e.conn.Status() == upstream.StatusConnected {
+			u.ConnectedNetworks++
+		}
+	}
+	for _, set := range b.clients {
+		u.AttachedClients += len(set)
+	}
+	return u
+}
+
+// PruneLoop is periodic housekeeping until ctx is done. Every node trims the
+// backlog of the users it runs to their limit. The leader (one node in a
+// cluster; nil leader means this node) also drops the history of networks
+// that no longer exist (deleted by evrctl, or while their owner was down),
+// expired web sessions, and leases of deleted users.
+// backlog returns a user's line limit (0 = keep everything).
+func (b *Bouncer) PruneLoop(ctx context.Context, interval time.Duration, backlog func(store.User) int, leader func() bool) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		b.prune(backlog, leader == nil || leader())
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+func (b *Bouncer) prune(backlog func(store.User) int, leader bool) {
+	users, err := b.store.ListUsers()
+	if err != nil {
+		b.log.Warn("prune: list users", "err", err)
+		return
+	}
+	for _, u := range users {
+		keep := backlog(u)
+		if keep <= 0 || !b.Owns(u.ID) {
+			continue
+		}
+		nets, err := b.store.ListNetworks(u.ID)
+		if err != nil {
+			continue
+		}
+		for _, n := range nets {
+			if err := b.history.Prune(n.ID, keep); err != nil {
+				b.log.Warn("prune backlog", "network", n.ID, "err", err)
+			}
+		}
+	}
+	if !leader {
+		return
+	}
+	b.dropOrphanHistory(users)
+	if err := b.store.DeleteExpiredSessions(time.Now()); err != nil {
+		b.log.Warn("expire sessions", "err", err)
+	}
+	if err := b.store.DeleteOrphanLeases(); err != nil {
+		b.log.Warn("drop leases of deleted users", "err", err)
+	}
+}
+
+// dropOrphanHistory deletes history whose network is gone.
+func (b *Bouncer) dropOrphanHistory(users []store.User) {
+	exists := map[int64]bool{}
+	for _, u := range users {
+		nets, err := b.store.ListNetworks(u.ID)
+		if err != nil {
+			return // can't tell what exists; don't delete anything
+		}
+		for _, n := range nets {
+			exists[n.ID] = true
+		}
+	}
+	ids, err := b.history.Networks()
+	if err != nil {
+		b.log.Warn("list history", "err", err)
+		return
+	}
+	for _, id := range ids {
+		if !exists[id] {
+			if err := b.history.DeleteNetwork(id); err != nil {
+				b.log.Warn("drop orphan history", "network", id, "err", err)
+			} else {
+				b.log.Info("dropped history of a deleted network", "network", id)
+			}
+		}
+	}
 }

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Builds the evrd daemon and the evrctl CLI.
-FROM golang:1.25-alpine AS build
+FROM golang:1.26-alpine AS build
 WORKDIR /src
 
 # Dependencies first for layer caching.
@@ -20,6 +20,6 @@ RUN adduser -D -u 1000 evrd && \
 COPY --from=build /out/evrd /usr/local/bin/evrd
 COPY --from=build /out/evrctl /usr/local/bin/evrctl
 USER evrd
-# IRC (6667 plain / 6697 TLS) and WebSocket (8097) listeners.
-EXPOSE 6667 6697 8097
+# IRC (6667 plain / 6697 TLS) and the HTTP/WebSocket API (8098).
+EXPOSE 6667 6697 8098
 ENTRYPOINT ["evrd"]

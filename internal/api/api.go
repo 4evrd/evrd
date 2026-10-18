@@ -1,47 +1,66 @@
-// Package api exposes evrd's HTTP + WebSocket admin/client API, consumed by the
-// web app: login, network CRUD, connect/disconnect, message history, and a live
-// per-network message stream.
+// Package api exposes evrd's HTTP + WebSocket API, consumed by the web app:
+// sign-in, the signed-in user's own account, their networks and message
+// history, a live per-network message stream, and user administration.
+//
+// Every route except /api/config and the sign-in endpoints needs a session
+// cookie (see internal/auth); /api/admin/* also needs the admin role. A user's
+// own resources are always looked up through the session, never a request
+// field, so one user can't reach another's.
+//
+// In a cluster, a request about a user is served by the node that owns that
+// user (see cluster.go): any other node forwards it there.
 package api
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
-	"golang.org/x/crypto/bcrypt"
 
+	"code.ircforever.org/ircforever/evrd/internal/accounts"
+	"code.ircforever.org/ircforever/evrd/internal/auth"
 	"code.ircforever.org/ircforever/evrd/internal/bouncer"
+	"code.ircforever.org/ircforever/evrd/internal/config"
 	"code.ircforever.org/ircforever/evrd/internal/store"
+	"code.ircforever.org/ircforever/evrd/internal/version"
 )
 
-type Server struct {
-	b   *bouncer.Bouncer
-	log *slog.Logger
-	up  websocket.Upgrader
-
-	mu     sync.Mutex
-	tokens map[string]int64 // bearer token -> user id
+// StatusRunner runs a *status command for the web chat (the IRC listener
+// implements it, so both share one set of commands).
+type StatusRunner interface {
+	WebStatus(userID int64, n store.Network, text string, out func(string))
 }
 
-func NewServer(b *bouncer.Bouncer, log *slog.Logger) *Server {
+type Server struct {
+	b      *bouncer.Bouncer
+	status StatusRunner // nil: *status isn't available in the web chat
+	cl     Cluster      // nil: a single node that serves every user
+	secret string       // the cluster secret
+	acc    *accounts.Service
+	auth   *auth.Manager
+	cfg    *config.Config
+	log    *slog.Logger
+	up     websocket.Upgrader
+}
+
+func NewServer(b *bouncer.Bouncer, acc *accounts.Service, am *auth.Manager, cfg *config.Config, status StatusRunner, log *slog.Logger) *Server {
 	return &Server{
-		b:      b,
-		log:    log,
-		tokens: map[string]int64{},
-		up:     websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+		b: b, acc: acc, auth: am, cfg: cfg, status: status, log: log,
+		up: websocket.Upgrader{CheckOrigin: auth.CheckWebSocketOrigin},
 	}
 }
 
+func (s *Server) st() store.Store { return s.b.Store() }
+
 // ListenAndServe runs the API until ctx is cancelled.
 func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
-	srv := &http.Server{Addr: addr, Handler: s.handler()}
+	srv := &http.Server{Addr: addr, Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
 		srv.Shutdown(context.Background())
@@ -53,260 +72,137 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 	return nil
 }
 
-func (s *Server) handler() http.Handler {
+// Handler is the public API, behind the load balancer.
+func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/login", s.handleLogin)
-	mux.HandleFunc("GET /api/networks", s.auth(s.handleListNetworks))
-	mux.HandleFunc("POST /api/networks", s.auth(s.handleCreateNetwork))
-	mux.HandleFunc("DELETE /api/networks/{id}", s.auth(s.handleDeleteNetwork))
-	mux.HandleFunc("POST /api/networks/{id}/connect", s.auth(s.handleConnect))
-	mux.HandleFunc("POST /api/networks/{id}/disconnect", s.auth(s.handleDisconnect))
-	mux.HandleFunc("GET /api/networks/{id}/messages", s.auth(s.handleMessages))
-	mux.HandleFunc("GET /api/networks/{id}/buffers", s.auth(s.handleBuffers))
-	mux.HandleFunc("GET /api/networks/{id}/stream", s.handleStream) // auth via ?token
-	return cors(mux)
+
+	// sign-in
+	mux.HandleFunc("GET /api/config", s.handleConfig)
+	mux.HandleFunc("POST /auth/password", s.auth.PasswordLogin)
+	mux.HandleFunc("GET /auth/login", s.auth.OIDCLogin)
+	mux.HandleFunc("GET /auth/callback", s.auth.Callback)
+	mux.HandleFunc("POST /auth/logout", s.auth.Logout)
+
+	s.routes(mux)
+	return auth.SameOrigin(mux)
 }
 
-// --- auth ----------------------------------------------------------------
+// routes registers the signed-in routes. Each is served on the node that
+// owns the user it's about: the caller for /api/me and /api/networks, the
+// {id} user for /api/admin/users/{id}.
+func (s *Server) routes(mux *http.ServeMux) {
+	caller := func(r *http.Request) int64 { return auth.User(r).ID }
+	target := pathID
+	user := func(h http.HandlerFunc) http.HandlerFunc { return s.auth.RequireUser(s.atOwner(caller, h)) }
+	admin := func(h http.HandlerFunc) http.HandlerFunc { return s.auth.RequireAdmin(s.atOwner(target, h)) }
+	adminAny := s.auth.RequireAdmin // about every user: served here
 
-type ctxKey int
+	// the signed-in user's own account
+	mux.HandleFunc("GET /api/me", user(s.handleMe))
+	mux.HandleFunc("PATCH /api/me", user(s.handleUpdateMe))
+	mux.HandleFunc("DELETE /api/me", user(s.handleDeleteMe))
+	mux.HandleFunc("POST /api/me/password", user(s.handleChangePassword))
+	mux.HandleFunc("GET /api/me/sessions", user(s.handleListSessions))
+	mux.HandleFunc("DELETE /api/me/sessions/{id}", user(s.handleRevokeSession))
+	mux.HandleFunc("POST /api/me/sessions/revoke-others", user(s.handleRevokeOtherSessions))
+	mux.HandleFunc("GET /api/me/client-passwords", user(s.handleListClientPasswords))
+	mux.HandleFunc("POST /api/me/client-passwords", user(s.handleCreateClientPassword))
+	mux.HandleFunc("DELETE /api/me/client-passwords/{id}", user(s.handleDeleteClientPassword))
 
-const userKey ctxKey = 0
+	// networks
+	mux.HandleFunc("GET /api/networks", user(s.handleListNetworks))
+	mux.HandleFunc("POST /api/networks", user(s.handleCreateNetwork))
+	mux.HandleFunc("PATCH /api/networks/{id}", user(s.handleUpdateNetwork))
+	mux.HandleFunc("DELETE /api/networks/{id}", user(s.handleDeleteNetwork))
+	mux.HandleFunc("POST /api/networks/{id}/connect", user(s.handleConnect))
+	mux.HandleFunc("POST /api/networks/{id}/disconnect", user(s.handleDisconnect))
+	mux.HandleFunc("GET /api/networks/{id}/messages", user(s.handleMessages))
+	mux.HandleFunc("GET /api/networks/{id}/buffers", user(s.handleBuffers))
+	mux.HandleFunc("GET /api/networks/{id}/stream", user(s.handleStream))
 
-func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		uid, ok := s.userFor(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-		if !ok {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		next(w, r.WithContext(context.WithValue(r.Context(), userKey, uid)))
-	}
+	// administration
+	mux.HandleFunc("GET /api/admin/overview", adminAny(s.handleAdminOverview))
+	mux.HandleFunc("GET /api/admin/users", adminAny(s.handleAdminListUsers))
+	mux.HandleFunc("POST /api/admin/users", adminAny(s.handleAdminCreateUser))
+	mux.HandleFunc("GET /api/admin/users/{id}", admin(s.handleAdminGetUser))
+	mux.HandleFunc("PATCH /api/admin/users/{id}", admin(s.handleAdminUpdateUser))
+	mux.HandleFunc("DELETE /api/admin/users/{id}", admin(s.handleAdminDeleteUser))
+	mux.HandleFunc("POST /api/admin/users/{id}/password", admin(s.handleAdminSetPassword))
+	mux.HandleFunc("POST /api/admin/users/{id}/sessions/revoke", admin(s.handleAdminRevokeSessions))
 }
 
-func (s *Server) userFor(token string) (int64, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	uid, ok := s.tokens[token]
-	return uid, ok
-}
-
-func userID(r *http.Request) int64 {
-	v, _ := r.Context().Value(userKey).(int64)
-	return v
-}
-
-func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
-	var req struct{ Username, Password string }
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	u, err := s.b.Store().UserByUsername(req.Username)
-	if err != nil || bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)) != nil {
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
-		return
-	}
-	token := newToken()
-	s.mu.Lock()
-	s.tokens[token] = u.ID
-	s.mu.Unlock()
-	writeJSON(w, map[string]any{"token": token, "user": u.Username})
-}
-
-// --- networks ------------------------------------------------------------
-
-func (s *Server) handleListNetworks(w http.ResponseWriter, r *http.Request) {
-	nets, err := s.b.Store().ListNetworks(userID(r))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	out := make([]map[string]any, 0, len(nets))
-	for _, n := range nets {
-		out = append(out, s.networkDTO(n))
-	}
-	writeJSON(w, out)
-}
-
-func (s *Server) handleCreateNetwork(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name, Host                        string
-		Port                              int
-		TLS                               bool
-		Nick, Username, Realname, Password string
-		Channels                          []string
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	if req.Port == 0 {
-		req.Port = 6697
-	}
-	n, err := s.b.Store().CreateNetwork(store.Network{
-		UserID: userID(r), Name: req.Name, Host: req.Host, Port: req.Port, TLS: req.TLS,
-		Nick: req.Nick, Username: req.Username, Realname: req.Realname,
-		Password: req.Password, Channels: req.Channels, Enabled: false,
+// handleConfig tells the sign-in page which methods exist and the app how
+// clients attach. Public.
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"passwordLogin": s.cfg.Auth.PasswordLogin,
+		"sso":           s.cfg.Auth.OIDCEnabled(),
+		"ssoLabel":      s.cfg.Auth.OIDCLabel,
+		"ircHost":       s.cfg.IRCHost,
+		"ircPorts":      ircPorts(s.cfg.Listen),
+		"version":       version.Version,
 	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, s.networkDTO(n))
 }
 
-func (s *Server) handleDeleteNetwork(w http.ResponseWriter, r *http.Request) {
-	id := pathID(r)
-	if _, ok := s.ownedNetwork(w, r, id); !ok {
-		return
-	}
-	s.b.Disconnect(id)
-	if err := s.b.Store().DeleteNetwork(userID(r), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+type portDTO struct {
+	Port int  `json:"port"`
+	TLS  bool `json:"tls"`
 }
 
-func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
-	id := pathID(r)
-	if _, ok := s.ownedNetwork(w, r, id); !ok {
-		return
-	}
-	if err := s.b.Connect(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, map[string]any{"status": string(s.b.Status(id))})
-}
-
-func (s *Server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
-	id := pathID(r)
-	if _, ok := s.ownedNetwork(w, r, id); !ok {
-		return
-	}
-	s.b.Disconnect(id)
-	writeJSON(w, map[string]any{"status": string(s.b.Status(id))})
-}
-
-func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
-	id := pathID(r)
-	if _, ok := s.ownedNetwork(w, r, id); !ok {
-		return
-	}
-	target := r.URL.Query().Get("target")
-	msgs, err := s.b.Store().RecentMessages(id, target, 200)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	out := make([]map[string]any, 0, len(msgs))
-	for _, m := range msgs {
-		out = append(out, messageDTO(m))
-	}
-	writeJSON(w, out)
-}
-
-func (s *Server) handleBuffers(w http.ResponseWriter, r *http.Request) {
-	id := pathID(r)
-	if _, ok := s.ownedNetwork(w, r, id); !ok {
-		return
-	}
-	targets, err := s.b.Store().Buffers(id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if targets == nil {
-		targets = []string{}
-	}
-	writeJSON(w, targets)
-}
-
-// handleStream upgrades to a WebSocket: it pushes live messages and accepts
-// {target,text} frames to send. Auth is via the ?token query param (browsers
-// can't set headers on a WS handshake).
-func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
-	uid, ok := s.userFor(r.URL.Query().Get("token"))
-	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-	id := pathID(r)
-	n, err := s.b.Store().NetworkByID(id)
-	if err != nil || n.UserID != uid {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-	conn, ok := s.b.ConnFor(id)
-	if !ok {
-		http.Error(w, "network not connected", http.StatusConflict)
-		return
-	}
-
-	ws, err := s.up.Upgrade(w, r, nil)
-	if err != nil {
-		return
-	}
-	defer ws.Close()
-
-	sub, unsub := conn.Subscribe()
-	defer unsub()
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for {
-			var in struct{ Target, Text string }
-			if err := ws.ReadJSON(&in); err != nil {
-				return
-			}
-			if in.Target != "" && in.Text != "" {
-				conn.SendMessage(in.Target, in.Text)
-			}
+// ircPorts lists the IRC listener ports, TLS first.
+func ircPorts(listen []string) []portDTO {
+	var tls, plain []portDTO
+	for _, l := range listen {
+		scheme, addr, ok := strings.Cut(l, "://")
+		if !ok {
+			scheme, addr = "tcp", l
 		}
-	}()
-
-	for {
-		select {
-		case m, ok := <-sub:
-			if !ok {
-				return
-			}
-			if err := ws.WriteJSON(messageDTO(m)); err != nil {
-				return
-			}
-		case <-done:
-			return
+		i := strings.LastIndex(addr, ":")
+		port, err := strconv.Atoi(addr[i+1:])
+		if i < 0 || err != nil {
+			continue
+		}
+		switch scheme {
+		case "ircs", "tls":
+			tls = append(tls, portDTO{port, true})
+		case "irc", "irc+insecure", "tcp":
+			plain = append(plain, portDTO{port, false})
 		}
 	}
+	return append(tls, plain...)
 }
 
 // --- helpers -------------------------------------------------------------
 
-func (s *Server) ownedNetwork(w http.ResponseWriter, r *http.Request, id int64) (store.Network, bool) {
-	n, err := s.b.Store().NetworkByID(id)
-	if err != nil || n.UserID != userID(r) {
-		http.Error(w, "not found", http.StatusNotFound)
-		return store.Network{}, false
+// decode reads a JSON body into v, answering 400 itself on failure.
+func decode(w http.ResponseWriter, r *http.Request, v any) bool {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(v); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad request")
+		return false
 	}
-	return n, true
+	return true
 }
 
-func (s *Server) networkDTO(n store.Network) map[string]any {
-	return map[string]any{
-		"id": n.ID, "name": n.Name, "host": n.Host, "port": n.Port,
-		"tls": n.TLS, "nick": n.Nick, "username": n.Username,
-		"realname": n.Realname, "channels": n.Channels,
-		"status": string(s.b.Status(n.ID)),
-	}
-}
-
-func messageDTO(m store.Message) map[string]any {
-	return map[string]any{
-		"target": m.Target, "sender": m.Sender, "kind": m.Kind,
-		"text": m.Text, "time": m.Time.Unix(),
+// fail maps an error to a response: validation problems are the caller's
+// fault (422) and their message is shown; anything else is logged and hidden.
+func (s *Server) fail(w http.ResponseWriter, err error) {
+	var ve *accounts.ValidationError
+	switch {
+	case errors.As(err, &ve):
+		writeErr(w, http.StatusUnprocessableEntity, ve.Message)
+	case errors.Is(err, accounts.ErrUsernameTaken), errors.Is(err, accounts.ErrLastAdmin):
+		writeErr(w, http.StatusConflict, err.Error())
+	case errors.Is(err, accounts.ErrInvalidCredentials):
+		writeErr(w, http.StatusUnprocessableEntity, "that isn't your current password")
+	case errors.Is(err, store.ErrNotFound):
+		writeErr(w, http.StatusNotFound, "not found")
+	case errors.Is(err, bouncer.ErrSuspended):
+		writeErr(w, http.StatusForbidden, "this account is suspended")
+	case errors.Is(err, bouncer.ErrNotOwner):
+		writeErr(w, http.StatusServiceUnavailable, moving)
+	default:
+		s.log.Error("api", "err", err)
+		writeErr(w, http.StatusInternalServerError, "something went wrong")
 	}
 }
 
@@ -315,26 +211,20 @@ func pathID(r *http.Request) int64 {
 	return id
 }
 
-func newToken() string {
-	b := make([]byte, 24)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-func writeJSON(w http.ResponseWriter, v any) {
+func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
 }
 
-func cors(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+func writeErr(w http.ResponseWriter, code int, msg string) {
+	writeJSON(w, code, map[string]string{"error": msg})
+}
+
+func unix(t *time.Time) any {
+	if t == nil || t.IsZero() {
+		return nil
+	}
+	return t.Unix()
 }

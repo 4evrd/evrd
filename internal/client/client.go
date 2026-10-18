@@ -3,8 +3,10 @@
 // accounts, attaches them to one of the user's networks, replays backlog, and
 // bridges live traffic to/from the upstream connection.
 //
-// Auth uses the server password (PASS): "user:password", or
-// "user/network:password" to pick a specific network.
+// Auth uses the server password (PASS): "user:secret", or
+// "user/network:secret" to pick a specific network, where secret is the
+// account password or an IRC client password. Each user may attach up to
+// their client limit at once.
 package client
 
 import (
@@ -15,6 +17,7 @@ import (
 	"strings"
 	"sync"
 
+	"code.ircforever.org/ircforever/evrd/internal/accounts"
 	"code.ircforever.org/ircforever/evrd/internal/bouncer"
 )
 
@@ -22,6 +25,9 @@ const serverName = "evrd"
 
 type Server struct {
 	b       *bouncer.Bouncer
+	cl      Cluster // nil: a single node that serves every user
+	secret  string
+	acc     *accounts.Service
 	log     *slog.Logger
 	tlsCert string
 	tlsKey  string
@@ -31,8 +37,8 @@ type Server struct {
 	tlsErr  error
 }
 
-func NewServer(b *bouncer.Bouncer, log *slog.Logger, tlsCert, tlsKey string) *Server {
-	return &Server{b: b, log: log, tlsCert: tlsCert, tlsKey: tlsKey}
+func NewServer(b *bouncer.Bouncer, acc *accounts.Service, log *slog.Logger, tlsCert, tlsKey string) *Server {
+	return &Server{b: b, acc: acc, log: log, tlsCert: tlsCert, tlsKey: tlsKey}
 }
 
 // ListenAndServe binds each IRC listener URL and serves until ctx is cancelled.
