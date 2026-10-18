@@ -5,11 +5,16 @@ import (
 	"os"
 
 	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/certs"
+	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/settings"
 )
 
 // SetSettings enables Admin → Settings.
 func (s *Server) SetSettings(m *settings.Manager) { s.settings = m }
+
+// SetCerts shows the certificates in use on Admin → Settings.
+func (s *Server) SetCerts(m *certs.Manager) { s.certs = m }
 
 func (s *Server) settingsDTO() map[string]any {
 	confs, _ := s.st().NodeConfs()
@@ -24,6 +29,7 @@ func (s *Server) settingsDTO() map[string]any {
 		"writeConf": c.WriteConf,
 		"clustered": c.Cluster.Enabled(),
 		"confs":     nodes,
+		"tls":       s.tlsDTO(c),
 	}
 }
 
@@ -61,6 +67,15 @@ func keys(m map[string]string) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
+	}
+	return out
+}
+
+// tlsDTO says who handles HTTPS and which certificates evrd serves.
+func (s *Server) tlsDTO(c *config.Config) map[string]any {
+	out := map[string]any{"httpsListen": c.HTTPSListen, "httpListen": c.HTTPListen}
+	if s.certs != nil {
+		out["report"] = s.certs.Report()
 	}
 	return out
 }

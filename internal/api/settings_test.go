@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/4evrd/evrd/internal/store"
@@ -40,5 +41,32 @@ func TestAdminSettings(t *testing.T) {
 	_, me = admin.do("GET", "/api/me", nil)
 	if me["limits"].(map[string]any)["maxNetworks"] != 2.0 { // the test env's default
 		t.Fatalf("reset: %v", me["limits"])
+	}
+}
+
+func TestTLSSettings(t *testing.T) {
+	e := newEnv(t)
+	e.user("root", store.RoleAdmin)
+	admin := e.login("root")
+	_, out := admin.do("GET", "/api/admin/settings", nil)
+	tlsOut, _ := out["tls"].(map[string]any)
+	if tlsOut == nil || tlsOut["httpsListen"] != "" {
+		t.Fatalf("tls: %v", out["tls"])
+	}
+	// Let's Encrypt can't sign localhost: refused, not saved.
+	set := func(kv map[string]string) (int, map[string]any) {
+		return admin.do("PATCH", "/api/admin/settings", map[string]any{"set": kv})
+	}
+	if code, out := set(map[string]string{"tls": "acme"}); code != 422 || !strings.Contains(out["error"].(string), "public host name") {
+		t.Fatalf("acme with localhost: %d %v", code, out)
+	}
+	if code, out := set(map[string]string{"tls": "acme", "irc_host": "irc.example.org"}); code != 200 {
+		t.Fatalf("acme with a public host: %d %v", code, out)
+	}
+	if code, _ := set(map[string]string{"tls": "files"}); code != 422 {
+		t.Fatalf("files without paths: %d", code)
+	}
+	if code, _ := set(map[string]string{"tls": "letsencrypt"}); code != 422 {
+		t.Fatalf("an unknown source: %d", code)
 	}
 }

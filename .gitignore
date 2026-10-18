@@ -23,3 +23,4 @@ web/.playwright/
 
 # chat history from a bare (non-docker) run
 /history/
+/dist/

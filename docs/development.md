@@ -135,6 +135,9 @@ to `main`, once CI passes, it looks at the commits since the last tag:
 It tags `vX.Y.Z`, publishes a GitHub release with notes grouped by type, and
 the images are pushed as `ghcr.io/4evrd/evrd:X.Y.Z` and `:X.Y` (plus `latest`
 and the commit sha, as on every push to `main`); `evrd -version` reports it.
+The `binaries` job attaches `evrd_<os>_<arch>.tar.gz` archives (evrd, evrctl
+and the web app, built by `scripts/dist.sh`) with a BSD-style `SHA256` file —
+what the [OpenBSD installer](openbsd.md) downloads.
 Config: `.releaserc.json`. Pull requests have their commit messages checked
 with commitlint (`commitlint.config.mjs`). Versions started from a `v0.0.0`
 baseline, so evrd stays 0.x until a breaking change says otherwise.

@@ -8,6 +8,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -15,12 +16,14 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/sandbox"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/version"
 )
@@ -32,7 +35,8 @@ commands:
   version                                  print evrctl version
   genkey                                   print a new secret_key (EVRD_SECRET_KEY) for encrypting saved passwords
   user add [-admin] [-email e] <name> [password]
-                                           create an account (no password = SSO / client passwords only)
+                                           create an account (no password = SSO / client passwords only;
+                                           "-" reads it from stdin)
   user list                                list accounts
   user passwd <name> <password>            set an account's password
   user role <name> user|admin              change an account's role
@@ -104,6 +108,11 @@ func userCmd(cfg *config.Config, args []string) {
 	if err != nil {
 		fatal("secret key: %v", err)
 	}
+	// Run as evrd's user (when started as root), so a database this creates
+	// is evrd's to write.
+	if err := sandbox.Drop(cfg.User); err != nil {
+		fatal("user: %v", err)
+	}
 	st, err := store.Open(cfg.DB)
 	if err != nil {
 		fatal("open store: %v", err)
@@ -134,6 +143,13 @@ func userCmd(cfg *config.Config, args []string) {
 		in := accounts.CreateInput{Username: rest[0], Email: *email, Role: store.RoleUser}
 		if len(rest) == 2 {
 			in.Password = rest[1]
+		}
+		if in.Password == "-" { // from stdin, kept out of ps and shell history
+			line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+			if err != nil && line == "" {
+				fatal("read password: %v", err)
+			}
+			in.Password = strings.TrimRight(line, "\r\n")
 		}
 		if *admin {
 			in.Role = store.RoleAdmin

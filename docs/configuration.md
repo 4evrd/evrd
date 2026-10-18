@@ -12,7 +12,12 @@ are stored in the database and win over the file (see below).
 |---|---|---|
 | `listen` | `irc+insecure://127.0.0.1:6667` | an IRC listener for clients; repeat for several. `ircs://:6697` (TLS) or `irc+insecure://:6667` |
 | `api` | `:8098` | HTTP + WebSocket API the web app talks to |
-| `tls_cert`, `tls_key` | self-signed | certificate for `ircs://` listeners (PEM files) |
+| `tls` | `files` if `tls_cert` is set, else `selfsigned` | where certificates come from: `acme` (Let's Encrypt), `selfsigned` or `files`; see [HTTPS and certificates](#https-and-certificates) |
+| `tls_cert`, `tls_key` | — | PEM files for `tls files` |
+| `acme_email`, `acme_hosts`, `acme_ca` | —, `public_url`'s host and `irc_host`, Let's Encrypt | Let's Encrypt's contact address, the names to cover, and the ACME directory |
+| `https_listen`, `http_listen` | — | evrd serves the web app over HTTPS itself (e.g. `:443`), and redirects plain HTTP (e.g. `:80`) |
+| `web_root` | — | the built web app (`web/build`) for evrd to serve on `api` and `https_listen`, without nginx |
+| `chroot`, `user` | — | confine evrd after startup; see [Confinement](#confinement-chroot-and-user) |
 | `db` (`EVRD_DB`) | `sqlite:evrd.db` | accounts and settings: `postgres://user:pass@host/evrd?sslmode=disable` or `sqlite:/path/evrd.db` |
 | `history` (`EVRD_HISTORY`) | `pebble:history` | chat history: `pebble:/var/lib/evrd/history` (one node) or `scylla://host1,host2:9042/evrd` (shared) |
 | `secret_key` (`EVRD_SECRET_KEY`), `secret_key_file`, `secret_key_old` | — | encrypts saved network passwords; see [Saved passwords](#saved-passwords) |
@@ -47,15 +52,18 @@ Environment — those are locked in the UI). **Reset** removes a value set here,
 falling back to evrd.conf or the default.
 
 **Editable:** `irc_host`, `public_url`, `max_networks`, `max_clients`,
-`backlog_lines`, `connect_rate`, `bindhost`, `password_login`, `session_ttl`,
+`backlog_lines`, `connect_rate`, `bindhost`, `tls`, `acme_email`, `acme_hosts`,
+`acme_ca`, `tls_cert`, `tls_key`, `password_login`, `session_ttl`,
 `cookie_secure`, the `oidc_*` directives, `otel_endpoint`, `otel_interval`,
 `metrics_url`. Most apply live on every node within a few seconds; `public_url`,
 the SSO provider (`oidc_issuer`, `oidc_client_id`, `oidc_client_secret`) and
-metrics export (`otel_*`) are marked *Restart needed* until evrd restarts. The
+metrics export (`otel_*`) and the certificate files (`tls_cert`, `tls_key`)
+are marked *Restart needed* until evrd restarts. The
 client secret is stored encrypted (with `secret_key`) and never shown back.
 
 **Startup settings stay in the file/environment** and are only shown: `listen`,
-`api`, `db`, `history`, TLS files, cluster identity (`node_id`,
+`api`, `https_listen`, `http_listen`, `web_root`, `chroot`, `user`, `db`,
+`history`, cluster identity (`node_id`,
 `internal_*`, `cluster_secret`), `upstream_bind` / `upstream_prefix6` and the
 `secret_key*` directives. evrd needs them before it can reach the database, and
 some differ per node.
@@ -162,10 +170,76 @@ TIME itself); and the addresses allowed to sign in, web and IRC.
 sasluser, bindhost, quitmsg, encoding, trustallcerts, trustpki, floodrate,
 floodburst, joindelay.
 
+## HTTPS and certificates
+
+evrd's own TLS ports — the `ircs://` IRC listeners, and `https_listen` when
+evrd serves the web app itself — share one certificate source, set with `tls`
+(or in **Admin → Settings → HTTPS & TLS**, where it can be switched while evrd
+runs):
+
+| `tls` | |
+|---|---|
+| `acme` | Let's Encrypt: evrd gets a certificate for each name in `acme_hosts` (default: `public_url`'s host and `irc_host`) on first use and renews it 30 days before it expires. Picking it accepts the CA's subscriber agreement. |
+| `selfsigned` | made once and kept. Browsers and IRC clients ask you to accept it. |
+| `files` | `tls_cert` and `tls_key` (PEM, with the chain), from certbot, acme-client or your own CA. Read at startup and again whenever the file changes (not from inside a chroot: restart evrd after renewing there). |
+
+Certificates evrd gets or makes (and the ACME account) are kept in the
+database, encrypted with `secret_key`, so every node of a cluster serves the
+same ones and nothing is written to disk.
+
+**Who serves HTTPS** for the web app is your choice:
+
+- **evrd itself** — set `https_listen :443` and `http_listen :80`, and
+  `web_root` to the built web app. No proxy or web server is needed; port 80
+  redirects to HTTPS and answers Let's Encrypt's `http-01` challenge (443
+  answers `tls-alpn-01`). For Let's Encrypt, the names must resolve to this
+  machine and both ports must be reachable.
+
+  ```
+  public_url   https://bnc.example.org
+  irc_host     bnc.example.org
+  https_listen :443
+  http_listen  :80
+  web_root     /var/lib/evrd/web
+  tls          acme
+  acme_email   ops@example.org
+  ```
+
+- **a proxy in front** (nginx, Caddy, Traefik, relayd, a cloud load balancer)
+  — leave `https_listen` unset; the proxy terminates TLS and forwards to
+  `api`. evrd's certificate then only matters for the IRC TLS ports.
+
+The settings page says which of the two is in use and shows each
+certificate's issuer, names and expiry (or why getting one failed).
+
+## Confinement (chroot and user)
+
+```
+chroot /var/evrd
+user   _evrd
+```
+
+Started as root, evrd binds its ports (so 80 and 443 work), reads its config,
+`secret_key_file` and `tls_cert`, then chroots into `chroot`, switches to
+`user`, and from then on runs unprivileged. On OpenBSD it also `unveil`s only
+its data, the web app and name resolution, and `pledge`s
+`stdio rpath wpath cpath fattr flock inet dns`: no exec, no other files.
+
+Local paths (`db sqlite:…`, `history pebble:…`, `web_root`) must be under the
+chroot; write them as seen from outside (`sqlite:/var/evrd/data/evrd.db`) and
+evrd translates them. Name resolution inside the chroot needs `etc/resolv.conf`
+and `etc/hosts` there (the OpenBSD rc.d script copies them at every start).
+`settings_write_conf` is turned off, since the config file is outside.
+`evrctl`, run as root with the same config, switches to `user` too, so files
+it creates stay evrd's.
+
+The [OpenBSD installer](openbsd.md) sets all of this up.
+
 ## Saved passwords
 
-Network passwords (the SASL password and server passwords) and the values
-set in Admin → Settings (such as the SSO client secret) are encrypted in the
+Network passwords (the SASL password and server passwords), the values
+set in Admin → Settings (such as the SSO client secret) and the keys of the
+certificates evrd keeps are encrypted in the
 database with AES-256-GCM under a key that lives outside it:
 
 ```

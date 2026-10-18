@@ -15,6 +15,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="docs/configuration.md">Configuration</a> ·
   <a href="docs/irc-clients.md">IRC clients</a> ·
+  <a href="docs/openbsd.md">OpenBSD</a> ·
   <a href="docs/clustering.md">Clustering</a> ·
   <a href="docs/development.md">Development</a>
 </p>
@@ -53,8 +54,11 @@
 
 ## Quick start
 
-You need a Linux host with Docker (Compose v2). evrd runs as three containers:
-the bouncer, its web app, and Postgres. Chat history is kept on a volume.
+You need a Linux host with Docker (Compose v2) — or, on OpenBSD, see
+[Installing on OpenBSD](docs/openbsd.md): one script, no Docker.
+
+evrd runs as three containers: the bouncer, its web app, and Postgres. Chat
+history is kept on a volume.
 
 **1. Get the deployment files**
 
@@ -120,16 +124,14 @@ bnc.example.org {
 ```
 
 IRC clients connect to evrd directly on **6697** (TLS). evrd makes a
-self-signed certificate unless you give it one; to use a real one (e.g. the
-same Let's Encrypt certificate), mount it into the container and set:
+self-signed certificate for it unless you pick another source, in the web app
+under **Admin → Settings → HTTPS & TLS** (or `tls` in `evrd.conf`):
+**Let's Encrypt**, got and renewed by evrd itself (`tls acme`), or your own
+files (`tls_cert`, `tls_key`, re-read when they change; in Docker, mount
+them through the `./certs` volume in `docker-compose.yml`).
 
-```
-tls_cert /etc/evrd/certs/fullchain.pem
-tls_key  /etc/evrd/certs/privkey.pem
-```
-
-(uncomment the `./certs` volume in `docker-compose.yml`, and restart evrd when
-the certificate renews).
+evrd can also serve the web app over HTTPS itself, with no proxy at all — see
+[HTTPS and certificates](docs/configuration.md#https-and-certificates).
 
 ## Connecting an IRC client
 
@@ -222,20 +224,35 @@ Three things hold your data:
 
 ## Running without Docker
 
-evrd is a single static binary (Linux, macOS, BSD; amd64 and arm64):
+**OpenBSD:** [one script](docs/openbsd.md) installs evrd as a confined daemon
+(chroot, its own user, unveil and pledge), with Let's Encrypt and no database
+server:
 
 ```sh
-CGO_ENABLED=0 go build -o evrd   ./cmd/evrd     # Go 1.26
-CGO_ENABLED=0 go build -o evrctl ./cmd/evrctl
-cd web && pnpm install && pnpm build          # the web app → web/build/
+ftp https://raw.githubusercontent.com/4evrd/evrd/main/deploy/openbsd/install.sh
+sh install.sh
 ```
 
-Run `evrd -config /etc/evrd/evrd.conf` (as its own user, e.g. under systemd),
-serve `web/build/` as static files with a fallback to `index.html`, and proxy
-`/api/` (with WebSocket upgrade) and `/auth/` to evrd's `api` address — the
-nginx template in [`web/templates/`](web/templates/default.conf.template) shows
-how. `db sqlite:/var/lib/evrd/evrd.db` and `history pebble:/var/lib/evrd/history`
-need no database server at all.
+**Elsewhere** (Linux, FreeBSD, macOS; amd64 and arm64): each
+[release](https://github.com/4evrd/evrd/releases) has an archive per system
+with `evrd`, `evrctl` and the built web app. evrd can serve the web app and
+HTTPS itself:
+
+```
+web_root     /var/lib/evrd/web        # the archive's web/
+https_listen :443
+http_listen  :80
+tls          acme                     # Let's Encrypt
+db           sqlite:/var/lib/evrd/evrd.db
+history      pebble:/var/lib/evrd/history
+chroot       /var/lib/evrd            # started as root: confine it
+user         evrd
+```
+
+Run `evrd -config /etc/evrd/evrd.conf` under your init system. SQLite and the
+Pebble history need no database server at all. To build it yourself:
+`CGO_ENABLED=0 go build ./cmd/evrd ./cmd/evrctl` (Go 1.26) and
+`cd web && pnpm install && pnpm build`.
 
 ## More nodes
 

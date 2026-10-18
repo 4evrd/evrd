@@ -25,6 +25,7 @@ import (
 
 	"github.com/4evrd/evrd/internal/cluster"
 	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/listen"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/telemetry"
 )
@@ -44,7 +45,7 @@ func (s *Server) SetCluster(cl Cluster, secret string) { s.cl, s.secret = cl, se
 // ListenInternal accepts clients forwarded by other nodes. It must only be
 // reachable between nodes.
 func (s *Server) ListenInternal(ctx context.Context, addr string) {
-	ln, err := net.Listen("tcp", addr)
+	ln, err := listen.TCP(addr)
 	if err != nil {
 		s.log.Error("internal irc listen", "addr", addr, "err", err)
 		return

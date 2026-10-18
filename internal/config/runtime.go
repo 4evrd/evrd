@@ -27,9 +27,10 @@ type Spec struct {
 	Group string `json:"group"`
 	Label string `json:"label"`
 	Help  string `json:"help"`
-	// Kind is int, bool, string, list (space-separated), duration, float, or
-	// secret (a string that's never shown back).
-	Kind string `json:"kind"`
+	// Kind is int, bool, string, list (space-separated), duration, float,
+	// choice (one of Options), or secret (a string that's never shown back).
+	Kind    string   `json:"kind"`
+	Options []string `json:"options,omitempty"`
 	// Restart is set when a change only takes effect after evrd restarts.
 	Restart bool `json:"restart"`
 	// Env is the environment variable that overrides it, if any.
@@ -86,6 +87,25 @@ var Specs = []Spec{
 		Help:  "Local addresses (or host names) users may choose to connect from. Space-separated.",
 		get:   func(c *Config) string { return strings.Join(c.Outbound.BindHosts, " ") },
 		reset: func(c *Config) { c.Outbound.BindHosts = nil }},
+
+	{Key: "tls", Group: "HTTPS & TLS", Label: "Certificate", Kind: "choice", Options: []string{"acme", "selfsigned", "files"},
+		Help: "For the IRC ports, and for the web app when evrd serves HTTPS itself. Let's Encrypt (acme) gets and renews one automatically, accepting the CA's subscriber agreement.",
+		get:  func(c *Config) string { return c.TLSSource() }},
+	{Key: "acme_email", Group: "HTTPS & TLS", Label: "Let's Encrypt contact email", Kind: "string",
+		Help: "Optional: where the CA writes about expiring certificates or policy changes.",
+		get:  func(c *Config) string { return c.TLS.ACMEEmail }},
+	{Key: "acme_hosts", Group: "HTTPS & TLS", Label: "Certificate host names", Kind: "list",
+		Help:  "Names the certificate covers. Empty: the public URL's host and the IRC host name.",
+		get:   func(c *Config) string { return strings.Join(c.TLS.ACMEHosts, " ") },
+		reset: func(c *Config) { c.TLS.ACMEHosts = nil }},
+	{Key: "acme_ca", Group: "HTTPS & TLS", Label: "ACME directory", Kind: "string",
+		Help: "Empty: Let's Encrypt. Their staging directory (https://acme-staging-v02.api.letsencrypt.org/directory) is for trying things out.",
+		get:  func(c *Config) string { return c.TLS.ACMECA }},
+	{Key: "tls_cert", Group: "HTTPS & TLS", Label: "Certificate file", Kind: "string", Restart: true,
+		Help: "PEM, with the chain. Read at startup, before evrd chroots.",
+		get:  func(c *Config) string { return c.TLSCert }},
+	{Key: "tls_key", Group: "HTTPS & TLS", Label: "Key file", Kind: "string", Restart: true,
+		get: func(c *Config) string { return c.TLSKey }},
 
 	{Key: "password_login", Group: "Sign-in", Label: "Password sign-in", Kind: "bool",
 		Help: "Let users sign in with a password. Turn off to use single sign-on only.",
@@ -153,6 +173,7 @@ func (c *Config) clone() *Config {
 	n.Outbound.BindHosts = slices.Clone(c.Outbound.BindHosts)
 	n.Outbound.Bind = slices.Clone(c.Outbound.Bind)
 	n.Secrets.Old = slices.Clone(c.Secrets.Old)
+	n.TLS.ACMEHosts = slices.Clone(c.TLS.ACMEHosts)
 	n.fromFile = c.fromFile
 	return &n
 }
@@ -204,6 +225,14 @@ func (c *Config) setEmpty(key string) {
 		c.Metrics.OTLPEndpoint = ""
 	case "metrics_url":
 		c.Metrics.QueryURL = ""
+	case "acme_email":
+		c.TLS.ACMEEmail = ""
+	case "acme_ca":
+		c.TLS.ACMECA = ""
+	case "tls_cert":
+		c.TLSCert = ""
+	case "tls_key":
+		c.TLSKey = ""
 	}
 }
 

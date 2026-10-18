@@ -70,3 +70,30 @@ test('users can’t see or change server settings', async ({ page }) => {
     await expect(page.getByText('Admins only.')).toBeVisible()
   } finally { await u.cleanup() }
 })
+
+test('HTTPS & TLS: who serves HTTPS, the certificate, and fields for the source picked', async ({ page }) => {
+  try {
+    await login(page, ADMIN, ADMIN_PASS)
+    await page.goto('/admin/settings')
+    // the dev stack serves HTTPS through nginx, not evrd
+    await expect(page.getByTestId('tls-who')).toContainText('A proxy in front of evrd handles HTTPS')
+    await expect(page.getByTestId('tls-certs')).toContainText('self-signed')
+
+    const source = page.getByTestId('setting-tls').getByRole('combobox')
+    await expect(source).toHaveValue('selfsigned')
+    await expect(page.getByTestId('setting-acme_email')).toHaveCount(0)
+    await source.selectOption('acme')
+    await expect(page.getByTestId('setting-acme_email')).toBeVisible()
+    await expect(page.getByTestId('setting-tls_cert')).toHaveCount(0)
+
+    // localhost can't get a Let's Encrypt certificate: refused, not saved
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByText(/needs a public host name/)).toBeVisible()
+    await source.selectOption('files')
+    await expect(page.getByTestId('setting-tls_cert')).toBeVisible()
+    await page.getByRole('button', { name: 'Discard' }).click()
+    await expect(source).toHaveValue('selfsigned')
+  } finally {
+    await restore(['tls'])
+  }
+})

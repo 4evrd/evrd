@@ -238,6 +238,15 @@ type Setting struct {
 	UpdatedBy string
 }
 
+// CertCacheEntry is a TLS certificate and key evrd keeps for itself: Let's
+// Encrypt's (the ACME client's cache) or the self-signed one, shared by
+// every node and encrypted like other secrets.
+type CertCacheEntry struct {
+	Key       string `gorm:"primaryKey;size:255"`
+	Data      string `gorm:"serializer:secret"`
+	UpdatedAt time.Time
+}
+
 // NodeConf is a node's last attempt to write the settings into its config
 // file (settings_write_conf).
 type NodeConf struct {
@@ -350,6 +359,12 @@ type Store interface {
 	SaveSettings(set map[string]string, del []string, by string) error
 	SetNodeConf(c NodeConf) error
 	NodeConfs() ([]NodeConf, error)
+
+	// TLS certificates evrd gets or makes (see CertCacheEntry). CertCache
+	// returns ErrNotFound for a missing key.
+	CertCache(key string) (string, error)
+	PutCertCache(key, data string) error
+	DeleteCertCache(key string) error
 	// DeleteNodesBefore drops nodes last heard from before t.
 	DeleteNodesBefore(t time.Time) error
 	// LiveNodes lists nodes that sent a heartbeat after since.

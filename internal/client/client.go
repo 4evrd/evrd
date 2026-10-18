@@ -19,6 +19,7 @@ import (
 
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/listen"
 )
 
 const serverName = "evrd"
@@ -58,11 +59,13 @@ func (s *Server) listen(ctx context.Context, url string) {
 	var err error
 	switch scheme {
 	case "irc", "irc+insecure", "tcp":
-		ln, err = net.Listen("tcp", addr)
+		ln, err = listen.TCP(addr)
 	case "ircs", "tls":
 		var conf *tls.Config
 		if conf, err = s.tlsConfig(); err == nil {
-			ln, err = tls.Listen("tcp", addr, conf)
+			if ln, err = listen.TCP(addr); err == nil {
+				ln = tls.NewListener(ln, conf)
+			}
 		}
 	default:
 		s.log.Warn("skipping unsupported IRC listener", "scheme", scheme, "addr", addr)

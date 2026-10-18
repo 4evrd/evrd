@@ -199,13 +199,17 @@ func (m *Manager) Save(set map[string]string, del []string, by string) error {
 	for _, k := range del {
 		delete(values, k)
 	}
-	if _, err := m.base.WithSettings(values); err != nil {
+	c, err := m.base.WithSettings(values)
+	if err != nil {
+		return err
+	}
+	if err := c.CheckTLS(); err != nil {
 		return err
 	}
 	if err := m.st.SaveSettings(set, del, by); err != nil {
 		return err
 	}
-	_, err := m.reload(false)
+	_, err = m.reload(false)
 	return err
 }
 
@@ -264,6 +268,9 @@ func (m *Manager) Bootstrap() []map[string]string {
 		{"key": "internal_listen", "value": c.Cluster.InternalListen},
 		{"key": "internal_url", "value": c.Cluster.InternalURL},
 		{"key": "secret_key", "value": map[bool]string{true: "set", false: "not set"}[c.Secrets.Key != "" || c.Secrets.KeyFile != ""]},
+		{"key": "web_root", "value": c.WebRoot},
+		{"key": "chroot", "value": c.Chroot},
+		{"key": "user", "value": c.User},
 		{"key": "settings_write_conf", "value": map[bool]string{true: "yes", false: "no"}[c.WriteConf]},
 		{"key": "config file", "value": c.Path},
 	}

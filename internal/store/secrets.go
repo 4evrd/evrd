@@ -232,7 +232,8 @@ func (serversSerializer) Value(_ context.Context, _ *schema.Field, _ reflect.Val
 	return string(b), err
 }
 
-// EncryptSecrets rewrites any network secret or saved setting that isn't
+// EncryptSecrets rewrites any network secret, saved setting or certificate
+// that isn't
 // encrypted under the current key (plaintext from before a key was set, or an
 // old key's). It reports how many rows it rewrote.
 func (s *gormStore) EncryptSecrets() (int, error) {
@@ -284,6 +285,28 @@ func (s *gormStore) EncryptSecrets() (int, error) {
 			return n, err
 		}
 		if err := s.db.Save(&st).Error; err != nil {
+			return n, err
+		}
+		n++
+	}
+
+	// And the TLS certificates' keys.
+	var crows []struct {
+		Key  string
+		Data string
+	}
+	if err := s.db.Table("cert_cache_entries").Select("key", "data").Scan(&crows).Error; err != nil {
+		return n, err
+	}
+	for _, r := range crows {
+		if current(r.Data) {
+			continue
+		}
+		var e CertCacheEntry
+		if err := s.db.First(&e, "key = ?", r.Key).Error; err != nil {
+			return n, err
+		}
+		if err := s.db.Save(&e).Error; err != nil {
 			return n, err
 		}
 		n++

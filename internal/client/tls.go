@@ -30,6 +30,12 @@ func (s *Server) tlsConfig() (*tls.Config, error) {
 	return s.tlsConf, s.tlsErr
 }
 
+// SetTLSConfig serves ircs:// listeners with conf (evrd's certificates, see
+// internal/certs) instead of reading tls_cert and tls_key.
+func (s *Server) SetTLSConfig(conf *tls.Config) {
+	s.tlsOnce.Do(func() { s.tlsConf = conf })
+}
+
 func selfSignedCert() (tls.Certificate, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

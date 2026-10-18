@@ -46,16 +46,7 @@ func (s *Server) InternalHandler() http.Handler {
 
 // ListenInternal runs the internal endpoint until ctx is cancelled.
 func (s *Server) ListenInternal(ctx context.Context, addr string) error {
-	srv := &http.Server{Addr: addr, Handler: s.InternalHandler(), ReadHeaderTimeout: 10 * time.Second}
-	go func() {
-		<-ctx.Done()
-		srv.Shutdown(context.Background())
-	}()
-	s.log.Info("internal api listening", "addr", addr)
-	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-		return err
-	}
-	return nil
+	return s.serve(ctx, "internal api", addr, s.InternalHandler(), nil)
 }
 
 // moving is the answer while a user is between nodes.

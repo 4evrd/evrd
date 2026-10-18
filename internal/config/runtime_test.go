@@ -107,3 +107,34 @@ func TestInlineComments(t *testing.T) {
 		t.Fatalf("comment not kept:\n%s", b)
 	}
 }
+
+func TestJail(t *testing.T) {
+	c := Default()
+	c.Chroot = "/var/evrd/"
+	c.DB = "sqlite:/var/evrd/data/evrd.db?_pragma=busy_timeout(5000)"
+	c.History = "pebble:/var/evrd/data/history"
+	c.WebRoot = "/var/evrd/web"
+	if err := c.Jail(); err != nil {
+		t.Fatal(err)
+	}
+	if c.DB != "sqlite:/data/evrd.db?_pragma=busy_timeout(5000)" || c.History != "pebble:/data/history" || c.WebRoot != "/web" {
+		t.Errorf("got %q %q %q", c.DB, c.History, c.WebRoot)
+	}
+
+	c = Default()
+	c.Chroot = "/var/evrd"
+	c.DB = "postgres://evrd:pw@db/evrd"
+	c.History = "scylla://a,b/evrd"
+	if err := c.Jail(); err != nil || c.DB != "postgres://evrd:pw@db/evrd" || c.History != "scylla://a,b/evrd" {
+		t.Errorf("servers changed: %v %q %q", err, c.DB, c.History)
+	}
+
+	for _, bad := range []string{"sqlite:/var/evrdx/evrd.db", "sqlite:/etc/evrd.db", "sqlite:evrd.db", "sqlite:/var/evrd/../x.db"} {
+		c = Default()
+		c.Chroot = "/var/evrd"
+		c.DB = bad
+		if err := c.Jail(); err == nil {
+			t.Errorf("%s: no error", bad)
+		}
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -18,12 +19,15 @@ import (
 	"github.com/4evrd/evrd/internal/api"
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/certs"
 	"github.com/4evrd/evrd/internal/client"
 	"github.com/4evrd/evrd/internal/cluster"
 	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/listen"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/outbound"
+	"github.com/4evrd/evrd/internal/sandbox"
 	"github.com/4evrd/evrd/internal/settings"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/telemetry"
@@ -73,9 +77,58 @@ func main() {
 	if cur == nil {
 		log.Warn("no secret_key set: network passwords are stored unencrypted (evrctl genkey makes a key)")
 	}
-	st, err := store.Open(cfg.DB)
+
+	// Certificates for the IRC ports and evrd's own HTTPS: files are read
+	// now, while they're in reach.
+	certMgr := certs.New(log)
+	if err := certMgr.LoadFiles(cfg.TLSCert, cfg.TLSKey); err != nil && cfg.TLSSource() == "files" {
+		log.Error("tls_cert", "err", err)
+		os.Exit(1)
+	}
+
+	// Confine evrd (chroot, user; unveil and pledge on OpenBSD) now that it
+	// has read what lives outside: the config, the keys, the certificate.
+	hostname, _ := os.Hostname()
+	dbDSN, histDSN, webRoot := cfg.DB, cfg.History, cfg.WebRoot
+	if sb := (sandbox.Config{Chroot: cfg.Chroot, User: cfg.User}); sb.Enabled() {
+		// Ports below 1024 need root: bind every port first.
+		addrs := append([]string{cfg.API, cfg.HTTPSListen, cfg.HTTPListen, cfg.Cluster.InternalListen, cfg.Cluster.InternalIRCListen}, cfg.Listen...)
+		if err := listen.Prebind(addrs...); err != nil {
+			log.Error("listen", "err", err)
+			os.Exit(1)
+		}
+		jail := *cfg
+		if err := jail.Jail(); err != nil {
+			log.Error("chroot", "err", err)
+			os.Exit(1)
+		}
+		dbDSN, histDSN, webRoot = jail.DB, jail.History, jail.WebRoot
+		if base.WriteConf && cfg.Chroot != "" {
+			log.Warn("settings_write_conf is off: the config file is outside the chroot")
+			base.WriteConf = false
+		}
+		sb.Read = []string{"/etc/resolv.conf", "/etc/hosts"}
+		if webRoot != "" {
+			sb.Read = append(sb.Read, webRoot)
+		}
+		if p, ok := localPath(dbDSN, "sqlite:"); ok {
+			sb.Write = append(sb.Write, filepath.Dir(p)) // the db and its -wal, -shm
+		}
+		if p, ok := localPath(histDSN, "pebble:"); ok {
+			sb.Write = append(sb.Write, p)
+		}
+		sb.Write = append(sb.Write, os.TempDir())
+		sandbox.Preload()
+		if err := sandbox.Enter(sb); err != nil {
+			log.Error("sandbox", "err", err)
+			os.Exit(1)
+		}
+		log.Info("sandboxed", "chroot", cfg.Chroot, "user", cfg.User)
+	}
+
+	st, err := store.Open(dbDSN)
 	if err != nil {
-		log.Error("open store", "dsn", cfg.DB, "err", err)
+		log.Error("open store", "dsn", dbDSN, "err", err)
 		os.Exit(1)
 	}
 	defer st.Close()
@@ -88,7 +141,7 @@ func main() {
 
 	nodeID := cfg.Cluster.NodeID
 	if nodeID == "" {
-		nodeID, _ = os.Hostname()
+		nodeID = hostname
 	}
 	sm, err := settings.New(st, base, nodeID, log)
 	if err != nil {
@@ -96,13 +149,18 @@ func main() {
 		os.Exit(1)
 	}
 	cfg = sm.Config()
+	certMgr.SetStore(st)
+	if err := certMgr.Apply(cfg); err != nil {
+		log.Error("tls", "err", err)
+		os.Exit(1)
+	}
 	if cfg.WriteConf && cfg.Cluster.Enabled() {
 		log.Warn("settings_write_conf is on in a cluster: every node rewrites its own config file — usually leave it off and let the database hold settings")
 	}
 
-	hist, err := history.Open(cfg.History)
+	hist, err := history.Open(histDSN)
 	if err != nil {
-		log.Error("open history", "store", redact(cfg.History), "err", err)
+		log.Error("open history", "store", redact(histDSN), "err", err)
 		os.Exit(1)
 	}
 	defer hist.Close()
@@ -218,6 +276,12 @@ func main() {
 	srv := api.NewServer(b, acc, am, cfg, irc, log)
 	srv.SetMetrics(metricsq.New(cfg.Metrics.QueryURL))
 	srv.SetSettings(sm)
+	irc.SetTLSConfig(certMgr.IRCConfig())
+	srv.SetCerts(certMgr)
+	if webRoot != "" {
+		srv.SetWebApp(webRoot)
+		log.Info("serving the web app", "dir", webRoot)
+	}
 
 	// Settings changed in the admin UI (here or on another node) apply live;
 	// the restart-only ones (public URL, the SSO provider, metrics export)
@@ -234,6 +298,9 @@ func main() {
 		acc.SetBindHosts(live.Outbound.BindHosts)
 		am.SetConfig(live.Auth)
 		ob.SetRate(live.Outbound.ConnectRate)
+		if err := certMgr.Apply(&live); err != nil {
+			log.Warn("tls", "err", err)
+		}
 		srv.SetConfig(&live)
 		if live.Metrics.QueryURL != metricsURL {
 			metricsURL = live.Metrics.QueryURL
@@ -253,6 +320,23 @@ func main() {
 		}()
 	}
 	go irc.ListenAndServe(ctx, cfg.Listen)
+	go certMgr.Run(ctx)
+	if cfg.HTTPSListen != "" {
+		go func() {
+			if err := srv.ListenAndServeTLS(ctx, cfg.HTTPSListen, certMgr.TLSConfig()); err != nil {
+				log.Error("https", "err", err)
+				stop()
+			}
+		}()
+	}
+	if cfg.HTTPListen != "" {
+		go func() {
+			if err := srv.ListenAndServeHTTP(ctx, cfg.HTTPListen, certMgr.HTTPHandler(cfg.HTTPSListen)); err != nil {
+				log.Error("http", "err", err)
+				stop()
+			}
+		}()
+	}
 
 	if err := srv.ListenAndServe(ctx, cfg.API); err != nil {
 		log.Error("api server", "err", err)
@@ -261,6 +345,15 @@ func main() {
 	// Shutting down: hand this node's users to the others before closing the
 	// stores underneath them.
 	<-clusterDone
+}
+
+// localPath is the file path in an SQLite or Pebble DSN (not a server's).
+func localPath(dsn, scheme string) (string, bool) {
+	if dsn == "" || strings.Contains(dsn, "://") {
+		return "", false
+	}
+	p, _, _ := strings.Cut(strings.TrimPrefix(dsn, scheme), "?")
+	return p, p != ""
 }
 
 // redact hides a password in a DSN for logging.

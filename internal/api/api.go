@@ -13,6 +13,7 @@ package api
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
@@ -28,7 +29,9 @@ import (
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/certs"
 	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/listen"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/settings"
 	"github.com/4evrd/evrd/internal/store"
@@ -52,6 +55,8 @@ type Server struct {
 	cfgp    atomic.Pointer[config.Config]
 	// settings, when set, edits the server settings (Admin → Settings).
 	settings *settings.Manager
+	certs    *certs.Manager // nil: no certificate report
+	webApp   string         // web_root: the built web app to serve, or ""
 	log      *slog.Logger
 	up       websocket.Upgrader
 }
@@ -69,13 +74,43 @@ func (s *Server) st() store.Store { return s.b.Store() }
 
 // ListenAndServe runs the API until ctx is cancelled.
 func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
-	srv := &http.Server{Addr: addr, Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	return s.serve(ctx, "api", addr, s.Handler(), nil)
+}
+
+// ListenAndServeTLS serves the API and web app over HTTPS (https_listen),
+// with conf's certificates.
+func (s *Server) ListenAndServeTLS(ctx context.Context, addr string, conf *tls.Config) error {
+	h := s.Handler()
+	hsts := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		h.ServeHTTP(w, r)
+	})
+	return s.serve(ctx, "https", addr, hsts, conf)
+}
+
+// ListenAndServeHTTP serves h on a plain-HTTP port (http_listen: the
+// redirect to HTTPS and ACME challenges).
+func (s *Server) ListenAndServeHTTP(ctx context.Context, addr string, h http.Handler) error {
+	return s.serve(ctx, "http (to https)", addr, h, nil)
+}
+
+func (s *Server) serve(ctx context.Context, name, addr string, h http.Handler, conf *tls.Config) error {
+	ln, err := listen.TCP(addr)
+	if err != nil {
+		return err
+	}
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second, TLSConfig: conf}
 	go func() {
 		<-ctx.Done()
 		srv.Shutdown(context.Background())
 	}()
-	s.log.Info("api listening", "addr", addr)
-	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+	s.log.Info(name+" listening", "addr", addr)
+	if conf != nil {
+		err = srv.ServeTLS(ln, "", "")
+	} else {
+		err = srv.Serve(ln)
+	}
+	if err != http.ErrServerClosed {
 		return err
 	}
 	return nil
@@ -93,6 +128,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /auth/logout", s.auth.Logout)
 
 	s.routes(mux)
+	if s.webApp != "" {
+		mux.Handle("/api/", http.NotFoundHandler()) // not the app's index.html
+		mux.Handle("/auth/", http.NotFoundHandler())
+		mux.Handle("/", webApp(s.webApp))
+	}
 	return auth.SameOrigin(mux)
 }
 

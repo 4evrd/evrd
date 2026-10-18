@@ -7,8 +7,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
+	"net/url"
 	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -33,6 +37,25 @@ type Config struct {
 	// self-signed cert is generated at startup (fine for dev).
 	TLSCert string
 	TLSKey  string
+	// TLS says where the certificate for evrd's TLS listeners (the IRC
+	// ports, and HTTPSListen) comes from.
+	TLS TLS
+	// HTTPSListen, when set (e.g. ":443"), makes evrd serve the web app and
+	// API over HTTPS itself; HTTPListen (e.g. ":80") then sends browsers to
+	// it and answers Let's Encrypt's challenges. Unset, a proxy in front of
+	// evrd handles HTTPS.
+	HTTPSListen string
+	HTTPListen  string
+	// WebRoot, when set, is the built web app (web/build) for evrd to serve
+	// itself on the API address, so no separate web server is needed.
+	WebRoot string
+
+	// Chroot and User confine evrd once it has read its config, keys and
+	// certificates: it chroots to Chroot and runs as User from then on (and
+	// on OpenBSD also unveils and pledges). Paths under Chroot (db, history,
+	// web_root) are used as seen from inside it.
+	Chroot string
+	User   string
 
 	// PublicURL is where the web app is served, e.g. https://bnc.example.org.
 	// The OIDC callback is PublicURL + /auth/callback.
@@ -54,6 +77,84 @@ type Config struct {
 	Path string
 	// fromFile records the directives the file set.
 	fromFile map[string]bool
+}
+
+// TLS configures where certificates come from.
+type TLS struct {
+	// Source is "files" (TLSCert and TLSKey), "acme" (Let's Encrypt, or
+	// another ACME CA) or "selfsigned". Empty: files when TLSCert is set,
+	// else selfsigned.
+	Source string
+	// ACMEEmail is the contact for the CA's expiry and policy mail.
+	ACMEEmail string
+	// ACMEHosts are the names to get certificates for. Empty: public_url's
+	// host and irc_host.
+	ACMEHosts []string
+	// ACMECA is the CA's ACME directory URL. Empty: Let's Encrypt.
+	ACMECA string
+}
+
+// TLSSource is the certificate source in effect.
+func (c *Config) TLSSource() string {
+	if c.TLS.Source != "" {
+		return c.TLS.Source
+	}
+	if c.TLSCert != "" && c.TLSKey != "" {
+		return "files"
+	}
+	return "selfsigned"
+}
+
+// CertHosts are the names evrd's certificate must cover: acme_hosts, or
+// public_url's host and irc_host.
+func (c *Config) CertHosts() []string {
+	var out []string
+	add := func(h string) {
+		h = strings.ToLower(strings.TrimSpace(h))
+		if h != "" && !slices.Contains(out, h) {
+			out = append(out, h)
+		}
+	}
+	if len(c.TLS.ACMEHosts) > 0 {
+		for _, h := range c.TLS.ACMEHosts {
+			add(h)
+		}
+		return out
+	}
+	if u, err := url.Parse(c.PublicURL); err == nil {
+		add(u.Hostname())
+	}
+	add(c.IRCHost)
+	return out
+}
+
+// ACMEHosts are the CertHosts a public CA will sign: not IPs, localhost or
+// single labels.
+func (c *Config) ACMEHosts() []string {
+	var out []string
+	for _, h := range c.CertHosts() {
+		if net.ParseIP(h) != nil || h == "localhost" || !strings.Contains(h, ".") ||
+			strings.HasSuffix(h, ".localhost") || strings.HasSuffix(h, ".local") {
+			continue
+		}
+		out = append(out, h)
+	}
+	return out
+}
+
+// CheckTLS reports a certificate setup that can't work.
+func (c *Config) CheckTLS() error {
+	switch c.TLSSource() {
+	case "acme":
+		if len(c.ACMEHosts()) == 0 {
+			return errors.New("Let's Encrypt needs a public host name: set the public URL, the IRC host name or the certificate host names")
+		}
+	case "files":
+		if c.TLSCert == "" || c.TLSKey == "" {
+			return errors.New("certificate files: set both the certificate and the key file")
+		}
+	}
+	return nil
 }
 
 // Secrets configures encryption of saved network passwords. Every node must
@@ -349,6 +450,29 @@ func (c *Config) set(key, val string) error {
 		c.TLSCert = val
 	case "tls_key":
 		c.TLSKey = val
+	case "tls":
+		switch val {
+		case "files", "acme", "selfsigned":
+			c.TLS.Source = val
+		default:
+			err = errors.New("files, acme or selfsigned")
+		}
+	case "acme_email":
+		c.TLS.ACMEEmail = val
+	case "acme_hosts": // several per line
+		c.TLS.ACMEHosts = append(c.TLS.ACMEHosts, strings.Fields(val)...)
+	case "acme_ca":
+		c.TLS.ACMECA = val
+	case "https_listen":
+		c.HTTPSListen = val
+	case "http_listen":
+		c.HTTPListen = val
+	case "web_root":
+		c.WebRoot = val
+	case "chroot":
+		c.Chroot = val
+	case "user":
+		c.User = val
 	case "public_url":
 		c.PublicURL = strings.TrimRight(val, "/")
 	case "irc_host":
@@ -429,4 +553,44 @@ func parseBool(v string) (bool, error) {
 		return false, nil
 	}
 	return false, fmt.Errorf("want yes or no, got %q", v)
+}
+
+// Jail rewrites the local paths (an SQLite db, a Pebble history, web_root)
+// as seen from inside Chroot: /var/evrd/data/evrd.db becomes /data/evrd.db.
+// They must be absolute and under Chroot.
+func (c *Config) Jail() error {
+	if c.Chroot == "" {
+		return nil
+	}
+	root := filepath.Clean(c.Chroot)
+	inside := func(name, p string) (string, error) {
+		if !filepath.IsAbs(p) {
+			return "", fmt.Errorf("%s %s: with chroot, use an absolute path under %s", name, p, root)
+		}
+		rel, err := filepath.Rel(root, filepath.Clean(p))
+		if err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+			return "", fmt.Errorf("%s %s: not under the chroot %s", name, p, root)
+		}
+		return filepath.Join("/", rel), nil
+	}
+	for _, d := range []struct {
+		name, scheme string
+		dst          *string
+	}{{"db", "sqlite:", &c.DB}, {"history", "pebble:", &c.History}, {"web_root", "", &c.WebRoot}} {
+		v := *d.dst
+		if v == "" || strings.Contains(v, "://") {
+			continue // a database server: not a path
+		}
+		v = strings.TrimPrefix(v, d.scheme)
+		path, query, _ := strings.Cut(v, "?")
+		p, err := inside(d.name, path)
+		if err != nil {
+			return err
+		}
+		if query != "" {
+			p += "?" + query
+		}
+		*d.dst = d.scheme + p
+	}
+	return nil
 }

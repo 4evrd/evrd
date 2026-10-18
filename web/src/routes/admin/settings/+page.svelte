@@ -38,6 +38,20 @@
     errs = { ...errs, [f.key]: '' }
   }
   const SOURCE = { default: 'Default', file: 'evrd.conf', ui: 'Set here', env: 'Environment' }
+  const CHOICE = { acme: 'Let’s Encrypt (automatic)', selfsigned: 'Self-signed', files: 'Certificate files' }
+
+  // HTTPS & TLS: show only the fields for the certificate source picked.
+  const tlsSource = $derived(data ? valueOf(data.fields.find((f) => f.key === 'tls') || { key: 'tls', value: '' }) : '')
+  function shown(f) {
+    if (f.key.startsWith('acme_')) return tlsSource === 'acme'
+    if (f.key === 'tls_cert' || f.key === 'tls_key') return tlsSource === 'files'
+    return true
+  }
+  const DAY = 86400
+  function expiry(t) {
+    const days = Math.floor((t - Date.now() / 1000) / DAY)
+    return days < 0 ? 'expired' : days === 0 ? 'expires today' : `expires in ${days} day${days === 1 ? '' : 's'}`
+  }
 
   function check(f, v) {
     if (f.kind === 'int' && !/^\d+$/.test(v.trim())) return 'A whole number, 0 or more.'
@@ -101,8 +115,41 @@
       {#each groups as g}
         <section class="card" aria-labelledby="g-{g.name}">
           <h2 id="g-{g.name}" class="group-h">{g.name}</h2>
+          {#if g.name === 'HTTPS & TLS' && data.tls}
+            {@const t = data.tls}
+            <div class="callout tls-who" data-testid="tls-who">
+              <Icon name={t.httpsListen ? 'lock' : 'info'} />
+              <span>
+                {#if t.httpsListen}
+                  <b>evrd serves HTTPS itself</b> on <span class="code">{t.httpsListen}</span>{#if t.httpListen}, and sends plain HTTP on <span class="code">{t.httpListen}</span> there{/if} — with the certificate below, which the IRC TLS ports use too.
+                {:else}
+                  <b>A proxy in front of evrd handles HTTPS</b> for the web app (<span class="code">https_listen</span> isn’t set in evrd.conf), so the certificate below is for the IRC TLS ports.
+                  To let evrd serve HTTPS itself, set <span class="code">https_listen :443</span> (and <span class="code">http_listen :80</span>) in evrd.conf and restart.
+                {/if}
+              </span>
+            </div>
+            {#if t.report?.certs?.length}
+              <div class="rows certs" data-testid="tls-certs">
+                {#each t.report.certs as c}
+                  <div class="row" style="--cols:minmax(0,1fr) auto">
+                    <span class="od-field">
+                      <span class="name mono">{c.host}</span>
+                      <span class="sub">
+                        {#if c.error}{c.error}
+                        {:else if c.pending}Not got yet — the first visit (or evrd, within minutes) asks Let’s Encrypt for it
+                        {:else}{c.issuer}{#if c.names?.length} · {c.names.join(', ')}{/if}{/if}
+                      </span>
+                    </span>
+                    {#if c.error}<span class="chip bad">Failed</span>
+                    {:else if c.pending}<span class="chip warn">Pending</span>
+                    {:else if c.notAfter}<span class="chip" class:ok={c.notAfter - Date.now() / 1000 > 14 * DAY} class:warn={c.notAfter - Date.now() / 1000 <= 14 * DAY}>{expiry(c.notAfter)}</span>{/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          {/if}
           <div class="rows-s">
-            {#each g.fields as f (f.key)}
+            {#each g.fields.filter(shown) as f (f.key)}
               {@const locked = f.source === 'env'}
               <div class="setting" data-testid="setting-{f.key}">
                 <div class="od-stack meta">
@@ -115,7 +162,11 @@
                   </div>
                 </div>
                 <div class="control">
-                  {#if f.kind === 'bool'}
+                  {#if f.kind === 'choice'}
+                    <select class="select" id="s-{f.key}" disabled={locked} value={valueOf(f)} onchange={(e) => edit(f, e.currentTarget.value)}>
+                      {#each f.options as o}<option value={o}>{CHOICE[o] || o}</option>{/each}
+                    </select>
+                  {:else if f.kind === 'bool'}
                     <Switch id="s-{f.key}" checked={valueOf(f) === 'yes'} label={f.label} disabled={locked} onchange={(v) => edit(f, v ? 'yes' : 'no')} />
                   {:else}
                     <input class="input" class:mono={f.kind !== 'string' || f.key.includes('url') || f.key.includes('host')} id="s-{f.key}"
@@ -181,6 +232,9 @@
   .control .input { flex: 1; min-width: 0; }
   .err-t { flex-basis: 100%; color: var(--bad); font-size: var(--fs-xs); text-align: right; }
   .chip.src-ui { color: var(--primary); }
+  .tls-who { margin-bottom: var(--s4); }
+  .certs { margin-bottom: var(--s4); }
+  .control .select { flex: 1; min-width: 0; }
   .chip.src-env { color: var(--warn); }
   .save-bar { position: sticky; bottom: var(--s4); z-index: 5; display: flex; align-items: center; gap: var(--s2); margin-top: var(--s5); padding: var(--s3) var(--s4); border-radius: var(--r-card); background: var(--bg-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
   @media (max-width: 799px) { .setting { grid-template-columns: minmax(0, 1fr); gap: var(--s2); } .control { justify-content: flex-start; } }
