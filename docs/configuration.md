@@ -183,7 +183,7 @@ runs):
 |---|---|
 | `acme` | Let's Encrypt: evrd gets a certificate for each name in `acme_hosts` (default: `public_url`'s host and `irc_host`) on first use and renews it 30 days before it expires. Picking it accepts the CA's subscriber agreement. |
 | `selfsigned` | made once and kept. Browsers and IRC clients ask you to accept it. |
-| `files` | `tls_cert` and `tls_key` (PEM, with the chain), from certbot, acme-client or your own CA. Read at startup and again whenever the file changes (not from inside a chroot: restart evrd after renewing there). |
+| `files` | `tls_cert` and `tls_key` (PEM, with the chain), from certbot, acme-client or your own CA. Read at startup, again whenever the file changes, and on `SIGHUP` (`rcctl reload evrd`), with no restart. In a chroot, keep a copy inside it and point these at the copy, as the OpenBSD installer does. |
 
 Certificates evrd gets or makes (and the ACME account) are kept in the
 database, encrypted with `secret_key`, so every node of a cluster serves the
