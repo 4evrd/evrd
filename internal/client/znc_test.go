@@ -35,7 +35,12 @@ func anyHas(lines []string, s string) bool {
 func TestDetachHidesAChannelUntilJoin(t *testing.T) {
 	r := newRig(t)
 	ic := r.attach("alice/one:alice-password")
-	ic.expect("u@h JOIN #one") // the upstream joined
+	ic.expect(" 376 ")
+	// the upstream has joined (it may have before this client subscribed)
+	eventually(t, "joined #one", func() bool {
+		m, _ := r.hist.Recent(r.network("one").ID, "#one", 10)
+		return len(m) > 0 && m[0].Kind == "join"
+	})
 	ic.send("DETACH #one")
 	ic.expect("PART #one :Detached")
 	eventually(t, "detached saved", func() bool { return r.network("one").Channel("#one").Detached })
