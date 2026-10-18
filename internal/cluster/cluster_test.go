@@ -153,11 +153,9 @@ func TestDrainHandsOffAtOnce(t *testing.T) {
 	if len(b.heldIDs()) != 0 || len(b.running) != 0 {
 		t.Fatal("drain left users running")
 	}
-	// b's row ages out; on a's next ticks it owns everyone, without waiting
-	// for leases to expire.
-	for i := 0; i < 4; i++ {
-		tick(clock, a)
-	}
+	// b has left the live set: a's next tick owns everyone, without waiting
+	// for b's heartbeat to go stale or its leases to expire.
+	tick(clock, a)
 	if per := exactlyOne(t, st, clock, 50, a, b); per["a"] != 50 {
 		t.Fatalf("after drain: %v", per)
 	}

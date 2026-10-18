@@ -172,7 +172,8 @@ func (c *Cluster) Run(ctx context.Context) {
 	}
 }
 
-// Drain stops and releases every user this node holds.
+// Drain stops and releases every user this node holds and takes the node
+// out of the live set (on shutdown), so another node picks them up at once.
 func (c *Cluster) Drain() {
 	c.mu.Lock()
 	held := c.held
@@ -184,6 +185,13 @@ func (c *Cluster) Drain() {
 		if err := c.st.ReleaseLease(uid, c.self.ID, now); err != nil {
 			c.log.Warn("release lease", "user", uid, "err", err)
 		}
+	}
+	// Leave the live set too, so the others place these users elsewhere on
+	// their next tick rather than once our heartbeat goes stale.
+	gone := c.self
+	gone.HeartbeatAt = time.Unix(0, 0)
+	if err := c.st.UpsertNode(gone); err != nil {
+		c.log.Warn("leave the cluster", "err", err)
 	}
 	if len(held) > 0 {
 		c.log.Info("handed off users", "count", len(held))
