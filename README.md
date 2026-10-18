@@ -147,7 +147,10 @@ Playwright specs in `web/e2e` drive every page against the real stack: sign-in
 and forced password changes, networks, chat (unread counts, mentions, members,
 topics, commands, `*status`), IRC clients (attaching a native client with a
 client password, backlog playback, web ↔ client sync, limits), the account
-page, admin users and the bouncer overview, and the traffic chart read back
+page, admin users and the bouncer overview, the network editor, real
+connections to the dev ergo (SASL against a registered account, its self-signed
+TLS refused then trusted by fingerprint, trust-all, failover across servers,
+detach), and the traffic chart read back
 from VictoriaMetrics. `e2e/irc.js` is a raw IRC client that attaches to evrd
 like irssi would, so tests can play other people in a channel. Each test makes
 its own throwaway account.
