@@ -1,0 +1,77 @@
+# evrd on one machine: the bouncer, its web app, and Postgres.
+#
+#   cp .env.example .env      # then fill in the secrets
+#   docker compose up -d
+#   docker compose exec evrd evrctl user add -admin <name> <password>
+#
+# Settings: evrd.conf here (mounted read-only); most can also be changed in
+# the web app, which stores them in the database.
+#
+# Web app on :8080 (put HTTPS in front — see the README), IRC clients attach
+# on :6697 (TLS). Add `--profile metrics` for VictoriaMetrics and the
+# dashboard's traffic charts.
+name: evrd
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: evrd
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: evrd
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "evrd"]
+      interval: 2s
+      retries: 30
+
+  evrd:
+    image: ${EVRD_IMAGE:-ghcr.io/4evrd/evrd}:${EVRD_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      EVRD_CONFIG: /etc/evrd/evrd.conf
+      EVRD_DB: postgres://evrd:${POSTGRES_PASSWORD}@postgres:5432/evrd?sslmode=disable
+      # Encrypts saved network passwords. `evrctl genkey` makes one; keep a
+      # copy somewhere safe (without it they can't be read back).
+      EVRD_SECRET_KEY: ${EVRD_SECRET_KEY:?set EVRD_SECRET_KEY in .env — see .env.example}
+      EVRD_NODE_ID: evrd
+    volumes:
+      - ./evrd.conf:/etc/evrd/evrd.conf:ro
+      - evrd-data:/var/lib/evrd # chat history (Pebble)
+      # - ./certs:/etc/evrd/certs:ro   # your TLS cert for IRC (see evrd.conf)
+    ports:
+      - "${IRC_PORT:-6697}:6697" # IRC over TLS
+      # - "6667:6667" # plain IRC (also uncomment the listen line in evrd.conf)
+    networks:
+      default:
+        aliases: [evrd-api] # the web app proxies /api and /auth here
+
+  web:
+    image: ${EVRD_WEB_IMAGE:-ghcr.io/4evrd/evrd-web}:${EVRD_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      - evrd
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+  # Optional: metrics for the traffic charts (docker compose --profile metrics up -d)
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.102.1
+    profiles: [metrics]
+    restart: unless-stopped
+    command:
+      - -retentionPeriod=90d
+      - -storageDataPath=/storage
+      - -opentelemetry.usePrometheusNaming
+    volumes:
+      - vm-data:/storage
+
+volumes:
+  pg-data:
+  evrd-data:
+  vm-data:
