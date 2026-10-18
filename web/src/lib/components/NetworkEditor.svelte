@@ -408,11 +408,13 @@
   .sections > section { scroll-margin-top: calc(var(--topbar-h) + var(--s4)); }
   .panel-grid { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: var(--s7); }
   .panel-grid :global(.od-stack) { --od-gap: 6px; }
-  .server-row { display: grid; grid-template-columns: 24px minmax(0, 2fr) 96px auto minmax(0, 1.4fr) auto; gap: var(--s3); align-items: start; padding: var(--s3); border-radius: var(--r-row); background: var(--row); }
+  /* host · port · TLS · actions on one line, the server password below */
+  .server-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 96px auto auto; gap: var(--s3); align-items: start; padding: var(--s3); border-radius: var(--r-row); background: var(--row); }
+  .server-row > :global(:nth-child(5)) { grid-column: 2 / 5; grid-row: 2; }
   .server-row .idx { padding-top: 38px; color: var(--faint); font-size: var(--fs-xs); text-align: center; }
   .server-row .tls { display: grid; gap: 10px; justify-items: start; }
   .server-row .tls .label { font-size: var(--fs-sm); font-weight: 500; }
-  .server-row .actions { display: flex; gap: 2px; padding-top: 28px; }
+  .server-row .actions { display: flex; gap: 2px; padding-top: 28px; grid-column: 5; grid-row: 1; }
   .fp { font-size: var(--fs-xs); word-break: break-all; color: var(--fg); }
   .fp-row { --cols: minmax(0, 1fr) auto; }
   .chan-table td { vertical-align: middle; }
@@ -426,9 +428,9 @@
     .editor { grid-template-columns: minmax(0, 1fr); }
     .toc { position: static; display: flex; flex-wrap: wrap; }
     .server-row { grid-template-columns: 20px minmax(0, 1fr) 88px; }
-    .server-row .idx { padding-top: 38px; }
-    .server-row > :global(:nth-child(4)), .server-row > :global(:nth-child(5)) { grid-column: 2 / -1; }
-    .server-row .actions { grid-column: 2 / -1; padding-top: 0; }
+    .server-row > :global(:nth-child(4)) { grid-column: 2 / -1; grid-row: 2; }
+    .server-row > :global(:nth-child(5)) { grid-column: 2 / -1; grid-row: 3; }
+    .server-row .actions { grid-column: 2 / -1; grid-row: 4; padding-top: 0; }
   }
   @media (max-width: 959px) { .panel-grid { grid-template-columns: minmax(0, 1fr); gap: var(--s4); } }
 </style>
