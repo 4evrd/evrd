@@ -5,7 +5,9 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   globalSetup: './e2e/global-setup.js',
-  fullyParallel: false,
+  // Tests are independent (each makes its own accounts), so CI shards can
+  // split by test; within a run they go one at a time against the one stack.
+  fullyParallel: true,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   use: {
