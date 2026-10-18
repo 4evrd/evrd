@@ -268,7 +268,7 @@ func main() {
 		os.Exit(1)
 	}
 	if cfg.Metrics.OTLPEndpoint != "" {
-		log.Info("exporting metrics", "endpoint", cfg.Metrics.OTLPEndpoint)
+		log.Info("exporting metrics", "endpoint", redact(cfg.Metrics.OTLPEndpoint))
 	}
 
 	// Downstream IRC listener for native clients (Hexchat, irssi, …).

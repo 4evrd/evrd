@@ -309,3 +309,8 @@ VictoriaMetrics with `-opentelemetry.usePrometheusNaming` so names come out as
 `evrd_irc_clients`, `evrd_web_streams`, `evrd_cluster_users`,
 `evrd_history_queue` and friends (`user`/`network` are ids). Without
 `metrics_url` the dashboard still works; the chart says metrics are off.
+
+If the metrics store sits behind a proxy with basic auth, put the
+credentials in both URLs (`https://user:pass@vm.example.org/opentelemetry/v1/metrics`,
+`https://user:pass@vm.example.org`): evrd sends them as basic auth, and
+Admin → Settings shows the password masked.

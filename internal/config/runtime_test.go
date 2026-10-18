@@ -138,3 +138,12 @@ func TestJail(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckRefusesAMaskedPassword(t *testing.T) {
+	if err := Check("metrics_url", "https://evrd:xxxxx@vm.example.org"); err == nil {
+		t.Error("the mask was accepted as a password")
+	}
+	if err := Check("metrics_url", "https://evrd:real-one@vm.example.org"); err != nil {
+		t.Errorf("a real password: %v", err)
+	}
+}

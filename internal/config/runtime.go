@@ -13,6 +13,7 @@ package config
 import (
 	"bufio"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -244,6 +245,13 @@ func Check(key, value string) error {
 	}
 	if strings.ContainsAny(value, "\r\n") {
 		return fmt.Errorf("%s: one line only", key)
+	}
+	// A URL's password is shown masked (user:xxxxx@): saving the mask back
+	// would replace the real one.
+	if u, err := url.Parse(strings.TrimSpace(value)); err == nil && u.User != nil {
+		if p, ok := u.User.Password(); ok && p == "xxxxx" {
+			return fmt.Errorf("%s: type the password again (it's shown masked)", s.Label)
+		}
 	}
 	if strings.TrimSpace(value) == "" && (s.Kind == "list" || s.Kind == "string" || s.Kind == "secret") {
 		return nil

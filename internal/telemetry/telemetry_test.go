@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -43,4 +44,31 @@ func TestNoEndpointIsANoop(t *testing.T) {
 		t.Fatal(err)
 	}
 	shutdown(context.Background())
+}
+
+func TestExportSendsURLCredentialsAsBasicAuth(t *testing.T) {
+	got := make(chan string, 4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, pass, _ := r.BasicAuth()
+		select {
+		case got <- r.URL.Path + " " + user + ":" + pass:
+		default:
+		}
+	}))
+	defer srv.Close()
+	u, _ := url.Parse(srv.URL + "/opentelemetry/v1/metrics")
+	u.User = url.UserPassword("evrd", "s3cret")
+	stop, err := Setup(context.Background(), Config{Endpoint: u.String(), Interval: 50 * time.Millisecond, NodeID: "t", Version: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stop(context.Background())
+	select {
+	case g := <-got:
+		if g != "/opentelemetry/v1/metrics evrd:s3cret" {
+			t.Fatalf("got %q", g)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("nothing exported")
+	}
 }

@@ -146,3 +146,16 @@ func TestWriteConf(t *testing.T) {
 		t.Fatal("a failed write isn't recorded")
 	}
 }
+
+func TestHidePassword(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://evrd:s3cret@vm.example.org/opentelemetry/v1/metrics": "https://evrd:xxxxx@vm.example.org/opentelemetry/v1/metrics",
+		"https://vm.example.org":      "https://vm.example.org",
+		"https://evrd@vm.example.org": "https://evrd@vm.example.org",
+		"oper@irc":                    "oper@irc",
+	} {
+		if got := hidePassword(in); got != want {
+			t.Errorf("hidePassword(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

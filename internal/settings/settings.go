@@ -14,6 +14,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"log/slog"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -237,7 +239,7 @@ func (m *Manager) Fields(env func(string) string) []Field {
 	m.mu.Unlock()
 	var out []Field
 	for _, s := range config.Specs {
-		f := Field{Spec: s, Value: eff.Value(s.Key), FileValue: m.base.Value(s.Key), Source: "default"}
+		f := Field{Spec: s, Value: hidePassword(eff.Value(s.Key)), FileValue: hidePassword(m.base.Value(s.Key)), Source: "default"}
 		if m.base.InFile(s.Key) {
 			f.Source, f.InFile = "file", true
 		}
@@ -276,6 +278,21 @@ func (m *Manager) Bootstrap() []map[string]string {
 		{"key": "config file", "value": c.Path},
 	}
 	return rows
+}
+
+// hidePassword masks a password in a URL setting (https://user:pass@host/…
+// sends basic auth): shown as user:xxxxx@, which config.Check refuses to
+// save back.
+func hidePassword(v string) string {
+	if !strings.Contains(v, "@") || !strings.Contains(v, "://") {
+		return v
+	}
+	if u, err := url.Parse(v); err == nil && u.User != nil {
+		if _, ok := u.User.Password(); ok {
+			return u.Redacted()
+		}
+	}
+	return v
 }
 
 func joinStrings(s []string) string {

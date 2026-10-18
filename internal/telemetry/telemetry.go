@@ -14,8 +14,10 @@ package telemetry
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
@@ -44,7 +46,21 @@ func Setup(ctx context.Context, cfg Config) (shutdown func(context.Context) erro
 	if cfg.Interval <= 0 {
 		cfg.Interval = 15 * time.Second
 	}
-	exp, err := otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpointURL(cfg.Endpoint))
+	// Credentials in the URL (https://user:pass@host/…) become basic auth:
+	// the exporter ignores them otherwise, and a proxy in front of the
+	// metrics store (like vmwrite behind Traefik) may want them.
+	opts := []otlpmetrichttp.Option{}
+	endpoint := cfg.Endpoint
+	if u, err := url.Parse(endpoint); err == nil && u.User != nil {
+		pass, _ := u.User.Password()
+		opts = append(opts, otlpmetrichttp.WithHeaders(map[string]string{
+			"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(u.User.Username()+":"+pass)),
+		}))
+		u.User = nil
+		endpoint = u.String()
+	}
+	opts = append(opts, otlpmetrichttp.WithEndpointURL(endpoint))
+	exp, err := otlpmetrichttp.New(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: %w", err)
 	}
