@@ -51,13 +51,18 @@
   // keep the counts fresh
   let timer
   onMount(() => { timer = setInterval(() => { refreshNets(); refreshMe().catch(() => {}) }, 15000) })
-  onDestroy(() => clearInterval(timer))
+  onDestroy(() => { clearInterval(timer); clearTimeout(closeT) })
 
   // ---- global search: networks and channels
   let q = $state('')
   let searchIn = $state()
   let sel = $state(0)
   let searchOpen = $state(false)
+  // Closing waits a moment after blur so a click on a result still lands;
+  // focusing again (or typing) cancels it, or picking a result and typing
+  // straight away would close the new results under the cursor.
+  let closeT
+  const openSearch = () => { clearTimeout(closeT); searchOpen = true }
   const results = $derived.by(() => {
     const s = q.trim().toLowerCase()
     if (!s) return []
@@ -145,7 +150,7 @@
         <label class="search" role="search">
           <Icon name="search" /><span class="sr-only">Search networks and channels</span>
           <input id="global-search" type="search" role="combobox" placeholder="Search networks, channels…" autocomplete="off" bind:value={q} bind:this={searchIn}
-            onfocus={() => (searchOpen = true)} onblur={() => setTimeout(() => (searchOpen = false), 150)} onkeydown={onSearchKey}
+            onfocus={openSearch} oninput={openSearch} onblur={() => { closeT = setTimeout(() => (searchOpen = false), 150) }} onkeydown={onSearchKey}
             aria-controls="search-results" aria-expanded={searchOpen && results.length > 0} />
           <span class="kbd" aria-hidden="true">⌘ K</span>
         </label>
