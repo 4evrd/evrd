@@ -116,9 +116,12 @@ installer then:
 - writes `/etc/httpd.conf` for Let's Encrypt's challenges on port 80,
   `/etc/acme-client.conf` and `/etc/relayd.conf` — only where none exists
   (otherwise it says what to merge from the examples);
-- runs `acme-client` and adds renewal to root's crontab:
-  `acme-client <host> && rcctl reload relayd && rcctl restart evrd`;
-- points evrd's IRC port at the same certificate (`tls_cert`).
+- runs `acme-client` and adds renewal to root's crontab: it copies the
+  new certificate into the chroot (`/var/evrd/etc/tls/`) and
+  `rcctl reload evrd` — evrd re-reads it, **without restarting**, so
+  nobody's connections drop;
+- points evrd's IRC port at that copy (`tls_cert`); rc.d refreshes it at
+  every start.
 
 relayd terminates TLS and forwards everything, including the WebSocket
 (`http websockets`), to evrd on 127.0.0.1:8098.
@@ -126,7 +129,9 @@ relayd terminates TLS and forwards everything, including the WebSocket
 ## Day to day
 
 ```sh
-rcctl restart evrd                       # after editing evrd.conf
+rcctl reload evrd                        # re-read the certificate (no restart)
+rcctl restart evrd                       # after editing evrd.conf (most
+                                         # settings: Admin → Settings, live)
 tail -f /var/log/daemon | grep evrd      # logs
 evrctl -config /etc/evrd/evrd.conf user add -admin alice -   # password on stdin
 evrctl -config /etc/evrd/evrd.conf user list
@@ -137,8 +142,15 @@ evrctl -config /etc/evrd/evrd.conf user list
 ## Upgrading
 
 Run the same command again. It keeps `evrd.conf` and the key (it asks; `-y`
-keeps them), replaces the programs and the web app, and restarts evrd.
-Database changes are applied at startup. Pin a version with `-v 0.4.0`.
+keeps them) and replaces the programs and the web app. evrd restarts only
+when its program actually changed: a release that changes just the web app
+goes live without a restart, so nobody is disconnected. Database changes are
+applied at startup. Pin a version with `-v 0.4.0`.
+
+A restart drops everyone's IRC connections for a moment (evrd reconnects
+them at once, and clients reconnect by themselves); see
+[the connection holder](design/connection-holder.md) for the plan to keep
+them up across upgrades too.
 
 ## Backups
 

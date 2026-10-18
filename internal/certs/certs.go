@@ -63,7 +63,8 @@ type Manager struct {
 	ca        string
 	acme      *autocert.Manager
 
-	certPath, keyPath string
+	certPath, keyPath string // as configured
+	pathMap           func(string) string
 	files             *tls.Certificate
 	filesMod          time.Time
 	filesErr          error
@@ -88,19 +89,49 @@ func (m *Manager) LoadFiles(certPath, keyPath string) error {
 	return m.loadFilesLocked(certPath, keyPath)
 }
 
+// SetPathMap maps tls_cert/tls_key to where they can be read from now —
+// inside the chroot, once evrd has entered it (nil: as configured).
+func (m *Manager) SetPathMap(f func(string) string) {
+	m.mu.Lock()
+	m.pathMap = f
+	m.mu.Unlock()
+}
+
+func (m *Manager) mapped(p string) string {
+	if m.pathMap == nil || p == "" {
+		return p
+	}
+	return m.pathMap(p)
+}
+
+// Reload re-reads tls_cert and tls_key now (SIGHUP, after a renewal), keeping
+// the current certificate if they can't be read.
+func (m *Manager) Reload() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.certPath == "" {
+		return nil
+	}
+	if err := m.loadFilesLocked(m.certPath, m.keyPath); err != nil {
+		return err
+	}
+	m.log.Info("reloaded tls_cert", "path", m.mapped(m.certPath))
+	return nil
+}
+
 func (m *Manager) loadFilesLocked(certPath, keyPath string) error {
 	m.certPath, m.keyPath = certPath, keyPath
 	if certPath == "" || keyPath == "" {
 		m.files, m.filesErr = nil, nil
 		return nil
 	}
-	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	cert, err := tls.LoadX509KeyPair(m.mapped(certPath), m.mapped(keyPath))
 	if err != nil {
 		m.filesErr = err
 		return err
 	}
 	m.files, m.filesErr = &cert, nil
-	if st, err := os.Stat(certPath); err == nil {
+	if st, err := os.Stat(m.mapped(certPath)); err == nil {
 		m.filesMod = st.ModTime()
 	}
 	return nil
@@ -275,7 +306,7 @@ func (m *Manager) reloadFiles() {
 	if m.certPath == "" {
 		return
 	}
-	st, err := os.Stat(m.certPath)
+	st, err := os.Stat(m.mapped(m.certPath))
 	if err != nil || !st.ModTime().After(m.filesMod) {
 		return // unchanged, or out of reach in the chroot
 	}
@@ -283,7 +314,7 @@ func (m *Manager) reloadFiles() {
 		m.log.Warn("reload tls_cert", "err", err)
 		return
 	}
-	m.log.Info("reloaded tls_cert", "path", m.certPath)
+	m.log.Info("reloaded tls_cert", "path", m.mapped(m.certPath))
 }
 
 func (m *Manager) prefetch() {

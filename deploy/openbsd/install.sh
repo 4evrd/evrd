@@ -354,6 +354,12 @@ install -d -o root -g "$user" -m 750 "$etc"
 # --- the programs and the web app ------------------------------------------
 running=no
 rcctl check evrd >/dev/null 2>&1 && running=yes
+# A release that only changes the web app needs no restart: evrd serves it
+# from disk, so nobody's connections drop.
+changed=yes
+if [ -f /usr/local/bin/evrd ] && [ "$(sha256 -q /usr/local/bin/evrd)" = "$(sha256 -q "$src/evrd")" ]; then
+	changed=no
+fi
 install -o root -g bin -m 555 "$src/evrd" "$src/evrctl" /usr/local/bin/
 rm -rf "$jail/web.new" "$jail/web.old"
 cp -R "$src/web" "$jail/web.new"
@@ -374,6 +380,11 @@ chmod 640 "$etc/secret.key"
 
 cert=/etc/ssl/$web_host.crt
 key=/etc/ssl/private/$web_host.key
+# evrd re-reads its certificate after a renewal (rcctl reload evrd) instead
+# of restarting — from a copy inside its chroot, kept fresh by rc.d and cron.
+jtls=$jail/etc/tls
+jcert=$jtls/$web_host.crt
+jkey=$jtls/$web_host.key
 if [ "$writeconf" = yes ]; then
 	tls=
 	case $front in
@@ -397,8 +408,8 @@ public_url $public
 api        127.0.0.1:$web_port"
 		# acme-client's (or the self-signed) certificate, for IRC
 		tls="
-tls_cert $cert
-tls_key  $key"
+tls_cert $jcert
+tls_key  $jkey"
 		;;
 	none)
 		web="# Plain HTTP, for trying evrd out: passwords cross the network
@@ -477,11 +488,29 @@ else
 	web_host=${web_host:-$(hostname)} irc_host=${irc_host:-$web_host}
 	web_port=${web_port:-8098} irc_port=${irc_port:-6697}
 	cert=/etc/ssl/$web_host.crt key=/etc/ssl/private/$web_host.key
+	jcert=$jtls/$web_host.crt jkey=$jtls/$web_host.key
+	# configs from before evrd could reload its certificate: point them at
+	# the copies inside the chroot
+	if [ "$front" = relayd ] && grep -q "^tls_cert[[:space:]]*$cert\$" "$conf"; then
+		cp -p "$conf" "$conf.bak.tls"
+		sed -i -e "s|^tls_cert[[:space:]].*|tls_cert $jcert|" -e "s|^tls_key[[:space:]].*|tls_key  $jkey|" "$conf"
+		say "tls_cert now points at the copy in the chroot (reloaded on renewal, no restart)"
+		changed=yes
+	fi
 fi
 chown root:"$user" "$conf"
 chmod 640 "$conf"
 
 # --- rc.d --------------------------------------------------------------------
+rc_certs= copy_certs=
+if [ "$front" = relayd ]; then
+	install -d -o root -g "$user" -m 750 "$jtls"
+	copy_certs="install -o root -g $user -m 640 $cert $key $jtls/"
+	[ -f "$cert" ] && [ -f "$key" ] && $copy_certs
+	rc_certs="	# and reads its certificate from a copy inside it
+	[ -f $cert ] && [ -f $key ] && $copy_certs
+"
+fi
 cat >/etc/rc.d/evrd <<EOF
 #!/bin/ksh
 #
@@ -494,14 +523,14 @@ daemon_logger="daemon.info"
 . /etc/rc.d/rc.subr
 
 rc_bg=YES
-rc_reload=NO
+# rcctl reload evrd: SIGHUP, evrd re-reads its certificate (no restart)
 
 rc_pre() {
 	# evrd looks up IRC servers from inside its chroot
 	for f in resolv.conf hosts; do
 		[ -f /etc/\$f ] && install -o root -g wheel -m 444 /etc/\$f $jail/etc/\$f
 	done
-	return 0
+$rc_certs	return 0
 }
 
 rc_cmd \$1
@@ -565,7 +594,7 @@ domain $web_host {$alt
 }
 
 # Renewal, in root's crontab (crontab -e):
-# ~ 3 * * * acme-client $web_host && rcctl reload relayd && rcctl restart evrd
+# ~ 3 * * * acme-client $web_host && install -o root -g $user -m 640 $cert $key $jtls/ && rcctl reload relayd && rcctl reload evrd
 EOF
 ports=$irc_port
 [ "$plain_port" = none ] || [ -z "$plain_port" ] || ports="$irc_port $plain_port"
@@ -618,7 +647,7 @@ if [ "$front" = relayd ] && [ "$certs" != kept ]; then
 		fi
 		if ! crontab -l 2>/dev/null | grep -q "acme-client $web_host"; then
 			(crontab -l 2>/dev/null
-			 echo "~ 3 * * * acme-client $web_host && rcctl reload relayd && rcctl restart evrd") | crontab -
+			 echo "~ 3 * * * acme-client $web_host && $copy_certs && rcctl reload relayd && rcctl reload evrd") | crontab -
 			say "added certificate renewal to root's crontab"
 		fi
 	elif [ -f "$cert" ] && [ -f "$key" ]; then
@@ -632,6 +661,13 @@ if [ "$front" = relayd ] && [ "$certs" != kept ]; then
 	fi
 fi
 
+# Renewal from before evrd could reload its certificate: copy and reload,
+# not restart.
+if [ "$front" = relayd ] && crontab -l 2>/dev/null | grep -q "acme-client $web_host && rcctl reload relayd && rcctl restart evrd"; then
+	crontab -l | sed "s|acme-client $web_host && rcctl reload relayd && rcctl restart evrd|acme-client $web_host \&\& $copy_certs \&\& rcctl reload relayd \&\& rcctl reload evrd|" | crontab -
+	say "certificate renewal now reloads evrd instead of restarting it"
+fi
+
 # --- start -------------------------------------------------------------------
 rcctl enable evrd >/dev/null
 if [ -n "$admin" ]; then
@@ -641,7 +677,9 @@ if [ -n "$admin" ]; then
 	pw=
 fi
 if [ "$start" = yes ]; then
-	if [ "$running" = yes ]; then
+	if [ "$running" = yes ] && [ "$changed" = no ] && [ "$writeconf" = no ]; then
+		say "evrd itself is unchanged — the web app is updated, no restart (nobody disconnected)"
+	elif [ "$running" = yes ]; then
 		rcctl restart evrd >/dev/null
 	else
 		rcctl start evrd >/dev/null
@@ -667,7 +705,7 @@ evrd/letsencrypt)
 	echo "Certificate: self-signed — browsers and IRC clients will ask you to accept it" ;;
 relayd/fallback)
 	echo "Certificate: self-signed for now. Once $web_host points here and port 80 is open:"
-	echo "             acme-client -F $web_host && rcctl reload relayd && rcctl restart evrd" ;;
+	echo "             acme-client -F $web_host && $copy_certs && rcctl reload relayd && rcctl reload evrd" ;;
 esac
 echo "IRC clients: $irc_host port $irc_port (TLS), server password yourname/network:password"
 echo "Firewall:    open the ports in $examples/pf.conf"

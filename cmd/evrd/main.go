@@ -111,6 +111,11 @@ func main() {
 		if webRoot != "" {
 			sb.Read = append(sb.Read, webRoot)
 		}
+		for _, f := range []string{cfg.TLSCert, cfg.TLSKey} {
+			if in, ok := cfg.InChroot(f); ok {
+				sb.Read = append(sb.Read, in) // re-read on SIGHUP after a renewal
+			}
+		}
 		if p, ok := localPath(dbDSN, "sqlite:"); ok {
 			sb.Write = append(sb.Write, filepath.Dir(p)) // the db and its -wal, -shm
 		}
@@ -124,6 +129,12 @@ func main() {
 			os.Exit(1)
 		}
 		log.Info("sandboxed", "chroot", cfg.Chroot, "user", cfg.User)
+		if cfg.Chroot != "" {
+			// Certificate files inside the chroot can be re-read after a
+			// renewal (SIGHUP); ones outside it need a restart.
+			jailed := *cfg
+			certMgr.SetPathMap(func(p string) string { q, _ := jailed.InChroot(p); return q })
+		}
 	}
 
 	st, err := store.Open(dbDSN)
@@ -321,6 +332,17 @@ func main() {
 	}
 	go irc.ListenAndServe(ctx, cfg.Listen)
 	go certMgr.Run(ctx)
+	// SIGHUP (rcctl reload evrd): re-read the certificate files, e.g. after a
+	// renewal — no restart, so nobody's connections drop.
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	go func() {
+		for range hup {
+			if err := certMgr.Reload(); err != nil {
+				log.Warn("reload certificate", "err", err)
+			}
+		}
+	}()
 	if cfg.HTTPSListen != "" {
 		go func() {
 			if err := srv.ListenAndServeTLS(ctx, cfg.HTTPSListen, certMgr.TLSConfig()); err != nil {

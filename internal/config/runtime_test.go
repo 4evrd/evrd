@@ -147,3 +147,17 @@ func TestCheckRefusesAMaskedPassword(t *testing.T) {
 		t.Errorf("a real password: %v", err)
 	}
 }
+
+func TestInChroot(t *testing.T) {
+	c := Default()
+	c.Chroot = "/var/evrd"
+	for in, want := range map[string]string{
+		"/var/evrd/etc/tls/x.crt": "/etc/tls/x.crt",
+		"/etc/ssl/x.crt":          "/etc/ssl/x.crt",
+		"/var/evrdx/x":            "/var/evrdx/x",
+	} {
+		if got, _ := c.InChroot(in); got != want {
+			t.Errorf("InChroot(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

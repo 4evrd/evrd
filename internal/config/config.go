@@ -565,6 +565,19 @@ func parseBool(v string) (bool, error) {
 // Jail rewrites the local paths (an SQLite db, a Pebble history, web_root)
 // as seen from inside Chroot: /var/evrd/data/evrd.db becomes /data/evrd.db.
 // They must be absolute and under Chroot.
+// InChroot is path as seen from inside Chroot, when it's under it
+// (/var/evrd/etc/tls/x.crt → /etc/tls/x.crt).
+func (c *Config) InChroot(path string) (string, bool) {
+	if c.Chroot == "" || !filepath.IsAbs(path) {
+		return path, false
+	}
+	rel, err := filepath.Rel(filepath.Clean(c.Chroot), filepath.Clean(path))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+		return path, false
+	}
+	return filepath.Join("/", rel), true
+}
+
 func (c *Config) Jail() error {
 	if c.Chroot == "" {
 		return nil

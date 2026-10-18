@@ -237,3 +237,45 @@ func (p pebbleShim) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 	return res, err
 }
+
+func TestReloadReadsThroughThePathMap(t *testing.T) {
+	jail := t.TempDir()
+	write := func(host string) {
+		data, err := makeSelfSigned([]string{host})
+		if err != nil {
+			t.Fatal(err)
+		}
+		os.MkdirAll(filepath.Join(jail, "etc", "tls"), 0o700)
+		os.WriteFile(filepath.Join(jail, "etc", "tls", "c.pem"), data, 0o600)
+		os.WriteFile(filepath.Join(jail, "etc", "tls", "k.pem"), data, 0o600)
+	}
+	write("old.example.org")
+	m := newManager(testStore(t))
+	// Configured as seen from outside the chroot; read (after "entering" it)
+	// through the map.
+	m.SetPathMap(func(p string) string { return filepath.Join(jail, p) })
+	if err := m.LoadFiles("/etc/tls/c.pem", "/etc/tls/k.pem"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Apply(conf(func(c *config.Config) { c.TLSCert, c.TLSKey = "/etc/tls/c.pem", "/etc/tls/k.pem" })); err != nil {
+		t.Fatal(err)
+	}
+	if serve(t, m, "").Leaf.DNSNames[0] != "old.example.org" {
+		t.Fatal("not the file's certificate")
+	}
+	write("renewed.example.org")
+	if err := m.Reload(); err != nil {
+		t.Fatal(err)
+	}
+	if got := serve(t, m, "").Leaf.DNSNames[0]; got != "renewed.example.org" {
+		t.Fatalf("after reload: %s", got)
+	}
+	// Unreadable: the current one stays.
+	os.Remove(filepath.Join(jail, "etc", "tls", "c.pem"))
+	if err := m.Reload(); err == nil {
+		t.Error("reload of a missing file: no error")
+	}
+	if serve(t, m, "").Leaf.DNSNames[0] != "renewed.example.org" {
+		t.Error("lost the certificate on a failed reload")
+	}
+}
