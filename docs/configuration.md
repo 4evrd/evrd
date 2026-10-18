@@ -341,6 +341,12 @@ VictoriaMetrics with `-opentelemetry.usePrometheusNaming` so names come out as
 `evrd_history_queue` and friends (`user`/`network` are ids). Without
 `metrics_url` the dashboard still works; the chart says metrics are off.
 
+Admins see every metric under Admin → Metrics. For Grafana there's a
+ready-made dashboard, `deploy/grafana/evrd.json` (a VictoriaMetrics or
+Prometheus data source with uid `victoriametrics`; change it on import):
+traffic, upstream links and lag, clients, sign-ins, users per node and the
+versions running.
+
 If the metrics store sits behind a proxy with basic auth, put the
 credentials in both URLs (`https://user:pass@vm.example.org/opentelemetry/v1/metrics`,
 `https://user:pass@vm.example.org`): evrd sends them as basic auth, and
