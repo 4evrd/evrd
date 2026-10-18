@@ -33,7 +33,8 @@ are stored in the database and win over the file (see below).
 
 ## Server settings (Admin → Settings)
 
-Admins can change most of `evrd.conf` from the web app. Each value comes from,
+Admins can change the general, limits, connection, sign-in, SSO and metrics
+settings of `evrd.conf` from the web app (the list is below). Each value comes from,
 in order (later wins):
 
 1. built-in defaults
@@ -163,7 +164,8 @@ floodburst, joindelay.
 
 ## Saved passwords
 
-Network passwords (SASL/NickServ and server passwords) are encrypted in the
+Network passwords (the SASL password and server passwords) and the values
+set in Admin → Settings (such as the SSO client secret) are encrypted in the
 database with AES-256-GCM under a key that lives outside it:
 
 ```
@@ -173,7 +175,8 @@ secret_key_old  <previous key>       # optional: still decrypts while rotating
 
 `evrctl genkey` makes a key. Every node needs the same one; keep it out of
 database backups. At startup evrd encrypts anything saved before a key was
-set and re-encrypts anything under an old key, so rotating is: set the new
+set and re-encrypts anything under an old key — network passwords and
+settings alike — so rotating is: set the new
 `secret_key`, move the old one to `secret_key_old`, restart, then drop it.
 Without a key evrd still runs and warns that these are stored in plaintext.
 Account passwords and client passwords are bcrypt hashes either way.

@@ -40,7 +40,7 @@ user on a node would otherwise share the node's address:
 ```
 connect_rate     5                    # most connects/second to one server, per node
 upstream_bind    192.0.2.10 192.0.2.11  # spread users over these (stable per user)
-upstream_prefix6 2001:db8:42::/64     # or: an IPv6 address of their own for every user
+upstream_prefix6 2001:db8:42::/64     # each user's own IPv6 address (IPv6 servers)
 ```
 
 `upstream_bind` / `upstream_prefix6` are per node (`EVRD_UPSTREAM_BIND`,

@@ -103,9 +103,10 @@ mTLS or a shared secret, and never exposed.
   the other node 19 s later. Users see a disconnect/reconnect on their
   networks — unavoidable, since a TCP connection to an IRC server can't move
   between machines.
-- **Rolling deploy:** on SIGTERM a node drains — it stops its users and
-  releases their leases — and the others pick them up on their next tick
-  (≤5 s) instead of waiting for leases to expire. (In the dev stack, air kills
+- **Rolling deploy:** on SIGTERM a node drains — it stops its users,
+  releases their leases and marks itself no longer live — and the others pick
+  them up on their next tick (≤5 s) instead of waiting for its heartbeat to go
+  stale and the leases to expire. (In the dev stack, air kills
   the process without SIGTERM, so a reload there waits for expiry.)
 - **Load balancer:** give it a short connect timeout and passive health
   checks (see `deploy/lb.conf`), or it keeps trying a dead node for a minute.

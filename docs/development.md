@@ -23,12 +23,12 @@ This is a monorepo with three parts:
   Two backends behind one interface, picked by the `history` directive:
   - `scylla://host1,host2:9042/evrd` — **ScyllaDB** (Cassandra-compatible),
     shared by every evrd node. One partition per buffer per month, newest
-    first; writes are queued so a slow database never stalls IRC.
+    first; writes are queued (up to 16k lines) so a slow database doesn't stall IRC.
   - `pebble:/var/lib/evrd/history` — an embedded
     [Pebble](https://github.com/cockroachdb/pebble) store on local disk, for
     single-node installs (one evrd process per directory).
 
-  `evrctl history copy <from> <to>` moves history between them.
+  `evrctl history copy <from> <to>` copies history between them.
 - `accounts` — user rules shared by the API, the IRC listener and evrctl:
   username/password policy, limits, IRC client passwords, last-admin guards
 - `auth` — web sign-in: database-backed cookie sessions, local passwords, and
