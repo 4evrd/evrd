@@ -567,7 +567,15 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
 .chan-node.dim { opacity: 0.4; }
 .chan-node .hash { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--bg-deep); color: var(--net, var(--muted)); }
 .chan-node .od-field span:first-child { font-family: var(--font-mono); font-size: var(--fs-sm); }
-.chan-node .od-field .sub { display: flex; align-items: center; gap: var(--s2); font-size: var(--fs-2xs); color: var(--muted); }
+.chan-node .od-field .sub { display: flex; align-items: center; gap: var(--s2); min-width: 0; overflow: hidden; font-size: var(--fs-2xs); color: var(--muted); }
+/* the "network · N users" text gives way (ellipsis) before the activity ticks
+   do, so neither runs under the unread count or out of the card */
+.chan-node .od-field .sub > .od-nowrap { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chan-node .od-field .sub > .ticks { flex: none; }
+/* opaque, so strands to a card in the next column pass behind this one rather
+   than showing through it: the same glass the card sits on, over the page */
+.topo .chan-node { background: linear-gradient(var(--glass), var(--glass)), linear-gradient(var(--glass), var(--glass)), var(--bg); }
+.topo .chan-node:hover { background: linear-gradient(var(--glass-2), var(--glass-2)), linear-gradient(var(--glass), var(--glass)), var(--bg); }
 .hub {
   align-self: center; justify-self: center; position: relative; z-index: 1;
   display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%;
