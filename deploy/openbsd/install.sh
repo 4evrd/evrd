@@ -2,8 +2,9 @@
 #
 # Installs (or upgrades) evrd on OpenBSD. Run as root:
 #
-#	ftp https://raw.githubusercontent.com/4evrd/evrd/main/deploy/openbsd/install.sh
-#	sh install.sh
+#	ftp -o - https://raw.githubusercontent.com/4evrd/evrd/main/deploy/openbsd/install.sh | sh
+#
+# (or download it and run sh install.sh; pass options with | sh -s -- -d host)
 #
 # From a terminal it asks where evrd will live (host names, ports, the
 # certificate, who serves HTTPS, the first admin); options answer ahead:
@@ -15,6 +16,12 @@
 #	-p port		evrd's plain-HTTP port: the web app with -c none, else
 #			local only, behind relayd (default 8098)
 #	-e email	a contact address for Let's Encrypt (optional)
+#	-o issuer	single sign-on: the OpenID Connect issuer URL (e.g.
+#			https://id.example.org/oidc for Logto)
+#	-O client-id	its client ID (the secret: $EVRD_OIDC_CLIENT_SECRET,
+#			or asked)
+#	-L label	the sign-in button: "Continue with <label>"
+#	-R role		a provider role that makes evrd admins
 #	-i host		the host name IRC clients use (default: the web host)
 #	-t port		the IRC port, with TLS (default 6697)
 #	-P port		a plain-text IRC port too (default none)
@@ -42,6 +49,9 @@
 # pledges itself: from then on it sees only its own data and can't run
 # anything.
 
+# Everything is in main, called on the last line: piped into sh, the whole
+# script is read before any of it runs.
+main() {
 set -eu
 
 repo=4evrd/evrd
@@ -52,8 +62,9 @@ conf=$etc/evrd.conf
 examples=/usr/local/share/examples/evrd
 
 web_host= certs= front= https_port= web_port= email= irc_host= irc_port= plain_port= admin=
+oidc_issuer= oidc_id= oidc_label= oidc_role=
 version= archive= reconf=no batch=no start=yes
-while getopts d:c:w:s:p:e:i:t:P:a:v:f:ryn opt; do
+while getopts d:c:w:s:p:e:o:O:L:R:i:t:P:a:v:f:ryn opt; do
 	case $opt in
 	d) web_host=$OPTARG ;;
 	c) certs=$OPTARG ;;
@@ -61,6 +72,10 @@ while getopts d:c:w:s:p:e:i:t:P:a:v:f:ryn opt; do
 	s) https_port=$OPTARG ;;
 	p) web_port=$OPTARG ;;
 	e) email=$OPTARG ;;
+	o) oidc_issuer=$OPTARG ;;
+	O) oidc_id=$OPTARG ;;
+	L) oidc_label=$OPTARG ;;
+	R) oidc_role=$OPTARG ;;
 	i) irc_host=$OPTARG ;;
 	t) irc_port=$OPTARG ;;
 	P) plain_port=$OPTARG ;;
@@ -70,7 +85,7 @@ while getopts d:c:w:s:p:e:i:t:P:a:v:f:ryn opt; do
 	r) reconf=yes ;;
 	y) batch=yes ;;
 	n) start=no ;;
-	*) sed -n '3,28s/^#//p' "$0" >&2; exit 2 ;;
+	*) echo "options: https://github.com/4evrd/evrd/blob/main/docs/openbsd.md#without-questions" >&2; exit 2 ;;
 	esac
 done
 
@@ -85,7 +100,15 @@ amd64|arm64) ;;
 *) die "no evrd build for $arch (amd64 and arm64 only)" ;;
 esac
 name=evrd_openbsd_$arch
-[ -t 0 ] || batch=yes
+# Answers come from the terminal, even when the script itself comes down a
+# pipe (ftp -o - … | sh); without one, the defaults.
+if [ -t 0 ]; then
+	exec 3<&0
+elif (exec </dev/tty) 2>/dev/null; then
+	exec 3</dev/tty
+else
+	batch=yes
+fi
 
 # ask var "question" default [check]: asks until check (a function) accepts
 # the answer; without a terminal (or with -y) takes the default.
@@ -96,7 +119,7 @@ ask() {
 			_ans=$_def
 		else
 			if [ -n "$_def" ]; then printf '%s [%s] ' "$_q" "$_def"; else printf '%s ' "$_q"; fi
-			read -r _ans || _ans=
+			read -r _ans <&3 || _ans=
 			_ans=${_ans:-$_def}
 		fi
 		if $_check "$_ans"; then
@@ -144,6 +167,25 @@ is_email() {
 	*) echo "   an email address, or Enter for none"; return 1 ;;
 	esac
 }
+is_url_or_empty() {
+	case $1 in
+	''|https://?*) ;;
+	*) echo "   an https:// URL, or Enter to skip"; return 1 ;;
+	esac
+}
+nonempty() { [ -n "$1" ] || { echo "   required"; return 1; }; }
+# secret var "question": asks without echoing.
+secret() {
+	while :; do
+		stty -echo <&3
+		printf '%s ' "$2"; read -r _s <&3 || _s=; echo
+		stty echo <&3
+		[ -n "$_s" ] && break
+		echo "   required"
+	done
+	eval "$1=\$_s"
+	_s=
+}
 is_user() {
 	case $1 in
 	''|*[!A-Za-z0-9._-]*) echo "   letters, digits, . _ -"; return 1 ;;
@@ -153,7 +195,7 @@ is_user() {
 listening() { netstat -an -p tcp | awk '$NF == "LISTEN" { print $4 }' | grep -q "\.$1\$"; }
 
 tmp=$(mktemp -d /tmp/evrd-install.XXXXXXXXXX)
-trap 'stty echo 2>/dev/null; rm -rf "$tmp"' EXIT INT TERM
+trap 'stty echo <&3 2>/dev/null; rm -rf "$tmp"' EXIT INT TERM
 
 # --- questions -------------------------------------------------------------
 writeconf=yes
@@ -193,8 +235,11 @@ Who serves HTTPS:
   relayd  OpenBSD's relayd in front, with httpd and acme-client for Let's
           Encrypt — if this machine serves other sites on 443 too"
 		if [ -z "$front" ]; then
+			# relayd if something else has 443 (evrd's own doesn't count)
 			front=evrd
-			listening 443 && front=relayd
+			if ! rcctl check evrd >/dev/null 2>&1 && listening 443; then
+				front=relayd
+			fi
 		fi
 		ask front "Who serves HTTPS?" "$front" is_front
 		if [ "$front" = evrd ]; then
@@ -219,6 +264,31 @@ Who serves HTTPS:
 			listening "$p" && die "port $p is in use (httpd? relayd?) — free it, or rerun and choose relayd"
 		done
 	fi
+
+	case $front in
+	none) public=http://$web_host:$web_port ;;
+	*)
+		public=https://$web_host
+		[ "$https_port" = 443 ] || public=$public:$https_port
+		;;
+	esac
+	[ "$batch" = no ] && echo "
+Single sign-on (optional): sign in through an OpenID Connect provider such
+as Logto, Authentik or Keycloak. Register evrd there as a traditional web
+app with the redirect URI
+  $public/auth/callback"
+	ask oidc_issuer "Issuer URL (Enter to skip):" "$oidc_issuer" is_url_or_empty
+	oidc_secret=
+	if [ -n "$oidc_issuer" ]; then
+		ask oidc_id "Client ID:" "$oidc_id" nonempty
+		oidc_secret=${EVRD_OIDC_CLIENT_SECRET:-}
+		if [ -z "$oidc_secret" ]; then
+			[ "$batch" = no ] || die "-o: set EVRD_OIDC_CLIENT_SECRET, or run from a terminal"
+			secret oidc_secret "Client secret:"
+		fi
+		ask oidc_label "Sign-in button — \"Continue with …\":" "${oidc_label:-single sign-on}" nonempty
+		ask oidc_role "A provider role that makes evrd admins (Enter for none):" "$oidc_role" true
+	fi
 fi
 if [ -z "$admin" ] && [ "$batch" = no ]; then
 	ask admin "Create an admin account — username (Enter to skip):" "" true
@@ -230,10 +300,10 @@ if [ -n "$admin" ]; then
 	if [ -z "$pw" ]; then
 		[ "$batch" = no ] || die "-a: set EVRD_ADMIN_PASSWORD, or run from a terminal"
 		while :; do
-			stty -echo
-			printf 'Password for %s (10 characters or more): ' "$admin"; read -r pw; echo
-			printf 'Again: '; read -r pw2; echo
-			stty echo
+			stty -echo <&3
+			printf 'Password for %s (10 characters or more): ' "$admin"; read -r pw <&3; echo
+			printf 'Again: '; read -r pw2 <&3; echo
+			stty echo <&3
 			[ "$pw" = "$pw2" ] && [ ${#pw} -ge 10 ] && break
 			echo "   they must match and be 10 characters or more"
 		done
@@ -305,8 +375,6 @@ chmod 640 "$etc/secret.key"
 cert=/etc/ssl/$web_host.crt
 key=/etc/ssl/private/$web_host.key
 if [ "$writeconf" = yes ]; then
-	public=https://$web_host
-	[ "$https_port" = 443 ] || [ -z "$https_port" ] || public=$public:$https_port
 	tls=
 	case $front in
 	evrd)
@@ -340,6 +408,20 @@ api           :$web_port
 cookie_secure no"
 		;;
 	esac
+	sso=
+	if [ -n "$oidc_issuer" ]; then
+		sso="
+# Single sign-on (also under Admin → Settings → Single sign-on). The
+# provider redirects back to $public/auth/callback.
+oidc_issuer        $oidc_issuer
+oidc_client_id     $oidc_id
+oidc_client_secret $oidc_secret
+oidc_label         $oidc_label"
+		[ -z "$oidc_role" ] || sso="$sso
+oidc_admin_role    $oidc_role"
+		sso="$sso
+"
+	fi
 	plain=
 	[ "$plain_port" = none ] || plain="
 listen irc+insecure://:$plain_port   # unencrypted"
@@ -356,6 +438,7 @@ irc_host $irc_host
 
 $web
 
+$sso
 # IRC clients connect with TLS, with the same certificate.
 listen ircs://:$irc_port$plain$tls
 
@@ -588,4 +671,7 @@ relayd/fallback)
 esac
 echo "IRC clients: $irc_host port $irc_port (TLS), server password yourname/network:password"
 echo "Firewall:    open the ports in $examples/pf.conf"
-[ -n "$admin" ] || echo "Make an admin: evrctl -config $conf user add -admin yourname -"
+[ -n "$admin" ] || [ "$writeconf" = no ] || echo "Make an admin: evrctl -config $conf user add -admin yourname -"
+}
+
+main "$@"; exit

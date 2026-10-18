@@ -7,15 +7,18 @@ no database server to run.
 
 ## Install
 
-As root, on a current OpenBSD (tested on 7.9):
+One command, as root, on a current OpenBSD (tested on 7.9) — `ftp` is
+OpenBSD's built-in downloader, no curl needed:
 
 ```sh
-ftp https://raw.githubusercontent.com/4evrd/evrd/main/deploy/openbsd/install.sh
-sh install.sh
+ftp -o - https://raw.githubusercontent.com/4evrd/evrd/main/deploy/openbsd/install.sh | sh
 ```
 
-It downloads the latest release for your machine, checks it against the
-release's `SHA256` file, and asks:
+The questions come up at your terminal even though the script arrives through
+a pipe. (Not root? `| doas sh`. To read it first: `ftp
+https://raw.githubusercontent.com/4evrd/evrd/main/deploy/openbsd/install.sh`,
+then `sh install.sh`.) It downloads the latest release for your machine,
+checks it against the release's `SHA256` file, and asks:
 
 | Question | Default | |
 |---|---|---|
@@ -27,6 +30,8 @@ release's `SHA256` file, and asks:
 | Host name IRC clients connect to | the web host | |
 | IRC port (TLS) | `6697` | |
 | Plain-text IRC port | none | e.g. `6667` |
+| Single sign-on: issuer URL | none | an OpenID Connect provider, e.g. `https://id.example.org/oidc` (Logto); the installer shows the redirect URI to register: `<web app>/auth/callback` |
+| … client ID, client secret, button label, admin role | —, —, `single sign-on`, none | from the provider's application; the secret isn't echoed |
 | Admin username and password | — | the first admin account |
 
 Then it starts evrd and prints the web app's address. Open the ports it lists
@@ -48,7 +53,8 @@ Every answer has an option, and `-y` takes the defaults for the rest — for
 provisioning scripts:
 
 ```sh
-EVRD_ADMIN_PASSWORD='a-long-password' sh install.sh -y \
+ftp -o - https://raw.githubusercontent.com/4evrd/evrd/main/deploy/openbsd/install.sh |
+    EVRD_ADMIN_PASSWORD='a-long-password' sh -s -- -y \
     -d bnc.example.org -c letsencrypt -w evrd -e ops@example.org -a yourname
 ```
 
@@ -60,6 +66,7 @@ EVRD_ADMIN_PASSWORD='a-long-password' sh install.sh -y \
 | `-s port` | evrd's HTTPS port (default 443) |
 | `-p port` | evrd's plain-HTTP port: the web app with `-c none`, else local only (default 8098) |
 | `-e email` | Let's Encrypt contact |
+| `-o issuer`, `-O client-id`, `-L label`, `-R role` | single sign-on (the secret from `$EVRD_OIDC_CLIENT_SECRET`, or asked) |
 | `-i host`, `-t port`, `-P port` | IRC host name, TLS port, plain port |
 | `-a name` | create an admin (password from `$EVRD_ADMIN_PASSWORD`, or asked) |
 | `-v version` | a specific release instead of the latest |
@@ -129,7 +136,7 @@ evrctl -config /etc/evrd/evrd.conf user list
 
 ## Upgrading
 
-Run the installer again. It keeps `evrd.conf` and the key (it asks; `-y`
+Run the same command again. It keeps `evrd.conf` and the key (it asks; `-y`
 keeps them), replaces the programs and the web app, and restarts evrd.
 Database changes are applied at startup. Pin a version with `-v 0.4.0`.
 

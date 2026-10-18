@@ -229,8 +229,7 @@ Three things hold your data:
 server:
 
 ```sh
-ftp https://raw.githubusercontent.com/4evrd/evrd/main/deploy/openbsd/install.sh
-sh install.sh
+ftp -o - https://raw.githubusercontent.com/4evrd/evrd/main/deploy/openbsd/install.sh | sh
 ```
 
 **Elsewhere** (Linux, FreeBSD, macOS; amd64 and arm64): each
