@@ -161,8 +161,10 @@ make e2e         # brings up the dev stack and runs the specs
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull
 request: gofmt, vet, build and Go tests; the ScyllaDB suite; svelte-check and
-the web build; and the Playwright suite against the full dev stack. Pushes to
-`main` and `v*` tags publish multi-arch images to `ghcr.io/4evrd/evrd` and
+the web build; and the Playwright suite against the full dev stack, with evrd
+from the production image (`docker-compose.e2e.yml`) instead of air. Pushes to
+`main` and `v*` tags publish multi-arch images (cross-compiled, no emulated
+Go builds) to `ghcr.io/4evrd/evrd` and
 `ghcr.io/4evrd/evrd-web`.
 
 ### Without Docker

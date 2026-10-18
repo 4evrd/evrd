@@ -1,0 +1,21 @@
+# Layered on docker-compose.dev.yml for CI's end-to-end run: both evrd nodes
+# run the production image instead of compiling under air at startup.
+#
+#   docker compose -f docker-compose.dev.yml -f docker-compose.e2e.yml up -d --build
+services:
+  evrd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: evrd-e2e
+    entrypoint: ["evrd", "-config", "/src/deploy/evrd.dev.conf"]
+    command: []
+  evrd2:
+    image: evrd-e2e
+    build: !reset null
+    pull_policy: never
+    entrypoint: ["evrd", "-config", "/src/deploy/evrd.dev.conf"]
+    command: []
+    depends_on:
+      evrd:
+        condition: service_started
