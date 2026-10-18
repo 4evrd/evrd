@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -27,16 +28,30 @@ type rig struct {
 	addr string // evrd's IRC listener
 }
 
+// scratchDir is a temp dir removed when the test ends, best effort: the
+// bouncer's goroutines may still be finishing writes as the test returns,
+// which would make t.TempDir's cleanup fail the test.
+func scratchDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "evrd-client-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	return dir
+}
+
 func newRig(t *testing.T) *rig {
 	t.Helper()
-	st, err := store.Open("sqlite:" + filepath.Join(t.TempDir(), "evrd.db"))
+	data := scratchDir(t) // registered first, so removed last
+	st, err := store.Open("sqlite:" + filepath.Join(data, "evrd.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	acc := accounts.New(st, config.Limits{MaxNetworks: 3, MaxClients: 5})
-	hist, err := history.Open(filepath.Join(t.TempDir(), "history"))
+	hist, err := history.Open(filepath.Join(data, "history"))
 	if err != nil {
 		t.Fatal(err)
 	}

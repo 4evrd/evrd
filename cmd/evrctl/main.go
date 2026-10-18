@@ -2,8 +2,9 @@
 // admin, and user management when the web app isn't reachable.
 //
 // It writes to the database directly. Suspending or deleting a user here
-// takes effect on their next sign-in or attach; use the web admin to also
-// cut off connections that are live right now.
+// signs them out of the web app at once; the node running them notices on its
+// next cluster tick (within a few seconds) and drops their IRC clients and
+// network connections.
 package main
 
 import (
