@@ -18,7 +18,10 @@
 
   const nodes = $derived((ov?.nodes || []).map((n, i) => ({ ...n, color: netColor(i) })))
   const now = () => Date.now() / 1000
-  const nodeLive = (n) => now() - n.heartbeatAt < 30
+  // Seconds the server's clock is behind (+) or ahead of this browser's:
+  // heartbeats and start times are in server time.
+  const skew = $derived(ov?.now ? now() - ov.now : 0)
+  const nodeLive = (n) => now() - skew - n.heartbeatAt < 30
   const healthy = $derived(nodes.length > 0 && nodes.every(nodeLive))
   const placed = $derived((ov?.placement || []).filter((p) => p.node || p.status === 'suspended'))
 
@@ -99,13 +102,13 @@
               <div class="net-node" style="--net:{n.color}">
                 <div class="head">
                   <span class="mono-badge" aria-hidden="true">{n.id.slice(-1).toUpperCase()}</span>
-                  <span class="od-field od-fill"><span class="od-truncate">{n.id}</span><span class="od-truncate">{n.host || 'this server'} · up {since(n.startedAt)}</span></span>
+                  <span class="od-field od-fill"><span class="od-truncate">{n.id}</span><span class="od-truncate">{n.host || 'this server'} · up {since(n.startedAt + skew)}</span></span>
                   {#if nodeLive(n)}<span class="chip ok live"><span class="dot" aria-hidden="true"></span>Live</span>{:else}<span class="chip warn">Stale</span>{/if}
                 </div>
                 <div class="node-meta">
                   <div class="od-stat"><span>{n.users}</span><span>Users</span></div>
                   <div class="od-stat" title="Upstream links connected"><span>{n.linksUp}</span><span>Links</span></div>
-                  <div class="od-stat"><span>{ago(n.heartbeatAt)}</span><span>Heartbeat</span></div>
+                  <div class="od-stat"><span>{ago(n.heartbeatAt + skew)}</span><span>Heartbeat</span></div>
                 </div>
               </div>
             {/snippet}

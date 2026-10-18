@@ -493,7 +493,8 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		for _, l := range live.Links {
-			if l.Node == n.ID && l.Status == string(upstream.StatusConnected) {
+			// Not clustered: links aren't tagged with a node — all are this one's.
+			if (l.Node == n.ID || s.cl == nil) && l.Status == string(upstream.StatusConnected) {
 				up++
 			}
 		}
@@ -536,6 +537,9 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 		"networks": len(allNets), "linksTotal": linksTotal, "linksUp": linksUp,
 		"connectedNetworks": live.Connected, "attachedClients": live.Attached, "accountsAttached": accountsWith,
 		"defaults": s.acc.Defaults(), "nodes": nodes, "placement": placements, "clustered": s.cl != nil,
+		// the server's clock: the page compares heartbeats against it, so a
+		// browser (or server) whose clock is off doesn't call a live node stale
+		"now":       now.Unix(),
 		"attention": attention, "upstreams": upList, "storage": s.storageHealth(),
 		"ircHost": s.cfg().IRCHost,
 	})

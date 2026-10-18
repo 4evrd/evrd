@@ -146,9 +146,17 @@ Password        <b>{me.username}/{firstNet}:</b><em>{pwText}</em></pre>
             <span class="od-field"><span class="name">{c.kind === 'web' ? 'Web' : c.software || 'IRC client'}{c.device ? ' · ' + c.device : c.kind === 'web' ? ' · ' + c.software : ''}</span><span class="sub mono od-truncate">{c.networks.join(', ')}{c.ip ? ' · ' + c.ip : ''}</span></span>
             <span class="chip ok live"><span class="dot" aria-hidden="true"></span>{since(c.since)}</span>
           </div>
-        {:else}
-          <p class="desc" style="font-size:var(--fs-sm)">Nothing attached right now.</p>
         {/each}
+        {#if !(attached?.clients || []).some((c) => c.kind === 'web')}
+          <!-- the server only sees open chat tabs; this browser is here too -->
+          <div class="row" style="--cols:minmax(0,1fr) auto" data-testid="this-browser">
+            <span class="od-field"><span class="name">Web · this browser</span><span class="sub od-truncate">signed in to the web app — open Chat to follow your networks live</span></span>
+            <span class="chip ok live"><span class="dot" aria-hidden="true"></span>now</span>
+          </div>
+        {/if}
+        {#if ircCount === 0}
+          <p class="desc" style="font-size:var(--fs-sm)">No IRC clients attached right now.</p>
+        {/if}
       </div>
     </section>
   </div>
