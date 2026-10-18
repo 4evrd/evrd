@@ -208,6 +208,9 @@ func (m *Manager) Save(set map[string]string, del []string, by string) error {
 	if err := c.CheckTLS(); err != nil {
 		return err
 	}
+	if err := c.CheckSignIn(); err != nil {
+		return err
+	}
 	if err := m.st.SaveSettings(set, del, by); err != nil {
 		return err
 	}

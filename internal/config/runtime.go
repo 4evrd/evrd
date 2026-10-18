@@ -109,7 +109,7 @@ var Specs = []Spec{
 		get: func(c *Config) string { return c.TLSKey }},
 
 	{Key: "password_login", Group: "Sign-in", Label: "Password sign-in", Kind: "bool",
-		Help: "Let users sign in with a password. Turn off to use single sign-on only.",
+		Help: "Let users sign in to the web app with a password. Turn off to use single sign-on only (set it up first). IRC clients still attach with client passwords.",
 		get:  func(c *Config) string { return fmtBool(c.Auth.PasswordLogin) }},
 	{Key: "session_ttl", Group: "Sign-in", Label: "Session length", Kind: "duration",
 		Help: "How long a web sign-in lasts, e.g. 720h.",

@@ -97,3 +97,15 @@ test('HTTPS & TLS: who serves HTTPS, the certificate, and fields for the source 
     await restore(['tls'])
   }
 })
+
+test('password sign-in can’t be turned off without single sign-on', async ({ page }) => {
+  await login(page, ADMIN, ADMIN_PASS)
+  await page.goto('/admin/settings')
+  await page.getByTestId('setting-password_login').getByRole('switch').click()
+  await page.getByRole('button', { name: 'Save changes' }).click()
+  await expect(page.getByText(/set up single sign-on before turning off password sign-in/)).toBeVisible()
+  // nothing changed: password sign-in still works
+  await page.reload()
+  await expect(page.getByTestId('setting-password_login').getByRole('switch')).toBeChecked()
+  await (await session(ADMIN, ADMIN_PASS)).dispose()
+})

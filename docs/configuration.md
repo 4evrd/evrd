@@ -25,7 +25,7 @@ are stored in the database and win over the file (see below).
 | `secret_key` (`EVRD_SECRET_KEY`), `secret_key_file`, `secret_key_old` | — | encrypts saved network passwords; see [Saved passwords](#saved-passwords) |
 | `public_url` | — | the web app's address, e.g. `https://bnc.example.org` (SSO redirects back here) |
 | `irc_host` | `localhost` | the host name users give their IRC clients (shown in the web app) |
-| `password_login` | `yes` | allow password sign-in to the web app |
+| `password_login` | `yes` | allow password sign-in to the web app; `no` leaves only single sign-on (Admin → Settings refuses it until SSO is set up) |
 | `session_ttl` | `720h` | how long a web sign-in lasts |
 | `cookie_secure` | `yes` | HTTPS-only session cookie; `no` only for plain-HTTP testing |
 | `oidc_issuer`, `oidc_client_id`, `oidc_client_secret` (`EVRD_OIDC_CLIENT_SECRET`) | — | single sign-on with any OpenID Connect provider |

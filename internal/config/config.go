@@ -150,6 +150,15 @@ func (c *Config) ACMEHosts() []string {
 	return out
 }
 
+// CheckSignIn refuses settings that leave no way to sign in to the web app:
+// password sign-in off with no single sign-on to use instead.
+func (c *Config) CheckSignIn() error {
+	if !c.Auth.PasswordLogin && !c.Auth.OIDCEnabled() {
+		return errors.New("set up single sign-on before turning off password sign-in — otherwise nobody can sign in to the web app")
+	}
+	return nil
+}
+
 // CheckTLS reports a certificate setup that can't work.
 func (c *Config) CheckTLS() error {
 	switch c.TLSSource() {

@@ -159,3 +159,25 @@ func TestHidePassword(t *testing.T) {
 		}
 	}
 }
+
+func TestPasswordSignInNeedsSSOToTurnOff(t *testing.T) {
+	st, path := setup(t, "")
+	m, err := New(st, load(t, path), "n1", quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Save(map[string]string{"password_login": "no"}, nil, "root"); err == nil || !strings.Contains(err.Error(), "single sign-on") {
+		t.Fatalf("turning passwords off without SSO: %v", err)
+	}
+	if !m.Config().Auth.PasswordLogin {
+		t.Fatal("password sign-in was turned off anyway")
+	}
+	// with a provider set up (here or in the same save), it's allowed
+	if err := m.Save(map[string]string{"oidc_issuer": "https://id.example.org", "oidc_client_id": "evrd", "password_login": "no"}, nil, "root"); err != nil {
+		t.Fatal(err)
+	}
+	// and then the provider can't be removed while passwords are off
+	if err := m.Save(nil, []string{"oidc_issuer"}, "root"); err == nil {
+		t.Fatal("removed SSO with password sign-in off")
+	}
+}
