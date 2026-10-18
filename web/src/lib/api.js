@@ -88,6 +88,8 @@ export const api = {
 
   admin: {
     overview: () => req('GET', '/api/admin/overview'),
+    settings: () => req('GET', '/api/admin/settings'),
+    saveSettings: (set, reset) => req('PATCH', '/api/admin/settings', { set, reset }),
     users: () => req('GET', '/api/admin/users'),
     createUser: (u) => req('POST', '/api/admin/users', u),
     user: (id) => req('GET', `/api/admin/users/${id}`),

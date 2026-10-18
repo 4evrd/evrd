@@ -229,6 +229,27 @@ type Node struct {
 	HeartbeatAt time.Time `gorm:"index"`
 }
 
+// Setting is a server setting changed in the admin UI: a config directive
+// and its value, shared by every node (see config.Specs).
+type Setting struct {
+	Key       string `gorm:"primaryKey;size:64"`
+	Value     string `gorm:"serializer:secret"` // encrypted like other secrets (client secrets live here)
+	UpdatedAt time.Time
+	UpdatedBy string
+}
+
+// NodeConf is a node's last attempt to write the settings into its config
+// file (settings_write_conf).
+type NodeConf struct {
+	NodeID  string `gorm:"primaryKey;size:128"`
+	Path    string
+	WroteAt time.Time
+	Error   string
+	// Keys are the settings last written, so a node that was down when one
+	// was reset still removes it from its file.
+	Keys []string `gorm:"serializer:json"`
+}
+
 // UserLease says which node owns a user's live state (their upstream
 // connections, attached clients and web chat sockets) until ExpiresAt. Epoch
 // grows each time the lease changes hands.
@@ -322,6 +343,13 @@ type Store interface {
 
 	// cluster: nodes and user leases
 	UpsertNode(n Node) error
+
+	// Settings changed in the admin UI. SaveSettings sets and deletes keys
+	// in one go.
+	Settings() ([]Setting, error)
+	SaveSettings(set map[string]string, del []string, by string) error
+	SetNodeConf(c NodeConf) error
+	NodeConfs() ([]NodeConf, error)
 	// DeleteNodesBefore drops nodes last heard from before t.
 	DeleteNodesBefore(t time.Time) error
 	// LiveNodes lists nodes that sent a heartbeat after since.

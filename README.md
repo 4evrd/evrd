@@ -327,6 +327,59 @@ user picks their own at next sign-in.
 Other directives: `session_ttl 720h`, `cookie_secure yes` (turn off only for
 plain-HTTP dev), `irc_host` (the hostname shown to users for attaching).
 
+## Server settings (Admin → Settings)
+
+Admins can change most of `evrd.conf` from the web app. Each value comes from,
+in order (later wins):
+
+1. built-in defaults
+2. `evrd.conf`
+3. **the database** — values set on the Settings page, shared by every node
+4. the environment (`EVRD_…`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`) on that node
+
+The page shows where each value comes from (Default, evrd.conf, Set here, or
+Environment — those are locked in the UI). **Reset** removes a value set here,
+falling back to evrd.conf or the default.
+
+**Editable:** `irc_host`, `public_url`, `max_networks`, `max_clients`,
+`backlog_lines`, `connect_rate`, `bindhost`, `password_login`, `session_ttl`,
+`cookie_secure`, the `oidc_*` directives, `otel_endpoint`, `otel_interval`,
+`metrics_url`. Most apply live on every node within a few seconds; `public_url`,
+the SSO provider (`oidc_issuer`, `oidc_client_id`, `oidc_client_secret`) and
+metrics export (`otel_*`) are marked *Restart needed* until evrd restarts. The
+client secret is stored encrypted (with `secret_key`) and never shown back.
+
+**Startup settings stay in the file/environment** and are only shown: `listen`,
+`api`, `db`, `history`, TLS files, cluster identity (`node_id`,
+`internal_*`, `cluster_secret`), `upstream_bind` / `upstream_prefix6` and the
+`secret_key*` directives. evrd needs them before it can reach the database, and
+some differ per node.
+
+### Writing changes back to evrd.conf
+
+Off by default. With
+
+```
+settings_write_conf yes
+```
+
+each node also writes the values set in the UI into **its own** config file:
+a changed directive is replaced in place, new ones go under a
+`# --- set from the evrd admin UI ---` block, and Reset removes the directive
+(so the default applies). Comments and everything else are kept, and the file
+is replaced atomically with the same permissions. A node that was down
+catches up when it starts. The Settings page lists each node's last write and
+any error (e.g. the evrd user can't write the file).
+
+Use it for a **single node** where you want `evrd.conf` to stay the readable,
+complete record of the configuration.
+
+**In cluster mode, leave it off** and let the database be the one place these
+settings live: every node already reads them from there, nodes' files may
+differ on purpose (or be read-only, baked into an image, or managed by config
+management), and having several nodes rewrite files gains nothing. evrd logs a
+warning if a clustered node has it on.
+
 ## Metrics
 
 evrd exports OpenTelemetry metrics over OTLP/HTTP and reads them back from

@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -29,6 +30,7 @@ import (
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/metricsq"
+	"github.com/4evrd/evrd/internal/settings"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/version"
 )
@@ -41,22 +43,26 @@ type StatusRunner interface {
 
 type Server struct {
 	b       *bouncer.Bouncer
-	status  StatusRunner     // nil: *status isn't available in the web chat
-	cl      Cluster          // nil: a single node that serves every user
-	secret  string           // the cluster secret
-	metrics *metricsq.Client // nil: dashboards show no charts
+	status  StatusRunner                    // nil: *status isn't available in the web chat
+	cl      Cluster                         // nil: a single node that serves every user
+	secret  string                          // the cluster secret
+	metrics atomic.Pointer[metricsq.Client] // nil: dashboards show no charts
 	acc     *accounts.Service
 	auth    *auth.Manager
-	cfg     *config.Config
-	log     *slog.Logger
-	up      websocket.Upgrader
+	cfgp    atomic.Pointer[config.Config]
+	// settings, when set, edits the server settings (Admin → Settings).
+	settings *settings.Manager
+	log      *slog.Logger
+	up       websocket.Upgrader
 }
 
 func NewServer(b *bouncer.Bouncer, acc *accounts.Service, am *auth.Manager, cfg *config.Config, status StatusRunner, log *slog.Logger) *Server {
-	return &Server{
-		b: b, acc: acc, auth: am, cfg: cfg, status: status, log: log,
+	s := &Server{
+		b: b, acc: acc, auth: am, status: status, log: log,
 		up: websocket.Upgrader{CheckOrigin: auth.CheckWebSocketOrigin},
 	}
+	s.cfgp.Store(cfg)
+	return s
 }
 
 func (s *Server) st() store.Store { return s.b.Store() }
@@ -132,6 +138,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	// administration
 	mux.HandleFunc("GET /api/admin/overview", adminAny(s.handleAdminOverview))
+	mux.HandleFunc("GET /api/admin/settings", adminAny(s.handleGetSettings))
+	mux.HandleFunc("PATCH /api/admin/settings", adminAny(s.handleSaveSettings))
 	mux.HandleFunc("GET /api/admin/users", adminAny(s.handleAdminListUsers))
 	mux.HandleFunc("POST /api/admin/users", adminAny(s.handleAdminCreateUser))
 	mux.HandleFunc("GET /api/admin/users/{id}", admin(s.handleAdminGetUser))
@@ -145,11 +153,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 // clients attach. Public.
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"passwordLogin": s.cfg.Auth.PasswordLogin,
-		"sso":           s.cfg.Auth.OIDCEnabled(),
-		"ssoLabel":      s.cfg.Auth.OIDCLabel,
-		"ircHost":       s.cfg.IRCHost,
-		"ircPorts":      ircPorts(s.cfg.Listen),
+		"passwordLogin": s.cfg().Auth.PasswordLogin,
+		"sso":           s.cfg().Auth.OIDCEnabled(),
+		"ssoLabel":      s.cfg().Auth.OIDCLabel,
+		"ircHost":       s.cfg().IRCHost,
+		"ircPorts":      ircPorts(s.cfg().Listen),
 		"version":       version.Version,
 	})
 }
@@ -246,3 +254,9 @@ func unix(t *time.Time) any {
 	}
 	return t.Unix()
 }
+
+// cfg is the current config (settings can change at runtime).
+func (s *Server) cfg() *config.Config { return s.cfgp.Load() }
+
+// SetConfig swaps in a changed config.
+func (s *Server) SetConfig(c *config.Config) { s.cfgp.Store(c) }

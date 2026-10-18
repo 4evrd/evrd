@@ -32,7 +32,7 @@ const (
 )
 
 // SetMetrics sets where dashboards read metrics from (nil: no charts).
-func (s *Server) SetMetrics(m *metricsq.Client) { s.metrics = m }
+func (s *Server) SetMetrics(m *metricsq.Client) { s.metrics.Store(m) }
 
 func (s *Server) handleMyClients(w http.ResponseWriter, r *http.Request) {
 	u := auth.User(r)
@@ -235,7 +235,8 @@ type userTraffic struct {
 // userTraffic reads a user's last 24 hours from the metrics store.
 func (s *Server) userTraffic(ctx context.Context, userID int64, nets []store.Network) userTraffic {
 	out := userTraffic{perNet: map[int64]float64{}, series: []map[string]any{}}
-	if s.metrics == nil {
+	mq := s.metrics.Load()
+	if mq == nil {
 		out.err = "metrics aren't configured"
 		return out
 	}
@@ -246,7 +247,7 @@ func (s *Server) userTraffic(ctx context.Context, userID int64, nets []store.Net
 	// Point i covers the hour ending at start+i hours. The last one ends in
 	// the future, where VictoriaMetrics has nothing, so the hour in progress
 	// is an instant query at now over the part of it that has passed.
-	series, err := s.metrics.Range(ctx,
+	series, err := mq.Range(ctx,
 		fmt.Sprintf(`sum by (network) (increase_pure(%s{user=%s}[1h]))`, metricLines, user), start, end.Add(-time.Hour), time.Hour)
 	if err != nil {
 		out.err = err.Error()
@@ -254,7 +255,7 @@ func (s *Server) userTraffic(ctx context.Context, userID int64, nets []store.Net
 	}
 	now := time.Now()
 	elapsed := max(now.Sub(end.Add(-time.Hour)).Truncate(time.Second), time.Minute)
-	current, err := s.metrics.Range(ctx,
+	current, err := mq.Range(ctx,
 		fmt.Sprintf(`sum by (network) (increase_pure(%s{user=%s}[%ds]))`, metricLines, user, int(elapsed.Seconds())), now, now, time.Minute)
 	if err != nil {
 		out.err = err.Error()
@@ -302,11 +303,11 @@ func (s *Server) userTraffic(ctx context.Context, userID int64, nets []store.Net
 		out.perNet[nid] = sum
 		out.series = append(out.series, map[string]any{"network": nid, "name": name, "points": pts})
 	}
-	if v, err := s.metrics.Scalar(ctx, fmt.Sprintf(`sum(increase_pure(%s{user=%s}[24h]))`, metricDisconnects, user)); err == nil {
+	if v, err := mq.Scalar(ctx, fmt.Sprintf(`sum(increase_pure(%s{user=%s}[24h]))`, metricDisconnects, user)); err == nil {
 		out.reconnects = int64(math.Round(v))
 	}
 	// Minutes in the last day with a network down, summed over networks.
-	if v, err := s.metrics.Scalar(ctx, fmt.Sprintf(`sum(count_over_time((%s{user=%s} == 0)[24h:1m]))`, metricUp, user)); err == nil {
+	if v, err := mq.Scalar(ctx, fmt.Sprintf(`sum(count_over_time((%s{user=%s} == 0)[24h:1m]))`, metricUp, user)); err == nil {
 		out.offlineMin = int64(math.Round(v))
 	}
 	return out
@@ -533,14 +534,14 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 		"connectedNetworks": live.Connected, "attachedClients": live.Attached, "accountsAttached": accountsWith,
 		"defaults": s.acc.Defaults(), "nodes": nodes, "placement": placements,
 		"attention": attention, "upstreams": upList, "storage": s.storageHealth(),
-		"ircHost": s.cfg.IRCHost,
+		"ircHost": s.cfg().IRCHost,
 	})
 }
 
 // storageHealth checks the account database and the history store.
 func (s *Server) storageHealth() map[string]any {
-	accounts := map[string]any{"kind": dbKind(s.cfg.DB), "addr": dbAddr(s.cfg.DB), "up": s.st().Ping() == nil}
-	hist := map[string]any{"kind": dbKind(s.cfg.History), "addr": dbAddr(s.cfg.History), "up": s.b.History().Ping() == nil}
+	accounts := map[string]any{"kind": dbKind(s.cfg().DB), "addr": dbAddr(s.cfg().DB), "up": s.st().Ping() == nil}
+	hist := map[string]any{"kind": dbKind(s.cfg().History), "addr": dbAddr(s.cfg().History), "up": s.b.History().Ping() == nil}
 	if p, ok := s.b.History().(interface{ Pending() int64 }); ok {
 		hist["queue"] = p.Pending()
 	}

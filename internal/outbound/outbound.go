@@ -148,6 +148,16 @@ func (d *Dialer) DialFrom(ctx context.Context, userID int64, bind, host string, 
 	return nil, lastErr
 }
 
+// SetRate changes the most connects per second to one host (0: unlimited).
+func (d *Dialer) SetRate(rate float64) {
+	d.pace.mu.Lock()
+	d.pace.interval = 0
+	if rate > 0 {
+		d.pace.interval = time.Duration(float64(time.Second) / rate)
+	}
+	d.pace.mu.Unlock()
+}
+
 // order puts the destinations we have a source of our own for first: IPv6
 // when there's a prefix or IPv6 binds, IPv4 when there are only IPv4 binds.
 func (d *Dialer) order(addrs []netip.Addr) []netip.Addr {
@@ -246,10 +256,11 @@ type pacer struct {
 }
 
 func (p *pacer) wait(ctx context.Context, host string) error {
+	p.mu.Lock()
 	if p.interval <= 0 {
+		p.mu.Unlock()
 		return nil
 	}
-	p.mu.Lock()
 	now := time.Now()
 	at := p.next[host]
 	if at.Before(now) {

@@ -12,6 +12,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -79,17 +80,40 @@ func HashPassword(pw string) (string, error) {
 
 // Service applies the rules against the store.
 type Service struct {
-	st        store.Store
+	st  store.Store
+	now func() time.Time
+
+	mu        sync.RWMutex // settings that can change at runtime
 	defaults  config.Limits
-	now       func() time.Time
 	bindHosts []string
 }
 
 // SetBindHosts sets the bind hosts users may choose from.
-func (s *Service) SetBindHosts(hosts []string) { s.bindHosts = hosts }
+func (s *Service) SetBindHosts(hosts []string) {
+	s.mu.Lock()
+	s.bindHosts = append([]string(nil), hosts...)
+	s.mu.Unlock()
+}
+
+// SetDefaults sets the server-wide limits.
+func (s *Service) SetDefaults(l config.Limits) {
+	s.mu.Lock()
+	s.defaults = l
+	s.mu.Unlock()
+}
 
 // BindHosts are the bind hosts users may choose from.
-func (s *Service) BindHosts() []string { return append([]string(nil), s.bindHosts...) }
+func (s *Service) BindHosts() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]string(nil), s.bindHosts...)
+}
+
+func (s *Service) limits() config.Limits {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.defaults
+}
 
 // CheckBindHost reports whether u may connect from bind ("" always may).
 // Admins may use any address; users pick from the server's list unless
@@ -100,15 +124,15 @@ func (s *Service) CheckBindHost(u store.User, bind string) error {
 		return nil
 	case u.DenySetBindHost:
 		return invalid("your bind host is set by an admin")
-	case len(s.bindHosts) == 0:
+	case len(s.BindHosts()) == 0:
 		return invalid("this bouncer doesn't offer bind hosts")
 	}
-	for _, h := range s.bindHosts {
+	for _, h := range s.BindHosts() {
 		if strings.EqualFold(h, bind) {
 			return nil
 		}
 	}
-	return invalid("%s isn't one of this bouncer's bind hosts (%s)", bind, strings.Join(s.bindHosts, ", "))
+	return invalid("%s isn't one of this bouncer's bind hosts (%s)", bind, strings.Join(s.BindHosts(), ", "))
 }
 
 func New(st store.Store, defaults config.Limits) *Service {
@@ -124,7 +148,8 @@ type Limits struct {
 
 // Defaults are the server-wide limits.
 func (s *Service) Defaults() Limits {
-	return Limits{s.defaults.MaxNetworks, s.defaults.MaxClients, s.defaults.BacklogLines}
+	d := s.limits()
+	return Limits{d.MaxNetworks, d.MaxClients, d.BacklogLines}
 }
 
 // LimitsFor resolves a user's overrides against the server defaults.
@@ -135,10 +160,11 @@ func (s *Service) LimitsFor(u store.User) Limits {
 		}
 		return def
 	}
+	d := s.limits()
 	return Limits{
-		MaxNetworks:  pick(u.MaxNetworks, s.defaults.MaxNetworks),
-		MaxClients:   pick(u.MaxClients, s.defaults.MaxClients),
-		BacklogLines: pick(u.BacklogLines, s.defaults.BacklogLines),
+		MaxNetworks:  pick(u.MaxNetworks, d.MaxNetworks),
+		MaxClients:   pick(u.MaxClients, d.MaxClients),
+		BacklogLines: pick(u.BacklogLines, d.BacklogLines),
 	}
 }
 

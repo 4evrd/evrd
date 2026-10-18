@@ -46,6 +46,14 @@ type Config struct {
 	Outbound Outbound
 	Metrics  Metrics
 	Secrets  Secrets
+
+	// WriteConf (settings_write_conf) makes evrd write settings changed in
+	// the admin UI back into this file, on every node.
+	WriteConf bool
+	// Path is the file this was loaded from ("" for none).
+	Path string
+	// fromFile records the directives the file set.
+	fromFile map[string]bool
 }
 
 // Secrets configures encryption of saved network passwords. Every node must
@@ -208,12 +216,26 @@ func Default() *Config {
 		},
 		Limits:   Limits{MaxNetworks: 0, MaxClients: 0, BacklogLines: 2000},
 		Outbound: Outbound{ConnectRate: 5},
+		fromFile: map[string]bool{},
 	}
 }
 
 // Load reads a simple "directive value" config file. Blank lines and lines
 // starting with '#' are ignored. See ApplyEnv for environment overrides.
 func Load(path string) (*Config, error) {
+	cfg, err := LoadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := cfg.ApplyEnv(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// LoadFile reads a config file without environment overrides, remembering
+// its path and which directives it set (see WithSettings).
+func LoadFile(path string) (*Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -222,6 +244,7 @@ func Load(path string) (*Config, error) {
 
 	cfg := Default()
 	cfg.Listen = nil
+	cfg.Path = path
 
 	sc := bufio.NewScanner(f)
 	line := 0
@@ -236,12 +259,10 @@ func Load(path string) (*Config, error) {
 		if err := cfg.set(key, val); err != nil {
 			return nil, fmt.Errorf("%s:%d: %s: %w", path, line, key, err)
 		}
+		cfg.fromFile[key] = true
 	}
 	if len(cfg.Listen) == 0 {
 		cfg.Listen = Default().Listen
-	}
-	if err := cfg.ApplyEnv(); err != nil {
-		return nil, err
 	}
 	return cfg, sc.Err()
 }
@@ -352,6 +373,8 @@ func (c *Config) set(key, val string) error {
 		c.Outbound.ConnectRate, err = strconv.ParseFloat(val, 64)
 	case "bindhost": // repeatable, or several per line
 		c.Outbound.BindHosts = append(c.Outbound.BindHosts, strings.Fields(val)...)
+	case "settings_write_conf":
+		c.WriteConf, err = parseBool(val)
 	case "secret_key":
 		c.Secrets.Key = val
 	case "secret_key_file":

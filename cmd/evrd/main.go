@@ -24,6 +24,7 @@ import (
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/outbound"
+	"github.com/4evrd/evrd/internal/settings"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/telemetry"
 	"github.com/4evrd/evrd/internal/version"
@@ -41,18 +42,21 @@ func main() {
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
-	cfg := config.Default()
-	if err := cfg.ApplyEnv(); err != nil {
-		log.Error("environment", "err", err)
-		os.Exit(1)
-	}
+	// The file (or defaults); the environment and the settings saved in the
+	// admin UI are layered on top (see internal/settings).
+	base := config.Default()
 	if *configPath != "" {
-		loaded, err := config.Load(*configPath)
+		loaded, err := config.LoadFile(*configPath)
 		if err != nil {
 			log.Error("load config", "path", *configPath, "err", err)
 			os.Exit(1)
 		}
-		cfg = loaded
+		base = loaded
+	}
+	cfg, err := base.WithSettings(nil)
+	if err != nil {
+		log.Error("environment", "err", err)
+		os.Exit(1)
 	}
 
 	cur, old, err := cfg.SecretKeys()
@@ -77,6 +81,20 @@ func main() {
 		os.Exit(1)
 	} else if n > 0 {
 		log.Info("re-encrypted saved secrets", "networks", n)
+	}
+
+	nodeID := cfg.Cluster.NodeID
+	if nodeID == "" {
+		nodeID, _ = os.Hostname()
+	}
+	sm, err := settings.New(st, base, nodeID, log)
+	if err != nil {
+		log.Error("load settings", "err", err)
+		os.Exit(1)
+	}
+	cfg = sm.Config()
+	if cfg.WriteConf && cfg.Cluster.Enabled() {
+		log.Warn("settings_write_conf is on in a cluster: every node rewrites its own config file — usually leave it off and let the database hold settings")
 	}
 
 	hist, err := history.Open(cfg.History)
@@ -117,9 +135,7 @@ func main() {
 	// Cluster membership: which users this node runs. A lone node owns
 	// everyone; with several, users spread across them and move on failure.
 	cc := cfg.Cluster
-	if cc.NodeID == "" {
-		cc.NodeID, _ = os.Hostname()
-	}
+	cc.NodeID = nodeID
 	if cc.Enabled() {
 		if cc.Secret == "" || cc.InternalURL == "" || cc.InternalIRCListen == "" || cc.InternalIRCAddr == "" {
 			log.Error("cluster: internal_listen needs cluster_secret, internal_url, internal_irc_listen and internal_irc_addr")
@@ -198,6 +214,30 @@ func main() {
 	irc := client.NewServer(b, acc, log, cfg.TLSCert, cfg.TLSKey)
 	srv := api.NewServer(b, acc, am, cfg, irc, log)
 	srv.SetMetrics(metricsq.New(cfg.Metrics.QueryURL))
+	srv.SetSettings(sm)
+
+	// Settings changed in the admin UI (here or on another node) apply live;
+	// the restart-only ones (public URL, the SSO provider, metrics export)
+	// keep their running values until evrd restarts.
+	running := cfg
+	metricsURL := cfg.Metrics.QueryURL
+	sm.OnChange(func(c *config.Config) {
+		live := *c
+		live.PublicURL = running.PublicURL
+		live.Auth.OIDCIssuer, live.Auth.OIDCClientID, live.Auth.OIDCClientSecret =
+			running.Auth.OIDCIssuer, running.Auth.OIDCClientID, running.Auth.OIDCClientSecret
+		live.Metrics.OTLPEndpoint, live.Metrics.Interval = running.Metrics.OTLPEndpoint, running.Metrics.Interval
+		acc.SetDefaults(live.Limits)
+		acc.SetBindHosts(live.Outbound.BindHosts)
+		am.SetConfig(live.Auth)
+		ob.SetRate(live.Outbound.ConnectRate)
+		srv.SetConfig(&live)
+		if live.Metrics.QueryURL != metricsURL {
+			metricsURL = live.Metrics.QueryURL
+			srv.SetMetrics(metricsq.New(metricsURL))
+		}
+	})
+	go sm.Run(ctx)
 	if cc.Enabled() {
 		irc.SetCluster(cl, cc.Secret)
 		srv.SetCluster(cl, cc.Secret)

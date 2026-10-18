@@ -35,7 +35,7 @@ func Open(dsn string) (Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &UserEvent{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &UserEvent{}, &Setting{}, &NodeConf{}); err != nil {
 		return nil, err
 	}
 	return &gormStore{db: db}, nil
@@ -422,4 +422,31 @@ func notFound(err error) error {
 		return ErrNotFound
 	}
 	return err
+}
+
+func (s *gormStore) Settings() ([]Setting, error) {
+	var out []Setting
+	return out, s.db.Order("key").Find(&out).Error
+}
+
+func (s *gormStore) SaveSettings(set map[string]string, del []string, by string) error {
+	now := time.Now()
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		for k, v := range set {
+			if err := tx.Save(&Setting{Key: k, Value: v, UpdatedAt: now, UpdatedBy: by}).Error; err != nil {
+				return err
+			}
+		}
+		if len(del) > 0 {
+			return tx.Where("key IN ?", del).Delete(&Setting{}).Error
+		}
+		return nil
+	})
+}
+
+func (s *gormStore) SetNodeConf(c NodeConf) error { return s.db.Save(&c).Error }
+
+func (s *gormStore) NodeConfs() ([]NodeConf, error) {
+	var out []NodeConf
+	return out, s.db.Order("node_id").Find(&out).Error
 }

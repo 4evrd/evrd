@@ -48,6 +48,7 @@ const touchEvery = time.Minute
 type Manager struct {
 	st    store.Store
 	acc   *accounts.Service
+	cmu   sync.Mutex // guards cfg (SetConfig)
 	cfg   config.Auth
 	pub   string // public URL
 	log   *slog.Logger
@@ -61,6 +62,22 @@ type Manager struct {
 
 	mu      sync.Mutex
 	pending map[string]pendingLogin // OIDC state -> flow data
+}
+
+// SetConfig applies sign-in settings changed at runtime (password sign-in,
+// session length, cookies, the SSO label and account rules). The provider
+// itself (issuer, client) is set up once, at startup.
+func (m *Manager) SetConfig(a config.Auth) {
+	m.cmu.Lock()
+	m.cfg = a
+	m.cmu.Unlock()
+}
+
+// conf is the current sign-in config.
+func (m *Manager) conf() config.Auth {
+	m.cmu.Lock()
+	defer m.cmu.Unlock()
+	return m.cfg
 }
 
 type pendingLogin struct {
@@ -127,7 +144,7 @@ func (m *Manager) startSession(w http.ResponseWriter, r *http.Request, u store.U
 	err := m.st.CreateSession(store.Session{
 		ID: Hash(token), UserID: u.ID, Method: method, IDToken: idToken,
 		IP: clientIP(r), UserAgent: truncate(r.UserAgent(), 255),
-		CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(m.cfg.SessionTTL),
+		CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(m.conf().SessionTTL),
 	})
 	if err != nil {
 		return err
@@ -136,8 +153,8 @@ func (m *Manager) startSession(w http.ResponseWriter, r *http.Request, u store.U
 	_ = m.st.UpdateUser(u)
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: token, Path: "/",
-		HttpOnly: true, Secure: m.cfg.CookieSecure, SameSite: http.SameSiteLaxMode,
-		Expires: now.Add(m.cfg.SessionTTL),
+		HttpOnly: true, Secure: m.conf().CookieSecure, SameSite: http.SameSiteLaxMode,
+		Expires: now.Add(m.conf().SessionTTL),
 	})
 	return nil
 }
@@ -145,7 +162,7 @@ func (m *Manager) startSession(w http.ResponseWriter, r *http.Request, u store.U
 func (m *Manager) clearCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: m.cfg.CookieSecure, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: m.conf().CookieSecure, SameSite: http.SameSiteLaxMode,
 	})
 }
 
@@ -270,8 +287,8 @@ func (m *Manager) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 
 // PasswordLogin handles POST /auth/password {username, password}.
 func (m *Manager) PasswordLogin(w http.ResponseWriter, r *http.Request) {
-	if !m.cfg.PasswordLogin {
-		writeErr(w, http.StatusForbidden, "password sign-in is turned off — use "+m.cfg.OIDCLabel)
+	if !m.conf().PasswordLogin {
+		writeErr(w, http.StatusForbidden, "password sign-in is turned off — use "+m.conf().OIDCLabel)
 		return
 	}
 	var in struct{ Username, Password string }
@@ -405,7 +422,7 @@ func (m *Manager) Callback(w http.ResponseWriter, r *http.Request) {
 // provision finds or creates the account for an SSO identity. A non-empty
 // code is the reason sign-in can't continue (shown on the sign-in page).
 func (m *Manager) provision(c Claims) (store.User, string) {
-	isAdmin := m.cfg.OIDCAdminRole != "" && contains(c.Roles, m.cfg.OIDCAdminRole)
+	isAdmin := m.conf().OIDCAdminRole != "" && contains(c.Roles, m.conf().OIDCAdminRole)
 
 	u, err := m.st.UserBySubject(c.Subject)
 	switch {
@@ -427,7 +444,7 @@ func (m *Manager) provision(c Claims) (store.User, string) {
 		}
 		existing, err := m.st.UserByUsername(name)
 		switch {
-		case err == nil && m.cfg.OIDCLinkExisting && existing.OIDCSubject == nil:
+		case err == nil && m.conf().OIDCLinkExisting && existing.OIDCSubject == nil:
 			sub := c.Subject
 			existing.OIDCSubject = &sub
 			if err := m.st.UpdateUser(existing); err != nil {
@@ -437,7 +454,7 @@ func (m *Manager) provision(c Claims) (store.User, string) {
 			u = existing
 		case err == nil:
 			return store.User{}, "taken"
-		case !m.cfg.OIDCAutoCreate:
+		case !m.conf().OIDCAutoCreate:
 			return store.User{}, "no_account"
 		default:
 			role := store.RoleUser
@@ -459,7 +476,7 @@ func (m *Manager) provision(c Claims) (store.User, string) {
 	if c.Email != "" && c.Email != u.Email {
 		u.Email, changed = c.Email, true
 	}
-	if m.cfg.OIDCAdminRole != "" {
+	if m.conf().OIDCAdminRole != "" {
 		want := store.RoleUser
 		if isAdmin {
 			want = store.RoleAdmin
@@ -496,7 +513,7 @@ func (m *Manager) Logout(w http.ResponseWriter, r *http.Request) {
 
 func (m *Manager) endSessionURL(idToken string) string {
 	q := url.Values{}
-	q.Set("client_id", m.cfg.OIDCClientID)
+	q.Set("client_id", m.conf().OIDCClientID)
 	q.Set("post_logout_redirect_uri", m.pub+"/")
 	if idToken != "" {
 		q.Set("id_token_hint", idToken)

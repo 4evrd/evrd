@@ -19,6 +19,7 @@ import (
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/settings"
 	"github.com/4evrd/evrd/internal/store"
 )
 
@@ -54,7 +55,14 @@ func newEnv(t *testing.T, mutate ...func(*config.Config)) *env {
 	}
 	t.Cleanup(func() { hist.Close() })
 	b := bouncer.New(st, hist, log)
-	srv := httptest.NewServer(NewServer(b, acc, am, cfg, nil, log).Handler())
+	api := NewServer(b, acc, am, cfg, nil, log)
+	sm, err := settings.New(st, cfg, "test", log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api.SetSettings(sm)
+	sm.OnChange(func(c *config.Config) { acc.SetDefaults(c.Limits); api.SetConfig(c) })
+	srv := httptest.NewServer(api.Handler())
 	t.Cleanup(srv.Close)
 	return &env{t: t, srv: srv, st: st, acc: acc}
 }
