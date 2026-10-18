@@ -12,6 +12,8 @@ RUN pnpm build
 
 FROM nginx:1.27-alpine
 COPY conf.d-upgrade-map.conf /etc/nginx/conf.d/00-upgrade-map.conf
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# templates/*.template are filled in from the environment at startup.
+COPY templates/ /etc/nginx/templates/
+ENV EVRD_API=evrd-api:8098 NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 COPY --from=build /app/build /usr/share/nginx/html
 EXPOSE 80
