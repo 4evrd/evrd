@@ -24,6 +24,9 @@ RUN adduser -D -u 1000 evrd && \
 COPY --from=build /out/evrd /usr/local/bin/evrd
 COPY --from=build /out/evrctl /usr/local/bin/evrctl
 USER evrd
+# Relative paths in the defaults (sqlite:evrd.db, pebble:history) land in the
+# data volume.
+WORKDIR /var/lib/evrd
 # IRC (6667 plain / 6697 TLS) and the HTTP/WebSocket API (8098).
 EXPOSE 6667 6697 8098
 ENTRYPOINT ["evrd"]
