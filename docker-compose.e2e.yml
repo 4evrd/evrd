@@ -19,3 +19,24 @@ services:
     depends_on:
       evrd:
         condition: service_started
+  # The standalone node and its connection holder, from the same image.
+  links:
+    image: evrd-e2e
+    build: !reset null
+    pull_policy: never
+    entrypoint: ["evrd-links", "-socket", "/run/evrd-links/links.sock"]
+    command: []
+    depends_on:
+      evrd:
+        condition: service_started
+  evrd-solo:
+    image: evrd-e2e
+    build: !reset null
+    pull_policy: never
+    entrypoint: ["evrd", "-config", "/src/deploy/evrd.solo.conf"]
+    command: []
+    depends_on:
+      evrd:
+        condition: service_started
+      links:
+        condition: service_started

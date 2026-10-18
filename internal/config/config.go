@@ -46,6 +46,10 @@ type Config struct {
 	// evrd handles HTTPS.
 	HTTPSListen string
 	HTTPListen  string
+	// LinksSocket, when set, is the connection holder's socket (evrd-links,
+	// internal/links): upstream connections live there and survive evrd
+	// restarting. Single node only.
+	LinksSocket string
 	// ProvisionToken, when set, turns on the provisioning API
 	// (/api/provision/…) for tools that create accounts and their networks,
 	// like a migration from another bouncer. Callers send it as a bearer token.
@@ -424,6 +428,7 @@ func (c *Config) ApplyEnv() error {
 		"EVRD_SECRET_KEY":         &c.Secrets.Key,
 		"EVRD_SECRET_KEY_FILE":    &c.Secrets.KeyFile,
 		"EVRD_PROVISION_TOKEN":    &c.ProvisionToken,
+		"EVRD_LINKS_SOCKET":       &c.LinksSocket,
 		"EVRD_NODE_ID":            &c.Cluster.NodeID,
 		"EVRD_INTERNAL_URL":       &c.Cluster.InternalURL,
 		"EVRD_INTERNAL_IRC_ADDR":  &c.Cluster.InternalIRCAddr,
@@ -472,6 +477,8 @@ func (c *Config) set(key, val string) error {
 		c.HTTPSListen = val
 	case "http_listen":
 		c.HTTPListen = val
+	case "links_socket":
+		c.LinksSocket = val
 	case "provision_token":
 		c.ProvisionToken = val
 	case "web_root":

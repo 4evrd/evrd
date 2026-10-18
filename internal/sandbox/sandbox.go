@@ -21,6 +21,8 @@ type Config struct {
 	// Read and Write are the paths (as seen after the chroot) evrd still
 	// opens: read-only, and read-write-create. Used by unveil on OpenBSD.
 	Read, Write []string
+	// Promises, when set, replaces the default pledge promises (OpenBSD).
+	Promises string
 }
 
 // Enabled reports whether there's anything to do.

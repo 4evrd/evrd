@@ -32,8 +32,8 @@ export async function confirm(page, typed) {
 }
 
 // session is an API client signed in as one user: a cookie jar of its own.
-export async function session(username, password) {
-  const ctx = await pwRequest.newContext({ baseURL: BASE })
+export async function session(username, password, baseURL = BASE) {
+  const ctx = await pwRequest.newContext({ baseURL })
   const res = await ctx.post('/auth/password', { data: { username, password } })
   if (!res.ok()) throw new Error(`login ${username}: ${res.status()} ${await res.text()}`)
   const call = async (method, path, data) => {
@@ -77,3 +77,10 @@ export async function addNetwork(api, { name = 'Dev', nick, channels = [] } = {}
 }
 
 export { uniq }
+
+// The standalone evrd (evrd-solo) whose IRC connections live in the
+// connection holder, and how to run docker compose and evrctl against it.
+export const SOLO_URL = process.env.E2E_SOLO_URL || 'http://localhost:8198'
+export const COMPOSE = process.env.E2E_COMPOSE || 'docker compose -f ../docker-compose.dev.yml'
+export const SOLO_EVRCTL = process.env.E2E_SOLO_EVRCTL ||
+  `${COMPOSE} exec -T evrd-solo go run ./cmd/evrctl -config deploy/evrd.solo.conf`

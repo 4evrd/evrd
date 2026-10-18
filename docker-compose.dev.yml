@@ -112,6 +112,46 @@ services:
       - go-build-cache:/root/.cache/go-build
       - go-mod-cache:/go/pkg/mod
 
+  # A standalone evrd (no cluster) whose IRC connections live in the
+  # connection holder (links): restart it and its users stay on IRC. The API
+  # is on localhost:8198 (e2e/holder.spec.js).
+  #
+  # evrd-solo shares the holder's network namespace, like containers in a
+  # pod: the IRC sockets evrd opens (and hands over) belong to it, and must
+  # outlive evrd-solo's restarts — its own namespace goes when it stops.
+  links:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["go", "run", "./cmd/evrd-links", "-socket", "/run/evrd-links/links.sock"]
+    volumes:
+      - .:/src
+      - go-build-cache:/root/.cache/go-build
+      - go-mod-cache:/go/pkg/mod
+      - links-sock:/run/evrd-links
+    ports:
+      - "8198:8098" # evrd-solo's API (it uses this network namespace)
+
+  evrd-solo:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["go", "run", "./cmd/evrd", "-config", "deploy/evrd.solo.conf"]
+    environment:
+      EVRD_SECRET_KEY: lziNkka9EHHENdp2LKv88ym6zYCRfH8cMo6rZj/Ihi4=
+    network_mode: "service:links"
+    depends_on:
+      ircd:
+        condition: service_started
+      links:
+        condition: service_started
+    volumes:
+      - .:/src
+      - go-build-cache:/root/.cache/go-build
+      - go-mod-cache:/go/pkg/mod
+      - solo-data:/var/lib/evrd
+      - links-sock:/run/evrd-links
+
   # Round-robin load balancer for IRC and the API (deploy/lb.conf).
   lb:
     image: nginx:1.27-alpine
@@ -144,4 +184,6 @@ volumes:
   go-build-cache:
   go-mod-cache:
   evrd-data:
+  solo-data:
+  links-sock:
   web-node-modules:

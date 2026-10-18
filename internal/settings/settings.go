@@ -271,6 +271,7 @@ func (m *Manager) Bootstrap() []map[string]string {
 		{"key": "internal_url", "value": c.Cluster.InternalURL},
 		{"key": "secret_key", "value": map[bool]string{true: "set", false: "not set"}[c.Secrets.Key != "" || c.Secrets.KeyFile != ""]},
 		{"key": "web_root", "value": c.WebRoot},
+		{"key": "links_socket", "value": c.LinksSocket},
 		{"key": "provision_token", "value": map[bool]string{true: "set", false: "not set"}[c.ProvisionToken != ""]},
 		{"key": "chroot", "value": c.Chroot},
 		{"key": "user", "value": c.User},

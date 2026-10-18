@@ -25,7 +25,11 @@ func restrict(c Config) error {
 	if err := unix.UnveilBlock(); err != nil {
 		return fmt.Errorf("unveil: %w", err)
 	}
-	if err := unix.PledgePromises(promises); err != nil {
+	p := promises
+	if c.Promises != "" {
+		p = c.Promises
+	}
+	if err := unix.PledgePromises(p); err != nil {
 		return fmt.Errorf("pledge: %w", err)
 	}
 	return nil

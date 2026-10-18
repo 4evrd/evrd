@@ -132,7 +132,8 @@ jobs:
       - name: Wait for evrd
         run: |
           for i in $(seq 1 60); do
-            curl -sf http://localhost:5173/api/config >/dev/null && exit 0
+            curl -sf http://localhost:5173/api/config >/dev/null &&
+              curl -sf http://localhost:8198/api/config >/dev/null && exit 0
             sleep 5
           done
           docker compose $COMPOSE ps
@@ -142,6 +143,9 @@ jobs:
         working-directory: web
         env:
           E2E_EVRCTL: docker compose -f ../docker-compose.dev.yml -f ../docker-compose.e2e.yml exec -T evrd evrctl -config /src/deploy/evrd.dev.conf
+          # the standalone node with the connection holder (holder.spec.js)
+          E2E_COMPOSE: docker compose -f ../docker-compose.dev.yml -f ../docker-compose.e2e.yml
+          E2E_SOLO_EVRCTL: docker compose -f ../docker-compose.dev.yml -f ../docker-compose.e2e.yml exec -T evrd-solo evrctl -config /src/deploy/evrd.solo.conf
         run: pnpm exec playwright test --shard=${{ matrix.shard }}/4 --reporter=github,line
       - name: Stack logs
         if: failure()

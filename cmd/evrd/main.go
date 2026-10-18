@@ -24,6 +24,7 @@ import (
 	"github.com/4evrd/evrd/internal/cluster"
 	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/listen"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/outbound"
@@ -90,6 +91,11 @@ func main() {
 	// has read what lives outside: the config, the keys, the certificate.
 	hostname, _ := os.Hostname()
 	dbDSN, histDSN, webRoot := cfg.DB, cfg.History, cfg.WebRoot
+	linksSocket := cfg.LinksSocket
+	if linksSocket != "" && cfg.Cluster.Enabled() {
+		log.Warn("links_socket is for a single node — in a cluster, users move between nodes instead; ignoring it")
+		linksSocket = ""
+	}
 	if sb := (sandbox.Config{Chroot: cfg.Chroot, User: cfg.User}); sb.Enabled() {
 		// Ports below 1024 need root: bind every port first.
 		addrs := append([]string{cfg.API, cfg.HTTPSListen, cfg.HTTPListen, cfg.Cluster.InternalListen, cfg.Cluster.InternalIRCListen}, cfg.Listen...)
@@ -123,6 +129,17 @@ func main() {
 			sb.Write = append(sb.Write, p)
 		}
 		sb.Write = append(sb.Write, os.TempDir())
+		if linksSocket != "" {
+			in, ok := cfg.InChroot(linksSocket)
+			if cfg.Chroot != "" && !ok {
+				log.Error("links_socket must be inside the chroot", "path", linksSocket, "chroot", cfg.Chroot)
+				os.Exit(1)
+			}
+			linksSocket = in
+			sb.Write = append(sb.Write, linksSocket)
+			// pass sockets to the holder
+			sb.Promises = "stdio rpath wpath cpath fattr flock inet dns unix sendfd"
+		}
 		sandbox.Preload()
 		if err := sandbox.Enter(sb); err != nil {
 			log.Error("sandbox", "err", err)
@@ -233,6 +250,10 @@ func main() {
 		os.Exit(1)
 	}
 	b.SetDialer(ob.DialFrom)
+	if linksSocket != "" {
+		b.SetLinks(links.NewClient(linksSocket))
+		log.Info("connection holder on: IRC connections survive restarts", "socket", linksSocket)
+	}
 	if len(cfg.Outbound.Bind) > 0 || cfg.Outbound.Prefix6.IsValid() {
 		log.Info("outbound addresses", "bind", cfg.Outbound.Bind, "prefix6", cfg.Outbound.Prefix6)
 	}
@@ -241,6 +262,7 @@ func main() {
 		os.Exit(1)
 	}
 	cl.Tick() // take this node's users before serving anyone
+	b.CloseStrayLinks(ctx)
 	if n := len(cl.Nodes()); n > 1 && !cc.Enabled() {
 		log.Error("cluster: other evrd nodes are running against this database but internal_listen isn't set — users on other nodes can't be reached from here", "nodes", n)
 	}

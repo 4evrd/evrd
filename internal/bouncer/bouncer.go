@@ -13,11 +13,13 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
 	"github.com/4evrd/evrd/internal/version"
@@ -53,12 +55,46 @@ type Bouncer struct {
 	// dial opens upstream connections for a user from a bind host ("" =
 	// the node's policy); nil dials directly (ignoring bind hosts).
 	dial func(ctx context.Context, userID int64, bind, host string, port int) (net.Conn, error)
+	// links, when set, is the connection holder upstream connections live in.
+	links *links.Client
 }
 
 // SetDialer sets how upstream connections are opened (pacing, source
 // addresses, bind hosts — see internal/outbound). Call it before Start.
 func (b *Bouncer) SetDialer(dial func(ctx context.Context, userID int64, bind, host string, port int) (net.Conn, error)) {
 	b.dial = dial
+}
+
+// SetLinks keeps upstream connections in the connection holder, so they
+// survive evrd restarting (see internal/links). Call it before Start.
+func (b *Bouncer) SetLinks(l *links.Client) { b.links = l }
+
+func linkID(networkID int64) string { return "n" + strconv.FormatInt(networkID, 10) }
+
+// CloseStrayLinks closes held links no running network wants any more — a
+// network switched off or deleted while evrd was down. Call it once the
+// networks this node runs have started.
+func (b *Bouncer) CloseStrayLinks(ctx context.Context) {
+	if b.links == nil {
+		return
+	}
+	held, err := b.links.List(ctx)
+	if err != nil {
+		b.log.Warn("connection holder", "err", err)
+		return
+	}
+	b.mu.Lock()
+	want := map[string]bool{}
+	for id := range b.conns {
+		want[linkID(id)] = true
+	}
+	b.mu.Unlock()
+	for _, l := range held {
+		if !want[l.Link] {
+			b.log.Info("closing a held link no network wants", "link", l.Link)
+			_ = b.links.Close(ctx, l.Link, "")
+		}
+	}
 }
 
 type entry struct {
@@ -179,7 +215,7 @@ func (b *Bouncer) Connect(networkID int64) error {
 		}
 	}
 	var conn *upstream.Conn
-	conn = upstream.New(n, b.log, upstream.Options{
+	opts := upstream.Options{
 		Persist: func(m history.Message) {
 			if err := b.history.Add(m); err != nil {
 				b.log.Warn("persist message", "err", err)
@@ -198,7 +234,13 @@ func (b *Bouncer) Connect(networkID int64) error {
 			}
 		},
 		Dial: dial,
-	})
+	}
+	if b.links != nil {
+		opts.Links, opts.LinkID = b.links, linkID(networkID)
+		// evrd stopping (not this network): the holder keeps the link
+		opts.Detaching = func() bool { return b.ctx != nil && b.ctx.Err() != nil }
+	}
+	conn = upstream.New(n, b.log, opts)
 	b.conns[networkID] = &entry{conn: conn, userID: n.UserID, cancel: cancel}
 	if u.AutoAway && len(b.clients[n.UserID])+len(b.streams[n.UserID]) == 0 {
 		conn.SetAway(AwayMessage) // applied once registered

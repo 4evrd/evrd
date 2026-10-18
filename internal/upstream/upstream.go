@@ -31,6 +31,8 @@ import (
 
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/irctls"
+	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/telemetry"
 )
@@ -138,10 +140,20 @@ type Conn struct {
 	serverPass   string // the current server's PASS (then no SASL-fallback PASS)
 	idle         func() bool
 	version      string
+	links        Holder
+	linkID       string
+	detaching    func() bool
+	tryResume    bool // the first connection tries the holder's link first
 }
 
 // maxPending caps the lines held for an upstream that isn't registered yet.
 const maxPending = 100
+
+// Holder keeps connections across evrd restarts (*links.Client).
+type Holder interface {
+	Open(ctx context.Context, link string, tcp net.Conn, tlsOn bool, host string, trust irctls.Trust) (net.Conn, error)
+	Resume(ctx context.Context, link string) (net.Conn, *links.Resumed, error)
+}
 
 // Options are a connection's hooks and settings.
 type Options struct {
@@ -155,6 +167,14 @@ type Options struct {
 	// Dial opens the TCP connection (TLS is added on top). The bouncer uses
 	// it to pace connects and pick the source address; nil dials directly.
 	Dial func(ctx context.Context, host string, port int) (net.Conn, error)
+	// Links, when set, keeps the connection in the connection holder
+	// (internal/links), so it survives evrd restarting; LinkID names it.
+	// The holder does the TLS handshake; Dial still opens the TCP socket.
+	Links  Holder
+	LinkID string
+	// Detaching reports that evrd itself is stopping: a held connection is
+	// left to the holder then, instead of quitting.
+	Detaching func() bool
 	// AltNick is tried when the nick is taken while registering (the
 	// network's own alternate nick wins).
 	AltNick string
@@ -187,6 +207,10 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		onChannels:   opts.OnChannels,
 		onEvent:      opts.OnEvent,
 		dial:         opts.Dial,
+		links:        opts.Links,
+		linkID:       opts.LinkID,
+		detaching:    opts.Detaching,
+		tryResume:    opts.Links != nil,
 		altNick:      orElse(strings.TrimSpace(n.AltNick), strings.TrimSpace(opts.AltNick)),
 		quitMsg:      orElse(n.QuitMsg, opts.QuitMsg),
 		joinDelay:    time.Duration(n.JoinDelay) * time.Second,
@@ -336,17 +360,55 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	c.mu.Unlock()
 	var conn net.Conn
 	var err error
-	if c.dial != nil {
-		conn, err = c.dial(dctxDial, sv.Host, sv.Port)
-	} else {
-		d := &net.Dialer{}
-		conn, err = d.DialContext(dctxDial, "tcp", net.JoinHostPort(sv.Host, strconv.Itoa(sv.Port)))
+	var resumed *links.Resumed
+	held := false // the connection lives in the holder
+	if c.links != nil && c.tryResume {
+		// evrd restarted: carry on with the link the holder kept
+		c.tryResume = false
+		rc, res, rerr := c.links.Resume(dctxDial, c.linkID)
+		switch {
+		case rerr == nil:
+			conn, resumed, held = rc, res, true
+		case !errors.Is(rerr, links.ErrNoLink):
+			c.log.Warn("resume held link", "network", c.net.Name, "err", rerr)
+		}
 	}
-	if err != nil {
-		telemetry.UpstreamConnects.Add(ctx, 1, telemetry.Result("error"))
-		return false, err
+	if conn == nil {
+		if c.dial != nil {
+			conn, err = c.dial(dctxDial, sv.Host, sv.Port)
+		} else {
+			d := &net.Dialer{}
+			conn, err = d.DialContext(dctxDial, "tcp", net.JoinHostPort(sv.Host, strconv.Itoa(sv.Port)))
+		}
+		if err != nil {
+			telemetry.UpstreamConnects.Add(ctx, 1, telemetry.Result("error"))
+			return false, err
+		}
+		if c.links != nil {
+			hc, herr := c.links.Open(dctxDial, c.linkID, conn, sv.TLS, sv.Host, c.trust())
+			switch {
+			case herr == nil:
+				conn, held = hc, true
+			case errors.Is(herr, links.ErrUnavailable):
+				// no holder: connect directly, as without one
+				c.log.Warn("connection holder unreachable — connecting directly", "network", c.net.Name, "err", herr)
+			default:
+				var ue *UntrustedCertError
+				if errors.As(herr, &ue) {
+					c.mu.Lock()
+					c.health.UntrustedFingerprint = ue.Fingerprint
+					c.mu.Unlock()
+				}
+				telemetry.UpstreamConnects.Add(ctx, 1, telemetry.Result("error"))
+				return false, herr
+			}
+		}
 	}
-	if sv.TLS {
+	if held {
+		c.mu.Lock()
+		c.health.UntrustedFingerprint = ""
+		c.mu.Unlock()
+	} else if sv.TLS {
 		tc := tls.Client(conn, c.tlsConfig(sv.Host))
 		if err := tc.HandshakeContext(dctxDial); err != nil {
 			conn.Close()
@@ -366,7 +428,12 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	defer dcancel()
 	go func() {
 		<-dctx.Done()
-		// Switched off (not just this link ending): say goodbye first.
+		// Switched off (not just this link ending): say goodbye first —
+		// unless evrd itself is stopping and the holder keeps the link.
+		if held && c.detaching != nil && c.detaching() {
+			conn.Close()
+			return
+		}
 		if ctx.Err() != nil && c.Status() == StatusConnected {
 			c.mu.Lock()
 			quit := c.quitMsg
@@ -384,6 +451,9 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	c.mu.Lock()
 	c.w = conn
 	c.nick = c.net.Nick
+	if resumed != nil {
+		c.nick = resumed.Nick
+	}
 	c.triedAlt = false
 	c.channels = map[string]bool{}
 	c.members = map[string]map[string]*Member{}
@@ -394,16 +464,20 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	// a ping timeout.
 	go c.pingLoop(dctx)
 
-	// Registration. CAP LS holds registration open so we can negotiate SASL;
-	// CAP END (sent once auth resolves, see handleCap) completes it.
-	if sv.Password != "" {
-		c.send("PASS " + sv.Password)
+	if resumed != nil {
+		c.resume(resumed)
+	} else {
+		// Registration. CAP LS holds registration open so we can negotiate
+		// SASL; CAP END (sent once auth resolves, see handleCap) completes it.
+		if sv.Password != "" {
+			c.send("PASS " + sv.Password)
+		}
+		c.send("CAP LS 302")
+		c.send("NICK " + c.net.Nick)
+		user := orElse(c.net.Username, c.net.Nick)
+		real := orElse(c.net.Realname, c.net.Nick)
+		c.send(fmt.Sprintf("USER %s 0 * :%s", user, real))
 	}
-	c.send("CAP LS 302")
-	c.send("NICK " + c.net.Nick)
-	user := orElse(c.net.Username, c.net.Nick)
-	real := orElse(c.net.Realname, c.net.Nick)
-	c.send(fmt.Sprintf("USER %s 0 * :%s", user, real))
 
 	sc := bufio.NewScanner(conn)
 	sc.Buffer(make([]byte, 0, 4096), 1<<20)
@@ -432,6 +506,43 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		err = io.EOF
 	}
 	return !h.ConnectedAt.IsZero() && h.Status == StatusConnected, err
+}
+
+// resume picks up a link the holder kept while evrd restarted: already
+// registered, so instead of registering it takes the nick and server
+// options from before, and asks for the channels' members and topics
+// (replies only — nobody sees a JOIN). Lines that arrived meanwhile follow
+// on the stream and go through the normal path.
+func (c *Conn) resume(r *links.Resumed) {
+	c.mu.Lock()
+	saved := append([]string(nil), c.saved...)
+	away := c.away
+	c.health.Status, c.health.ConnectedAt = StatusConnected, r.ConnectedAt
+	c.health.Attempts, c.health.RetryIn, c.health.Lag = 0, 0, -1
+	for _, ch := range saved {
+		c.channels[ch] = true
+	}
+	pending := c.pending
+	c.pending = nil
+	c.mu.Unlock()
+	for _, l := range r.ISupport {
+		c.handle(irc.Parse(c.codec.decode([]byte(l))))
+	}
+	for _, ch := range saved {
+		c.send("NAMES " + ch)
+		c.send("TOPIC " + ch)
+	}
+	if away != "" {
+		c.send("AWAY :" + away)
+	}
+	for _, l := range pending {
+		c.send(l)
+	}
+	c.log.Info("resumed held link", "network", c.net.Name, "nick", r.Nick, "channels", len(saved), "dropped", r.Dropped)
+	if r.Dropped > 0 {
+		c.notify(Event{Kind: "netsplit", Title: c.net.Name + ": lines missed while evrd restarted",
+			Detail: fmt.Sprintf("%d lines didn't fit the holder's buffer", r.Dropped)})
+	}
 }
 
 func (c *Conn) pingLoop(ctx context.Context) {

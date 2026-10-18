@@ -22,6 +22,24 @@ func Start(t testing.TB) string {
 type Log struct {
 	mu    sync.Mutex
 	lines []string
+	conns []net.Conn
+}
+
+// Send has the server send line to every client connected now (a message
+// arriving while nobody's looking, say).
+func (l *Log) Send(line string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, c := range l.conns {
+		fmt.Fprintf(c, "%s\r\n", line)
+	}
+}
+
+// Connections is how many clients have connected so far.
+func (l *Log) Connections() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.conns)
 }
 
 // Lines returns what was received so far.
@@ -54,6 +72,11 @@ func StartLogged(t testing.TB, log *Log) string {
 			c, err := ln.Accept()
 			if err != nil {
 				return
+			}
+			if log != nil {
+				log.mu.Lock()
+				log.conns = append(log.conns, c)
+				log.mu.Unlock()
 			}
 			go func(c net.Conn) {
 				defer c.Close()
@@ -88,6 +111,15 @@ func StartLogged(t testing.TB, log *Log) string {
 						out(":%s!u@h JOIN %s", nick, f[1])
 					case "PART":
 						out(":%s!u@h PART %s :bye", nick, f[1])
+					case "NAMES":
+						if len(f) > 1 {
+							out(":fake 353 %s = %s :%s @op", nick, f[1], nick)
+							out(":fake 366 %s %s :End of /NAMES list.", nick, f[1])
+						}
+					case "TOPIC":
+						if len(f) > 1 {
+							out(":fake 332 %s %s :the topic", nick, f[1])
+						}
 					case "SIMULATE": // test hook: the server sends a line as-is
 						out("%s", strings.TrimPrefix(sc.Text(), "SIMULATE "))
 					}
