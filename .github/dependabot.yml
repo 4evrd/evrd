@@ -1,11 +1,17 @@
+# Commit prefixes decide releases (see .releaserc.json): runtime dependencies
+# are fix(deps), so a security update ships as a patch release; development
+# dependencies and CI actions don't release anything.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    commit-message: { prefix: "ci(deps)" }
   - package-ecosystem: gomod
     directory: /
     schedule: { interval: weekly }
+    commit-message: { prefix: "fix(deps)" }
   - package-ecosystem: npm
     directory: /web
     schedule: { interval: weekly }
+    commit-message: { prefix: "fix(deps)", prefix-development: "chore(deps)" }

@@ -7,4 +7,7 @@ export default {
     'body-max-line-length': [0],
     'footer-max-line-length': [0],
   },
+  // Dependabot writes "fix(deps): Bump …" — the prefix is ours (see
+  // .github/dependabot.yml), the capital B isn't.
+  ignores: [(msg) => msg.includes('Signed-off-by: dependabot[bot]')],
 }

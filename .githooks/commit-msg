@@ -1,0 +1,24 @@
+#!/bin/sh
+# Conventional Commits, as commitlint checks in CI (commitlint.config.mjs):
+# they decide the next release. type(scope)!: lowercase subject.
+set -eu
+
+header=$(grep -v '^#' "$1" | head -n 1)
+case $header in
+Merge\ *|Revert\ *|fixup!\ *|squash!\ *|amend!\ *) exit 0 ;;
+esac
+
+types='build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test'
+if ! printf '%s\n' "$header" | grep -Eq "^($types)(\([a-z0-9._/-]+\))?!?: [^A-Z ].*[^.]$"; then
+	cat >&2 <<MSG
+commit-msg: "$header"
+  wants: type(scope): subject — e.g. "fix(store): keep settings on rotate"
+  types: $(echo "$types" | sed 's/|/, /g'); the subject starts lowercase, no trailing period.
+  feat → minor release, fix/perf → patch, feat!/BREAKING CHANGE → major.
+MSG
+	exit 1
+fi
+if [ ${#header} -gt 100 ]; then
+	echo "commit-msg: the first line is ${#header} characters (100 at most)" >&2
+	exit 1
+fi

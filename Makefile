@@ -4,7 +4,7 @@ export CGO_ENABLED := 0
 
 LDFLAGS := -s -w -X github.com/4evrd/evrd/internal/version.Version=$(VERSION)
 
-.PHONY: all build core cli web vet test clean up down up-prod down-prod e2e e2e-setup
+.PHONY: all build core cli web vet test clean up down up-prod down-prod e2e e2e-setup hooks
 
 all: build web
 
@@ -41,6 +41,11 @@ down-prod:
 	docker compose down
 
 # One-time: install web deps + the Playwright browser.
+# Git hooks: gofmt/vet/svelte-check before a commit, Conventional Commits
+# on the message (.githooks/). Once per clone.
+hooks:
+	git config core.hooksPath .githooks
+
 e2e-setup:
 	cd web && pnpm install && pnpm exec playwright install chromium
 

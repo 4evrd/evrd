@@ -139,7 +139,17 @@ The `binaries` job attaches `evrd_<os>_<arch>.tar.gz` archives (evrd, evrctl
 and the web app, built by `scripts/dist.sh`) with a BSD-style `SHA256` file —
 what the [OpenBSD installer](openbsd.md) downloads.
 Config: `.releaserc.json`. Pull requests have their commit messages checked
-with commitlint (`commitlint.config.mjs`). Versions started from a `v0.0.0`
+with commitlint (`commitlint.config.mjs`).
+
+Dependabot's commits follow the same rules (`.github/dependabot.yml`): Go
+modules and the web app's runtime packages are `fix(deps)`, so an update —
+a security fix, say — ships as a patch release; dev packages are
+`chore(deps)` and GitHub Actions `ci(deps)`, which don't release.
+
+`make hooks` (once per clone) turns on the git hooks in `.githooks/`: before a
+commit, gofmt, `go vet`, an OpenBSD build and svelte-check on what's staged;
+on the message, the Conventional Commits check CI runs. `git commit
+--no-verify` skips them. Versions started from a `v0.0.0`
 baseline, so evrd stays 0.x until a breaking change says otherwise.
 
 ### Without Docker

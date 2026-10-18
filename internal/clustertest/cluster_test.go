@@ -364,8 +364,14 @@ func TestWebRequestsAreServedByTheOwner(t *testing.T) {
 		t.Fatalf("ready: %v %v", m, err)
 	}
 	ws.WriteJSON(map[string]string{"target": "#c", "text": "hello across nodes"})
-	if err := ws.ReadJSON(&m); err != nil || m["text"] != "hello across nodes" {
-		t.Fatalf("echo: %v %v", m, err)
+	for { // other events (the owner's rejoin of #c) may come first
+		m = nil
+		if err := ws.ReadJSON(&m); err != nil {
+			t.Fatalf("echo: %v", err)
+		}
+		if m["text"] == "hello across nodes" {
+			break
+		}
 	}
 	// *status from the web runs on the owner too.
 	ws.WriteJSON(map[string]string{"status": "networks"})

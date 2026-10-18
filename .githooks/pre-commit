@@ -1,0 +1,30 @@
+#!/bin/sh
+# Quick checks on what's being committed (make hooks turns these on). CI runs
+# the full tests; this catches the cheap mistakes first. Skip once with
+# git commit --no-verify.
+set -eu
+
+staged() { git diff --cached --name-only --diff-filter=ACMR | grep -E "$1" || true; }
+fail=0
+
+go_files=$(staged '\.go$')
+if [ -n "$go_files" ]; then
+	unformatted=$(gofmt -l $go_files)
+	if [ -n "$unformatted" ]; then
+		echo "pre-commit: not gofmt'd (gofmt -w them):" >&2
+		echo "$unformatted" | sed 's/^/  /' >&2
+		fail=1
+	fi
+	CGO_ENABLED=0 go vet ./... || fail=1
+	CGO_ENABLED=0 GOOS=openbsd go build -o /dev/null ./cmd/... || fail=1 # the sandbox's OpenBSD side
+fi
+
+if [ -n "$(staged '^web/(src|e2e)/')" ]; then
+	(cd web && pnpm -s check) || fail=1
+fi
+
+for f in $(staged '\.sh$'); do
+	sh -n "$f" || fail=1
+done
+
+exit $fail
