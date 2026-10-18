@@ -11,6 +11,7 @@
 </p>
 
 <p align="center">
+  <a href="https://4evrd.github.io">Website</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="docs/configuration.md">Configuration</a> ·
   <a href="docs/irc-clients.md">IRC clients</a> ·

@@ -147,3 +147,10 @@ make web         # builds web/dist
 ./bin/evrd -version
 cd web && pnpm dev
 ```
+
+## The website
+
+https://4evrd.github.io lives in its own repository,
+[4evrd/4evrd.github.io](https://github.com/4evrd/4evrd.github.io) (an
+organization Pages site, so it's served from the root). Its docs and install
+pages mirror this README and `docs/`: update both when behaviour changes.
