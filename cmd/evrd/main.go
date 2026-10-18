@@ -83,7 +83,7 @@ func main() {
 		log.Error("encrypt saved secrets", "err", err)
 		os.Exit(1)
 	} else if n > 0 {
-		log.Info("re-encrypted saved secrets", "networks", n)
+		log.Info("re-encrypted saved secrets", "rows", n)
 	}
 
 	nodeID := cfg.Cluster.NodeID

@@ -232,9 +232,9 @@ func (serversSerializer) Value(_ context.Context, _ *schema.Field, _ reflect.Val
 	return string(b), err
 }
 
-// EncryptSecrets rewrites any network secret that isn't encrypted under the
-// current key (plaintext from before a key was set, or an old key's). It
-// reports how many networks it rewrote.
+// EncryptSecrets rewrites any network secret or saved setting that isn't
+// encrypted under the current key (plaintext from before a key was set, or an
+// old key's). It reports how many rows it rewrote.
 func (s *gormStore) EncryptSecrets() (int, error) {
 	var rows []struct {
 		ID       int64
@@ -261,6 +261,29 @@ func (s *gormStore) EncryptSecrets() (int, error) {
 			return n, err
 		}
 		if err := s.db.Model(&Network{ID: net.ID}).Select("password", "servers").Updates(&net).Error; err != nil {
+			return n, err
+		}
+		n++
+	}
+
+	// Settings saved in the admin UI are sealed too (client secrets live
+	// there): rewrite those the same way.
+	var srows []struct {
+		Key   string
+		Value string
+	}
+	if err := s.db.Table("settings").Select("key", "value").Scan(&srows).Error; err != nil {
+		return n, err
+	}
+	for _, r := range srows {
+		if current(r.Value) {
+			continue
+		}
+		var st Setting
+		if err := s.db.First(&st, "key = ?", r.Key).Error; err != nil {
+			return n, err
+		}
+		if err := s.db.Save(&st).Error; err != nil {
 			return n, err
 		}
 		n++

@@ -95,3 +95,27 @@ func TestSecretKeyLength(t *testing.T) {
 		t.Fatal("a short key was accepted")
 	}
 }
+
+func TestSettingsAreReencrypted(t *testing.T) {
+	t.Cleanup(func() { SetSecretKeys(nil) })
+	old, nu := bytes.Repeat([]byte{3}, 32), bytes.Repeat([]byte{4}, 32)
+	path := "sqlite:" + filepath.Join(t.TempDir(), "evrd.db")
+	SetSecretKeys(old)
+	st, _ := Open(path)
+	st.SaveSettings(map[string]string{"oidc_client_secret": "shh"}, nil, "root")
+	st.Close()
+
+	SetSecretKeys(nu, old) // rotate
+	st, _ = Open(path)
+	if c, err := st.EncryptSecrets(); err != nil || c != 1 {
+		t.Fatalf("EncryptSecrets: %d %v", c, err)
+	}
+	st.Close()
+	SetSecretKeys(nu) // the old key is gone
+	st, _ = Open(path)
+	defer st.Close()
+	rows, err := st.Settings()
+	if err != nil || len(rows) != 1 || rows[0].Value != "shh" {
+		t.Fatalf("after rotation: %+v %v", rows, err)
+	}
+}
