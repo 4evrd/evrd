@@ -44,10 +44,13 @@ commands:
 }
 
 func main() {
-	cfgPath := flag.String("config", "", "evrd config file to read the db DSN from")
+	cfgPath := flag.String("config", "", "evrd config file to read the db DSN from (default $EVRD_CONFIG)")
 	db := flag.String("db", "", "storage DSN (default: from -config, else sqlite:evrd.db)")
 	flag.Usage = usage
 	flag.Parse()
+	if *cfgPath == "" {
+		*cfgPath = os.Getenv("EVRD_CONFIG") // e.g. set in a container image or compose file
+	}
 	args := flag.Args()
 	if len(args) == 0 {
 		usage()

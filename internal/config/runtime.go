@@ -269,7 +269,9 @@ func RewriteFile(path string, values map[string]*string) error {
 		if v == nil || done[key] {
 			continue // removed, or a repeat (bindhost) folded into one line
 		}
-		out = append(out, key+" "+*v)
+		_, rest, _ := strings.Cut(t, " ")
+		_, comment := splitComment(rest)
+		out = append(out, key+" "+*v+comment) // keeps a trailing # comment
 		done[key] = true
 	}
 	var add []string

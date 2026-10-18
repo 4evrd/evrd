@@ -31,9 +31,12 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "", "path to config file (optional)")
+	configPath := flag.String("config", "", "path to config file (optional; default $EVRD_CONFIG)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+	if *configPath == "" {
+		*configPath = os.Getenv("EVRD_CONFIG") // e.g. set in a container image or compose file
+	}
 
 	if *showVersion {
 		fmt.Println("evrd", version.Version)

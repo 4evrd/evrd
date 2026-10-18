@@ -89,3 +89,21 @@ func TestRewriteFileKeepsTheRest(t *testing.T) {
 		t.Fatalf("the rewritten file doesn't load: %v", err)
 	}
 }
+
+func TestInlineComments(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "evrd.conf")
+	os.WriteFile(path, []byte("cookie_secure no   # testing only\nirc_host #notacomment\nmax_clients 3\t# tab\n"), 0o600)
+	c, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Auth.CookieSecure || c.IRCHost != "#notacomment" || c.Limits.MaxClients != 3 {
+		t.Fatalf("parsed: %v %q %d", c.Auth.CookieSecure, c.IRCHost, c.Limits.MaxClients)
+	}
+	v := "yes"
+	RewriteFile(path, map[string]*string{"cookie_secure": &v})
+	b, _ := os.ReadFile(path)
+	if !strings.HasPrefix(string(b), "cookie_secure yes   # testing only\n") {
+		t.Fatalf("comment not kept:\n%s", b)
+	}
+}

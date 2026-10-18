@@ -255,7 +255,7 @@ func LoadFile(path string) (*Config, error) {
 			continue
 		}
 		key, val, _ := strings.Cut(text, " ")
-		val = strings.TrimSpace(val)
+		val, _ = splitComment(val)
 		if err := cfg.set(key, val); err != nil {
 			return nil, fmt.Errorf("%s:%d: %s: %w", path, line, key, err)
 		}
@@ -265,6 +265,22 @@ func LoadFile(path string) (*Config, error) {
 		cfg.Listen = Default().Listen
 	}
 	return cfg, sc.Err()
+}
+
+// splitComment splits "value   # comment" into the value and the comment
+// (with its leading space). A # only starts a comment after whitespace, so
+// values like "#chan" or "pa#ss" are kept.
+func splitComment(val string) (string, string) {
+	for i := 1; i < len(val); i++ {
+		if val[i] == '#' && (val[i-1] == ' ' || val[i-1] == '\t') {
+			j := i - 1
+			for j > 0 && (val[j-1] == ' ' || val[j-1] == '\t') {
+				j--
+			}
+			return strings.TrimSpace(val[:j]), val[j:]
+		}
+	}
+	return strings.TrimSpace(val), ""
 }
 
 func (c *Config) addBind(val string) error {
@@ -296,6 +312,8 @@ func (c *Config) ApplyEnv() error {
 		c.Outbound.Prefix6 = p
 	}
 	for env, dst := range map[string]*string{
+		"EVRD_DB":                 &c.DB,
+		"EVRD_HISTORY":            &c.History,
 		"EVRD_OIDC_CLIENT_SECRET": &c.Auth.OIDCClientSecret,
 		"EVRD_CLUSTER_SECRET":     &c.Cluster.Secret,
 		"EVRD_SECRET_KEY":         &c.Secrets.Key,
