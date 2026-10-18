@@ -68,7 +68,7 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - name: svelte-check
-        run: pnpm exec svelte-check --threshold warning
+        run: pnpm check
       - name: Build
         run: pnpm build
 

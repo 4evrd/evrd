@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "evrd web app — SvelteKit static SPA, served next to the daemon's /api.",
+  "description": "evrd web app \u2014 SvelteKit static SPA, served next to the daemon's /api.",
   "packageManager": "pnpm@11.8.0",
   "scripts": {
     "dev": "vite dev",
@@ -11,7 +11,8 @@
     "preview": "vite preview --host --port 4173",
     "prepare": "svelte-kit sync || true",
     "e2e": "playwright test",
-    "e2e:install": "playwright install chromium"
+    "e2e:install": "playwright install chromium",
+    "check": "svelte-check --threshold warning"
   },
   "devDependencies": {
     "@playwright/test": "^1.50.0",
@@ -19,6 +20,7 @@
     "@sveltejs/kit": "^2.16.0",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "svelte": "^5.25.0",
+    "svelte-check": "4.7.7",
     "vite": "^6.2.0"
   }
 }
