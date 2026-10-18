@@ -102,7 +102,8 @@ func (s *Server) handleAdminMetrics(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
 
-	end := time.Now().Truncate(rg.step)
+	// Up to now: the newest points are the ones an admin looks for.
+	end := time.Now()
 	start := end.Add(-rg.span)
 	step := fmt.Sprintf("%ds", int(rg.step.Seconds()))
 	panels := adminPanels(step)
