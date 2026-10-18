@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture · evrd</title>
+<meta name="description" content="How evrd is built and the three ways to deploy it: a single file, a single node with Postgres and ScyllaDB, or a cluster behind a load balancer.">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Architecture · evrd">
+<meta property="og:description" content="How evrd is built and the three ways to deploy it: a single file, a single node with Postgres and ScyllaDB, or a cluster behind a load balancer.">
+<meta property="og:image" content="assets/og-overview.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0f1a1e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Geist+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="assets/evrd.css">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body class="site" data-page="architecture">
+<main id="main">
+
+  <section class="page-hero" aria-labelledby="arch-h" style="padding-bottom:var(--s5)">
+    <div class="wrap enter">
+      <span class="eyebrow">Architecture</span>
+      <h1 id="arch-h">How evrd fits together</h1>
+      <p class="lead">One Go process holds your IRC connections and serves your clients. Run it on its own with a file on disk, next to Postgres and ScyllaDB, or as a cluster of nodes that share the work and take over when one fails.</p>
+      <div class="tele-row"><span>shapes <b>3</b></span><span>failover <b>cluster_lease 20s</b></span><span>source <b>docs/scaling.md</b></span></div>
+      <svg class="ribbon" aria-hidden="true"></svg>
+    </div>
+  </section>
+
+  <nav class="arch-nav" aria-label="On this page">
+    <div class="wrap">
+      <a href="#components"><span class="n">01</span>Components</a>
+      <a href="#deploy"><span class="n">02</span>Deployment shapes</a>
+      <a href="#routing"><span class="n">03</span>Request routing</a>
+      <a href="#failover"><span class="n">04</span>Failover</a>
+      <a href="#outbound"><span class="n">05</span>Outbound addresses</a>
+      <a href="#choose"><span class="n">06</span>Choosing a setup</a>
+    </div>
+  </nav>
+
+  <!-- ============================================================ 01 components -->
+  <section class="arch-section" id="components" aria-labelledby="comp-h">
+    <div class="wrap">
+      <div class="arch-intro">
+        <span class="eyebrow">01 · Components</span>
+        <h2 class="h2-site" id="comp-h">One process, three kinds of storage</h2>
+        <p>Native clients attach to the IRC listener, while the web app talks to the HTTP and WebSocket API. Both share the connection to each upstream network. Accounts go to a SQL database, chat history to a separate store, and metrics out over OpenTelemetry.</p>
+      </div>
+
+      <div class="dg-stage">
+        <div class="diagram" id="dg-components"
+             data-links="hexchat>m-client, irssi>m-client, browser>m-api, m-upstream>libera, m-upstream>oftc, m-upstream>hackint:warn, m-store>pg:data, m-history>scy:data, evrd>vm:data">
+          <div class="dg-row">
+            <div class="dg-col">
+              <span class="caps">Clients</span>
+              <div class="dg-node" data-node="hexchat" tabindex="0"><span class="ic"><i data-icon="monitor"></i></span><span class="od-field"><span class="nm">HexChat</span><span class="sub">IRC · :6697 TLS</span></span></div>
+              <div class="dg-node" data-node="irssi" tabindex="0"><span class="ic"><i data-icon="terminal"></i></span><span class="od-field"><span class="nm">irssi</span><span class="sub">IRC · :6697 TLS</span></span></div>
+              <div class="dg-node" data-node="browser" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">Web app</span><span class="sub">HTTPS + WebSocket</span></span></div>
+            </div>
+
+            <div class="dg-box" data-node="evrd" tabindex="0">
+              <div class="dg-box-head"><span class="brand-mark" aria-hidden="true">#</span><span class="od-field"><span class="nm">evrd</span><span class="sub">cmd/evrd · one Go process</span></span></div>
+              <div class="dg-mods">
+                <div class="dg-mod" data-node="m-client"><span class="nm">client</span><span class="sub">IRC listener, backlog replay</span></div>
+                <div class="dg-mod" data-node="m-upstream"><span class="nm">upstream</span><span class="sub">one connection per network</span></div>
+                <div class="dg-mod" data-node="m-api"><span class="nm">api</span><span class="sub">HTTP + WebSocket on :8098</span></div>
+                <div class="dg-mod" data-node="m-bouncer"><span class="nm">bouncer</span><span class="sub">runs every user's upstreams</span></div>
+                <div class="dg-mod" data-node="m-store"><span class="nm">store</span><span class="sub">accounts, sessions, networks</span></div>
+                <div class="dg-mod" data-node="m-history"><span class="nm">history</span><span class="sub">messages and channel events</span></div>
+              </div>
+            </div>
+
+            <div class="dg-col">
+              <span class="caps">IRC networks</span>
+              <div class="dg-node" data-node="libera" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">Libera.Chat</span><span class="sub">SASL PLAIN · +6697</span></span></div>
+              <div class="dg-node" data-node="oftc" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">OFTC</span><span class="sub">+6697</span></span></div>
+              <div class="dg-node" data-node="hackint" tabindex="0"><span class="ic"><i data-icon="refresh"></i></span><span class="od-field"><span class="nm">hackint</span><span class="sub">reconnecting with backoff</span></span></div>
+            </div>
+          </div>
+
+          <div class="dg-row">
+            <div class="dg-under wide">
+              <div class="dg-node" data-node="pg" tabindex="0"><span class="ic db"><i data-icon="disk"></i></span><span class="od-field"><span class="nm">Postgres / SQLite</span><span class="sub">db</span></span></div>
+              <div class="dg-node" data-node="scy" tabindex="0"><span class="ic db"><i data-icon="layers"></i></span><span class="od-field"><span class="nm">ScyllaDB / Pebble</span><span class="sub">history</span></span></div>
+              <div class="dg-node" data-node="vm" tabindex="0"><span class="ic db"><i data-icon="chart"></i></span><span class="od-field"><span class="nm">VictoriaMetrics</span><span class="sub">otel · optional</span></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="dg-legend">
+          <span><i style="--c:var(--cyan)"></i>Client and network traffic</span>
+          <span><i style="--c:var(--nick)"></i>Storage and metrics</span>
+          <span><i style="--c:var(--signal)"></i>Reconnecting</span>
+          <span>Hover or tab to a box to trace its connections</span>
+        </div>
+      </div>
+
+      <div class="arch-two">
+        <div>
+          <h3>Where state lives</h3>
+          <div class="table-wrap">
+            <table class="compare">
+              <thead><tr><th scope="col">State</th><th scope="col">Stored in</th><th scope="col">Shared by nodes?</th></tr></thead>
+              <tbody>
+                <tr><td>Accounts, sessions, client passwords, networks</td><td>Postgres (or SQLite)</td><td><span class="chip ok">Yes</span></td></tr>
+                <tr><td>Chat history</td><td>ScyllaDB (or Pebble)</td><td><span class="chip ok">Yes</span></td></tr>
+                <tr><td>Which node owns which user</td><td>Postgres <span class="code">nodes</span>, <span class="code">user_leases</span></td><td><span class="chip ok">Yes</span></td></tr>
+                <tr><td>Live connections to IRC networks</td><td>The user's owner node</td><td><span class="chip">Forwarded</span></td></tr>
+                <tr><td>Attached IRC clients, web chat sockets</td><td>The user's owner node</td><td><span class="chip">Forwarded</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h3>Why history has its own store</h3>
+          <p>Chat history never goes into Postgres. The <span class="code">history</span> directive picks the backend:</p>
+          <ul>
+            <li><strong>ScyllaDB</strong>, shared by every node. Each buffer gets one partition per month, read newest first. Writes are queued, so a slow database never stalls IRC.</li>
+            <li><strong>Pebble</strong>, an embedded store on local disk, for one evrd process per directory.</li>
+          </ul>
+          <p style="margin-top:var(--s3)"><span class="code">evrctl history copy &lt;from&gt; &lt;to&gt;</span> moves history between them.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 02 deployment shapes -->
+  <section class="arch-section" id="deploy" aria-labelledby="deploy-h">
+    <div class="wrap">
+      <div class="arch-intro">
+        <span class="eyebrow">02 · Deployment shapes</span>
+        <h2 class="h2-site" id="deploy-h">Three ways to run it</h2>
+        <p>Every shape uses the same binary. The <span class="code">db</span> and <span class="code">history</span> directives pick the backends, and adding <span class="code">internal_listen</span> turns a node into a cluster member.</p>
+      </div>
+
+      <div class="tabs shape-tabs" role="tablist" aria-label="Deployment shape" data-hash>
+        <button class="tab" role="tab" id="tab-single" aria-controls="shape-single" aria-selected="true" type="button">Single file</button>
+        <button class="tab" role="tab" id="tab-node" aria-controls="shape-node" aria-selected="false" type="button">Single node + databases</button>
+        <button class="tab" role="tab" id="tab-cluster" aria-controls="shape-cluster" aria-selected="false" type="button">Cluster</button>
+      </div>
+
+      <!-- A · single file -->
+      <div class="shape-panel" role="tabpanel" id="shape-single" aria-labelledby="tab-single">
+        <div class="dg-stage">
+          <div class="diagram" data-links="a-irc>a-evrd, a-web>a-nginx, a-nginx>a-evrd, a-evrd>a-libera, a-evrd>a-oftc">
+            <div class="dg-row">
+              <div class="dg-col">
+                <span class="caps">Clients</span>
+                <div class="dg-node" data-node="a-irc" tabindex="0"><span class="ic"><i data-icon="terminal"></i></span><span class="od-field"><span class="nm">IRC clients</span><span class="sub">:6697 TLS</span></span></div>
+                <div class="dg-node" data-node="a-web" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">Browser</span><span class="sub">HTTPS</span></span></div>
+              </div>
+              <div class="dg-col" style="align-self:end">
+                <span class="caps">Web app</span>
+                <div class="dg-node" data-node="a-nginx" tabindex="0"><span class="ic lb"><i data-icon="server"></i></span><span class="od-field"><span class="nm">evrd-web</span><span class="sub">nginx · static SPA</span></span></div>
+              </div>
+              <div class="dg-box" data-node="a-evrd" tabindex="0">
+                <div class="dg-box-head"><span class="brand-mark" aria-hidden="true">#</span><span class="od-field"><span class="nm">evrd</span><span class="sub">one process · one disk</span></span></div>
+                <div class="dg-files">
+                  <span class="row-f"><i data-icon="file" class="i-sm"></i><span class="od-field"><span class="lb">Accounts · SQLite</span><span class="path">/var/lib/evrd/evrd.db</span></span></span>
+                  <span class="row-f"><i data-icon="layers" class="i-sm"></i><span class="od-field"><span class="lb">History · Pebble</span><span class="path">/var/lib/evrd/history/</span></span></span>
+                </div>
+              </div>
+              <div class="dg-col">
+                <span class="caps">Networks</span>
+                <div class="dg-node" data-node="a-libera" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">Libera.Chat</span><span class="sub">+6697</span></span></div>
+                <div class="dg-node" data-node="a-oftc" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">OFTC</span><span class="sub">+6697</span></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="arch-two">
+          <div class="codeblock">
+            <div class="cb-head"><span class="caps">evrd.conf</span><button class="copy-btn" type="button" data-copy-from="#cfg-single" aria-label="Copy config" data-label="Copy config"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="cfg-single"><b>listen</b>     ircs://:6697
+<b>api</b>        :8098
+<b>db</b>         sqlite:/var/lib/evrd/evrd.db
+<b>history</b>    pebble:/var/lib/evrd/history
+<b>public_url</b> https://bnc.example.org
+<b>irc_host</b>   bnc.example.org</pre>
+          </div>
+          <div class="shape-meta">
+            <div class="od-row"><span>Processes</span><span>1 evrd</span></div>
+            <div class="od-row"><span>External services</span><span>none</span></div>
+            <div class="od-row"><span>Backup</span><span>/var/lib/evrd</span></div>
+            <div class="od-row"><span>Failover</span><span>restart the process</span></div>
+            <p class="muted" style="font-size:var(--fs-sm)">Good for a personal bouncer, a Raspberry Pi or a small VPS. Pebble allows one evrd process per directory.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- B · single node + databases -->
+      <div class="shape-panel" role="tabpanel" id="shape-node" aria-labelledby="tab-node" hidden>
+        <div class="dg-stage">
+          <div class="diagram" data-links="b-irc>b-evrd, b-web>b-nginx, b-nginx>b-evrd, b-evrd>b-libera, b-evrd>b-oftc, b-evrd>b-pg:data, b-evrd>b-scy:data, b-evrd>b-vm:data">
+            <div class="dg-row">
+              <div class="dg-col">
+                <span class="caps">Clients</span>
+                <div class="dg-node" data-node="b-irc" tabindex="0"><span class="ic"><i data-icon="terminal"></i></span><span class="od-field"><span class="nm">IRC clients</span><span class="sub">:6697 TLS</span></span></div>
+                <div class="dg-node" data-node="b-web" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">Browser</span><span class="sub">HTTPS</span></span></div>
+              </div>
+              <div class="dg-col" style="align-self:end">
+                <span class="caps">Web app</span>
+                <div class="dg-node" data-node="b-nginx" tabindex="0"><span class="ic lb"><i data-icon="server"></i></span><span class="od-field"><span class="nm">evrd-web</span><span class="sub">proxies /api /auth</span></span></div>
+              </div>
+              <div class="dg-col">
+                <span class="caps">Node</span>
+                <div class="dg-node" data-node="b-evrd" tabindex="0"><span class="ic"><i data-icon="server"></i></span><span class="od-field"><span class="nm">evrd</span><span class="sub">:6697 · :8098</span></span></div>
+              </div>
+              <div class="dg-col">
+                <span class="caps">Networks</span>
+                <div class="dg-node" data-node="b-libera" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">Libera.Chat</span><span class="sub">+6697</span></span></div>
+                <div class="dg-node" data-node="b-oftc" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">OFTC</span><span class="sub">+6697</span></span></div>
+              </div>
+            </div>
+            <div class="dg-row">
+              <div class="dg-spacer" aria-hidden="true"></div>
+              <div class="dg-under" style="grid-column:span 3">
+                <div class="dg-node" data-node="b-pg" tabindex="0"><span class="ic db"><i data-icon="disk"></i></span><span class="od-field"><span class="nm">Postgres</span><span class="sub">accounts, settings</span></span></div>
+                <div class="dg-node" data-node="b-scy" tabindex="0"><span class="ic db"><i data-icon="layers"></i></span><span class="od-field"><span class="nm">ScyllaDB or Pebble</span><span class="sub">chat history</span></span></div>
+                <div class="dg-node" data-node="b-vm" tabindex="0"><span class="ic db"><i data-icon="chart"></i></span><span class="od-field"><span class="nm">VictoriaMetrics</span><span class="sub">optional · dashboards</span></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="arch-two">
+          <div class="codeblock">
+            <div class="cb-head"><span class="caps">evrd.conf</span><button class="copy-btn" type="button" data-copy-from="#cfg-node" aria-label="Copy config" data-label="Copy config"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="cfg-node"><b>listen</b>        ircs://:6697
+<b>api</b>           :8098
+<b>db</b>            postgres://evrd:…@postgres:5432/evrd
+<b>history</b>       scylla://scylla:9042/evrd
+<b>secret_key_file</b> /etc/evrd/secret.key
+<b>otel_endpoint</b> http://victoriametrics:8428/opentelemetry/v1/metrics
+<b>metrics_url</b>   http://victoriametrics:8428</pre>
+          </div>
+          <div class="shape-meta">
+            <div class="od-row"><span>Processes</span><span>evrd, evrd-web</span></div>
+            <div class="od-row"><span>External services</span><span>Postgres, ScyllaDB*</span></div>
+            <div class="od-row"><span>Metrics</span><span>VictoriaMetrics, optional</span></div>
+            <div class="od-row"><span>Failover</span><span>restart the process</span></div>
+            <p class="muted" style="font-size:var(--fs-sm)">Good for hosting a group of people on one machine, with the databases you would later share across a cluster. *Pebble works here too, as long as only one node uses it.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- C · cluster -->
+      <div class="shape-panel" role="tabpanel" id="shape-cluster" aria-labelledby="tab-cluster" hidden>
+        <div class="dg-stage">
+          <div class="diagram" data-links="c-irc>c-lb, c-web>c-nginx, c-nginx>c-lb, c-lb>c-na, c-lb>c-nb, c-lb>c-nc, c-na>c-libera, c-nb>c-oftc, c-nc>c-libera, c-na>c-nb:int, c-nb>c-nc:int, c-nc>c-pg:data, c-nc>c-scy:data">
+            <div class="dg-row">
+              <div class="dg-col">
+                <span class="caps">Clients</span>
+                <div class="dg-node" data-node="c-irc" tabindex="0"><span class="ic"><i data-icon="terminal"></i></span><span class="od-field"><span class="nm">IRC clients</span><span class="sub">:6697 TLS</span></span></div>
+                <div class="dg-node" data-node="c-web" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">Browser</span><span class="sub">HTTPS</span></span></div>
+              </div>
+              <div class="dg-col">
+                <span class="caps">Front</span>
+                <div class="dg-node" data-node="c-lb" tabindex="0"><span class="ic lb"><i data-icon="balance"></i></span><span class="od-field"><span class="nm">Load balancer</span><span class="sub">TCP :6697 · HTTP :8098</span></span></div>
+                <div class="dg-node" data-node="c-nginx" tabindex="0"><span class="ic lb"><i data-icon="server"></i></span><span class="od-field"><span class="nm">evrd-web</span><span class="sub">static SPA</span></span></div>
+              </div>
+              <div class="dg-col">
+                <span class="caps">Nodes</span>
+                <div class="dg-node" data-node="c-na" tabindex="0"><span class="ic"><i data-icon="server"></i></span><span class="od-field"><span class="nm">node-a</span><span class="sub">owns ⅓ of users</span></span></div>
+                <div class="dg-node" data-node="c-nb" tabindex="0"><span class="ic"><i data-icon="server"></i></span><span class="od-field"><span class="nm">node-b</span><span class="sub">owns ⅓ of users</span></span></div>
+                <div class="dg-node" data-node="c-nc" tabindex="0"><span class="ic"><i data-icon="server"></i></span><span class="od-field"><span class="nm">node-c</span><span class="sub">owns ⅓ of users</span></span></div>
+              </div>
+              <div class="dg-col">
+                <span class="caps">Networks</span>
+                <div class="dg-node" data-node="c-libera" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">Libera.Chat</span><span class="sub">+6697</span></span></div>
+                <div class="dg-node" data-node="c-oftc" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">OFTC</span><span class="sub">+6697</span></span></div>
+              </div>
+            </div>
+            <div class="dg-row">
+              <div class="dg-spacer" aria-hidden="true"></div>
+              <div class="dg-spacer" aria-hidden="true"></div>
+              <div class="dg-under" style="--under-cols:2;grid-column:span 2">
+                <div class="dg-node" data-node="c-pg" tabindex="0"><span class="ic db"><i data-icon="disk"></i></span><span class="od-field"><span class="nm">Postgres</span><span class="sub">accounts · leases</span></span></div>
+                <div class="dg-node" data-node="c-scy" tabindex="0"><span class="ic db"><i data-icon="layers"></i></span><span class="od-field"><span class="nm">ScyllaDB</span><span class="sub">shared history</span></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="dg-legend">
+            <span><i style="--c:var(--cyan)"></i>Client and network traffic</span>
+            <span><i class="dash" style="--c:var(--ice)"></i>Internal :8099 HTTP / :6699 IRC between nodes</span>
+            <span><i style="--c:var(--nick)"></i>Every node reads and writes the shared databases</span>
+          </div>
+        </div>
+        <div class="arch-two">
+          <div class="codeblock">
+            <div class="cb-head"><span class="caps">every node</span><button class="copy-btn" type="button" data-copy-from="#cfg-cluster" aria-label="Copy config" data-label="Copy config"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="cfg-cluster"><b>db</b>                   postgres://…/evrd
+<b>history</b>              scylla://db1,db2/evrd   <span class="c"># must be shared</span>
+<b>internal_listen</b>      :8099
+<b>internal_irc_listen</b>  :6699
+<b>cluster_lease</b>        20s
+
+<span class="c"># per node, in the environment:</span>
+<em>EVRD_NODE_ID</em>=node-a
+<em>EVRD_INTERNAL_URL</em>=http://evrd-a.internal:8099
+<em>EVRD_INTERNAL_IRC_ADDR</em>=evrd-a.internal:6699
+<em>EVRD_CLUSTER_SECRET</em>=&lt;same long secret everywhere&gt;</pre>
+          </div>
+          <div class="shape-meta">
+            <div class="od-row"><span>Nodes</span><span>any number, same config</span></div>
+            <div class="od-row"><span>Load balancer</span><span>nginx lb.conf · Traefik ≥ 3.7</span></div>
+            <div class="od-row"><span>Shared</span><span>Postgres, ScyllaDB, secret_key</span></div>
+            <div class="od-row"><span>Failover</span><span>≈ 20 s (cluster_lease)</span></div>
+            <p class="muted" style="font-size:var(--fs-sm)">Good for hosting a community with no single machine to lose. <span class="code">make up-prod</span> runs exactly this shape with two nodes behind nginx. The load balancer needs TCP passthrough for IRC, WebSocket upgrades for HTTP, a short connect timeout and health checks.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 03 routing -->
+  <section class="arch-section" id="routing" aria-labelledby="route-h">
+    <div class="wrap">
+      <div class="arch-intro">
+        <span class="eyebrow">03 · Request routing</span>
+        <h2 class="h2-site" id="route-h">Any node is a front door</h2>
+        <p>In a cluster each user is owned by exactly one node, which runs their networks and serves their clients. A client can land on any node, and that node forwards it to the owner. Nodes need no message bus, only one extra hop.</p>
+      </div>
+
+      <div class="stepper" data-stepper data-steps="4">
+        <div class="step-bar">
+          <div class="step-dots" role="group" aria-label="Routing steps">
+            <button class="step-dot" type="button" aria-label="Step 1">1</button>
+            <button class="step-dot" type="button" aria-label="Step 2">2</button>
+            <button class="step-dot" type="button" aria-label="Step 3">3</button>
+            <button class="step-dot" type="button" aria-label="Step 4">4</button>
+          </div>
+          <div class="od-row">
+            <span class="step-count" aria-live="polite"></span>
+            <button class="btn btn-sm" type="button" data-prev aria-label="Previous step"><i data-icon="chevronLeft" class="i-sm"></i></button>
+            <button class="btn btn-sm" type="button" data-next aria-label="Next step"><i data-icon="chevron" class="i-sm"></i></button>
+            <button class="btn btn-sm btn-primary" type="button" data-play aria-pressed="false"><i data-icon="play" class="i-sm"></i>Play</button>
+          </div>
+        </div>
+
+        <div class="dg-stage">
+          <div class="diagram"
+               data-links-0="r-client>r-lb"
+               data-links-1="r-client>r-lb, r-lb>r-nb"
+               data-links-2="r-client>r-lb, r-lb>r-nb, r-nb>r-pg:data"
+               data-links-3="r-client>r-lb, r-lb>r-nb, r-nb>r-na:int, r-na>r-libera">
+            <div class="dg-row">
+              <div class="dg-col">
+                <span class="caps">Client</span>
+                <div class="dg-node" data-node="r-client" tabindex="0" data-states="live,live,live,connected"><span class="ic"><i data-icon="monitor"></i></span><span class="od-field"><span class="nm">alice · HexChat</span><span class="sub">PASS alice/libera:…</span></span><span class="st-chip" hidden></span></div>
+              </div>
+              <div class="dg-col">
+                <span class="caps">L4 balancer</span>
+                <div class="dg-node" data-node="r-lb" tabindex="0"><span class="ic lb"><i data-icon="balance"></i></span><span class="od-field"><span class="nm">Load balancer</span><span class="sub">round-robin · TCP</span></span></div>
+              </div>
+              <div class="dg-col">
+                <span class="caps">Nodes</span>
+                <div class="dg-node" data-node="r-na" tabindex="0" data-states="idle,idle,idle,owner"><span class="ic"><i data-icon="server"></i></span><span class="od-field"><span class="nm">node-a</span><span class="sub">owns alice</span></span><span class="st-chip" hidden></span></div>
+                <div class="dg-node" data-node="r-nb" tabindex="0" data-states="idle,front,lookup,front"><span class="ic"><i data-icon="server"></i></span><span class="od-field"><span class="nm">node-b</span><span class="sub">picked by the balancer</span></span><span class="st-chip" hidden></span></div>
+              </div>
+              <div class="dg-col">
+                <span class="caps">Network</span>
+                <div class="dg-node" data-node="r-libera" tabindex="0" data-states="connected"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">Libera.Chat</span><span class="sub">alice's upstream</span></span><span class="st-chip" hidden></span></div>
+              </div>
+            </div>
+            <div class="dg-row">
+              <div class="dg-spacer" aria-hidden="true"></div>
+              <div class="dg-spacer" aria-hidden="true"></div>
+              <div class="dg-col">
+                <div class="dg-node" data-node="r-pg" tabindex="0" data-states="idle,idle,lookup,idle"><span class="ic db"><i data-icon="disk"></i></span><span class="od-field"><span class="nm">Postgres</span><span class="sub">nodes · user_leases</span></span><span class="st-chip" hidden></span></div>
+              </div>
+              <div class="dg-spacer" aria-hidden="true"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-caps" aria-live="polite">
+          <div class="step-cap" data-cap="0"><span class="t">TCP :6697</span><div><h3>The client connects to the balancer</h3><p>The balancer passes IRC through as plain TCP, so TLS on 6697 terminates at evrd. It can't route by user, because IRC only reveals the username in <span class="code">PASS</span> once the connection is already open.</p></div></div>
+          <div class="step-cap" data-cap="1" hidden><span class="t">any node</span><div><h3>Any node answers</h3><p>node-b accepts the connection, answers <span class="code">CAP</span> and reads the registration: <span class="code">PASS</span>, <span class="code">NICK</span> and <span class="code">USER</span>.</p></div></div>
+          <div class="step-cap" data-cap="2" hidden><span class="t">rendezvous</span><div><h3>Find the owner</h3><p>Every node computes the same owner by rendezvous-hashing the user ID over the live nodes, and Postgres holds the lease that confirms it. When a node joins or leaves, only about 1/N of users move.</p></div></div>
+          <div class="step-cap ok" data-cap="3" hidden><span class="t">EVRD-PROXY</span><div><h3>Splice to the owner</h3><p>node-b connects to node-a's internal IRC port, sends <span class="code">EVRD-PROXY &lt;secret&gt; &lt;client ip&gt; &lt;caps&gt;</span>, replays the registration and any bytes already received, then splices the two sockets. node-a authenticates alice as usual. For the web app, pages that only need the database are served locally. The chat WebSocket, connect and disconnect, and <span class="code">*status</span> are reverse-proxied to the owner's internal HTTP port.</p></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 04 failover -->
+  <section class="arch-section" id="failover" aria-labelledby="fail-h">
+    <div class="wrap">
+      <div class="arch-intro">
+        <span class="eyebrow">04 · Failover</span>
+        <h2 class="h2-site" id="fail-h">When a node goes away</h2>
+        <p>Ownership is a lease in Postgres. Nodes heartbeat every 5 s and count as live if they beat within 15 s. Leases last 20 s. Step through a crash, or switch to a rolling deploy, where the node drains on SIGTERM instead.</p>
+      </div>
+
+      <div class="stepper" data-stepper data-steps="4" data-mode="crash">
+        <div class="step-bar">
+          <div class="od-row" style="--od-gap:12px;flex-wrap:wrap">
+            <div class="tabs mode-switch" role="group" aria-label="Failure type">
+              <button class="tab" type="button" data-mode-btn="crash" aria-pressed="true">Node crashes</button>
+              <button class="tab" type="button" data-mode-btn="drain" aria-pressed="false">Rolling deploy</button>
+            </div>
+            <div class="step-dots" role="group" aria-label="Failover steps">
+              <button class="step-dot" type="button" aria-label="Step 1">1</button>
+              <button class="step-dot" type="button" aria-label="Step 2">2</button>
+              <button class="step-dot" type="button" aria-label="Step 3">3</button>
+              <button class="step-dot" type="button" aria-label="Step 4">4</button>
+            </div>
+          </div>
+          <div class="od-row">
+            <span class="step-count" aria-live="polite"></span>
+            <button class="btn btn-sm" type="button" data-prev aria-label="Previous step"><i data-icon="chevronLeft" class="i-sm"></i></button>
+            <button class="btn btn-sm" type="button" data-next aria-label="Next step"><i data-icon="chevron" class="i-sm"></i></button>
+            <button class="btn btn-sm btn-primary" type="button" data-play aria-pressed="false"><i data-icon="play" class="i-sm"></i>Play</button>
+          </div>
+        </div>
+
+        <div class="dg-stage">
+          <div class="diagram"
+               data-links-0="f-client>f-lb, f-lb>f-na, f-na>f-libera, f-na>f-pg:data"
+               data-links-crash-1="f-client>f-lb:bad, f-lb>f-na:bad, f-na>f-libera:bad"
+               data-links-drain-1="f-client>f-lb:warn, f-lb>f-na:warn, f-na>f-libera:warn, f-na>f-pg:data"
+               data-links-2="f-nb>f-pg:data, f-nb>f-libera:warn"
+               data-links-3="f-client>f-lb, f-lb>f-nb, f-nb>f-libera, f-nb>f-pg:data">
+            <div class="dg-row">
+              <div class="dg-col">
+                <span class="caps">Client</span>
+                <div class="dg-node" data-node="f-client" tabindex="0" data-states="connected,reconnect,reconnect,connected"><span class="ic"><i data-icon="monitor"></i></span><span class="od-field"><span class="nm">alice · HexChat</span><span class="sub">auto-reconnect on</span></span><span class="st-chip" hidden></span></div>
+              </div>
+              <div class="dg-col">
+                <span class="caps">Balancer</span>
+                <div class="dg-node" data-node="f-lb" tabindex="0"><span class="ic lb"><i data-icon="balance"></i></span><span class="od-field"><span class="nm">Load balancer</span><span class="sub">health checks · 2s connect</span></span></div>
+              </div>
+              <div class="dg-col">
+                <span class="caps">Nodes</span>
+                <div class="dg-node" data-node="f-na" tabindex="0" data-states="owner,down,down,down" data-states-drain="owner,drain,idle,idle"><span class="ic"><i data-icon="server"></i></span><span class="od-field"><span class="nm">node-a</span><span class="sub">epoch 7</span></span><span class="st-chip" hidden></span></div>
+                <div class="dg-node" data-node="f-nb" tabindex="0" data-states="idle,idle,taking,owner"><span class="ic"><i data-icon="server"></i></span><span class="od-field"><span class="nm">node-b</span><span class="sub">next in alice's order</span></span><span class="st-chip" hidden></span></div>
+                <div class="dg-node" data-node="f-nc" tabindex="0" data-states="idle"><span class="ic"><i data-icon="server"></i></span><span class="od-field"><span class="nm">node-c</span><span class="sub">its own users</span></span><span class="st-chip" hidden></span></div>
+              </div>
+              <div class="dg-col">
+                <span class="caps">Network</span>
+                <div class="dg-node" data-node="f-libera" tabindex="0" data-states="connected,retry,reconnect,connected"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">Libera.Chat</span><span class="sub">alice's upstream</span></span><span class="st-chip" hidden></span></div>
+              </div>
+            </div>
+            <div class="dg-row">
+              <div class="dg-spacer" aria-hidden="true"></div>
+              <div class="dg-spacer" aria-hidden="true"></div>
+              <div class="dg-col">
+                <div class="dg-node" data-node="f-pg" tabindex="0" data-states="live,live,lookup,live"><span class="ic db"><i data-icon="disk"></i></span><span class="od-field"><span class="nm">Postgres</span><span class="sub">user_leases · TTL 20s</span></span><span class="st-chip" hidden></span></div>
+              </div>
+              <div class="dg-spacer" aria-hidden="true"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-caps" aria-live="polite">
+          <div class="step-cap ok" data-cap="0"><span class="t">t = 0</span><div><h3>Normal operation</h3><p>node-a owns alice. It runs her Libera.Chat connection, serves her HexChat and renews her lease with one batched statement per heartbeat.</p></div></div>
+
+          <div class="step-cap bad" data-cap="1" data-mode="crash" hidden><span class="t">t = 0 s</span><div><h3>node-a dies</h3><p>Alice's upstream connection and her client connection drop with it. The balancer's short connect timeout and passive health checks take node-a out of rotation, so new connections don't wait a minute on a dead node.</p></div></div>
+          <div class="step-cap warn" data-cap="1" data-mode="drain" hidden><span class="t">SIGTERM</span><div><h3>node-a drains</h3><p>On SIGTERM a node stops its users' connections and releases their leases straight away, instead of letting them run out.</p></div></div>
+
+          <div class="step-cap warn" data-cap="2" data-mode="crash" hidden><span class="t">t ≤ 20 s</span><div><h3>The lease expires, node-b takes over</h3><p>Once alice's lease passes its TTL, the next node in her rendezvous order acquires it with a conditional update and bumps the <span class="code">epoch</span>. The internal API refuses late requests from the old owner.</p></div></div>
+          <div class="step-cap warn" data-cap="2" data-mode="drain" hidden><span class="t">t ≤ 5 s</span><div><h3>The next tick picks her up</h3><p>Because the lease was released rather than left to expire, node-b acquires alice on its next tick, within 5 s, and starts reconnecting her networks at the paced <span class="code">connect_rate</span>.</p></div></div>
+
+          <div class="step-cap ok" data-cap="3" data-mode="crash" hidden><span class="t">≈ 19 s</span><div><h3>Back online on node-b</h3><p>On the dev stack, after a <span class="code">docker kill</span> of a node, a user's network was connected again on the other node 19 s later. Alice's client reconnects through any node and lands on the new owner. Networks see a disconnect and a reconnect, because a TCP connection to an IRC server can't move between machines.</p></div></div>
+          <div class="step-cap ok" data-cap="3" data-mode="drain" hidden><span class="t">deployed</span><div><h3>node-a comes back empty</h3><p>node-b now owns alice. When the new node-a starts, gradual rebalancing (at most 50 users per tick, once the node has been up 10 s) moves its share of users back over time.</p></div></div>
+        </div>
+
+        <div class="callout warn"><i data-icon="shield"></i><p><strong>Fencing:</strong> a node that can't renew its leases, for example because it lost Postgres, stops its users' connections at half the TTL, before anyone else may take over. Two nodes never hold the same nick on a network. A short Postgres outage is better than split-brain.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 05 outbound -->
+  <section class="arch-section" id="outbound" aria-labelledby="out-h">
+    <div class="wrap">
+      <div class="arch-intro">
+        <span class="eyebrow">05 · Outbound addresses</span>
+        <h2 class="h2-site" id="out-h">Give every user an address of their own</h2>
+        <p>Large networks throttle and cap connections per source address. Without help, every user on a node would connect to Libera.Chat from that node's single address.</p>
+      </div>
+
+      <div class="dg-stage">
+        <div class="diagram" data-links="o-node>o-a1, o-node>o-a2, o-node>o-a3, o-a1>o-libera, o-a2>o-libera, o-a3>o-libera:warn">
+          <div class="dg-row">
+            <div class="dg-col">
+              <span class="caps">Node</span>
+              <div class="dg-node" data-node="o-node" tabindex="0"><span class="ic"><i data-icon="server"></i></span><span class="od-field"><span class="nm">node-a</span><span class="sub">connect_rate 5</span></span></div>
+            </div>
+            <div class="dg-col">
+              <span class="caps">upstream_prefix6 2001:db8:42::/64</span>
+              <div class="dg-node" data-node="o-a1" tabindex="0"><span class="ic"><i data-icon="route"></i></span><span class="od-field"><span class="nm">alice</span><span class="sub">2001:db8:42::a1f3</span></span></div>
+              <div class="dg-node" data-node="o-a2" tabindex="0"><span class="ic"><i data-icon="route"></i></span><span class="od-field"><span class="nm">bob</span><span class="sub">2001:db8:42::7c20</span></span></div>
+              <div class="dg-node" data-node="o-a3" tabindex="0"><span class="ic"><i data-icon="route"></i></span><span class="od-field"><span class="nm">carol</span><span class="sub">2001:db8:42::e911 · paced</span></span></div>
+            </div>
+            <div class="dg-col">
+              <span class="caps">Network</span>
+              <div class="dg-node" data-node="o-libera" tabindex="0"><span class="ic"><i data-icon="globe"></i></span><span class="od-field"><span class="nm">Libera.Chat</span><span class="sub">sees 3 addresses</span></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="dg-legend"><span>Addresses come from the 2001:db8::/32 documentation range. A user always connects from the same address.</span></div>
+      </div>
+
+      <div class="arch-two">
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">evrd.conf · per node</span><button class="copy-btn" type="button" data-copy-from="#cfg-out" aria-label="Copy config" data-label="Copy config"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="cfg-out"><b>connect_rate</b>     5                       <span class="c"># most connects/second to one server, per node</span>
+<b>upstream_bind</b>    192.0.2.10 192.0.2.11   <span class="c"># spread users over these (stable per user)</span>
+<b>upstream_prefix6</b> 2001:db8:42::/64        <span class="c"># or: an IPv6 address for every user</span>
+<b>bindhost</b>         192.0.2.20 vhost.example.org   <span class="c"># addresses users may pick</span>
+
+<span class="c"># a prefix needs Linux and a local route:</span>
+ip -6 route add local 2001:db8:42::/64 dev lo</pre>
+        </div>
+        <div>
+          <h3>What each one does</h3>
+          <ul>
+            <li><span class="code">connect_rate</span> spaces connects to each IRC server host per node, and reconnect backoff is jittered, so a takeover or netsplit recovery doesn't flood a network.</li>
+            <li><span class="code">upstream_bind</span> spreads users over a list of source addresses, with each user keeping the same one.</li>
+            <li><span class="code">upstream_prefix6</span> gives every user their own IPv6 address from a routed prefix.</li>
+            <li><span class="code">bindhost</span> is ZNC's BindHost. It lists addresses users may choose from, and admins can lock a user's choice.</li>
+          </ul>
+          <p style="margin-top:var(--s3)">Per-address caps on large networks are usually the first real limit. Talk to the networks you care about about limits for your ranges.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 06 choosing -->
+  <section class="arch-section" id="choose" aria-labelledby="choose-h">
+    <div class="wrap">
+      <div class="arch-intro">
+        <span class="eyebrow">06 · Choosing a setup</span>
+        <h2 class="h2-site" id="choose-h">Start small, grow when you need to</h2>
+        <p>The shapes differ only in configuration, so you can start with the simplest one and move up when you need to.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table class="compare">
+          <thead><tr><th scope="col"></th><th scope="col">Single file</th><th scope="col">Single node + databases</th><th scope="col">Cluster</th></tr></thead>
+          <tbody>
+            <tr><td>evrd processes</td><td>1</td><td>1</td><td>2 or more</td></tr>
+            <tr><td>Accounts (<span class="code">db</span>)</td><td>SQLite</td><td>Postgres</td><td>Postgres, shared</td></tr>
+            <tr><td>History (<span class="code">history</span>)</td><td>Pebble</td><td>ScyllaDB or Pebble</td><td>ScyllaDB, shared</td></tr>
+            <tr><td>Load balancer</td><td><span class="chip">None</span></td><td><span class="chip">None</span></td><td><span class="chip nick">nginx or Traefik ≥ 3.7</span></td></tr>
+            <tr><td>A node fails</td><td><span class="chip bad">Down until restart</span></td><td><span class="chip bad">Down until restart</span></td><td><span class="chip ok">Users move in ≈ 20 s</span></td></tr>
+            <tr><td>Deploying a new version</td><td>Brief restart</td><td>Brief restart</td><td>Rolling, drain on SIGTERM</td></tr>
+            <tr><td>Good for</td><td>One person, a Pi or a small VPS</td><td>A group on one machine</td><td>A community with no machine to lose</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="arch-two">
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">moving history to ScyllaDB</span><button class="copy-btn" type="button" data-copy="evrctl history copy pebble:/var/lib/evrd/history scylla://db1,db2/evrd" aria-label="Copy command" data-label="Copy command"><i data-icon="copy"></i></button></div>
+<pre class="snippet"><span class="c"># stop evrd first when copying from a Pebble store</span>
+<b>evrctl history copy</b> pebble:/var/lib/evrd/history scylla://db1,db2/evrd</pre>
+        </div>
+        <div>
+          <h3>Before you go multi-node</h3>
+          <ul>
+            <li>History has to be shared, so clusters need ScyllaDB.</li>
+            <li>Every node needs the same <span class="code">secret_key</span> and <span class="code">cluster_secret</span>. Keep both out of database backups.</li>
+            <li>Leave <span class="code">settings_write_conf</span> off, so the database is the one place admin settings live.</li>
+            <li>Keep the internal ports (:8099, :6699) on a private network.</li>
+          </ul>
+          <div class="od-cluster" style="margin-top:var(--s5)"><a class="btn btn-primary" href="docs.html#clustering"><i data-icon="book"></i>Cluster setup docs</a><a class="btn" href="download.html#install">Install evrd</a></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+<script src="assets/site.js"></script>
+<script>
+  // section pills follow the reader
+  (() => {
+    const links = [...document.querySelectorAll('.arch-nav a')]
+    const spy = new IntersectionObserver((es) => es.forEach((e) => {
+      if (!e.isIntersecting) return
+      links.forEach((l) => l.setAttribute('aria-current', String(l.hash === '#' + e.target.id)))
+    }), { rootMargin: '-30% 0px -60% 0px' })
+    document.querySelectorAll('.arch-section').forEach((s) => spy.observe(s))
+  })()
+</script>
+</body>
+</html>

@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs · evrd</title>
+<meta name="description" content="Install, configure and run evrd, the IRC bouncer: native clients, *status commands, network settings, SSO, clustering and metrics.">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Docs · evrd">
+<meta property="og:description" content="Install, configure and run evrd, the IRC bouncer: native clients, *status commands, network settings, SSO, clustering and metrics.">
+<meta property="og:image" content="assets/og-overview.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0f1a1e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Geist+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="assets/evrd.css">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body class="site" data-page="docs">
+<main id="main">
+  <section class="page-hero" aria-labelledby="docs-h" style="padding-bottom:0">
+    <div class="wrap">
+      <span class="eyebrow">Documentation</span>
+      <h1 id="docs-h">Run evrd</h1>
+      <p class="lead">Install it, attach your clients, and scale from one node to a cluster.</p>
+      <div class="tele-row"><span>15 sections</span><span>source <b>README.md</b></span><span>config <b>evrd.conf</b></span><span>admin <b>evrctl</b></span></div>
+      <svg class="ribbon" aria-hidden="true"></svg>
+    </div>
+  </section>
+  <div class="wrap docs">
+
+    <!-- ============================================================ nav -->
+    <nav class="docs-nav" aria-label="Documentation">
+      <div class="search">
+        <label class="sr-only" for="docs-q">Search the docs</label>
+        <i data-icon="search" class="i-sm"></i>
+        <input class="input" id="docs-q" type="search" placeholder="Search the docs" autocomplete="off">
+      </div>
+      <div class="field docs-jump">
+        <label for="docs-jump">Jump to section</label>
+        <select class="select" id="docs-jump">
+          <option value="#quick-start">Quick start</option>
+          <option value="#from-source">Build from source</option>
+          <option value="#web-client">Web client</option>
+          <option value="#native-clients">Native IRC clients</option>
+          <option value="#status">*status commands</option>
+          <option value="#networks">Network settings</option>
+          <option value="#configuration">Configuration</option>
+          <option value="#accounts">Accounts and sign-in</option>
+          <option value="#server-settings">Server settings</option>
+          <option value="#secrets">Saved passwords</option>
+          <option value="#clustering">Running several nodes</option>
+          <option value="#upstream">Connections to networks</option>
+          <option value="#metrics">Metrics</option>
+          <option value="#evrctl">evrctl reference</option>
+          <option value="#releases">Releases and versions</option>
+        </select>
+      </div>
+      <div class="docs-group"><span class="caps">Get started</span>
+        <a class="docs-link" href="#quick-start">Quick start</a>
+        <a class="docs-link" href="#from-source">Build from source</a>
+      </div>
+      <div class="docs-group"><span class="caps">Use evrd</span>
+        <a class="docs-link" href="#web-client">Web client</a>
+        <a class="docs-link" href="#native-clients">Native IRC clients</a>
+        <a class="docs-link" href="#status">*status commands</a>
+        <a class="docs-link" href="#networks">Network settings</a>
+      </div>
+      <div class="docs-group"><span class="caps">Operate</span>
+        <a class="docs-link" href="#configuration">Configuration</a>
+        <a class="docs-link" href="#accounts">Accounts and sign-in</a>
+        <a class="docs-link" href="#server-settings">Server settings</a>
+        <a class="docs-link" href="#secrets">Saved passwords</a>
+        <a class="docs-link" href="#clustering">Running several nodes</a>
+        <a class="docs-link" href="architecture.html">Architecture and diagrams ↗</a>
+        <a class="docs-link" href="#upstream">Connections to networks</a>
+        <a class="docs-link" href="#metrics">Metrics</a>
+      </div>
+      <div class="docs-group"><span class="caps">Reference</span>
+        <a class="docs-link" href="#evrctl">evrctl</a>
+        <a class="docs-link" href="#releases">Releases and versions</a>
+      </div>
+      <p class="docs-empty" id="docs-empty" hidden>No sections match. Try “TLS”, “SASL” or “cluster”.</p>
+    </nav>
+
+    <!-- ============================================================ content -->
+    <article class="prose" id="prose">
+      <div class="empty" id="docs-noresult" hidden>
+        <span class="ic"><i data-icon="search"></i></span>
+        <h3>Nothing matches that search</h3>
+        <p>Search covers every section on this page. Try a directive name like <span class="code">history</span> or a command like <span class="code">playback</span>.</p>
+        <button class="btn" type="button" id="docs-clear">Clear search</button>
+      </div>
+
+      <section id="quick-start" aria-labelledby="h-qs">
+        <span class="eyebrow section-kicker">Get started</span>
+        <h2 id="h-qs">Quick start <a class="anchor" href="#quick-start" aria-label="Link to Quick start">#</a></h2>
+        <p>evrd keeps your IRC connection alive while you're away, buffers what you miss, and lets clients (native or web) attach and detach whenever you like. The quickest way to run it is with the published container images: <span class="code">ghcr.io/4evrd/evrd</span> (the daemon and <span class="code">evrctl</span>) and <span class="code">ghcr.io/4evrd/evrd-web</span> (the web app on nginx).</p>
+        <ol class="steps" style="margin-top:var(--s6)">
+          <li><div>
+            <strong>Make a secret key</strong>
+            <p>It encrypts the network passwords evrd saves (NickServ, SASL). Keep a copy somewhere safe; without it they can't be read back.</p>
+            <div class="codeblock">
+              <div class="cb-head"><span class="caps">shell</span><button class="copy-btn" type="button" data-copy="echo &quot;EVRD_SECRET_KEY=$(docker run --rm --entrypoint evrctl ghcr.io/4evrd/evrd genkey)&quot; &gt; .env" aria-label="Copy command" data-label="Copy command"><i data-icon="copy"></i></button></div>
+<pre class="snippet"><b>echo</b> "EVRD_SECRET_KEY=$(docker run --rm --entrypoint evrctl ghcr.io/4evrd/evrd genkey)" &gt; .env</pre>
+            </div>
+          </div></li>
+          <li><div>
+            <strong>Write a config file</strong>
+            <p>A single node needs no external database: SQLite holds accounts and an embedded Pebble store holds history.</p>
+            <div class="codeblock">
+              <div class="cb-head"><span class="caps">evrd.conf</span><button class="copy-btn" type="button" data-copy-from="#qs-conf" aria-label="Copy evrd.conf" data-label="Copy evrd.conf"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="qs-conf"><b>listen</b>     ircs://:6697
+<b>api</b>        :8098
+<b>db</b>         sqlite:/var/lib/evrd/evrd.db
+<b>history</b>    pebble:/var/lib/evrd/history
+<b>public_url</b> https://bnc.example.org
+<b>irc_host</b>   bnc.example.org</pre>
+            </div>
+          </div></li>
+          <li><div>
+            <strong>Start evrd and the web app</strong>
+            <p>The web image proxies <span class="code">/api</span> and <span class="code">/auth</span> to a host named <span class="code">evrd-api</span> on port 8098, so name the daemon's service that.</p>
+            <div class="codeblock">
+              <div class="cb-head"><span class="caps">docker-compose.yml</span><button class="copy-btn" type="button" data-copy-from="#qs-compose" aria-label="Copy compose file" data-label="Copy compose file"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="qs-compose"><b>services:</b>
+  <em>evrd-api:</em>
+    image: ghcr.io/4evrd/evrd:latest
+    command: ["-config", "/etc/evrd/evrd.conf"]
+    environment:
+      EVRD_SECRET_KEY: ${EVRD_SECRET_KEY}   <span class="c"># from .env</span>
+    volumes:
+      - ./evrd.conf:/etc/evrd/evrd.conf:ro
+      - evrd-data:/var/lib/evrd
+    ports:
+      - "6697:6697"   <span class="c"># IRC — clients attach here</span>
+    restart: unless-stopped
+  <em>evrd-web:</em>
+    image: ghcr.io/4evrd/evrd-web:latest
+    ports:
+      - "8080:80"     <span class="c"># web app; put TLS in front of it</span>
+    restart: unless-stopped
+<b>volumes:</b>
+  evrd-data:</pre>
+            </div>
+          </div></li>
+          <li><div>
+            <strong>Create the first admin</strong>
+            <div class="codeblock">
+              <div class="cb-head"><span class="caps">shell</span><button class="copy-btn" type="button" data-copy="docker compose exec evrd-api evrctl -config /etc/evrd/evrd.conf user add -admin james 'a-long-password'" aria-label="Copy command" data-label="Copy command"><i data-icon="copy"></i></button></div>
+<pre class="snippet"><b>docker compose exec</b> evrd-api evrctl -config /etc/evrd/evrd.conf \
+  user add -admin james <em>'a-long-password'</em></pre>
+            </div>
+          </div></li>
+          <li><div>
+            <strong>Sign in and add a network</strong>
+            <p>Open the web app (port 8080, or your <span class="code">public_url</span> once a TLS proxy is in front), sign in, and add a network such as <span class="code">irc.libera.chat</span> on <span class="code">+6697</span>. evrd dials it, registers, autojoins your channels and starts buffering. Then <a href="#native-clients">attach a native client</a>.</p>
+          </div></li>
+        </ol>
+        <div class="callout" style="margin-top:var(--s6)"><i data-icon="info"></i><p>Passwords need at least 10 characters. A password an admin sets is temporary: the user picks their own at next sign-in. Testing over plain http first? Add <span class="code">cookie_secure no</span> to evrd.conf until TLS is in front, or the browser won't keep you signed in. For Postgres and metrics, the repository's <a href="https://github.com/4evrd/evrd/tree/main/deploy/docker"><span class="code">deploy/docker</span></a> setup has them ready.</p></div>
+      </section>
+
+      <section id="from-source" aria-labelledby="h-src">
+        <span class="eyebrow section-kicker">Get started</span>
+        <h2 id="h-src">Build from source <a class="anchor" href="#from-source" aria-label="Link to Build from source">#</a></h2>
+        <p>evrd is pure Go (no cgo), so it cross-compiles anywhere Go 1.26 runs. The web client is a Svelte 5 + Vite app built with pnpm.</p>
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">shell</span><button class="copy-btn" type="button" data-copy-from="#src-cmd" aria-label="Copy commands" data-label="Copy commands"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="src-cmd"><b>git clone</b> https://github.com/4evrd/evrd.git && cd evrd
+<b>make build</b>       <span class="c"># bin/evrd and bin/evrctl</span>
+<b>make web</b>         <span class="c"># web/build</span>
+./bin/evrd -version
+./bin/evrd -config evrd.conf</pre>
+        </div>
+        <h3 id="dev-stack">Development stack</h3>
+        <p><span class="code">make up</span> runs the whole stack with hot reload: an upstream ergo IRC server, two evrd nodes behind nginx, Postgres, ScyllaDB, VictoriaMetrics and the web client on <span class="code">http://localhost:5173</span>. <span class="code">make e2e</span> runs the Playwright suite against it.</p>
+      </section>
+
+      <section id="web-client" aria-labelledby="h-web">
+        <span class="eyebrow section-kicker">Use evrd</span>
+        <h2 id="h-web">Web client <a class="anchor" href="#web-client" aria-label="Link to Web client">#</a></h2>
+        <p>The web app shows your networks, channels and private messages with unread counts, mentions, members and topics, and stays in sync with every attached IRC client. Anything you send there shows up in your other clients too, because all sessions share one upstream connection.</p>
+        <p>The chat input understands <span class="code">/join</span>, <span class="code">/part</span>, <span class="code">/msg</span>, <span class="code">/query</span>, <span class="code">/me</span>, <span class="code">/notice</span>, <span class="code">/nick</span>, <span class="code">/topic</span>, <span class="code">/mode</span>, <span class="code">/kick</span>, <span class="code">/close</span>, <span class="code">/quote</span> and <span class="code">/help</span>, and runs <span class="code">*status</span> commands with <span class="code">/status help</span>.</p>
+      </section>
+
+      <section id="native-clients" aria-labelledby="h-native">
+        <span class="eyebrow section-kicker">Use evrd</span>
+        <h2 id="h-native">Native IRC clients <a class="anchor" href="#native-clients" aria-label="Link to Native IRC clients">#</a></h2>
+        <p>Point HexChat, irssi, WeeChat or any other IRC client at the bouncer and authenticate with a <strong>server password</strong>:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Server password</th><th scope="col">Attaches to</th></tr></thead>
+            <tbody>
+              <tr><td><span class="code">user:password</span></td><td>your default network</td></tr>
+              <tr><td><span class="code">user/network:password</span></td><td>a specific network</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The password is either your account password or an <strong>IRC client password</strong> made on the web app's <em>IRC clients</em> page. Client passwords are the only option for accounts that sign in with SSO, and you can revoke them one client at a time.</p>
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">irssi</span><button class="copy-btn" type="button" data-copy="/connect -tls bnc.example.org 6697 james/libera:a-long-password" aria-label="Copy command" data-label="Copy command"><i data-icon="copy"></i></button></div>
+<pre class="snippet"><b>/connect</b> -tls bnc.example.org 6697 <em>james/libera:a-long-password</em></pre>
+        </div>
+        <h3 id="on-connect">What you get on connect</h3>
+        <ul>
+          <li>The welcome burst, your channels with names and topic, backlog replay, then live traffic.</li>
+          <li><span class="code">/join</span> and <span class="code">/part</span> update the network's saved channel list, and <span class="code">/nick</span> changes your nick upstream.</li>
+          <li>Your own notices and <span class="code">/me</span> actions are saved and shown on your other clients.</li>
+          <li>Capabilities <span class="code">echo-message</span> and <span class="code">server-time</span>.</li>
+        </ul>
+        <h3 id="buffextras">Channel events in backlog</h3>
+        <p>Joins, parts, quits, kicks, nick changes, topics and modes are saved alongside messages. On replay they come from <span class="code">*buffextras</span> as plain text, for example <span class="code">bob is now known as robert</span>, the same way ZNC's buffextras module does it, so they never confuse a client's nick list.</p>
+        <div class="callout warn"><i data-icon="alert"></i><p>Port 6667 is plaintext. Use 6697 with TLS anywhere outside a private network, and set <span class="code">tls_cert</span> / <span class="code">tls_key</span> for a real certificate.</p></div>
+      </section>
+
+      <section id="status" aria-labelledby="h-status">
+        <span class="eyebrow section-kicker">Use evrd</span>
+        <h2 id="h-status">*status commands <a class="anchor" href="#status" aria-label="Link to *status commands">#</a></h2>
+        <p><span class="code">/msg *status help</span> lists the bouncer's own commands. ZNC's names work too.</p>
+        <div class="table-wrap">
+          <table class="cmd-table">
+            <thead><tr><th scope="col">Command</th><th scope="col">Does</th></tr></thead>
+            <tbody>
+              <tr><td><span class="code">networks</span></td><td>Your networks, their status, and which one this client is on</td></tr>
+              <tr><td><span class="code">jump &lt;network&gt;</span></td><td>Switch this client to another network</td></tr>
+              <tr><td><span class="code">connect [network]</span></td><td>Bring a network up (default: this one)</td></tr>
+              <tr><td><span class="code">disconnect [network]</span></td><td>Bring a network down</td></tr>
+              <tr><td><span class="code">addnetwork &lt;name&gt; &lt;host&gt; [[+]port] [nick]</span></td><td>Add a network; <span class="code">+port</span> is TLS (default <span class="code">+6697</span>)</td></tr>
+              <tr><td><span class="code">delnetwork &lt;network&gt;</span></td><td>Remove a network and its history</td></tr>
+              <tr><td><span class="code">show [network]</span></td><td>A network's settings</td></tr>
+              <tr><td><span class="code">set [network] &lt;setting&gt; &lt;value&gt;</span></td><td>Change <span class="code">name</span>, <span class="code">host</span>, <span class="code">port</span>, <span class="code">tls</span>, <span class="code">nick</span>, <span class="code">ident</span>, <span class="code">realname</span> or <span class="code">password</span> (<span class="code">-</span> clears); reconnects when needed</td></tr>
+              <tr><td><span class="code">channels</span></td><td>This network's saved channels</td></tr>
+              <tr><td><span class="code">playback &lt;channel|nick&gt; [lines]</span></td><td>Replay a buffer (default 50, up to 500)</td></tr>
+              <tr><td><span class="code">info</span> / <span class="code">version</span></td><td>Your account and limits / the evrd version</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 id="status-advanced">Servers, certificates and tuning</h3>
+        <p><span class="code">listservers</span>, <span class="code">addserver</span>, <span class="code">delserver</span>, <span class="code">listfingerprints</span>, <span class="code">addfingerprint</span>, <span class="code">delfingerprint</span> (and ZNC's <span class="code">AddTrustedServerFingerprint</span> names), <span class="code">detach</span>, and <span class="code">set</span> for <span class="code">altnick</span>, <span class="code">sasluser</span>, <span class="code">bindhost</span>, <span class="code">quitmsg</span>, <span class="code">encoding</span>, <span class="code">trustallcerts</span>, <span class="code">trustpki</span>, <span class="code">floodrate</span>, <span class="code">floodburst</span>, <span class="code">joindelay</span>.</p>
+      </section>
+
+      <section id="networks" aria-labelledby="h-net">
+        <span class="eyebrow section-kicker">Use evrd</span>
+        <h2 id="h-net">Network settings <a class="anchor" href="#networks" aria-label="Link to Network settings">#</a></h2>
+        <p>Each network has its own page in the web app (<span class="code">/networks/&lt;id&gt;</span>) with everything ZNC offers without modules.</p>
+        <ul>
+          <li><strong>Servers</strong>: several, each with host, port, TLS and an optional server password. evrd connects to the first and moves to the next each time the link drops.</li>
+          <li><strong>Identity</strong>: nick, alternate nick, ident, real name, quit message and bind host. Empty fields use the account defaults.</li>
+          <li><strong>Authentication</strong>: SASL PLAIN account and password, sent as <span class="code">PASS</span> if the network has no SASL.</li>
+          <li><strong>Certificates</strong>: verify with system CAs (TrustPKI), trust everything (TrustAllCerts), or trusted SHA-256 fingerprints. When a certificate is refused, its fingerprint is shown with a button to trust it.</li>
+          <li><strong>Channels</strong>: key, detached (joined and logged but hidden from IRC clients until they <span class="code">/join</span>), join-on-connect.</li>
+          <li><strong>Advanced</strong>: encoding for non-UTF-8 networks, flood protection (lines per second and burst), join delay.</li>
+        </ul>
+        <h3 id="user-settings">Per-user settings</h3>
+        <p>Under Account → Bouncer: default ident, quit message and bind host; how many lines to play back, and whether channels and private messages only replay what arrived since you were last attached; timestamps for clients without <span class="code">server-time</span>; fixed CTCP replies; and the addresses allowed to sign in.</p>
+      </section>
+
+      <section id="configuration" aria-labelledby="h-conf">
+        <span class="eyebrow section-kicker">Operate</span>
+        <h2 id="h-conf">Configuration <a class="anchor" href="#configuration" aria-label="Link to Configuration">#</a></h2>
+        <p>evrd reads one plain-text file of <span class="code">directive value</span> lines; pass it with <span class="code">evrd -config evrd.conf</span>. These are the directives you'll set first:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Directive</th><th scope="col">Example</th><th scope="col">Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><span class="code">listen</span></td><td><span class="code">ircs://:6697</span></td><td>IRC listener; repeat for <span class="code">irc+insecure://:6667</span></td></tr>
+              <tr><td><span class="code">api</span></td><td><span class="code">:8098</span></td><td>HTTP + WebSocket API for the web app</td></tr>
+              <tr><td><span class="code">db</span></td><td><span class="code">postgres://…/evrd</span></td><td>Accounts and settings; <span class="code">sqlite:/path</span> for single-file installs</td></tr>
+              <tr><td><span class="code">history</span></td><td><span class="code">scylla://h1,h2:9042/evrd</span></td><td>Chat history; <span class="code">pebble:/path</span> for one node</td></tr>
+              <tr><td><span class="code">tls_cert</span> / <span class="code">tls_key</span></td><td><span class="code">/etc/evrd/*.pem</span></td><td>Real certificate for the IRC listener</td></tr>
+              <tr><td><span class="code">public_url</span></td><td><span class="code">https://bnc.example.org</span></td><td>Web app address (and SSO callback)</td></tr>
+              <tr><td><span class="code">irc_host</span></td><td><span class="code">bnc.example.org</span></td><td>Hostname shown to users for attaching</td></tr>
+              <tr><td><span class="code">max_networks</span></td><td><span class="code">0</span></td><td>Per-user default, 0 = unlimited</td></tr>
+              <tr><td><span class="code">max_clients</span></td><td><span class="code">0</span></td><td>Attached IRC clients at once, 0 = unlimited</td></tr>
+              <tr><td><span class="code">backlog_lines</span></td><td><span class="code">2000</span></td><td>Kept per channel, pruned every 10 minutes</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 id="history-backends">History backends</h3>
+        <p>Chat history never goes in Postgres. <strong>ScyllaDB</strong> is shared by every node, with one partition per buffer per month and queued writes so a slow database never stalls IRC. <strong>Pebble</strong> is an embedded store on local disk for single-node installs. <span class="code">evrctl history copy &lt;from&gt; &lt;to&gt;</span> moves history between them.</p>
+      </section>
+
+      <section id="accounts" aria-labelledby="h-acc">
+        <span class="eyebrow section-kicker">Operate</span>
+        <h2 id="h-acc">Accounts and sign-in <a class="anchor" href="#accounts" aria-label="Link to Accounts and sign-in">#</a></h2>
+        <p>Every user has a role (<span class="code">user</span> or <span class="code">admin</span>), per-user limits and optional suspension. Web sessions are stored in the database behind an HttpOnly cookie, so they survive restarts, and users can see and revoke them on their Account page.</p>
+        <h3 id="sso">SSO with OpenID Connect</h3>
+        <p>Use Logto or any OIDC provider; SAML and social logins are connectors in the provider. Accounts are created on first sign-in and linked by the token's subject.</p>
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">evrd.conf</span><button class="copy-btn" type="button" data-copy-from="#oidc-conf" aria-label="Copy OIDC config" data-label="Copy OIDC config"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="oidc-conf"><b>public_url</b>         https://bnc.example.org   <span class="c"># callback: &lt;public_url&gt;/auth/callback</span>
+<b>oidc_issuer</b>        https://id.example.org/oidc
+<b>oidc_client_id</b>     &lt;app id&gt;
+<span class="c"># secret: oidc_client_secret, or EVRD_OIDC_CLIENT_SECRET</span>
+<b>oidc_label</b>         IRCforever account
+<b>oidc_auto_create</b>   yes
+<b>oidc_link_existing</b> no
+<b>oidc_admin_role</b>    evrd-admin</pre>
+        </div>
+        <p><strong>Suspending</strong> a user signs them out everywhere, drops their IRC clients and disconnects their networks; lifting the suspension reconnects them. The last active admin can't be demoted, suspended or deleted.</p>
+      </section>
+
+      <section id="server-settings" aria-labelledby="h-ss">
+        <span class="eyebrow section-kicker">Operate</span>
+        <h2 id="h-ss">Server settings <a class="anchor" href="#server-settings" aria-label="Link to Server settings">#</a></h2>
+        <p>Admins can change most of <span class="code">evrd.conf</span> from Admin → Settings. Each value comes from, in order (later wins):</p>
+        <ol>
+          <li>built-in defaults</li>
+          <li><span class="code">evrd.conf</span></li>
+          <li>the database: values set on the Settings page, shared by every node</li>
+          <li>the environment (<span class="code">EVRD_…</span>) on that node</li>
+        </ol>
+        <p>Most settings apply live on every node within a few seconds. <span class="code">public_url</span>, the SSO provider and metrics export are marked <em>Restart needed</em>. Startup settings (<span class="code">listen</span>, <span class="code">api</span>, <span class="code">db</span>, <span class="code">history</span>, TLS files, cluster identity, secret keys) stay in the file or environment.</p>
+        <div class="callout"><i data-icon="info"></i><p><span class="code">settings_write_conf yes</span> writes values set in the UI back into each node's own config file. Use it on a single node; in cluster mode, leave it off and let the database be the one place these settings live.</p></div>
+      </section>
+
+      <section id="secrets" aria-labelledby="h-sec">
+        <span class="eyebrow section-kicker">Operate</span>
+        <h2 id="h-sec">Saved passwords <a class="anchor" href="#secrets" aria-label="Link to Saved passwords">#</a></h2>
+        <p>Network passwords (SASL, NickServ and server passwords) are encrypted in the database with AES-256-GCM under a key that lives outside it. Account and client passwords are bcrypt hashes either way.</p>
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">evrd.conf</span><button class="copy-btn" type="button" data-copy="evrctl genkey" aria-label="Copy genkey command" data-label="Copy genkey command"><i data-icon="copy"></i></button></div>
+<pre class="snippet"><span class="c"># make one with: evrctl genkey</span>
+<b>secret_key</b>      &lt;32 bytes, base64&gt;   <span class="c"># or EVRD_SECRET_KEY, or secret_key_file /path</span>
+<b>secret_key_old</b>  &lt;previous key&gt;       <span class="c"># optional: still decrypts while rotating</span></pre>
+        </div>
+        <h3 id="rotate">Rotating the key</h3>
+        <p>Set the new <span class="code">secret_key</span>, move the old one to <span class="code">secret_key_old</span>, restart, then remove the old key. At startup evrd encrypts anything saved before a key was set and re-encrypts anything under an old key. Every node needs the same key; keep it out of database backups.</p>
+      </section>
+
+      <section id="clustering" aria-labelledby="h-cl">
+        <span class="eyebrow section-kicker">Operate</span>
+        <h2 id="h-cl">Running several nodes <a class="anchor" href="#clustering" aria-label="Link to Running several nodes">#</a></h2>
+        <p>Run any number of nodes against the same Postgres and ScyllaDB, behind a plain round-robin load balancer for IRC (TCP passthrough) and the API (HTTP + WebSocket). Each user is owned by one node, which runs their network connections and serves their clients; any other node forwards that user's traffic to it.</p>
+        <p>If a node dies, its users move to the others in about 20 seconds (<span class="code">cluster_lease</span>); on shutdown a node hands them over at once.</p>
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">every node</span><button class="copy-btn" type="button" data-copy-from="#cluster-conf" aria-label="Copy cluster config" data-label="Copy cluster config"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="cluster-conf"><b>internal_listen</b>      :8099   <span class="c"># internal HTTP — between nodes only</span>
+<b>internal_irc_listen</b>  :6699   <span class="c"># internal IRC — between nodes only</span>
+<b>history</b>              scylla://db1,db2/evrd
+
+<span class="c"># per node, in the environment:</span>
+<em>EVRD_NODE_ID</em>=node-a
+<em>EVRD_INTERNAL_URL</em>=http://evrd-a.internal:8099
+<em>EVRD_INTERNAL_IRC_ADDR</em>=evrd-a.internal:6699
+<em>EVRD_CLUSTER_SECRET</em>=&lt;the same long random secret on every node&gt;</pre>
+        </div>
+        <div class="callout"><i data-icon="route"></i><p>See the <a href="architecture.html#deploy">architecture page</a> for diagrams of each deployment shape, request routing and failover.</p></div>
+        <p>The repository ships a tested nginx config (<span class="code">deploy/lb.conf</span>) and a Traefik equivalent (<span class="code">deploy/traefik/</span>, Traefik ≥ 3.7 for TCP health checks). A lone node without <span class="code">internal_listen</span> still works and owns every user.</p>
+      </section>
+
+      <section id="upstream" aria-labelledby="h-up">
+        <span class="eyebrow section-kicker">Operate</span>
+        <h2 id="h-up">Connections to networks <a class="anchor" href="#upstream" aria-label="Link to Connections to networks">#</a></h2>
+        <p>Large networks throttle and cap connections per source address, and every user on a node would otherwise share the node's address.</p>
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">evrd.conf</span><button class="copy-btn" type="button" data-copy-from="#up-conf" aria-label="Copy config" data-label="Copy config"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="up-conf"><b>connect_rate</b>     5                       <span class="c"># most connects/second to one server, per node</span>
+<b>upstream_bind</b>    192.0.2.10 192.0.2.11   <span class="c"># spread users over these (stable per user)</span>
+<b>upstream_prefix6</b> 2001:db8:42::/64        <span class="c"># or: an IPv6 address of their own per user</span>
+<b>bindhost</b>         192.0.2.20 vhost.example.org</pre>
+        </div>
+        <p>A prefix needs Linux and a local route: <span class="code">ip -6 route add local 2001:db8:42::/64 dev lo</span>. <span class="code">bindhost</span> lists addresses users may pick to connect from, like ZNC's BindHost. Admins can use any address and can lock a user's choice.</p>
+      </section>
+
+      <section id="metrics" aria-labelledby="h-met">
+        <span class="eyebrow section-kicker">Operate</span>
+        <h2 id="h-met">Metrics <a class="anchor" href="#metrics" aria-label="Link to Metrics">#</a></h2>
+        <p>evrd exports OpenTelemetry metrics over OTLP/HTTP and reads them back from VictoriaMetrics for the dashboard's traffic chart and health numbers.</p>
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">evrd.conf</span><button class="copy-btn" type="button" data-copy-from="#met-conf" aria-label="Copy config" data-label="Copy config"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="met-conf"><b>otel_endpoint</b> http://victoriametrics:8428/opentelemetry/v1/metrics
+<b>otel_interval</b> 15s
+<b>metrics_url</b>   http://victoriametrics:8428</pre>
+        </div>
+        <p>Run VictoriaMetrics with <span class="code">-opentelemetry.usePrometheusNaming</span> to get <span class="code">evrd_irc_lines_total</span>, <span class="code">evrd_upstream_up</span>, <span class="code">evrd_upstream_lag_seconds</span>, <span class="code">evrd_irc_clients</span>, <span class="code">evrd_cluster_users</span>, <span class="code">evrd_history_queue</span> and friends. Without <span class="code">metrics_url</span> the dashboard still works, and the chart says metrics are off.</p>
+      </section>
+
+      <section id="evrctl" aria-labelledby="h-ctl">
+        <span class="eyebrow section-kicker">Reference</span>
+        <h2 id="h-ctl">evrctl <a class="anchor" href="#evrctl" aria-label="Link to evrctl">#</a></h2>
+        <p>Command-line admin for a running install: <span class="code">evrctl [-config file | -db dsn] &lt;command&gt;</span>.</p>
+        <div class="table-wrap">
+          <table class="cmd-table">
+            <thead><tr><th scope="col">Command</th><th scope="col">Does</th></tr></thead>
+            <tbody>
+              <tr><td><span class="code">version</span></td><td>Print the evrctl version</td></tr>
+              <tr><td><span class="code">genkey</span></td><td>Print a new <span class="code">secret_key</span></td></tr>
+              <tr><td><span class="code">user add [-admin] [-email e] &lt;name&gt; [password]</span></td><td>Create an account (no password = SSO or client passwords only)</td></tr>
+              <tr><td><span class="code">user list</span></td><td>List accounts</td></tr>
+              <tr><td><span class="code">user passwd &lt;name&gt; &lt;password&gt;</span></td><td>Set an account's password</td></tr>
+              <tr><td><span class="code">user role &lt;name&gt; user|admin</span></td><td>Change an account's role</td></tr>
+              <tr><td><span class="code">user suspend &lt;name&gt; [reason]</span></td><td>Suspend an account</td></tr>
+              <tr><td><span class="code">user unsuspend &lt;name&gt;</span></td><td>Lift a suspension</td></tr>
+              <tr><td><span class="code">user delete &lt;name&gt;</span></td><td>Delete an account and everything it owns</td></tr>
+              <tr><td><span class="code">history copy &lt;from&gt; &lt;to&gt;</span></td><td>Copy all chat history between stores (stop evrd first when copying from Pebble)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="releases" aria-labelledby="h-rel">
+        <span class="eyebrow section-kicker">Reference</span>
+        <h2 id="h-rel">Releases and versions <a class="anchor" href="#releases" aria-label="Link to Releases and versions">#</a></h2>
+        <p>Releases are cut automatically by semantic-release from Conventional Commits on <span class="code">main</span>. Each release is tagged <span class="code">vX.Y.Z</span>, gets GitHub release notes grouped by type, and publishes images as <span class="code">:X.Y.Z</span>, <span class="code">:X.Y</span>, <span class="code">:latest</span> and the commit sha. <span class="code">evrd -version</span> reports the version.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Commit</th><th scope="col">Release</th></tr></thead>
+            <tbody>
+              <tr><td><span class="code">fix: …</span>, <span class="code">perf: …</span></td><td>patch</td></tr>
+              <tr><td><span class="code">feat: …</span></td><td>minor</td></tr>
+              <tr><td><span class="code">feat!: …</span> or <span class="code">BREAKING CHANGE:</span></td><td>major</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>evrd stays at 0.x until a breaking change says otherwise. <a href="download.html">Get the latest release →</a></p>
+      </section>
+    </article>
+
+    <!-- ============================================================ on this page -->
+    <aside class="docs-toc" aria-label="On this page">
+      <span class="caps">On this page</span>
+      <div class="od-stack" id="docs-toc-list" style="--od-gap:2px"></div>
+      <div class="edit">
+        <a href="https://github.com/4evrd/evrd/blob/main/README.md" rel="noopener"><i data-icon="git" class="i-sm"></i>Edit on GitHub</a>
+        <a href="https://github.com/4evrd/evrd/blob/main/docs/scaling.md" rel="noopener"><i data-icon="book" class="i-sm"></i>Scaling design notes</a>
+      </div>
+    </aside>
+
+  </div>
+</main>
+<script src="assets/site.js"></script>
+</body>
+</html>

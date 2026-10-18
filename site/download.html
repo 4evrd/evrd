@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download · evrd</title>
+<meta name="description" content="Install evrd from the multi-arch container images on GHCR, or build it from source.">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Download · evrd">
+<meta property="og:description" content="Install evrd from the multi-arch container images on GHCR, or build it from source.">
+<meta property="og:image" content="assets/og-overview.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0f1a1e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Geist+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="assets/evrd.css">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body class="site" data-page="download">
+<main id="main">
+
+  <section class="page-hero" aria-labelledby="dl-h">
+    <div class="wrap enter">
+      <span class="eyebrow">Download</span>
+      <h1 id="dl-h">Get evrd</h1>
+      <p class="lead">evrd ships as multi-arch container images, built on every release. It's pure Go, so building from source takes one command.</p>
+      <div class="tele-row"><span>registry <b>ghcr.io/4evrd</b></span><span>arch <b>amd64 · arm64</b></span><span>release <b>semantic-release</b></span></div>
+      <svg class="ribbon" aria-hidden="true"></svg>
+      <div class="release-bar" style="margin-top:var(--s3)">
+        <div class="od-stat"><span class="n">latest</span><span class="u">Channel · tracks main</span></div>
+        <span class="sep" aria-hidden="true"></span>
+        <div class="od-stat"><span class="n">v0.x</span><span class="u">Version line · semver</span></div>
+        <span class="sep" aria-hidden="true"></span>
+        <div class="od-stat"><span class="n">amd64 · arm64</span><span class="u">Linux platforms</span><span class="ticks ok" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></div>
+        <a class="btn" href="https://github.com/4evrd/evrd/releases" rel="noopener"><i data-icon="external" class="i-sm"></i>Release notes</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ options -->
+  <section class="section" style="padding-top:var(--s6)" aria-labelledby="opt-h">
+    <div class="wrap">
+      <h2 class="sr-only" id="opt-h">Ways to get evrd</h2>
+      <div class="dl-grid">
+        <article class="dl-card featured">
+          <div class="tile-top"><span class="ic"><i data-icon="box"></i></span><span class="chip ok">Recommended</span></div>
+          <h3>Daemon image</h3>
+          <p>The <span class="code">evrd</span> daemon and <span class="code">evrctl</span> on Alpine, running as an unprivileged user. Exposes 6667, 6697 and 8098.</p>
+          <div class="sig"><span class="plat"><span class="chip ok">linux/amd64</span><span class="chip ok">linux/arm64</span></span><span class="comb" style="--fill:100%;width:72px" aria-hidden="true"></span></div>
+          <div class="od-stack">
+            <div class="input-group">
+              <label class="sr-only" for="img-evrd">Daemon image pull command</label>
+              <input class="input mono" id="img-evrd" readonly value="docker pull ghcr.io/4evrd/evrd:latest">
+              <button class="btn" type="button" data-copy="docker pull ghcr.io/4evrd/evrd:latest" aria-label="Copy pull command" data-label="Copy pull command"><i data-icon="copy"></i></button>
+            </div>
+            <a class="btn btn-primary" href="https://github.com/4evrd/evrd/pkgs/container/evrd" rel="noopener"><i data-icon="external" class="i-sm"></i>ghcr.io/4evrd/evrd</a>
+          </div>
+        </article>
+        <article class="dl-card">
+          <div class="tile-top"><span class="ic"><i data-icon="globe"></i></span><span class="chip nick">Web app</span></div>
+          <h3>Web image</h3>
+          <p>The Svelte web client as static files on nginx (port 80). Proxies <span class="code">/api</span> and <span class="code">/auth</span> to <span class="code">evrd-api:8098</span>.</p>
+          <div class="sig"><span class="plat"><span class="chip ok">linux/amd64</span><span class="chip ok">linux/arm64</span></span><span class="comb" style="--fill:100%;width:72px" aria-hidden="true"></span></div>
+          <div class="od-stack">
+            <div class="input-group">
+              <label class="sr-only" for="img-web">Web image pull command</label>
+              <input class="input mono" id="img-web" readonly value="docker pull ghcr.io/4evrd/evrd-web:latest">
+              <button class="btn" type="button" data-copy="docker pull ghcr.io/4evrd/evrd-web:latest" aria-label="Copy pull command" data-label="Copy pull command"><i data-icon="copy"></i></button>
+            </div>
+            <a class="btn" href="https://github.com/4evrd/evrd/pkgs/container/evrd-web" rel="noopener"><i data-icon="external" class="i-sm"></i>ghcr.io/4evrd/evrd-web</a>
+          </div>
+        </article>
+        <article class="dl-card">
+          <div class="tile-top"><span class="ic"><i data-icon="code"></i></span><span class="chip">Source</span></div>
+          <h3>Source code</h3>
+          <p>Go 1.26 for the daemon, Node and pnpm for the web client. Tagged releases include source archives on GitHub.</p>
+          <div class="sig"><span class="plat"><span class="chip nick">any GOOS/GOARCH</span><span class="chip">no cgo</span></span><span class="comb" style="--fill:60%;width:72px" aria-hidden="true"></span></div>
+          <div class="od-stack">
+            <div class="input-group">
+              <label class="sr-only" for="src-clone">Clone command</label>
+              <input class="input mono" id="src-clone" readonly value="git clone https://github.com/4evrd/evrd.git">
+              <button class="btn" type="button" data-copy="git clone https://github.com/4evrd/evrd.git" aria-label="Copy clone command" data-label="Copy clone command"><i data-icon="copy"></i></button>
+            </div>
+            <a class="btn" href="https://github.com/4evrd/evrd/releases/latest" rel="noopener"><i data-icon="download" class="i-sm"></i>Latest source archive</a>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ install -->
+  <section class="section" id="install" aria-labelledby="inst-h">
+    <div class="wrap install">
+      <div class="section-intro" style="margin-bottom:0">
+        <span class="eyebrow">Install</span>
+        <h2 class="h2-site" id="inst-h">Pick how you'll run it</h2>
+        <p>All three methods run the same binary. Once it's up, follow the <a href="docs.html#quick-start">quick start</a> to create an admin and add a network.</p>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Install method" data-hash>
+        <button class="tab" role="tab" id="tab-compose" aria-controls="m-compose" aria-selected="true">Docker Compose</button>
+        <button class="tab" role="tab" id="tab-docker" aria-controls="m-docker" aria-selected="false">docker run</button>
+        <button class="tab" role="tab" id="tab-source" aria-controls="m-source" aria-selected="false">From source</button>
+      </div>
+
+      <div class="install-panel" role="tabpanel" id="m-compose" aria-labelledby="tab-compose" tabindex="0">
+        <p>The daemon and the web app together. SQLite and Pebble live in one volume, so there's no external database to run. Put your own TLS-terminating proxy in front of port 8080.</p>
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">docker-compose.yml</span><button class="copy-btn" type="button" data-copy-from="#c-compose" aria-label="Copy compose file" data-label="Copy compose file"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="c-compose"><b>services:</b>
+  <em>evrd-api:</em>
+    image: ghcr.io/4evrd/evrd:latest
+    command: ["-config", "/etc/evrd/evrd.conf"]
+    environment:
+      EVRD_SECRET_KEY: ${EVRD_SECRET_KEY}   <span class="c"># evrctl genkey — encrypts saved network passwords</span>
+    volumes:
+      - ./evrd.conf:/etc/evrd/evrd.conf:ro
+      - evrd-data:/var/lib/evrd
+    ports:
+      - "6697:6697"
+    restart: unless-stopped
+  <em>evrd-web:</em>
+    image: ghcr.io/4evrd/evrd-web:latest
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+<b>volumes:</b>
+  evrd-data:</pre>
+        </div>
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">shell</span><button class="copy-btn" type="button" data-copy="docker compose up -d" aria-label="Copy command" data-label="Copy command"><i data-icon="copy"></i></button></div>
+<pre class="snippet"><b>docker compose up -d</b></pre>
+        </div>
+      </div>
+
+      <div class="install-panel" role="tabpanel" id="m-docker" aria-labelledby="tab-docker" tabindex="0" hidden>
+        <p>The daemon alone, for native IRC clients only, or behind a web app you host yourself.</p>
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">shell</span><button class="copy-btn" type="button" data-copy-from="#c-docker" aria-label="Copy command" data-label="Copy command"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="c-docker"><b>docker run -d</b> --name evrd \
+  -p 6697:6697 -p 8098:8098 \
+  -v "$PWD/evrd.conf:/etc/evrd/evrd.conf:ro" \
+  -e EVRD_SECRET_KEY="$EVRD_SECRET_KEY" \
+  -v evrd-data:/var/lib/evrd \
+  ghcr.io/4evrd/evrd:latest -config /etc/evrd/evrd.conf</pre>
+        </div>
+        <div class="callout"><i data-icon="info"></i><p>Pin a version for production. Use <span class="code">:X.Y</span> to follow patch releases, or <span class="code">:X.Y.Z</span> to stay on one exact build.</p></div>
+      </div>
+
+      <div class="install-panel" role="tabpanel" id="m-source" aria-labelledby="tab-source" tabindex="0" hidden>
+        <p>Pure Go with no cgo, so it cross-compiles with <span class="code">GOOS</span>/<span class="code">GOARCH</span> and doesn't need a C toolchain.</p>
+        <div class="codeblock">
+          <div class="cb-head"><span class="caps">shell</span><button class="copy-btn" type="button" data-copy-from="#c-source" aria-label="Copy commands" data-label="Copy commands"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="c-source"><b>git clone</b> https://github.com/4evrd/evrd.git && cd evrd
+<b>make build</b>      <span class="c"># bin/evrd, bin/evrctl</span>
+<b>make web</b>        <span class="c"># web/build — serve it and proxy /api, /auth to :8098</span>
+./bin/evrd -config evrd.conf</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ platforms -->
+  <section class="section" aria-labelledby="plat-h">
+    <div class="wrap">
+      <div class="section-intro">
+        <span class="eyebrow">Platforms</span>
+        <h2 class="h2-site" id="plat-h">What's published</h2>
+        <p>This table lists only what CI publishes today. Standalone binary downloads aren't published yet, so build from source if you need one.</p>
+      </div>
+      <div class="table-wrap">
+        <table class="matrix">
+          <thead><tr><th scope="col">Artifact</th><th scope="col">linux/amd64</th><th scope="col">linux/arm64</th><th scope="col">Tags</th></tr></thead>
+          <tbody>
+            <tr><td>ghcr.io/4evrd/evrd</td><td><span class="chip ok"><i data-icon="check"></i>Image</span></td><td><span class="chip ok"><i data-icon="check"></i>Image</span></td><td><span class="mono">latest · X.Y.Z · X.Y · sha</span></td></tr>
+            <tr><td>ghcr.io/4evrd/evrd-web</td><td><span class="chip ok"><i data-icon="check"></i>Image</span></td><td><span class="chip ok"><i data-icon="check"></i>Image</span></td><td><span class="mono">latest · X.Y.Z · X.Y · sha</span></td></tr>
+            <tr><td>Source archive</td><td colspan="2"><span class="chip ok"><i data-icon="check"></i>Any Go 1.26 target</span></td><td><span class="mono">vX.Y.Z on GitHub Releases</span></td></tr>
+            <tr><td>Prebuilt binaries</td><td><span class="chip">Not yet published</span></td><td><span class="chip">Not yet published</span></td><td><span class="faint">Use <span class="mono">make build</span></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="next-h">
+    <div class="wrap">
+      <div class="cta-band">
+        <div>
+          <h2 class="h2-site" id="next-h">Installed? Attach your first client.</h2>
+          <p>Create an admin with <span class="code">evrctl user add -admin</span>, add a network in the web app, then connect HexChat or irssi with <span class="code">user/network:password</span>.</p>
+        </div>
+        <div class="od-cluster">
+          <a class="btn btn-primary btn-lg" href="docs.html#quick-start"><i data-icon="book"></i>Quick start</a>
+          <a class="btn btn-lg" href="docs.html#native-clients">Native clients</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+<script src="assets/site.js"></script>
+</body>
+</html>

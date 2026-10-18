@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>evrd — the IRC bouncer that stays connected, forever</title>
+<meta name="description" content="evrd keeps your IRC connections alive while you're away, buffers what you miss, and lets native clients and the web attach and detach at will.">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="evrd — the IRC bouncer that stays connected, forever">
+<meta property="og:description" content="evrd keeps your IRC connections alive while you're away, buffers what you miss, and lets native clients and the web attach and detach at will.">
+<meta property="og:image" content="assets/og-overview.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0f1a1e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Geist+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="assets/evrd.css">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body class="site" data-page="home">
+<main id="main">
+
+  <!-- ============================================================ hero -->
+  <section class="hero v2" aria-labelledby="hero-h">
+    <div class="wrap">
+      <div class="hero-copy enter">
+        <span class="chip ok live"><span class="dot" aria-hidden="true"></span>Open source · written in Go</span>
+        <h1 class="display" id="hero-h">Stay on IRC.<br><em>Forever.</em></h1>
+        <p class="lead">evrd keeps your IRC connections alive while you're away, saves everything you miss, and lets HexChat, irssi, WeeChat and the built-in web client attach and detach whenever you like. All of them share one upstream connection.</p>
+        <div class="od-cluster">
+          <a class="btn btn-primary btn-lg" href="download.html#install"><i data-icon="download"></i>Get evrd</a>
+          <a class="btn btn-lg" href="docs.html#quick-start"><i data-icon="book"></i>Read the quick start</a>
+        </div>
+      </div>
+
+      <section class="anomaly" aria-labelledby="health-h">
+        <div class="head-row">
+          <h2 id="health-h" class="title">Upstream<br>health</h2>
+          <a class="icon-btn" href="docs.html#metrics" aria-label="How evrd measures upstream health"><i data-icon="external"></i></a>
+        </div>
+        <div class="metric">
+          <div class="od-row"><span>Libera.Chat lag</span><span class="od-nowrap">42 ms</span></div>
+          <span class="ubar" role="img" aria-label="Lag 42 milliseconds, low"><span style="transform:scaleX(.18)"></span></span>
+        </div>
+        <div class="metric">
+          <div class="od-row"><span>OFTC lag</span><span class="od-nowrap">88 ms</span></div>
+          <span class="ubar" role="img" aria-label="Lag 88 milliseconds, low"><span style="transform:scaleX(.34)"></span></span>
+        </div>
+        <div class="metric">
+          <div class="od-row"><span>hackint</span><span class="od-nowrap">retry in 24 s</span></div>
+          <span class="ubar signal" role="img" aria-label="hackint is reconnecting with backoff"><span style="transform:scaleX(.62)"></span></span>
+        </div>
+        <div class="alert-row"><span>Mentions while away</span><span class="count mention">3</span></div>
+        <span class="foot">Sample data · evrd_upstream_lag_seconds</span>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============================================================ connection map -->
+  <div class="wrap stage-wrap">
+    <section class="stage" aria-labelledby="map-h">
+      <div class="ruler" aria-hidden="true"><span>10</span><span>09</span><span>08</span><span>07</span><span>06</span></div>
+      <div class="stage-head">
+        <div class="od-stack" style="--od-gap:4px">
+          <span class="caps">Live connection map</span>
+          <h2 id="map-h">Your clients come and go. evrd stays connected.</h2>
+        </div>
+        <div class="od-row">
+          <span class="chip ok live"><span class="dot" aria-hidden="true"></span>3 attached</span>
+          <span class="chip warn">1 reconnecting</span>
+        </div>
+      </div>
+
+      <div class="map" id="map">
+        <svg class="map-strands" aria-hidden="true"></svg>
+
+        <div class="map-col left" aria-label="Clients">
+          <span class="caps">Clients</span>
+          <div class="downlink"><span class="anchor-tick" aria-hidden="true"></span><span class="od-field"><span class="nm">HexChat</span><span class="lb">Last attach</span><span class="ts">2026-10-18 <b>09:14:18</b></span></span></div>
+          <div class="downlink"><span class="anchor-tick" aria-hidden="true"></span><span class="od-field"><span class="nm">irssi on a VPS</span><span class="lb">Attached since</span><span class="ts">2026-10-11 <b>22:03:51</b></span></span></div>
+          <div class="downlink"><span class="anchor-tick" aria-hidden="true"></span><span class="od-field"><span class="nm">evrd web</span><span class="lb">Live WebSocket</span><span class="ts">2026-10-18 <b>09:15:02</b></span></span></div>
+          <div class="downlink off"><span class="anchor-tick" aria-hidden="true"></span><span class="od-field"><span class="nm">Laptop · detached</span><span class="lb">Last seen</span><span class="ts">2026-10-18 <b>01:22:07</b></span></span></div>
+        </div>
+
+        <div class="map-hub">
+          <div class="core-ring"><span class="brand-mark" aria-hidden="true">#</span></div>
+          <div class="od-field"><span class="nm">evrd</span><span class="lb">node-a · irc.4evr.sh</span></div>
+          <span class="comb" style="--fill:78%" aria-hidden="true"></span>
+        </div>
+
+        <div class="map-col right" aria-label="IRC networks">
+          <span class="caps">Networks</span>
+          <div class="downlink"><span class="anchor-tick" aria-hidden="true"></span><span class="od-field"><span class="nm">Libera.Chat</span><span class="lb">Connected · uptime</span><span class="ts">irc.libera.chat <b>11d 4h</b></span></span></div>
+          <div class="downlink"><span class="anchor-tick" aria-hidden="true"></span><span class="od-field"><span class="nm">OFTC</span><span class="lb">Connected · uptime</span><span class="ts">irc.oftc.net <b>6d 19h</b></span></span></div>
+          <div class="downlink warn"><span class="anchor-tick" aria-hidden="true"></span><span class="od-field"><span class="nm">hackint</span><span class="lb">Reconnecting · backoff</span><span class="ts">irc.hackint.org <b>00:00:24</b></span></span></div>
+          <div class="downlink off"><span class="anchor-tick" aria-hidden="true"></span><span class="od-field"><span class="nm">Rizon</span><span class="lb">Disconnected by you</span><span class="ts">irc.rizon.net <b>—</b></span></span></div>
+        </div>
+      </div>
+
+      <div class="stage-foot">
+        <div class="legend">
+          <span><i style="--c:var(--cyan)"></i>Attached / connected</span>
+          <span><i style="--c:var(--signal)"></i>Reconnecting</span>
+          <span><i style="--c:var(--faint)"></i>Detached / off</span>
+        </div>
+        <span>Illustrative sample · one upstream connection per network, shared by every client</span>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================ terminal -->
+  <section class="term-section" aria-labelledby="term-h">
+    <div class="wrap">
+      <div class="od-stack" style="--od-gap:16px">
+        <span class="eyebrow">What your client sees</span>
+        <h2 class="h2-site" id="term-h">Open the laptop.<br>Everything's still there.</h2>
+        <p class="muted" style="font-size:var(--fs-lg);line-height:1.6;max-width:44ch">When you attach, you get the welcome burst, your channels with their topics, the backlog with original timestamps, and then live traffic.</p>
+        <ul class="checks">
+          <li><i data-icon="check" class="i-sm"></i><span><span class="code">server-time</span> and <span class="code">echo-message</span> for clients that support them</span></li>
+          <li><i data-icon="check" class="i-sm"></i><span>Channel events replayed from <span class="code">*buffextras</span>, so your nick list stays correct</span></li>
+          <li><i data-icon="check" class="i-sm"></i><span>Optional: only replay what arrived since you were last attached</span></li>
+        </ul>
+      </div>
+
+      <figure class="term" aria-labelledby="term-cap" style="margin:0">
+        <div class="term-head">
+          <div class="od-row">
+            <span class="chip nick">HexChat</span>
+            <span class="mono faint od-truncate" style="font-size:var(--fs-xs)">jamesat@Libera.Chat · #evrd</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" id="term-replay"><i data-icon="refresh" class="i-sm"></i>Replay</button>
+        </div>
+        <div class="term-body" id="term-body" role="log" aria-label="Example: attaching a client to evrd and receiving backlog">
+          <div class="term-line"><time>09:14</time><span class="t sys">-!- Connecting to irc.4evr.sh:6697 (TLS)…</span></div>
+          <div class="term-line"><time>09:14</time><span class="t sys">-!- Logged in as <span class="me">jamesat</span> via server password</span></div>
+          <div class="term-line"><time>09:14</time><span class="t ok">-!- Joined #evrd · 38 users · topic restored</span></div>
+          <div class="term-sep">Backlog · while you were away · 412 lines</div>
+          <div class="term-line"><time>02:41</time><span class="t"><span class="n">&lt;mira&gt;</span> anyone tried the pebble history backend on a pi?</span></div>
+          <div class="term-line"><time>02:43</time><span class="t"><span class="n">&lt;tobi&gt;</span> yep, single node, runs fine on arm64</span></div>
+          <div class="term-line"><time>03:12</time><span class="t sys">&lt;*buffextras&gt; bob is now known as robert</span></div>
+          <div class="term-line"><time>07:58</time><span class="t"><span class="n">&lt;robert&gt;</span> <span class="hl">jamesat:</span> merged your PR, thanks!</span></div>
+          <div class="term-sep">Live</div>
+          <div class="term-line" data-live="1"><time>09:15</time><span class="t"><span class="me">&lt;jamesat&gt;</span> morning — just caught up, nice one</span></div>
+          <div class="term-line" data-live="1"><time>09:15</time><span class="t"><span class="n">&lt;robert&gt;</span> o/ you never actually left, did you</span></div>
+        </div>
+        <figcaption class="term-foot" id="term-cap">
+          <span id="term-status">Replaying backlog…</span>
+          <span class="mono">server-time · echo-message</span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============================================================ topology -->
+  <section class="section" id="how" aria-labelledby="how-h">
+    <div class="wrap">
+      <div class="section-intro">
+        <span class="eyebrow">How it works</span>
+        <h2 class="h2-site" id="how-h">Every channel stays joined, and every line is saved.</h2>
+        <p>evrd keeps one permanent connection to each network, stays in your channels and counts what's waiting for you. This is the same view as the web app's overview.</p>
+      </div>
+
+      <section class="card topo-card" aria-labelledby="topo-h">
+        <div class="section-head">
+          <div class="od-stack">
+            <span class="caps">Live topology</span>
+            <h3 id="topo-h">Networks → channels</h3>
+            <p id="topo-scope" aria-live="polite">Select a network to show only its channels.</p>
+          </div>
+          <div class="tabs" id="topo-filter" role="group" aria-label="Channel filter">
+            <button class="tab" type="button" data-f="all" aria-pressed="true">All <span class="n" data-n="all"></span></button>
+            <button class="tab" type="button" data-f="unread" aria-pressed="false">Unread <span class="n" data-n="unread"></span></button>
+            <button class="tab" type="button" data-f="mention" aria-pressed="false">Mentions <span class="n" data-n="mention"></span></button>
+          </div>
+        </div>
+
+        <div class="topo" id="topo">
+          <svg class="topo-links" aria-hidden="true"></svg>
+          <div class="topo-col">
+            <span class="caps">Upstream networks</span>
+            <button class="net-node" type="button" aria-pressed="false" data-net="lc" data-name="Libera.Chat" data-color="oklch(80% 0.10 205)" style="--net:var(--primary)">
+              <span class="head"><span class="mono-badge">LC</span><span class="od-field od-fill"><span>Libera.Chat</span><span>irc.libera.chat:+6697</span></span><span class="chip ok">Up</span></span>
+              <span class="meta-row"><span class="ticks ok" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span>lag <span class="mono">42 ms</span> · 4 channels</span></span>
+              <span class="comb" style="--fill:86%" aria-hidden="true"></span>
+            </button>
+            <button class="net-node" type="button" aria-pressed="false" data-net="of" data-name="OFTC" data-color="oklch(80% 0.07 240)" style="--net:var(--nick)">
+              <span class="head"><span class="mono-badge">OF</span><span class="od-field od-fill"><span>OFTC</span><span>irc.oftc.net:+6697</span></span><span class="chip ok">Up</span></span>
+              <span class="meta-row"><span class="ticks ok" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span>lag <span class="mono">88 ms</span> · 2 channels</span></span>
+              <span class="comb" style="--fill:58%" aria-hidden="true"></span>
+            </button>
+            <button class="net-node" type="button" aria-pressed="false" data-net="hi" data-name="hackint" data-color="oklch(70% 0.16 45)" style="--net:var(--signal)">
+              <span class="head"><span class="mono-badge">HI</span><span class="od-field od-fill"><span>hackint</span><span>irc.hackint.org:+6697</span></span><span class="chip warn">Retrying</span></span>
+              <span class="meta-row"><span class="ticks warn" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span><span>backoff <span class="mono">24 s</span> · 1 channel</span></span>
+              <span class="comb" style="--fill:30%" aria-hidden="true"></span>
+            </button>
+            <button class="net-node off" type="button" aria-pressed="false" data-net="rz" data-name="Rizon" data-color="oklch(66% 0.016 215)" style="--net:var(--faint)">
+              <span class="head"><span class="mono-badge">RZ</span><span class="od-field od-fill"><span>Rizon</span><span>irc.rizon.net:6667</span></span><span class="chip">Off</span></span>
+              <span class="meta-row"><span class="ticks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span>disconnected · no channels</span></span>
+            </button>
+          </div>
+          <div aria-hidden="true"></div>
+          <div class="topo-col right">
+            <span class="caps">Joined channels</span>
+            <div class="chan-node" data-net="lc" data-unread="0" data-mention="2" style="--net:var(--primary)"><span class="hash"><i data-icon="hash" class="i-sm"></i></span><span class="od-field"><span>#evrd</span><span class="sub">Libera.Chat · 38 users</span></span><span class="count mention">2 mentions</span></div>
+            <div class="chan-node" data-net="lc" data-unread="83" data-mention="0" style="--net:var(--primary)"><span class="hash"><i data-icon="hash" class="i-sm"></i></span><span class="od-field"><span>#go-nuts</span><span class="sub">Libera.Chat · 1,204 users</span></span><span class="count hot">83</span></div>
+            <div class="chan-node" data-net="lc" data-unread="41" data-mention="0" style="--net:var(--primary)"><span class="hash"><i data-icon="hash" class="i-sm"></i></span><span class="od-field"><span>#svelte</span><span class="sub">Libera.Chat · 612 users</span></span><span class="count hot">41</span></div>
+            <div class="chan-node" data-net="lc" data-unread="12" data-mention="0" style="--net:var(--primary)"><span class="hash"><i data-icon="hash" class="i-sm"></i></span><span class="od-field"><span>#libera</span><span class="sub">Libera.Chat · 2,731 users</span></span><span class="count calm">12</span></div>
+            <div class="chan-node" data-net="of" data-unread="24" data-mention="0" style="--net:var(--nick)"><span class="hash"><i data-icon="hash" class="i-sm"></i></span><span class="od-field"><span>#debian</span><span class="sub">OFTC · 902 users</span></span><span class="count calm">24</span></div>
+            <div class="chan-node" data-net="of" data-unread="7" data-mention="0" style="--net:var(--nick)"><span class="hash"><i data-icon="hash" class="i-sm"></i></span><span class="od-field"><span>#tor</span><span class="sub">OFTC · 455 users</span></span><span class="count calm">7</span></div>
+            <div class="chan-node" data-net="hi" data-unread="15" data-mention="1" style="--net:var(--signal)"><span class="hash"><i data-icon="hash" class="i-sm"></i></span><span class="od-field"><span>#cccamp</span><span class="sub">hackint · 318 users</span></span><span class="count mention">1 mention</span></div>
+            <p class="topo-empty" id="topo-empty" hidden>Nothing here: that network has no channels matching this filter. Choose “All” or select the network again.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============================================================ traffic -->
+  <section class="section traffic" aria-labelledby="traffic-h">
+    <div class="wrap">
+      <div class="section-intro">
+        <span class="eyebrow">Observable</span>
+        <h2 class="h2-site" id="traffic-h">See what each network is doing.</h2>
+        <p>evrd exports OpenTelemetry metrics and draws them back from VictoriaMetrics: lines per network, lag, disconnects and attached clients. Here's a day where hackint timed out at 03:12 and evrd reconnected on its own.</p>
+      </div>
+      <section class="card" aria-labelledby="chart-h">
+        <div class="section-head">
+          <div class="od-stack">
+            <span class="caps">Message traffic</span>
+            <h3 id="chart-h">Lines per hour, last 24h</h3>
+          </div>
+          <div class="legend">
+            <span><i style="--c:var(--cyan)"></i>Libera.Chat</span>
+            <span><i style="--c:var(--nick)"></i>OFTC</span>
+            <span><i style="--c:var(--signal)"></i>hackint</span>
+            <span class="chip sample">Sample data</span>
+          </div>
+        </div>
+        <div class="chart">
+          <div class="chart-plot" id="traffic-plot" role="img" aria-label="Sample chart of lines per hour over 24 hours. Libera.Chat peaks near 1,400 lines at 15:00; OFTC peaks near 700; hackint drops to zero at 03:12 and recovers by 07:00.">
+            <div class="yaxis" aria-hidden="true"><span>1.6k</span><span>1.2k</span><span>800</span><span>400</span><span>0</span></div>
+            <div class="marker bad" style="left:13.9%"><span class="tag">hackint timeout 03:12</span></div>
+            <div class="marker ok" style="left:30.4%"><span class="tag" style="top:40px">reconnected 07:00</span></div>
+            <div class="marker warn" style="left:34.7%"><span class="tag" style="top:72px">#evrd mention 07:58</span></div>
+            <div class="marker ok" style="left:40.1%"><span class="tag" style="top:104px">HexChat attach 09:14</span></div>
+          </div>
+          <div class="axis-x" aria-hidden="true"><span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>23:00</span></div>
+        </div>
+        <div class="metrics-row">
+          <span class="code">evrd_irc_lines_total</span><span class="code">evrd_upstream_up</span><span class="code">evrd_upstream_lag_seconds</span><span class="code">evrd_upstream_disconnects_total</span><span class="code">evrd_irc_clients</span>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============================================================ features -->
+  <section class="section" id="features" aria-labelledby="feat-h">
+    <div class="wrap">
+      <div class="section-intro">
+        <span class="eyebrow">Features</span>
+        <h2 class="h2-site" id="feat-h">A bouncer for everyone from one person to a whole community.</h2>
+        <p>Run a single node with a file on disk, or a cluster behind a load balancer that serves a whole community. Either way, the settings are the ones ZNC users already know.</p>
+      </div>
+
+      <div class="feature-grid">
+        <article class="feature wide">
+          <span class="ic"><i data-icon="message"></i></span>
+          <h3>Backlog you can trust</h3>
+          <p>Messages, joins, parts, quits, kicks, nick changes, topics and modes are saved, and replayed to every client with <span class="code">server-time</span>. Channel events come from <span class="code">*buffextras</span> as plain text, so they never confuse your client's nick list. Playback can be limited to what arrived since you were last attached.</p>
+          <div class="meta">
+            <div class="od-row"><span>Kept per channel (default)</span><span class="v">2,000 lines</span></div>
+            <span class="comb" style="--fill:100%" aria-hidden="true"></span>
+          </div>
+        </article>
+        <article class="feature">
+          <span class="ic"><i data-icon="plug"></i></span>
+          <h3>Any IRC client</h3>
+          <p>Attach with a server password <span class="code">user/network:pass</span>. Native clients get the welcome burst, names, topics, backlog and a full-fidelity live feed.</p>
+          <div class="meta"><div class="od-row"><span>Clients per user (default)</span><span class="v">unlimited</span></div></div>
+        </article>
+        <article class="feature">
+          <span class="ic"><i data-icon="globe"></i></span>
+          <h3>A real web client</h3>
+          <p>Svelte web app with unread counts, mentions, members, topics and slash commands (<span class="code">/join</span>, <span class="code">/msg</span>, <span class="code">/me</span>, <span class="code">/quote</span> and more), kept in sync with your other clients.</p>
+          <div class="meta"><div class="od-row"><span>Mentions badge</span><span class="count mention">3</span></div></div>
+        </article>
+        <article class="feature">
+          <span class="ic"><i data-icon="terminal"></i></span>
+          <h3>ZNC-style <span class="mono">*status</span></h3>
+          <p><span class="code">/msg *status help</span> to add networks, jump between them, play back a buffer or change settings. ZNC's command names work too.</p>
+          <div class="meta"><div class="od-row"><span>playback default / max</span><span class="v">50 / 500 lines</span></div></div>
+        </article>
+        <article class="feature">
+          <span class="ic"><i data-icon="server"></i></span>
+          <h3>Scales out</h3>
+          <p>Run any number of nodes against the same Postgres and ScyllaDB. If a node dies, its users move to the others in about 20 seconds.</p>
+          <div class="meta">
+            <div class="od-row"><span>cluster_lease</span><span class="v">20 s</span></div>
+            <span class="ticks ok" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>
+          </div>
+        </article>
+        <article class="feature">
+          <span class="ic"><i data-icon="key"></i></span>
+          <h3>SSO or passwords</h3>
+          <p>Local passwords, OpenID Connect (Logto or any OIDC provider), or both. Per-client IRC passwords can be revoked one at a time.</p>
+          <div class="meta"><div class="od-row"><span>session_ttl (default)</span><span class="v">720 h</span></div></div>
+        </article>
+        <article class="feature">
+          <span class="ic"><i data-icon="lock"></i></span>
+          <h3>Secrets stay secret</h3>
+          <p>Network passwords are encrypted with AES-256-GCM under a key that lives outside the database, and keys can be rotated. Account passwords are bcrypt hashes.</p>
+          <div class="meta"><div class="od-row"><span>Cipher</span><span class="v">AES-256-GCM</span></div></div>
+        </article>
+        <article class="feature">
+          <span class="ic"><i data-icon="chart"></i></span>
+          <h3>Observable</h3>
+          <p>Exports OpenTelemetry metrics over OTLP, covering lines, lag, disconnects and clients, and draws the dashboard traffic chart from VictoriaMetrics.</p>
+          <div class="meta"><div class="od-row"><span>otel_interval</span><span class="v">15 s</span></div></div>
+        </article>
+        <article class="feature">
+          <span class="ic"><i data-icon="users"></i></span>
+          <h3>Built for hosting others</h3>
+          <p>Roles, per-user limits, suspension, bind hosts and per-user IPv6 addresses. Admins can edit most of <span class="code">evrd.conf</span> from the web app.</p>
+          <div class="meta"><div class="od-row"><span>connect_rate (example)</span><span class="v">5 / s</span></div></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ status commands -->
+  <section class="section" aria-labelledby="status-h">
+    <div class="wrap split">
+      <div class="copy">
+        <span class="eyebrow">Muscle memory included</span>
+        <h2 class="h2-site" id="status-h">Talk to the bouncer from any client.</h2>
+        <p>Everything the web app does, <span class="code">*status</span> does too, so a terminal client is all you need. Coming from ZNC? <span class="code">AddTrustedServerFingerprint</span> and friends still work.</p>
+        <ul class="checks">
+          <li><i data-icon="check" class="i-sm"></i><span>Add, connect and remove networks without leaving your client</span></li>
+          <li><i data-icon="check" class="i-sm"></i><span>Replay up to 500 lines of any buffer on demand</span></li>
+          <li><i data-icon="check" class="i-sm"></i><span>Manage servers, certificate fingerprints, flood and encoding settings</span></li>
+        </ul>
+        <div><a class="btn" href="docs.html#status">All commands<i data-icon="chevron" class="i-sm"></i></a></div>
+      </div>
+      <div class="codeblock">
+        <div class="cb-head"><span class="caps">irssi · *status</span><button class="copy-btn" type="button" data-copy="/msg *status addnetwork libera irc.libera.chat +6697 jamesat" aria-label="Copy command" data-label="Copy command"><i data-icon="copy"></i></button></div>
+<pre class="snippet"><b>/msg *status</b> addnetwork libera irc.libera.chat +6697 jamesat
+<span class="c">-*status- Added libera (irc.libera.chat:+6697, nick jamesat). connect libera to bring it online, then jump libera.</span>
+<b>/msg *status</b> networks
+<span class="c">-*status- </span>* <em>libera</em>  connected     as jamesat  irc.libera.chat:+6697 · 4 channels
+<span class="c">-*status- </span>  <em>oftc</em>    connected     as jamesat  irc.oftc.net:+6697 · 2 channels
+<span class="c">-*status- </span>  <em>hackint</em> reconnecting  as jamesat  irc.hackint.org:+6697 · 1 channel
+<b>/msg *status</b> jump oftc
+<span class="c">-*status- Jumped from libera to oftc.</span>
+<b>/msg *status</b> playback #debian 100
+<span class="c">-*status- Replayed 100 line(s) of #debian.</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ self-host -->
+  <section class="section" aria-labelledby="host-h">
+    <div class="wrap split">
+      <div class="codeblock">
+        <div class="cb-head"><span class="caps">evrd.conf · single node</span><button class="copy-btn" type="button" data-copy-from="#conf-snippet" aria-label="Copy config" data-label="Copy config"><i data-icon="copy"></i></button></div>
+<pre class="snippet" id="conf-snippet"><b>listen</b>     ircs://:6697
+<b>api</b>        :8098
+<b>db</b>         sqlite:/var/lib/evrd/evrd.db
+<b>history</b>    pebble:/var/lib/evrd/history
+<b>public_url</b> https://bnc.example.org
+<b>irc_host</b>   bnc.example.org
+<b>tls_cert</b>   /etc/evrd/fullchain.pem
+<b>tls_key</b>    /etc/evrd/privkey.pem
+<b>secret_key_file</b> /etc/evrd/secret.key</pre>
+      </div>
+      <div class="copy">
+        <span class="eyebrow">Self-hosted</span>
+        <h2 class="h2-site" id="host-h">One config file.<br>One binary per node.</h2>
+        <p>The config is a few readable directives. Start with SQLite and an embedded Pebble store on one machine, then move to Postgres and ScyllaDB when you outgrow it. <span class="code">evrctl history copy</span> moves your history across.</p>
+        <ul class="checks">
+          <li><i data-icon="check" class="i-sm"></i><span>The database backend is picked from the DSN, with no code changes</span></li>
+          <li><i data-icon="check" class="i-sm"></i><span>Pure Go, statically built, multi-arch images</span></li>
+          <li><i data-icon="check" class="i-sm"></i><span><span class="code">evrctl</span> for admin from a shell</span></li>
+        </ul>
+        <div class="od-cluster"><a class="btn btn-primary" href="download.html#install"><i data-icon="download"></i>Install</a><a class="btn" href="docs.html#configuration">Configuration reference</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ cta -->
+  <section class="section" aria-labelledby="cta-h">
+    <div class="wrap">
+      <div class="cta-band">
+        <div>
+          <h2 class="h2-site" id="cta-h">Close the laptop. Miss nothing.</h2>
+          <p>Pull the image, create an admin account, add a network. Five minutes from now your nick is online for good.</p>
+        </div>
+        <div class="od-cluster">
+          <a class="btn btn-primary btn-lg" href="download.html#install"><i data-icon="download"></i>Get evrd</a>
+          <a class="btn btn-lg" href="https://github.com/4evrd/evrd" rel="noopener"><i data-icon="git"></i>View source</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+<script src="assets/site.js"></script>
+</body>
+</html>
