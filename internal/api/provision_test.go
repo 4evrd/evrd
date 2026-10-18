@@ -30,9 +30,9 @@ func TestProvisionUser(t *testing.T) {
 	body := map[string]any{
 		"email": "bob@example.org",
 		"networks": []map[string]any{
-			{"name": "libera", "servers": []map[string]any{{"host": "irc.libera.chat", "port": 6697, "tls": true}},
+			{"name": "libera", "servers": []map[string]any{{"host": "127.0.0.1", "port": 1, "tls": false}},
 				"nick": "bob", "channels": []string{"#evrd", "#go-nuts"}, "saslUser": "bob", "password": "sasl-pass"},
-			{"name": "oftc", "host": "irc.oftc.net", "port": 6697, "tls": true},
+			{"name": "oftc", "host": "127.0.0.1", "port": 1},
 		},
 	}
 	if code, _ := put("", body); code != 401 {
@@ -65,6 +65,17 @@ func TestProvisionUser(t *testing.T) {
 	}
 	if list, _ := e.st.ListNetworks(u.ID); len(list) != 2 {
 		t.Fatalf("repeat duplicated networks: %d", len(list))
+	}
+
+	// Connect on a repeat connects the existing networks (here: tries to —
+	// the test's networks point at a closed local port, so only check it's asked).
+	body["connect"] = true
+	code, out = put("s3cret-token", body)
+	if code != 200 {
+		t.Fatalf("connect repeat: %d %v", code, out)
+	}
+	if list, _ := e.st.ListNetworks(u.ID); !list[0].Enabled {
+		t.Fatalf("connect didn't enable %s", list[0].Name)
 	}
 }
 

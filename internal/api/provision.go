@@ -21,7 +21,9 @@ import (
 //
 // A missing account is created SSO-only and claimable: the owner's first SSO
 // sign-in with the same username and email takes it over. Networks whose
-// name the account already has are left alone, so a call can be repeated.
+// name the account already has are left as they are (so a call can be
+// repeated); "connect" connects every listed network, new or not — so a
+// caller can create first, take the old bouncer off IRC, then connect.
 
 type provisionInput struct {
 	Email    string         `json:"email"`
@@ -83,9 +85,9 @@ func (s *Server) handleProvisionUser(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	have := map[string]bool{}
+	have := map[string]int64{}
 	for _, n := range existing {
-		have[strings.ToLower(n.Name)] = true
+		have[strings.ToLower(n.Name)] = n.ID
 	}
 	out := []provisionedNetwork{}
 	for _, ni := range in.Networks {
@@ -95,8 +97,11 @@ func (s *Server) handleProvisionUser(w http.ResponseWriter, r *http.Request) {
 		}
 		ni.apply(&n)
 		res := provisionedNetwork{Name: n.Name}
-		if have[strings.ToLower(n.Name)] {
-			res.Status = "exists"
+		if id, ok := have[strings.ToLower(n.Name)]; ok {
+			res.ID, res.Status = id, "exists"
+			if in.Connect {
+				res.Error = s.provisionConnect(id)
+			}
 			out = append(out, res)
 			continue
 		}
@@ -113,15 +118,10 @@ func (s *Server) handleProvisionUser(w http.ResponseWriter, r *http.Request) {
 			out = append(out, res)
 			continue
 		}
-		have[strings.ToLower(n.Name)] = true
+		have[strings.ToLower(n.Name)] = n.ID
 		res.ID, res.Status = n.ID, "created"
 		if in.Connect {
-			if err := s.b.Connect(n.ID); errors.Is(err, bouncer.ErrNotOwner) {
-				// Another node serves this user: it connects enabled networks.
-				_ = s.st().SetNetworkEnabled(n.ID, true)
-			} else if err != nil {
-				res.Error = "created, but not connected: " + err.Error()
-			}
+			res.Error = s.provisionConnect(n.ID)
 		}
 		out = append(out, res)
 	}
@@ -130,4 +130,18 @@ func (s *Server) handleProvisionUser(w http.ResponseWriter, r *http.Request) {
 		"username": u.Username, "id": u.ID, "created": created,
 		"claimable": u.SSOClaimable, "networks": out,
 	})
+}
+
+// provisionConnect connects a network, returning why it couldn't ("" if it
+// did, or will: another node serves this user and connects it).
+func (s *Server) provisionConnect(id int64) string {
+	err := s.b.Connect(id)
+	if errors.Is(err, bouncer.ErrNotOwner) {
+		_ = s.st().SetNetworkEnabled(id, true)
+		return ""
+	}
+	if err != nil {
+		return "not connected: " + err.Error()
+	}
+	return ""
 }

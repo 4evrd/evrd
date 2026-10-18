@@ -260,8 +260,10 @@ Networks take the same fields as the web app's network editor (`servers`,
 `nick`, `altNick`, `username`, `realname`, `saslUser`, `password`,
 `channels`, `channelSettings`, `trustAllCerts`, `fingerprints`, …). The
 answer lists each network as `created`, `exists` (that name is already there,
-so a call can be repeated) or `failed` with the reason; `connect` connects the
-new ones straight away.
+so a call can be repeated) or `failed` with the reason. `connect` connects every
+listed network, new or already there — so a migration can create everything
+first, take the old bouncer off IRC, then call again with `connect` (no nick
+clash in between).
 
 A new account has no password and is **claimable**: the first SSO sign-in
 with the same username *and* email links to it — so the provider account must
