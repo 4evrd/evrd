@@ -206,7 +206,7 @@ func Default() *Config {
 			OIDCLabel:      "single sign-on",
 			OIDCAutoCreate: true,
 		},
-		Limits:   Limits{MaxNetworks: 0, MaxClients: 5, BacklogLines: 2000},
+		Limits:   Limits{MaxNetworks: 0, MaxClients: 0, BacklogLines: 2000},
 		Outbound: Outbound{ConnectRate: 5},
 	}
 }

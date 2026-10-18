@@ -104,7 +104,7 @@
                 </div>
                 <div class="node-meta">
                   <div class="od-stat"><span>{n.users}</span><span>Users</span></div>
-                  <div class="od-stat"><span>{n.linksUp}</span><span>Links up</span></div>
+                  <div class="od-stat" title="Upstream links connected"><span>{n.linksUp}</span><span>Links</span></div>
                   <div class="od-stat"><span>{ago(n.heartbeatAt)}</span><span>Heartbeat</span></div>
                 </div>
               </div>
@@ -200,10 +200,12 @@
   :global(.user-node) { grid-template-columns: 32px minmax(0, 1fr) auto; }
   :global(.user-node .avatar) { width: 32px; height: 32px; font-size: var(--fs-xs); }
   :global(.user-node.off) { opacity: 0.55; }
-  .node-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
+  .node-meta { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr); gap: var(--s2); }
+  .node-meta .od-stat { min-width: 0; }
+  .node-meta .od-stat span { overflow: hidden; text-overflow: ellipsis; }
   .node-meta .od-stat { padding: var(--s2) var(--s3); border-radius: var(--r-field); background: oklch(14% 0.011 215 / 0.55); }
   .node-meta .od-stat span:first-child { font-family: var(--font-mono); font-size: var(--fs-sm); white-space: nowrap; }
-  .node-meta .od-stat span:last-child { font-size: var(--fs-2xs); color: var(--faint); text-transform: uppercase; letter-spacing: var(--track-caps); font-weight: var(--fw-med); }
+  .node-meta .od-stat span:last-child { font-size: var(--fs-2xs); color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; font-weight: var(--fw-med); white-space: nowrap; }
   .attn-row { --cols: 32px minmax(0, 1fr) auto; color: var(--fg); }
   .attn-row:hover { text-decoration: none; }
   .attn-row .ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--bg-deep); }

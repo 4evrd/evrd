@@ -313,7 +313,7 @@ oidc_admin_role   evrd-admin  # optional: provider role that makes an evrd admin
 ```
 
 **Limits** (server defaults; admins override per user, 0 = unlimited):
-`max_networks 0` (unlimited by default), `max_clients 5` (attached IRC clients at once),
+`max_networks 0` (unlimited by default), `max_clients 0` (attached IRC clients at once; unlimited by default),
 `backlog_lines 2000` (kept per channel, pruned every 10 minutes).
 
 **Suspending** a user signs them out everywhere, drops their IRC clients and

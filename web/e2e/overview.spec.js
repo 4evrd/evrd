@@ -31,7 +31,7 @@ test('networks, channels, clients and events', async ({ page }) => {
     // attached clients, named from CTCP VERSION
     await expect(async () => {
       await page.reload()
-      await expect(page.getByTestId('tile-clients')).toHaveText(/^1\s*\/ 5$/, { timeout: 2000 })
+      await expect(page.getByTestId('tile-clients')).toHaveText(/^1\s*\/ ∞$/, { timeout: 2000 })
     }).toPass({ timeout: 20000 })
     await expect(page.locator('section[aria-labelledby="att-h"]')).toContainText('WeeChat')
     await expect(page.locator('section[aria-labelledby="ev-h"]')).toContainText('Connected to Dev')
