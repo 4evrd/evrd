@@ -67,3 +67,11 @@ export function greeting() {
   const h = new Date().getHours()
   return h < 5 ? 'Up late' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening'
 }
+
+// device names a browser from its user agent: "Chrome on macOS".
+export function device(ua) {
+  if (!ua) return 'Unknown device'
+  const b = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser'
+  const os = /iPhone|iPad/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'macOS' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : ''
+  return os ? `${b} on ${os}` : b
+}

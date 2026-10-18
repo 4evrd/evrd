@@ -225,7 +225,7 @@ button { cursor: pointer; }
 .nav-link[aria-current="page"] { background: var(--glass-2); color: var(--fg); box-shadow: inset 0 1px 0 var(--hilite), inset 0 0 0 1px var(--line-soft); }
 .nav-link[aria-current="page"] .i { color: var(--primary); }
 .nav-link .count { margin-left: auto; }
-.side-foot { margin-top: auto; display: grid; gap: var(--s3); }
+.side-foot { margin-top: auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
 .health-card {
   display: grid; gap: var(--s3); padding: var(--s4); border-radius: var(--r-card);
   background:
@@ -234,6 +234,8 @@ button { cursor: pointer; }
     var(--glass);
   border: 1px solid var(--line-soft); box-shadow: inset 0 1px 0 var(--hilite);
 }
+.health-card { grid-template-columns: minmax(0, 1fr); }
+.health-card > * { min-width: 0; }
 .health-card .who { font-family: var(--font-mono); font-size: var(--fs-sm); }
 .health-card .sub { font-size: var(--fs-xs); color: var(--muted); }
 

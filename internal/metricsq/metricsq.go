@@ -6,6 +6,7 @@ package metricsq
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,7 +33,20 @@ func New(base string) *Client {
 	if base == "" {
 		return nil
 	}
-	return &Client{base: strings.TrimRight(base, "/"), hc: &http.Client{Timeout: 10 * time.Second}}
+	return &Client{base: strings.TrimRight(base, "/"), hc: &http.Client{Timeout: 10 * time.Second, Transport: transport()}}
+}
+
+// transport speaks HTTP/1.1 only, one request per connection at a time. Over
+// HTTP/2 every query shares one connection, and when that connection dies
+// silently (a firewall or proxy on the way forgets it) every later query
+// hangs on it until its deadline. Over HTTP/1.1 a request that times out
+// takes its connection with it, and the next one dials afresh.
+func transport() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.ForceAttemptHTTP2 = false
+	t.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
+	t.IdleConnTimeout = 30 * time.Second
+	return t
 }
 
 // Series is one labelled series of [unix seconds, value] points.
@@ -118,6 +132,20 @@ func (c *Client) Scalar(ctx context.Context, query string) (float64, error) {
 		total += num(r.Value[1])
 	}
 	return total, nil
+}
+
+// Instant runs an instant query and returns each series' labels and value.
+func (c *Client) Instant(ctx context.Context, query string) ([]Series, error) {
+	out, err := c.get(ctx, "/api/v1/query", url.Values{"query": {query}})
+	if err != nil {
+		return nil, err
+	}
+	series := make([]Series, 0, len(out.Data.Result))
+	for _, r := range out.Data.Result {
+		t, _ := r.Value[0].(float64)
+		series = append(series, Series{Labels: r.Metric, Points: [][2]float64{{t, num(r.Value[1])}}})
+	}
+	return series, nil
 }
 
 // Quote makes a string safe inside a PromQL label matcher.

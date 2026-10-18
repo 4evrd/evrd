@@ -5,6 +5,7 @@ package bouncer
 // activity feed, presence (last seen, auto-away).
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -268,6 +269,8 @@ func (b *Bouncer) Buffers(networkID int64) []BufferState {
 			out = append(out, BufferState{Name: name, ReadAt: markers[strings.ToLower(name)]})
 		}
 	}
+	// Older versions filed prefix-less server notices under no name at all.
+	out = slices.DeleteFunc(out, func(st BufferState) bool { return st.Name == "" })
 	sort.Slice(out, func(i, j int) bool {
 		ci, cj := isChannelName(out[i].Name), isChannelName(out[j].Name)
 		if ci != cj {

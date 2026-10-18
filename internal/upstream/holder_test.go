@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -137,4 +138,24 @@ func TestNoHolderConnectsDirectly(t *testing.T) {
 	c := New(n, quiet, Options{Links: links.NewClient(filepath.Join(t.TempDir(), "none.sock")), LinkID: "n9"})
 	run(t, c)
 	eventually(t, "connected without a holder", func() bool { return c.Status() == StatusConnected })
+}
+
+func TestPrefixlessNoticeGoesUnderTheServer(t *testing.T) {
+	var log testirc.Log
+	addr := testirc.StartLogged(t, &log)
+	host, port, _ := net.SplitHostPort(addr)
+	p, _ := strconv.Atoi(port)
+	var got atomic.Value
+	c := New(store.Network{ID: 10, Nick: "dora", Host: host, Port: p}, quiet, Options{Persist: func(m history.Message) {
+		if strings.Contains(m.Text, "Looking up your hostname") {
+			got.Store(m.Target)
+		}
+	}})
+	run(t, c)
+	eventually(t, "registered", func() bool { return c.Status() == StatusConnected })
+	log.Send("NOTICE * :*** Looking up your hostname")
+	eventually(t, "the notice recorded", func() bool { return got.Load() != nil })
+	if got.Load() != host {
+		t.Fatalf("filed under %q, want the server %q", got.Load(), host)
+	}
 }

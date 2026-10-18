@@ -28,6 +28,7 @@
     ...(isAdmin ? [{ group: 'Administration', items: [
       { href: '/admin', label: 'Overview', ic: 'chart' },
       { href: '/admin/users', label: 'Users', ic: 'users' },
+      { href: '/admin/metrics', label: 'Metrics', ic: 'activity' },
       { href: '/admin/settings', label: 'Settings', ic: 'sliders' },
     ] }] : []),
     { group: 'Account', items: [{ href: '/account', label: 'Account', ic: 'user' }] },

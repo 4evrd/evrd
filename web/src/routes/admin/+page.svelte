@@ -29,6 +29,8 @@
   const match = { all: () => true, online: (p) => p.status === 'online', issue: (p) => !!p.issue }
   const label = { all: 'Accounts', online: 'Online now', issue: 'Accounts with an issue' }
   const shown = $derived((ov?.placement || []).filter(match[filter]).map((p) => ({ ...p, key: p.id, source: p.node || '-', dashed: p.status !== 'online' })))
+  // node-a → A; a host name → its first letter
+  const nodeBadge = (id) => (/[-_]([a-z0-9])$/i.exec(id)?.[1] || id[0] || '?').toUpperCase()
   const leftNodes = $derived(nodes.map((n) => ({ id: n.id, color: n.color })))
 
   const attnIcon = { network: ['alert', 'signal'], limit: ['sliders', 'warn'], suspended: ['ban', 'bad'], inactive: ['user', 'warn'] }
@@ -72,7 +74,7 @@
       </div>
       <div class="tile">
         <div class="tile-top"><span class="caps"><Icon name="monitor" class="i-sm" />Clients</span><span class="chip ok live"><span class="dot" aria-hidden="true"></span>Live</span></div>
-        <div class="od-stat"><span class="n">{ov.attachedClients}</span><span class="u">attached across {ov.accountsAttached} account{ov.accountsAttached === 1 ? '' : 's'}</span></div>
+        <div class="od-stat"><span class="n">{ov.attachedClients}</span><span class="u">IRC client{ov.attachedClients === 1 ? '' : 's'}{ov.attachedClients ? ` across ${ov.accountsAttached} account${ov.accountsAttached === 1 ? '' : 's'}` : ''}{ov.webAttached ? ` · ${ov.webAttached} in the web app` : ''}</span></div>
         <span class="ubar" role="img" aria-label="{ov.attachedClients} clients attached"><span style="transform:scaleX({ratio(ov.accountsAttached, ov.users)});background:var(--nick)"></span></span>
       </div>
       <div class="tile">
@@ -101,7 +103,7 @@
               {@const n = nodes.find((x) => x.id === l.id)}
               <div class="net-node" style="--net:{n.color}">
                 <div class="head">
-                  <span class="mono-badge" aria-hidden="true">{n.id.slice(-1).toUpperCase()}</span>
+                  <span class="mono-badge" aria-hidden="true">{nodeBadge(n.id)}</span>
                   <span class="od-field od-fill"><span class="od-truncate">{n.id}</span><span class="od-truncate">{n.host || 'this server'} · up {since(n.startedAt + skew)}</span></span>
                   {#if nodeLive(n)}<span class="chip ok live"><span class="dot" aria-hidden="true"></span>Live</span>{:else}<span class="chip warn">Stale</span>{/if}
                 </div>
@@ -113,9 +115,9 @@
               </div>
             {/snippet}
             {#snippet item(u)}
-              <a class="chan-node user-node" class:off={u.status === 'suspended'} href="/admin/users?user={encodeURIComponent(u.username)}" style={nodes.find((n) => n.id === u.node) ? `--net:${nodes.find((n) => n.id === u.node).color}` : ''}>
+              <a class="chan-node user-node" class:off={u.status === 'suspended'} href="/admin/users/{u.id}" style={nodes.find((n) => n.id === u.node) ? `--net:${nodes.find((n) => n.id === u.node).color}` : ''}>
                 <span class="avatar" aria-hidden="true">{u.username[0].toUpperCase()}</span>
-                <span class="od-field"><span class="od-truncate">{u.username}</span><span class="sub"><span class="od-nowrap">{u.node ? `${u.up}/${u.nets} links · ${u.status}` : 'not placed'}</span>{#if u.issue && u.status !== 'suspended'}<span class="od-nowrap" style="color:var(--signal)">{u.issue}</span>{/if}</span></span>
+                <span class="od-field"><span class="od-truncate">{u.username}</span><span class="sub"><span class="od-nowrap">{u.node ? `${u.up}/${u.nets} links · ${u.status === 'online' ? 'client attached' : u.status === 'offline' ? 'no client attached' : u.status}` : 'not placed'}</span>{#if u.issue && u.status !== 'suspended'}<span class="od-nowrap" style="color:var(--signal)">{u.issue}</span>{/if}</span></span>
                 {#if u.status === 'suspended'}<span class="chip bad"><Icon name="ban" />Suspended</span>
                 {:else if u.issue}<span class="count hot" aria-label="Issue: {u.issue}">!</span>
                 {:else}<span class="count calm" aria-label="{u.clients} clients attached">{u.clients}</span>{/if}

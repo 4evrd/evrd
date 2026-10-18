@@ -18,6 +18,7 @@ export const ICONS = {
   alert: '<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/>',
   refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/>',
   chevron: '<path d="m9 6 6 6-6 6"/>',
+  'chevron-left': '<path d="m15 6-6 6 6 6"/>',
   chevronDown: '<path d="m6 9 6 6 6-6"/>',
   shield: '<path d="M12 3 19.5 6v6c0 4.6-3.2 7.8-7.5 9-4.3-1.2-7.5-4.4-7.5-9V6z"/><path d="m9 12 2 2 4-4"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',

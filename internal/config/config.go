@@ -325,6 +325,7 @@ func Default() *Config {
 		},
 		Limits:   Limits{MaxNetworks: 0, MaxClients: 0, BacklogLines: 2000},
 		Outbound: Outbound{ConnectRate: 5},
+		Metrics:  Metrics{Interval: 15 * time.Second},
 		fromFile: map[string]bool{},
 	}
 }

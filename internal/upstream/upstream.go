@@ -947,6 +947,15 @@ func (c *Conn) handleMessage(m irc.Message) {
 	targetField := m.Params[0]
 	text := m.Params[len(m.Params)-1]
 	sender := nickOf(m.Prefix)
+	if sender == "" {
+		// A server notice without a prefix ("NOTICE * :*** Looking up your
+		// hostname", before registration): file it under the server, with
+		// the ones that name it.
+		c.mu.Lock()
+		host, _, _ := net.SplitHostPort(c.health.Server)
+		c.mu.Unlock()
+		sender = orElse(host, c.net.Host)
+	}
 
 	kind := "message"
 	if m.Command == "NOTICE" {

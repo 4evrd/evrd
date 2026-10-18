@@ -179,11 +179,13 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	// administration
 	mux.HandleFunc("GET /api/admin/overview", adminAny(s.handleAdminOverview))
+	mux.HandleFunc("GET /api/admin/metrics", adminAny(s.handleAdminMetrics))
 	mux.HandleFunc("GET /api/admin/settings", adminAny(s.handleGetSettings))
 	mux.HandleFunc("PATCH /api/admin/settings", adminAny(s.handleSaveSettings))
 	mux.HandleFunc("GET /api/admin/users", adminAny(s.handleAdminListUsers))
 	mux.HandleFunc("POST /api/admin/users", adminAny(s.handleAdminCreateUser))
 	mux.HandleFunc("GET /api/admin/users/{id}", admin(s.handleAdminGetUser))
+	mux.HandleFunc("GET /api/admin/users/{id}/overview", admin(s.handleAdminUserOverview))
 	mux.HandleFunc("PATCH /api/admin/users/{id}", admin(s.handleAdminUpdateUser))
 	mux.HandleFunc("DELETE /api/admin/users/{id}", admin(s.handleAdminDeleteUser))
 	mux.HandleFunc("POST /api/admin/users/{id}/password", admin(s.handleAdminSetPassword))
@@ -199,8 +201,27 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		"ssoLabel":      s.cfg().Auth.OIDCLabel,
 		"ircHost":       s.cfg().IRCHost,
 		"ircPorts":      ircPorts(s.cfg().Listen),
+		"ircSelfSigned": s.selfSigned(),
 		"version":       version.Version,
 	})
+}
+
+// selfSigned says whether IRC clients will see a self-signed certificate
+// (and so need to be told to accept it).
+func (s *Server) selfSigned() bool {
+	if s.certs == nil {
+		return true
+	}
+	r := s.certs.Report()
+	if r.Source == "selfsigned" {
+		return true
+	}
+	for _, c := range r.Certs {
+		if c.Issuer == "self-signed" {
+			return true
+		}
+	}
+	return false
 }
 
 type portDTO struct {

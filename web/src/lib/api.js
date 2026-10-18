@@ -93,6 +93,8 @@ export const api = {
     users: () => req('GET', '/api/admin/users'),
     createUser: (u) => req('POST', '/api/admin/users', u),
     user: (id) => req('GET', `/api/admin/users/${id}`),
+    userOverview: (id) => req('GET', `/api/admin/users/${id}/overview`),
+    metrics: (range) => req('GET', `/api/admin/metrics?range=${encodeURIComponent(range)}`),
     updateUser: (id, patch) => req('PATCH', `/api/admin/users/${id}`, patch),
     deleteUser: (id) => req('DELETE', `/api/admin/users/${id}`),
     // no password: one is generated and returned; either way it's temporary

@@ -77,13 +77,45 @@ func eventsDTO(evs []store.UserEvent) []map[string]any {
 // It runs on the user's owner node (live state) and reads traffic from the
 // metrics store.
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
-	u := auth.User(r)
-	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
-	defer cancel()
-	nets, err := s.st().ListNetworks(u.ID)
+	ov, err := s.overviewOf(r.Context(), auth.User(r))
 	if err != nil {
 		s.fail(w, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, ov)
+}
+
+// handleAdminUserOverview is the same overview of another user, for admins,
+// with their web sign-ins and client passwords. Served on their owner node.
+func (s *Server) handleAdminUserOverview(w http.ResponseWriter, r *http.Request) {
+	u, ok := s.adminTarget(w, r)
+	if !ok {
+		return
+	}
+	ov, err := s.overviewOf(r.Context(), u)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	ov["usage"] = map[string]any{"networks": len(ov["networks"].([]map[string]any))}
+	ov["sessions"] = s.sessionsDTO(u.ID, "")
+	cps, _ := s.st().ListClientPasswords(u.ID)
+	pws := make([]map[string]any, 0, len(cps))
+	for _, c := range cps {
+		pws = append(pws, map[string]any{"name": c.Name, "createdAt": c.CreatedAt.Unix(), "lastUsedAt": unix(c.LastUsedAt)})
+	}
+	ov["clientPasswords"] = pws
+	writeJSON(w, http.StatusOK, ov)
+}
+
+// overviewOf is everything a user's overview page shows. It needs the
+// user's live state, so it runs on their owner node.
+func (s *Server) overviewOf(ctx context.Context, u store.User) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	nets, err := s.st().ListNetworks(u.ID)
+	if err != nil {
+		return nil, err
 	}
 	lim := s.acc.LimitsFor(u)
 
@@ -180,7 +212,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	evs, _ := s.st().UserEvents(u.ID, now.Add(-24*time.Hour), 20)
-	writeJSON(w, http.StatusOK, map[string]any{
+	return map[string]any{
 		"networks": netsOut,
 		"clients":  s.clientsDTO(u.ID),
 		"events":   eventsDTO(evs),
@@ -190,7 +222,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 			"available": traffic.available, "error": traffic.err,
 			"start": traffic.start, "step": 3600, "series": traffic.series, "total24h": int64(math.Round(total)),
 		},
-	})
+	}, nil
 }
 
 func pct(part, total float64) int {
@@ -240,6 +272,9 @@ func (s *Server) userTraffic(ctx context.Context, userID int64, nets []store.Net
 		out.err = "metrics aren't configured"
 		return out
 	}
+	// The rest of the page doesn't wait on a slow metrics store.
+	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
 	user := metricsq.Quote(strconv.FormatInt(userID, 10))
 	end := time.Now().Truncate(time.Hour).Add(time.Hour)
 	start := end.Add(-24 * time.Hour)
@@ -522,11 +557,13 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 			linksUp++
 		}
 	}
-	accountsWith := 0
-	for _, c := range live.Online {
-		if c > 0 {
+	// IRC clients and the accounts they're attached to; web chats apart.
+	accountsWith, web := 0, 0
+	for uid, c := range live.Online {
+		if live.Clients[uid] > 0 {
 			accountsWith++
 		}
+		web += c - live.Clients[uid]
 	}
 
 	if attention == nil {
@@ -535,7 +572,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"users": len(users), "admins": admins, "suspended": suspended, "sso": sso, "online": online,
 		"networks": len(allNets), "linksTotal": linksTotal, "linksUp": linksUp,
-		"connectedNetworks": live.Connected, "attachedClients": live.Attached, "accountsAttached": accountsWith,
+		"connectedNetworks": live.Connected, "attachedClients": live.Attached, "accountsAttached": accountsWith, "webAttached": max(web, 0),
 		"defaults": s.acc.Defaults(), "nodes": nodes, "placement": placements, "clustered": s.cl != nil,
 		// the server's clock: the page compares heartbeats against it, so a
 		// browser (or server) whose clock is off doesn't call a live node stale

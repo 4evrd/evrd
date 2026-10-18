@@ -108,7 +108,7 @@ Password        <b>{me.username}/{firstNet}:</b><em>{pwText}</em></pre>
         {:else}
           <p class="desc">Any client that can send a server password (PASS) works. Use host <span class="code">{host}</span>, port <span class="code">{port.port}</span>{port.tls ? ' with TLS' : ''}, and the password format above. Add one server entry per network.</p>
         {/if}
-        {#if port.tls}<p class="desc" style="font-size:var(--fs-xs)">If your client rejects the certificate, the server is using a self-signed one — allow it in the client’s TLS settings.</p>{/if}
+        {#if port.tls && session.config?.ircSelfSigned}<p class="desc" style="font-size:var(--fs-xs)">If your client rejects the certificate, the server is using a self-signed one — allow it in the client’s TLS settings.</p>{/if}
       </div>
     </section>
   </div>

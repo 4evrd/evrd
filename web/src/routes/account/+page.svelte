@@ -8,7 +8,7 @@
   import { api } from '$lib/api.js'
   import { session, refreshMe } from '$lib/session.svelte.js'
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
-  import { ago } from '$lib/format.js'
+  import { ago, device } from '$lib/format.js'
   import { check } from '$lib/validate.js'
 
   const me = $derived(session.me)
@@ -45,12 +45,6 @@
   let sessions = $state(null)
   async function loadSessions() { try { sessions = await api.sessions() } catch { sessions = [] } }
   onMount(loadSessions)
-  const device = (ua) => {
-    if (!ua) return 'Unknown device'
-    const b = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser'
-    const os = /iPhone|iPad/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'macOS' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : ''
-    return os ? `${b} on ${os}` : b
-  }
   async function revoke(s) {
     try { await api.revokeSession(s.id); await loadSessions(); toast(`Signed out ${device(s.userAgent)}`) } catch (e) { toast(e.message, 'bad') }
   }
