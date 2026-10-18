@@ -1,14 +1,15 @@
 name: ci
 
-# Build and test everything on every push and pull request. Pushes to main and
-# version tags (v*) also publish multi-arch images to GHCR:
+# Build and test everything on every push and pull request. On main, once
+# everything passes, semantic-release cuts a release from the Conventional
+# Commits since the last one (tag vX.Y.Z + GitHub release), and multi-arch
+# images go to GHCR — tagged latest, the commit sha, and the version:
 #   ghcr.io/4evrd/evrd      the daemon + evrctl
 #   ghcr.io/4evrd/evrd-web  the web app (nginx + static SPA)
 
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -20,6 +21,19 @@ permissions:
   contents: read
 
 jobs:
+  # Pull requests: commit messages follow Conventional Commits (they decide
+  # the next version).
+  commits:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: commitlint.config.mjs
+
   core:
     runs-on: ubuntu-latest
     env:
@@ -138,11 +152,36 @@ jobs:
           path: web/test-results
           retention-days: 7
 
-  # --- images: main and tags only (skipped, not failed, on PRs) -------------
+  # --- release + images: pushes to main only (skipped on PRs) --------------
+  release:
+    runs-on: ubuntu-latest
+    needs: [core, scylla, web, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write # tags and GitHub releases
+      issues: write
+      pull-requests: write
+    outputs:
+      published: ${{ steps.release.outputs.new_release_published }}
+      version: ${{ steps.release.outputs.new_release_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: release
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          semantic_version: 24.2.0
+          extra_plugins: |
+            conventional-changelog-conventionalcommits@8.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   images:
     runs-on: ubuntu-latest
-    needs: [core, scylla, web]
-    if: github.event_name == 'push'
+    needs: [release]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
       packages: write
@@ -167,17 +206,17 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
             type=sha,format=long
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=v${{ needs.release.outputs.version }},enable=${{ needs.release.outputs.published == 'true' }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.release.outputs.version }},enable=${{ needs.release.outputs.published == 'true' }}
       - uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
-            VERSION=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+            VERSION=${{ needs.release.outputs.published == 'true' && needs.release.outputs.version || github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}

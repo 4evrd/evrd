@@ -165,10 +165,31 @@ make e2e         # brings up the dev stack and runs the specs
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull
 request: gofmt, vet, build and Go tests; the ScyllaDB suite; svelte-check and
 the web build; and the Playwright suite against the full dev stack, with evrd
-from the production image (`docker-compose.e2e.yml`) instead of air. Pushes to
+from the production image (`docker-compose.e2e.yml`) instead of air. On
+`main` it then releases (see below) and publishes the images. Pushes to
 `main` and `v*` tags publish multi-arch images (cross-compiled, no emulated
 Go builds) to `ghcr.io/4evrd/evrd` and
 `ghcr.io/4evrd/evrd-web`.
+
+### Releases and commit messages
+
+Releases are cut by [semantic-release](https://semantic-release.gitbook.io)
+from [Conventional Commits](https://www.conventionalcommits.org). On every push
+to `main`, once CI passes, it looks at the commits since the last tag:
+
+| Commit | Release |
+|---|---|
+| `fix: …`, `perf: …` | patch (0.1.0 → 0.1.1) |
+| `feat: …` | minor (0.1.0 → 0.2.0) |
+| `feat!: …` or a `BREAKING CHANGE:` footer | major |
+| `docs:`, `test:`, `ci:`, `chore:`, `refactor:`, `build:` | none |
+
+It tags `vX.Y.Z`, publishes a GitHub release with notes grouped by type, and
+the images are pushed as `ghcr.io/4evrd/evrd:X.Y.Z` and `:X.Y` (plus `latest`
+and the commit sha, as on every push to `main`); `evrd -version` reports it.
+Config: `.releaserc.json`. Pull requests have their commit messages checked
+with commitlint (`commitlint.config.mjs`). Versions started from a `v0.0.0`
+baseline, so evrd stays 0.x until a breaking change says otherwise.
 
 ### Without Docker
 
