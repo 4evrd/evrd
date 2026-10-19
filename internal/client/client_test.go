@@ -26,6 +26,11 @@ type rig struct {
 	st   store.Store
 	hist history.Store
 	addr string // evrd's IRC listener
+	b    *bouncer.Bouncer
+	acc  *accounts.Service
+	srv  *Server
+	ctx  context.Context
+	user store.User
 }
 
 // scratchDir is a temp dir removed when the test ends, best effort: the
@@ -64,7 +69,8 @@ func newRig(t *testing.T) *rig {
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")
 	addr := ln.Addr().String()
 	ln.Close()
-	go NewServer(b, acc, log, "", "").ListenAndServe(ctx, []string{"irc+insecure://" + addr})
+	srv := NewServer(b, acc, log, "", "")
+	go srv.ListenAndServe(ctx, []string{"irc+insecure://" + addr})
 
 	u, err := acc.Create(accounts.CreateInput{Username: "alice", Password: "alice-password"})
 	if err != nil {
@@ -83,7 +89,7 @@ func newRig(t *testing.T) *rig {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	return &rig{t: t, st: st, hist: hist, addr: addr}
+	return &rig{t: t, st: st, hist: hist, addr: addr, b: b, acc: acc, srv: srv, ctx: ctx, user: u}
 }
 
 type ircClient struct {
