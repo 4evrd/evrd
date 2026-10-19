@@ -78,6 +78,18 @@ func TestParse(t *testing.T) {
 	}
 }
 
+// The dev stack's and e2e suite's directory must stay valid.
+func TestDevFixture(t *testing.T) {
+	data, err := os.ReadFile("../../deploy/networks.dev.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, skipped, err := Parse(data)
+	if err != nil || len(skipped) > 0 || len(doc.Networks) != 5 {
+		t.Fatalf("%v %q", err, skipped)
+	}
+}
+
 func TestParseSkipsBadEntries(t *testing.T) {
 	srv := `"servers": [{"host": "irc.example.org", "port": 6697, "tls": true}]`
 	doc, skipped, err := Parse([]byte(`{"version": 1, "networks": [

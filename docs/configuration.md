@@ -19,6 +19,7 @@ are stored in the database and win over the file (see below).
 | `web_root` | — | the built web app (`web/build`) for evrd to serve on `api` and `https_listen`, without nginx |
 | `chroot`, `user` | — | confine evrd after startup; see [Confinement](#confinement-chroot-and-user) |
 | `modules_off` | — | [modules](modules.md) nobody on this server can use, space-separated |
+| `network_directory` (`EVRD_NETWORK_DIRECTORY`) | `https://evrd.sh/api/networks/v1.json` | the [network directory](network-directory.md) users pick from when adding a network: a URL, a local file, or `off` |
 | `links_socket` (`EVRD_LINKS_SOCKET`) | — | the [connection holder](#connection-holder)'s socket: IRC connections stay up while evrd restarts (one node only) |
 | `provision_token` (`EVRD_PROVISION_TOKEN`) | — | turns on the [provisioning API](#provisioning-api) for tools that create accounts |
 | `db` (`EVRD_DB`) | `sqlite:evrd.db` | accounts and settings: `postgres://user:pass@host/evrd?sslmode=disable` or `sqlite:/path/evrd.db` |
@@ -56,7 +57,7 @@ Environment — those are locked in the UI). **Reset** removes a value set here,
 falling back to evrd.conf or the default.
 
 **Editable:** `irc_host`, `public_url`, `max_networks`, `max_clients`,
-`backlog_lines`, `connect_rate`, `bindhost`, `tls`, `acme_email`, `acme_hosts`,
+`backlog_lines`, `connect_rate`, `bindhost`, `network_directory`, `tls`, `acme_email`, `acme_hosts`,
 `acme_ca`, `tls_cert`, `tls_key`, `password_login`, `session_ttl`,
 `cookie_secure`, the `oidc_*` directives, `otel_endpoint`, `otel_interval`,
 `metrics_url`. Most apply live on every node within a few seconds; `public_url`,

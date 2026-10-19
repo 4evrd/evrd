@@ -35,6 +35,7 @@ The web chat understands `/join`, `/part`, `/msg`, `/query`, `/me`, `/notice`,
 | `jump <network>` | switch this client to another network |
 | `connect [network]` / `disconnect [network]` | bring a network up or down (default: this one) |
 | `addnetwork <name> <host> [[+]port] [nick]` | add a network; `+port` is TLS (default `+6697`) |
+| `addnetwork <id>` / `directory [search]` | add a network from the [network directory](network-directory.md) by its id (`addnetwork libera`); list or search it |
 | `delnetwork <network>` | remove a network and its history |
 | `show [network]` | a network's settings (default: this one) |
 | `set [network] <setting> <value>` | change `name`, `host`, `port` (`+port` = TLS), `tls`, `nick`, `altnick`, `ident`, `realname`, `password`, `sasluser`, `bindhost`, `quitmsg`, `encoding`, `trustallcerts`, `trustpki`, `floodrate`, `floodburst`, `joindelay` (`-` clears); reconnects when needed |
