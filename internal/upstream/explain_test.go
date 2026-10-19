@@ -13,19 +13,23 @@ import (
 
 func TestHint(t *testing.T) {
 	for msg, want := range map[string]string{
-		"Closing Link: 203.0.113.9 (K-Lined: spam)":                                 "refuses connections from this bouncer",
-		"the server refused the connection: *** Banned: Please use another server.": "refuses connections from this bouncer",
-		"Closing Link: host (Throttled: Reconnecting too fast)":                     "limits how often",
-		"Too many connections from your host":                                       "limits how often",
-		"Password incorrect":                                                        "password was refused",
-		"the server didn't answer with TLS on this port — it said …":                "doesn't speak TLS",
-		"the server speaks TLS on this port":                                        "expects TLS",
-		"can't resolve irc.example.invalid":                                         "doesn't exist",
-		"connection refused":                                                        "nothing listens on that port",
-		"connection timed out":                                                      "didn't answer",
-		"TLS certificate rejected":                                                  "certificate couldn't be verified",
-		"Closing Link: Wollino[unknown@2001:db8::1] (SASL authentication required)": "only lets in people who log in with SASL",
-		"the server hung up during the TLS handshake":                               "hung up before the secure connection",
+		"Closing Link: 203.0.113.9 (K-Lined: spam)":                                    "refuses connections from this bouncer",
+		"the server refused the connection: *** Banned: Please use another server.":    "refuses connections from this bouncer",
+		"Closing Link: admin.floretos.com (You are not authorised to use this server)": "refuses connections from this bouncer",
+		"You are not authorized to use this server":                                    "only accept certain countries or networks, or clients with ident",
+		"Closing Link: host (No Authorization)":                                        "tries the network's other servers",
+		"Unauthorized connection":                                                      "refuses connections from this bouncer",
+		"Closing Link: host (Throttled: Reconnecting too fast)":                        "limits how often",
+		"Too many connections from your host":                                          "limits how often",
+		"Password incorrect":                                                           "password was refused",
+		"the server didn't answer with TLS on this port — it said …":                   "doesn't speak TLS",
+		"the server speaks TLS on this port":                                           "expects TLS",
+		"can't resolve irc.example.invalid":                                            "doesn't exist",
+		"connection refused":                                                           "nothing listens on that port",
+		"connection timed out":                                                         "didn't answer",
+		"TLS certificate rejected":                                                     "certificate couldn't be verified",
+		"Closing Link: Wollino[unknown@2001:db8::1] (SASL authentication required)":    "only lets in people who log in with SASL",
+		"the server hung up during the TLS handshake":                                  "hung up before the secure connection",
 	} {
 		if got := Hint(msg); !strings.Contains(got, want) {
 			t.Errorf("%q: hint %q, want it to mention %q", msg, got, want)

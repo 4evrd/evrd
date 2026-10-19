@@ -321,6 +321,16 @@ func TestDescribeErr(t *testing.T) {
 	if roundDur(10*time.Millisecond) != "a moment" || roundDur(1600*time.Millisecond) != "2s" {
 		t.Error("roundDur")
 	}
+	for d, want := range map[time.Duration]string{
+		9*time.Minute + 59*time.Second:  "9m59s",
+		32*time.Minute + 17*time.Second: "32m",
+		time.Hour + 20*time.Second:      "1h",
+		4*time.Hour + 3*time.Minute:     "4h3m",
+	} {
+		if got := roundDur(d); got != want {
+			t.Errorf("roundDur(%v) = %q, want %q", d, got, want)
+		}
+	}
 }
 
 func TestLogged(t *testing.T) {
