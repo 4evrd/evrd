@@ -208,7 +208,9 @@ jobs:
           builder: ${{ steps.buildx.outputs.name }}
           cache-map: |
             { "docker-go-cache/mod": "/go/pkg/mod", "docker-go-cache/build": "/root/.cache/go-build" }
-          skip-extraction: ${{ steps.gocache.outputs.cache-hit == 'true' }}
+          # saving it takes a minute the shards would wait on: main saves
+          # it, and PRs build from main's
+          skip-extraction: ${{ steps.gocache.outputs.cache-hit == 'true' || github.event_name != 'push' }}
       # evrd runs the production image in e2e (docker-compose.e2e.yml) rather
       # than compiling under air at startup.
       - name: Build the evrd image
