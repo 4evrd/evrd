@@ -28,6 +28,7 @@ import (
 	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/identd"
 	"github.com/4evrd/evrd/internal/identfile"
 	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/listen"
@@ -114,7 +115,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	if sb := (sandbox.Config{Chroot: cfg.Chroot, User: cfg.User}); sb.Enabled() {
 		// Ports below 1024 need root: bind every port first.
-		addrs := append([]string{cfg.API, cfg.HTTPSListen, cfg.HTTPListen, cfg.Cluster.InternalListen, cfg.Cluster.InternalIRCListen}, cfg.Listen...)
+		addrs := append([]string{cfg.API, cfg.HTTPSListen, cfg.HTTPListen, cfg.Cluster.InternalListen, cfg.Cluster.InternalIRCListen, cfg.IdentdListen}, cfg.Listen...)
 		if err := listen.Prebind(addrs...); err != nil {
 			log.Error("listen", "err", err)
 			return 1
@@ -286,6 +287,21 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	if len(cfg.Outbound.Bind) > 0 || cfg.Outbound.Prefix6.IsValid() {
 		log.Info("outbound addresses", "bind", cfg.Outbound.Bind, "prefix6", cfg.Outbound.Prefix6)
+	}
+	// Ident queries from IRC servers, answered from this node's connections:
+	// open before they connect.
+	if cfg.IdentdListen != "" {
+		ln, err := listen.TCP(cfg.IdentdListen)
+		if err != nil {
+			log.Error("identd", "err", err)
+			return 1
+		}
+		log.Info("identd listening", "addr", ln.Addr().String())
+		go func() {
+			if err := identd.New(b.Ident, log).Serve(ctx, ln); err != nil {
+				log.Warn("identd", "err", err)
+			}
+		}()
 	}
 	if err := b.Start(ctx); err != nil {
 		log.Error("start bouncer", "err", err)

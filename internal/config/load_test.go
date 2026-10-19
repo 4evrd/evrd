@@ -38,6 +38,7 @@ acme_ca https://ca.example/dir
 https_listen :443
 http_listen :80
 links_socket /run/links.sock
+identd_listen :1113
 provision_token tok
 web_root /srv/web
 chroot /var/evrd
@@ -100,6 +101,7 @@ backlog_lines 600
 	check("https_listen", c.HTTPSListen, ":443")
 	check("http_listen", c.HTTPListen, ":80")
 	check("links_socket", c.LinksSocket, "/run/links.sock")
+	check("identd_listen", c.IdentdListen, ":1113")
 	check("provision_token", c.ProvisionToken, "tok")
 	check("web_root", c.WebRoot, "/srv/web")
 	check("chroot", c.Chroot, "/var/evrd")
@@ -200,6 +202,7 @@ func TestLoadAppliesEnv(t *testing.T) {
 		"EVRD_SECRET_KEY_FILE":                "/key",
 		"EVRD_PROVISION_TOKEN":                "prov",
 		"EVRD_LINKS_SOCKET":                   "/links",
+		"EVRD_IDENTD_LISTEN":                  ":113",
 		"EVRD_NODE_ID":                        "node",
 		"EVRD_INTERNAL_URL":                   "http://node",
 		"EVRD_INTERNAL_IRC_ADDR":              "node:1",
@@ -216,9 +219,9 @@ func TestLoadAppliesEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := []string{c.DB, c.History, c.Auth.OIDCClientSecret, c.Cluster.Secret, c.Secrets.Key, c.Secrets.KeyFile,
-		c.ProvisionToken, c.LinksSocket, c.Cluster.NodeID, c.Cluster.InternalURL, c.Cluster.InternalIRCAddr,
+		c.ProvisionToken, c.LinksSocket, c.IdentdListen, c.Cluster.NodeID, c.Cluster.InternalURL, c.Cluster.InternalIRCAddr,
 		c.Metrics.OTLPEndpoint, c.Metrics.QueryURL}
-	want := []string{"postgres://env/evrd", "scylla://env/evrd", "oidc", "cluster", "key", "/key", "prov", "/links",
+	want := []string{"postgres://env/evrd", "scylla://env/evrd", "oidc", "cluster", "key", "/key", "prov", "/links", ":113",
 		"node", "http://node", "node:1", "http://otel", "http://vm"}
 	if !slices.Equal(got, want) {
 		t.Errorf("env overrides:\n got %q\nwant %q", got, want)

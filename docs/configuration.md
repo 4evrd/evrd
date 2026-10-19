@@ -21,6 +21,7 @@ are stored in the database and win over the file (see below).
 | `modules_off` | — | [modules](modules.md) nobody on this server can use, space-separated |
 | `network_directory` (`EVRD_NETWORK_DIRECTORY`) | `https://evrd.sh/api/networks/v1.json` | the [network directory](network-directory.md) users pick from when adding a network: a URL, a local file, or `off` |
 | `ident_file` (`EVRD_IDENT_FILE`) | — | an oidentd user config evrd keeps up to date so networks see users' idents, not evrd's system user; see [Idents](openbsd.md#idents-oidentd) |
+| `identd_listen` (`EVRD_IDENTD_LISTEN`) | — | evrd answers ident queries (RFC 1413) itself, e.g. `:113`; see [Ident](#ident-identd) |
 | `links_socket` (`EVRD_LINKS_SOCKET`) | — | the [connection holder](#connection-holder)'s socket: IRC connections stay up while evrd restarts (one node only) |
 | `provision_token` (`EVRD_PROVISION_TOKEN`) | — | turns on the [provisioning API](#provisioning-api) for tools that create accounts |
 | `db` (`EVRD_DB`) | `sqlite:evrd.db` | accounts and settings: `postgres://user:pass@host/evrd?sslmode=disable` or `sqlite:/path/evrd.db` |
@@ -278,6 +279,51 @@ program changed. In Docker, run evrd in the holder's network namespace
 (`network_mode: "service:links"`) so the connections outlive evrd's container.
 The holder is for a single node: in a [cluster](clustering.md), users move
 between nodes instead, and `links_socket` is ignored.
+
+## Ident (identd)
+
+Some IRC networks ask each connection's host who it is (ident, TCP port 113),
+and a few refuse connections that don't answer (EFnet's "No Ident response").
+With `identd_listen`, evrd answers those queries itself, with the ident each
+network registers with (its *username*, else the nick):
+
+```
+identd_listen :113
+```
+
+A server asks while the connection registers, from the address evrd dialed.
+evrd matches the query to the connection by that address and the two ports;
+when NAT has changed evrd's port, the one connection to that server still
+registering answers. If it can't tell connections apart it answers `NO-USER`
+rather than guess. Each node of a [cluster](clustering.md) answers for its
+own connections.
+
+### In Docker
+
+A host identd can't see a container's connections, so let evrd answer. The
+image runs evrd as a normal user, which can't bind port 113: listen on a high
+port in the container and map 113 to it on the host:
+
+```
+identd_listen :1113
+```
+
+```yaml
+  links:                # the service that owns the network namespace (or evrd's own)
+    ports:
+      - "113:1113"
+  evrd:
+    network_mode: "service:links"
+```
+
+Publish the port on the service that owns the network namespace: with the
+[connection holder](#connection-holder), evrd shares the holder's
+(`network_mode: "service:links"`), so the mapping goes on `links`. Behind a
+router, forward public TCP 113 to the host too.
+
+On a host where evrd runs natively, like the OpenBSD install, oidentd with
+[`ident_file`](openbsd.md#idents-oidentd) works instead (or `identd_listen
+:113`, bound before evrd drops root).
 
 ## Provisioning API
 
