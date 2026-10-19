@@ -173,11 +173,13 @@ func TestOpenSecret(t *testing.T) {
 		t.Fatalf("plaintext: %q %v", got, err)
 	}
 	b64 := strings.TrimPrefix(sealed, secretPrefix+id+":")
+	// Flip a character in the middle: the last one can carry only padding
+	// bits, which decoding ignores, leaving the ciphertext as it was.
 	flipped := []byte(b64)
-	if flipped[len(flipped)-1] == 'A' {
-		flipped[len(flipped)-1] = 'B'
+	if i := len(flipped) / 2; flipped[i] == 'A' {
+		flipped[i] = 'B'
 	} else {
-		flipped[len(flipped)-1] = 'A'
+		flipped[i] = 'A'
 	}
 	for name, bad := range map[string]string{
 		"no key id":      secretPrefix + "abcdef",
