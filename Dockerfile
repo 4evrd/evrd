@@ -19,7 +19,7 @@ ENV CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     go build -ldflags "-s -w -X github.com/4evrd/evrd/internal/version.Version=${VERSION}" -o /out/evrd ./cmd/evrd && \
     go build -ldflags "-s -w -X github.com/4evrd/evrd/internal/version.Version=${VERSION}" -o /out/evrctl ./cmd/evrctl && \
-    go build -trimpath -ldflags "-s -w" -o /out/evrd-links ./cmd/evrd-links
+    go build -trimpath -buildvcs=false -ldflags "-s -w" -o /out/evrd-links ./cmd/evrd-links
 
 FROM alpine:3.20
 RUN adduser -D -u 1000 evrd && \
