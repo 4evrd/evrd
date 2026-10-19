@@ -268,7 +268,9 @@ func TestEncryptSecretsCoversServersSettingsAndCerts(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Only a server password is secret here; another network has no secrets.
-	n, _ := st.CreateNetwork(Network{UserID: 1, Name: "x", Servers: []Server{{Host: "h", Password: "server-secret"}}})
+	n, _ := st.CreateNetwork(Network{UserID: 1, Name: "x", Servers: []Server{{Host: "h", Password: "server-secret"}},
+		AuthCommand: "PRIVMSG x@channels.undernet.org :login %account% %password%",
+		Modules:     map[string]ModuleConfig{"perform": {Enabled: true, Settings: map[string]string{"commands": "OPER me oper-secret"}}}})
 	st.CreateNetwork(Network{UserID: 1, Name: "plain", Servers: []Server{{Host: "h"}}})
 	st.PutCertCache("acme", "PRIVATE KEY")
 	st.SaveSettings(map[string]string{"s": "v", "empty": ""}, nil, "root")
@@ -290,6 +292,17 @@ func TestEncryptSecretsCoversServersSettingsAndCerts(t *testing.T) {
 	db.Table("settings").Select("value").Where("key = ?", "s").Scan(&value)
 	if strings.Contains(servers, "server-secret") || !strings.HasPrefix(data, secretPrefix) || !strings.HasPrefix(value, secretPrefix) {
 		t.Fatalf("not encrypted: %q %q %q", servers, data, value)
+	}
+	// perform's commands (an OPER password) and the login command too
+	var mods, authCmd string
+	db.Table("networks").Select("modules").Where("id = ?", n.ID).Scan(&mods)
+	db.Table("networks").Select("auth_command").Where("id = ?", n.ID).Scan(&authCmd)
+	if !strings.HasPrefix(mods, secretPrefix) || strings.Contains(mods, "oper-secret") || !strings.HasPrefix(authCmd, secretPrefix) {
+		t.Fatalf("modules / auth command not encrypted: %q %q", mods, authCmd)
+	}
+	if got, _ := st.NetworkByID(n.ID); got.Modules["perform"].Settings["commands"] != "OPER me oper-secret" || !got.Modules["perform"].Enabled ||
+		got.AuthCommand != "PRIVMSG x@channels.undernet.org :login %account% %password%" {
+		t.Fatalf("modules / auth command after encryption: %+v %q", got.Modules, got.AuthCommand)
 	}
 	if got, _ := st.CertCache("acme"); got != "PRIVATE KEY" {
 		t.Fatalf("cert after encryption: %q", got)
@@ -313,5 +326,56 @@ func TestEncryptSecretsCoversServersSettingsAndCerts(t *testing.T) {
 	db.Exec("UPDATE networks SET password = 'enc:v1:00000000:AAAA' WHERE id = ?", n.ID)
 	if _, err := st.EncryptSecrets(); !errors.Is(err, ErrSecretKey) {
 		t.Fatalf("network under an unknown key: %v", err)
+	}
+}
+
+// Module settings saved as plain JSON (before they were encrypted) still
+// read; with a key, a save seals them; empty modules store nothing.
+func TestModulesAreEncrypted(t *testing.T) {
+	t.Cleanup(func() { SetSecretKeys(nil) })
+	SetSecretKeys(bytes.Repeat([]byte{9}, 32))
+	st, err := Open("sqlite:" + filepath.Join(t.TempDir(), "evrd.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	db := st.(*gormStore).db
+	raw := func(id int64) (mods string) {
+		db.Table("networks").Select("coalesce(modules, '')").Where("id = ?", id).Scan(&mods)
+		return
+	}
+
+	empty, _ := st.CreateNetwork(Network{UserID: 1, Name: "empty"})
+	if raw(empty.ID) != "" {
+		t.Fatalf("empty modules stored as %q", raw(empty.ID))
+	}
+	if got, _ := st.NetworkByID(empty.ID); len(got.Modules) != 0 {
+		t.Fatalf("empty modules read back as %v", got.Modules)
+	}
+
+	n, _ := st.CreateNetwork(Network{UserID: 1, Name: "old"})
+	db.Exec(`UPDATE networks SET modules = '{"perform":{"enabled":true,"settings":{"commands":"PRIVMSG NickServ :IDENTIFY pw"}}}' WHERE id = ?`, n.ID)
+	got, err := st.NetworkByID(n.ID)
+	if err != nil || got.Modules["perform"].Settings["commands"] != "PRIVMSG NickServ :IDENTIFY pw" {
+		t.Fatalf("plain JSON from before: %v %v", got.Modules, err)
+	}
+	if err := st.UpdateNetwork(got); err != nil {
+		t.Fatal(err)
+	}
+	if m := raw(n.ID); !strings.HasPrefix(m, secretPrefix) || strings.Contains(m, "IDENTIFY") {
+		t.Fatalf("saved again, still readable: %q", m)
+	}
+	if got, _ := st.NetworkByID(n.ID); got.Modules["perform"].Settings["commands"] != "PRIVMSG NickServ :IDENTIFY pw" {
+		t.Fatalf("after sealing: %v", got.Modules)
+	}
+
+	// a key that doesn't open them, and JSON that doesn't parse, are errors
+	db.Exec("UPDATE networks SET modules = 'enc:v1:00000000:AAAA' WHERE id = ?", n.ID)
+	if _, err := st.NetworkByID(n.ID); !errors.Is(err, ErrSecretKey) {
+		t.Fatalf("unknown key: %v", err)
+	}
+	db.Exec("UPDATE networks SET modules = '{not json' WHERE id = ?", n.ID)
+	if _, err := st.NetworkByID(n.ID); err == nil {
+		t.Fatal("broken JSON read without an error")
 	}
 }
