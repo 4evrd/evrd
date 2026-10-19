@@ -84,3 +84,12 @@ export const SOLO_URL = process.env.E2E_SOLO_URL || 'http://localhost:8198'
 export const COMPOSE = process.env.E2E_COMPOSE || 'docker compose -f ../docker-compose.dev.yml'
 export const SOLO_EVRCTL = process.env.E2E_SOLO_EVRCTL ||
   `${COMPOSE} exec -T evrd-solo go run ./cmd/evrctl -config deploy/evrd.solo.conf`
+
+// choose picks an option in one of the app's dropdowns (components/Select):
+// open it, then click the option whose text starts with label.
+export async function choose(page, combo, label) {
+  await combo.click()
+  const esc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  await page.getByRole('listbox').getByRole('option', { name: new RegExp(`^${esc}(\\s|$)`) }).click()
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+}

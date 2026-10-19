@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { login, confirm, freshUser, addNetwork, session, ADMIN, ADMIN_PASS } from './helpers.js'
+import { login, confirm, freshUser, addNetwork, session, ADMIN, ADMIN_PASS, choose } from './helpers.js'
 
 let u
 test.beforeEach(async ({ page }) => {
@@ -106,7 +106,7 @@ test('identity, SASL, certificates and advanced settings are saved', async ({ pa
   await page.locator('#newFp').fill(fp)
   await page.locator('#newFp').press('Enter')
   await expect(page.getByText(fp)).toBeVisible()
-  await page.getByLabel('Encoding').selectOption('windows-1252')
+  await choose(page, page.getByLabel('Encoding'), 'windows-1252')
   await page.getByLabel('Lines per second').fill('1.5')
   await page.getByLabel('Burst').fill('5')
   await page.getByLabel('Join delay').fill('3')

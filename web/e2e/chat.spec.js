@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { login, freshUser, addNetwork, uniq } from './helpers.js'
+import { login, freshUser, addNetwork, uniq, choose } from './helpers.js'
 import { IRC } from './irc.js'
 
 // Two accounts on the dev ircd: "me" uses the web app, "them" is someone else
@@ -168,13 +168,35 @@ test('*status works from the web chat', async ({ page }) => {
 })
 
 test('switching networks', async ({ page }) => {
-  await addNetwork(me.api, { name: 'Second', nick: me.name + '2', channels: [chan] })
+  const second = await addNetwork(me.api, { name: 'Second', nick: me.name + '2', channels: [chan] })
   await openChat(page)
-  await page.getByLabel('Network', { exact: true }).selectOption({ label: 'Second' })
+  const pick = page.getByLabel('Network', { exact: true })
+  await expect(pick).toHaveText(/^\s*Dev\b/)
+  await choose(page, pick, 'Second')
   await expect(page.locator('.net-switch')).toContainText(`${me.name}2 · ircd`)
   await expect(page).toHaveURL(/net=/)
-  await page.getByLabel('Network', { exact: true }).selectOption({ label: 'Dev' })
+  await choose(page, pick, 'Dev')
   await expect(page.locator('.net-switch')).toContainText(`${me.name} · ircd`)
+
+  // a mention on the other network: counted on the picker, and on its option
+  await expect.poll(async () => (await me.api.get(`/api/networks/${second.id}`)).channels.length, { timeout: 20000 }).toBeGreaterThan(0)
+  irc.send(`PRIVMSG ${chan} :hey ${me.name}2, over here`)
+  await expect(pick.locator('.count.mention')).toHaveText('1', { timeout: 20000 })
+  await pick.click()
+  const opt = page.getByRole('option', { name: /^Second/ })
+  await expect(opt.locator('.count.mention')).toHaveText('1')
+  await expect(page.getByRole('option', { name: /^Dev/ })).toHaveAttribute('aria-selected', 'true')
+  // the keyboard: arrows move, Enter picks, Escape closes
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+  await expect(pick).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(page.getByRole('listbox')).toBeVisible()
+  await page.keyboard.press('End')
+  await expect(pick).toHaveAttribute('aria-activedescendant', /net-pick-opt-1$/)
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.net-switch')).toContainText(`${me.name}2 · ircd`)
+  await expect(pick.locator('.count.mention')).toHaveCount(0) // it's the one you're on now
 })
 
 test('chat with no networks points you at adding one', async ({ page }) => {
@@ -189,7 +211,7 @@ test('long names shorten instead of pushing the buffer list into the chat', asyn
   const long = '#' + uniq('a-very-long-channel-name-that-goes-on-and-on-')
   await addNetwork(me.api, { name: 'a-network-with-a-long-name-xyz12', nick: (me.name + 'withaverylongnickname').slice(0, 30), channels: [long] })
   await openChat(page)
-  await page.getByLabel('Network', { exact: true }).selectOption({ label: 'a-network-with-a-long-name-xyz12' })
+  await choose(page, page.getByLabel('Network', { exact: true }), 'a-network-with-a-long-name-xyz12')
   await expect(page.locator('.buf', { hasText: long.slice(1, 20) })).toBeVisible({ timeout: 20000 })
   const fits = await page.evaluate(() => {
     const pane = document.querySelector('.buffers').getBoundingClientRect()

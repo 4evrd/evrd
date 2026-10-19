@@ -4,6 +4,7 @@
   // the environment still wins on its node.
   import { onMount } from 'svelte'
   import Icon from '$lib/components/Icon.svelte'
+  import Select from '$lib/components/Select.svelte'
   import Switch from '$lib/components/Switch.svelte'
   import { api } from '$lib/api.js'
   import { session } from '$lib/session.svelte.js'
@@ -163,9 +164,7 @@
                 </div>
                 <div class="control">
                   {#if f.kind === 'choice'}
-                    <select class="select" id="s-{f.key}" disabled={locked} value={valueOf(f)} onchange={(e) => edit(f, e.currentTarget.value)}>
-                      {#each f.options as o}<option value={o}>{CHOICE[o] || o}</option>{/each}
-                    </select>
+                    <Select id="s-{f.key}" disabled={locked} value={valueOf(f)} onchange={(v) => edit(f, v)} options={f.options.map((o) => ({ value: o, label: CHOICE[o] || o }))} />
                   {:else if f.kind === 'bool'}
                     <Switch id="s-{f.key}" checked={valueOf(f) === 'yes'} label={f.label} disabled={locked} onchange={(v) => edit(f, v ? 'yes' : 'no')} />
                   {:else}
@@ -234,7 +233,7 @@
   .chip.src-ui { color: var(--primary); }
   .tls-who { margin-bottom: var(--s4); }
   .certs { margin-bottom: var(--s4); }
-  .control .select { flex: 1; min-width: 0; }
+  .control :global(.dd) { flex: 1; min-width: 0; }
   .chip.src-env { color: var(--warn); }
   .save-bar { position: sticky; bottom: var(--s4); z-index: 5; display: flex; align-items: center; gap: var(--s2); margin-top: var(--s5); padding: var(--s3) var(--s4); border-radius: var(--r-card); background: var(--bg-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
   @media (max-width: 799px) { .setting { grid-template-columns: minmax(0, 1fr); gap: var(--s2); } .control { justify-content: flex-start; } }

@@ -874,3 +874,26 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
 .rc-axis { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--faint); margin-top: -4px; }
 .rc-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
 @media (max-width: 560px) { .rc-summary { grid-template-columns: 1fr 1fr; } }
+
+/* custom dropdown (components/Select.svelte) */
+.dd { position: relative; min-width: 0; }
+.dd-trigger { display: flex; align-items: center; gap: var(--s2); text-align: left; cursor: pointer; }
+.dd-trigger:disabled { cursor: not-allowed; opacity: 0.6; }
+.dd-trigger.mono .dd-value { font-family: var(--font-mono); }
+.dd-trigger.strong .dd-value { font-weight: 600; }
+.dd-value { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--s2); overflow: hidden; }
+.dd .dd-chev { flex: none; color: var(--muted); transition: transform var(--t-fast) var(--ease-out); }
+.dd.open .dd-chev { transform: rotate(180deg); }
+.dd.open .dd-trigger { border-color: var(--primary-dim); box-shadow: 0 0 0 3px var(--primary-soft); }
+.dd-list {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40; max-height: min(320px, 60vh); overflow-y: auto;
+  padding: var(--s1, 4px); border-radius: var(--r-card); background: var(--bg-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+  display: grid; gap: 2px; min-width: max(100%, 200px);
+}
+.dd-opt { display: flex; align-items: center; gap: var(--s2); min-height: 38px; padding: var(--s2) var(--s3); border-radius: var(--r-field); color: var(--fg); font-size: var(--fs-sm); cursor: pointer; }
+.dd-opt.mono { font-family: var(--font-mono); }
+.dd-opt.active { background: var(--row-hover); }
+.dd-opt[aria-selected="true"] { color: var(--primary); }
+.dd-opt[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+.dd-opt .sub { color: var(--muted); font-size: var(--fs-xs); }
+.dd-opt .dd-tick { flex: none; margin-left: auto; color: var(--primary); }
