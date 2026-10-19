@@ -67,6 +67,7 @@ func noEnv(t *testing.T) {
 		"EVRD_OIDC_CLIENT_SECRET", "EVRD_CLUSTER_SECRET", "EVRD_SECRET_KEY", "EVRD_SECRET_KEY_FILE",
 		"EVRD_PROVISION_TOKEN", "EVRD_LINKS_SOCKET", "EVRD_NODE_ID", "EVRD_INTERNAL_URL",
 		"EVRD_INTERNAL_IRC_ADDR", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "EVRD_METRICS_URL",
+		"EVRD_NETWORK_DIRECTORY",
 	} {
 		t.Setenv(v, "")
 	}
@@ -145,6 +146,7 @@ func testConfig(t *testing.T, dir string, extra ...string) (path, api, irc strin
 		"api " + api,
 		"listen irc+insecure://" + irc,
 		"secret_key " + testKey,
+		"network_directory off", // tests don't fetch evrd.sh
 	}, extra...)
 	path = filepath.Join(dir, "evrd.conf")
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
@@ -331,8 +333,15 @@ func TestServes(t *testing.T) {
 	t.Cleanup(hcancel)
 	go links.NewHolder(slog.New(slog.NewTextHandler(io.Discard, nil))).Serve(hctx, ln)
 
+	// The network directory, from local files.
+	dirs := [2]string{filepath.Join(dir, "networks-a.json"), filepath.Join(dir, "networks-b.json")}
+	for _, p := range dirs {
+		os.WriteFile(p, []byte(`{"version": 1, "networks": [{"id": "dev", "name": "Dev", "servers": [{"host": "ircd", "port": 6667}]}]}`), 0o644)
+	}
+
 	httpsAddr, httpAddr := freeAddr(t), freeAddr(t)
 	extra := []string{
+		"network_directory " + dirs[0],
 		"tls_cert " + certPath, "tls_key " + keyPath,
 		"https_listen " + httpsAddr, "http_listen " + httpAddr,
 		"web_root " + web,
@@ -427,8 +436,7 @@ func TestServes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = st.SaveSettings(map[string]string{"irc_host": "irc.changed", "metrics_url": "http://metrics.invalid"}, nil, "test")
-	st.Close()
+	err = st.SaveSettings(map[string]string{"irc_host": "irc.changed", "metrics_url": "http://metrics.invalid", "network_directory": dirs[1]}, nil, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,6 +447,17 @@ func TestServes(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	// ...the directory too: read from the new file, and a copy stored
+	for {
+		if c, _ := st.Cached("network-directory"); strings.Contains(c, dirs[1]) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("directory never moved:\n%s", d.stderr)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	st.Close()
 
 	if code := d.stop(); code != 0 {
 		t.Fatalf("exit %d:\n%s", code, d.stderr)
@@ -675,5 +694,10 @@ func TestLocalPathAndRedact(t *testing.T) {
 	}
 	if got := redact("pebble:/var/evrd/history"); got != "pebble:/var/evrd/history" {
 		t.Errorf("redact: %q", got)
+	}
+	for src, want := range map[string]string{"/etc/evrd/n.json": "/etc/evrd/n.json", "file:///etc/n.json": "/etc/n.json", "https://evrd.sh/x.json": "", "": ""} {
+		if p, ok := directoryFile(src); p != want || ok != (want != "") {
+			t.Errorf("directoryFile(%q) = %q, %v", src, p, ok)
+		}
 	}
 }

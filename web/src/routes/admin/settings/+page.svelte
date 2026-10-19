@@ -82,6 +82,17 @@
     try { data = await api.admin.saveSettings({}, [f.key]); const { [f.key]: _, ...rest } = draft; draft = rest; toast(`Reset ${f.label}`) } catch (x) { toast(x.message, 'bad') }
   }
   function discard() { draft = {}; errs = {} }
+
+  // The network directory: fetch it again now.
+  let checking = $state(false)
+  async function refreshDirectory() {
+    checking = true
+    try {
+      const d = await api.admin.refreshDirectory()
+      data = { ...data, directory: d }
+      toast(d.error ? `Couldn’t fetch the directory: ${d.error}` : `Fetched the directory: ${d.networks} networks`, d.error ? 'bad' : undefined)
+    } catch (x) { toast(x.message, 'bad') } finally { checking = false }
+  }
 </script>
 
 <svelte:head><title>Settings · evrd admin</title></svelte:head>
@@ -116,6 +127,24 @@
       {#each groups as g}
         <section class="card" aria-labelledby="g-{g.name}">
           <h2 id="g-{g.name}" class="group-h">{g.name}</h2>
+          {#if g.name === 'Network directory' && data.directory}
+            {@const d = data.directory}
+            <div class="rows dir-status" data-testid="directory-status">
+              <div class="row" style="--cols:minmax(0,1fr) auto auto">
+                <span class="od-field">
+                  <span class="name">{d.source ? `${d.networks} network${d.networks === 1 ? '' : 's'}` : 'Off'}</span>
+                  <span class="sub">
+                    {#if !d.source}Users type every network’s details themselves.
+                    {:else}{d.fetchedAt ? `Fetched ${ago(d.fetchedAt)}` : 'Not fetched yet'}{#if d.updated} · list updated {ago(d.updated)}{/if}{#if d.error} · last try failed: {d.error}{d.networks ? ' — keeping the last good copy' : ''}{/if}{#if d.skipped?.length} · {d.skipped.length} entr{d.skipped.length === 1 ? 'y' : 'ies'} skipped{/if}{/if}
+                  </span>
+                </span>
+                {#if d.source}
+                  {#if d.error}<span class="chip bad">Failed</span>{:else if d.fetchedAt}<span class="chip ok">OK</span>{:else}<span class="chip warn">Pending</span>{/if}
+                  <button class="btn btn-sm" type="button" onclick={refreshDirectory} disabled={checking}><Icon name="refresh" />Check now</button>
+                {/if}
+              </div>
+            </div>
+          {/if}
           {#if g.name === 'HTTPS & TLS' && data.tls}
             {@const t = data.tls}
             <div class="callout tls-who" data-testid="tls-who">
@@ -232,7 +261,7 @@
   .err-t { flex-basis: 100%; color: var(--bad); font-size: var(--fs-xs); text-align: right; }
   .chip.src-ui { color: var(--primary); }
   .tls-who { margin-bottom: var(--s4); }
-  .certs { margin-bottom: var(--s4); }
+  .certs, .dir-status { margin-bottom: var(--s4); }
   .control :global(.dd) { flex: 1; min-width: 0; }
   .chip.src-env { color: var(--warn); }
   .save-bar { position: sticky; bottom: var(--s4); z-index: 5; display: flex; align-items: center; gap: var(--s2); margin-top: var(--s5); padding: var(--s3) var(--s4); border-radius: var(--r-card); background: var(--bg-2); border: 1px solid var(--line); box-shadow: var(--shadow); }

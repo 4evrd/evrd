@@ -35,7 +35,7 @@ func Open(dsn string) (Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}); err != nil {
 		return nil, err
 	}
 	return &gormStore{db: db}, nil
@@ -460,6 +460,18 @@ func (s *gormStore) PutCertCache(key, data string) error {
 
 func (s *gormStore) DeleteCertCache(key string) error {
 	return s.db.Delete(&CertCacheEntry{}, "key = ?", key).Error
+}
+
+func (s *gormStore) Cached(key string) (string, error) {
+	var e CacheEntry
+	if err := s.db.First(&e, "key = ?", key).Error; err != nil {
+		return "", notFound(err)
+	}
+	return e.Data, nil
+}
+
+func (s *gormStore) PutCached(key, data string) error {
+	return s.db.Save(&CacheEntry{Key: key, Data: data, UpdatedAt: time.Now()}).Error
 }
 
 func (s *gormStore) NodeConfs() ([]NodeConf, error) {

@@ -26,6 +26,7 @@ import (
 	"github.com/4evrd/evrd/internal/client"
 	"github.com/4evrd/evrd/internal/cluster"
 	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/listen"
@@ -141,6 +142,11 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 		}
 		if p, ok := localPath(histDSN, "pebble:"); ok {
 			sb.Write = append(sb.Write, p)
+		}
+		if p, ok := directoryFile(cfg.NetworkDirectory); ok {
+			if in, ok := cfg.InChroot(p); ok || cfg.Chroot == "" {
+				sb.Read = append(sb.Read, in) // a network directory kept locally
+			}
 		}
 		sb.Write = append(sb.Write, os.TempDir())
 		if linksSocket != "" {
@@ -326,6 +332,16 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 	srv.SetSettings(sm)
 	irc.SetTLSConfig(certMgr.IRCConfig())
 	srv.SetCerts(certMgr)
+	// The network directory users pick from when adding a network: fetched
+	// now and twice a day, the last good copy kept in the database.
+	dir := directory.New(cfg.NetworkDirectory, st, log)
+	if cfg.Chroot != "" {
+		jailed := *cfg
+		dir.PathMap = func(p string) string { q, _ := jailed.InChroot(p); return q }
+	}
+	go dir.Run(ctx)
+	srv.SetDirectory(dir)
+	irc.SetDirectory(dir)
 	if webRoot != "" {
 		srv.SetWebApp(webRoot)
 		log.Info("serving the web app", "dir", webRoot)
@@ -351,6 +367,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 			log.Warn("tls", "err", err)
 		}
 		srv.SetConfig(&live)
+		dir.SetSource(live.NetworkDirectory)
 		if live.Metrics.QueryURL != metricsURL {
 			metricsURL = live.Metrics.QueryURL
 			srv.SetMetrics(metricsq.New(metricsURL))
@@ -435,6 +452,15 @@ func localPath(dsn, scheme string) (string, bool) {
 	}
 	p, _, _ := strings.Cut(strings.TrimPrefix(dsn, scheme), "?")
 	return p, p != ""
+}
+
+// directoryFile is the path of a network directory kept in a local file
+// (not fetched over HTTP).
+func directoryFile(src string) (string, bool) {
+	if src == "" || (strings.Contains(src, "://") && !strings.HasPrefix(src, "file://")) {
+		return "", false
+	}
+	return strings.TrimPrefix(src, "file://"), true
 }
 
 // redact hides a password in a DSN for logging.

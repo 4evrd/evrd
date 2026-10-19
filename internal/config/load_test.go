@@ -458,3 +458,31 @@ func TestInChrootEdges(t *testing.T) {
 		t.Errorf("a relative web_root: %v", err)
 	}
 }
+
+func TestNetworkDirectory(t *testing.T) {
+	t.Setenv("EVRD_NETWORK_DIRECTORY", "")
+	if Default().NetworkDirectory != DefaultNetworkDirectory {
+		t.Fatal("not on by default")
+	}
+	for conf, want := range map[string]string{
+		"network_directory https://example.org/n.json\n": "https://example.org/n.json",
+		"network_directory /etc/evrd/networks.json\n":    "/etc/evrd/networks.json",
+		"network_directory off\n":                        "",
+		"network_directory\n":                            "",
+		"irc_host x\n":                                   DefaultNetworkDirectory,
+	} {
+		c, err := LoadFile(writeConf(t, conf))
+		if err != nil || c.NetworkDirectory != want {
+			t.Errorf("%q: %v, want %q", conf, err, want)
+		}
+	}
+	t.Setenv("EVRD_NETWORK_DIRECTORY", "None")
+	c, err := Load(writeConf(t, "network_directory https://example.org/n.json\n"))
+	if err != nil || c.NetworkDirectory != "" {
+		t.Errorf("env off: %v", err)
+	}
+	eff, err := Default().WithSettings(map[string]string{"network_directory": ""})
+	if err != nil || eff.NetworkDirectory != "" || eff.Value("network_directory") != "" {
+		t.Errorf("cleared in the admin UI: %v", err)
+	}
+}

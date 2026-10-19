@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
 	"github.com/4evrd/evrd/internal/version"
@@ -36,7 +37,8 @@ func init() {
 		{"jump", "<network>", "Switch this client to another network.", (*session).cmdJump},
 		{"connect", "[network]", "Connect a network (default: this one).", (*session).cmdConnect},
 		{"disconnect", "[network]", "Disconnect a network (default: this one). evrd stops reconnecting it.", (*session).cmdDisconnect},
-		{"addnetwork", "<name> <host> [[+]port] [nick]", "Add a network. +port means TLS (default +6697).", (*session).cmdAddNetwork},
+		{"addnetwork", "<name> <host> [[+]port] [nick] | <id>", "Add a network. +port means TLS (default +6697). With just an id, one from the directory.", (*session).cmdAddNetwork},
+		{"directory", "[search]", "Public networks you can add by id (addnetwork <id>).", (*session).cmdDirectory},
 		{"delnetwork", "<network>", "Remove a network and its saved history.", (*session).cmdDelNetwork},
 		{"show", "[network]", "A network's settings (default: this one).", (*session).cmdShow},
 		{"set", "[network] <setting> <value>", "Change a setting: " + strings.Join(settingNames, ", ") + " (- clears).", (*session).cmdSet},
@@ -223,8 +225,8 @@ func (se *session) cmdDisconnect(args []string) {
 }
 
 func (se *session) cmdAddNetwork(args []string) {
-	if len(args) < 2 || len(args) > 4 {
-		se.statusf("Usage: addnetwork <name> <host> [[+]port] [nick] — e.g. addnetwork libera irc.libera.chat +6697")
+	if len(args) < 1 || len(args) > 4 {
+		se.statusf("Usage: addnetwork <name> <host> [[+]port] [nick] — e.g. addnetwork libera irc.libera.chat +6697 — or addnetwork <id> for a network in the directory")
 		return
 	}
 	u, err := se.srv.b.Store().UserByID(se.uid)
@@ -232,7 +234,23 @@ func (se *session) cmdAddNetwork(args []string) {
 		se.statusf("Couldn't load your account: %v", err)
 		return
 	}
-	n := store.Network{UserID: u.ID, Name: args[0], Host: args[1], Port: 6697, TLS: true, Nick: u.DefaultNick, Realname: u.DefaultRealname, Channels: []string{}}
+	n := store.Network{UserID: u.ID, Name: args[0], Port: 6697, TLS: true, Nick: u.DefaultNick, Realname: u.DefaultRealname, Channels: []string{}}
+	if len(args) == 1 {
+		// one word: a network from the directory, with its servers and
+		// suggested channels
+		d, ok := se.srv.directory().Lookup(args[0])
+		if !ok {
+			se.statusf("No network %q in the directory — see directory, or addnetwork <name> <host> [[+]port] [nick].", args[0])
+			return
+		}
+		n.Name, n.Channels = d.ID, append([]string{}, d.Channels...)
+		for _, s := range d.Connect() {
+			n.Servers = append(n.Servers, store.Server{Host: s.Host, Port: s.Port, TLS: s.TLS})
+		}
+		n.Host, n.Port, n.TLS = n.Servers[0].Host, n.Servers[0].Port, n.Servers[0].TLS
+	} else {
+		n.Host = args[1]
+	}
 	if len(args) >= 3 {
 		p := args[2]
 		n.TLS = strings.HasPrefix(p, "+")
@@ -274,6 +292,30 @@ func (se *session) cmdAddNetwork(args []string) {
 		tls = "+"
 	}
 	se.statusf("Added %s (%s:%s%d, nick %s). connect %s to bring it online, then jump %s.", n.Name, n.Host, tls, n.Port, n.Nick, n.Name, n.Name)
+}
+
+// cmdDirectory lists the network directory, or the networks matching a
+// search.
+func (se *session) cmdDirectory(args []string) {
+	all := se.srv.directory().Networks()
+	if len(all) == 0 {
+		se.statusf("The network directory is empty here (an admin can set it up: network_directory).")
+		return
+	}
+	nets := directory.Search(all, strings.Join(args, " "))
+	for _, n := range nets {
+		s := n.Connect()[0]
+		tls := ""
+		if s.TLS {
+			tls = "+"
+		}
+		se.statusf("  %-14s %-20s %s:%s%d", n.ID, n.Name, s.Host, tls, s.Port)
+	}
+	if len(nets) == 0 {
+		se.statusf("No network in the directory matches %q.", strings.Join(args, " "))
+		return
+	}
+	se.statusf("%s. addnetwork <id> adds one.", plural(len(nets), "network"))
 }
 
 func (se *session) cmdDelNetwork(args []string) {

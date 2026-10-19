@@ -30,6 +30,7 @@ func (s *Server) settingsDTO() map[string]any {
 		"clustered": c.Cluster.Enabled(),
 		"confs":     nodes,
 		"tls":       s.tlsDTO(c),
+		"directory": s.directoryStatus(),
 	}
 }
 

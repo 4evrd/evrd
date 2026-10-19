@@ -264,6 +264,15 @@ type CertCacheEntry struct {
 	UpdatedAt time.Time
 }
 
+// CacheEntry is a document evrd fetched and keeps for when its source is
+// out of reach: the network directory (internal/directory). Shared by every
+// node, so a restart or a new node starts with the last good copy.
+type CacheEntry struct {
+	Key       string `gorm:"primaryKey;size:255"`
+	Data      string
+	UpdatedAt time.Time
+}
+
 // NodeConf is a node's last attempt to write the settings into its config
 // file (settings_write_conf).
 type NodeConf struct {
@@ -382,6 +391,10 @@ type Store interface {
 	CertCache(key string) (string, error)
 	PutCertCache(key, data string) error
 	DeleteCertCache(key string) error
+	// Fetched documents (see CacheEntry). Cached returns ErrNotFound for a
+	// missing key.
+	Cached(key string) (string, error)
+	PutCached(key, data string) error
 	// DeleteNodesBefore drops nodes last heard from before t.
 	DeleteNodesBefore(t time.Time) error
 	// LiveNodes lists nodes that sent a heartbeat after since.

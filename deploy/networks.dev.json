@@ -1,0 +1,69 @@
+{
+  "$schema": "https://evrd.sh/api/networks/v1.schema.json",
+  "version": 1,
+  "updated": "2026-10-19T00:00:00Z",
+  "networks": [
+    {
+      "id": "devircd",
+      "name": "Dev ircd",
+      "description": "The dev stack's own Ergo server (the ircd service), for trying things out.",
+      "servers": [{ "host": "ircd", "port": 6667, "tls": false }],
+      "sasl": true,
+      "services": "ergo",
+      "channels": ["#evrd-dev"],
+      "tags": ["dev", "testing"],
+      "region": "local"
+    },
+    {
+      "id": "libera",
+      "name": "Libera.Chat",
+      "description": "Free and open-source software projects and their communities.",
+      "homepage": "https://libera.chat",
+      "servers": [
+        { "host": "irc.libera.chat", "port": 6697, "tls": true },
+        { "host": "irc.libera.chat", "port": 6667, "tls": false }
+      ],
+      "sasl": true,
+      "services": "atheme",
+      "channels": ["#libera"],
+      "tags": ["foss", "community"],
+      "region": "global"
+    },
+    {
+      "id": "oftc",
+      "name": "OFTC",
+      "description": "The Open and Free Technology Community: Debian, Tor, Linux kernel and other free software projects.",
+      "homepage": "https://www.oftc.net",
+      "servers": [
+        { "host": "irc.oftc.net", "port": 6697, "tls": true },
+        { "host": "irc.oftc.net", "port": 6667, "tls": false }
+      ],
+      "services": "oftc",
+      "sasl": false,
+      "channels": ["#oftc"],
+      "tags": ["foss"],
+      "region": "global"
+    },
+    {
+      "id": "efnet",
+      "name": "EFnet",
+      "description": "The original IRC network, with no nickname or channel services. Its TLS certificates are self-signed per server, so it's listed without TLS.",
+      "homepage": "https://www.efnet.org",
+      "servers": [{ "host": "irc.efnet.org", "port": 6667, "tls": false }],
+      "services": "none",
+      "channels": ["#efnet"],
+      "tags": ["classic"],
+      "region": "global"
+    },
+    {
+      "id": "ircforever",
+      "name": "IRCForever",
+      "description": "A free, volunteer-run network with bouncers, shells and bots, and no ads.",
+      "homepage": "https://ircforever.org",
+      "servers": [{ "host": "irc.ircforever.org", "port": 6697, "tls": true }],
+      "channels": ["#ircforever"],
+      "tags": ["community"],
+      "region": "global"
+    }
+  ]
+}

@@ -2,11 +2,17 @@ package client
 
 import (
 	"bufio"
+	"context"
 	"fmt"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
@@ -105,7 +111,8 @@ func TestStatusNetworkCommandErrors(t *testing.T) {
 	ic.status("jump one", "You're already on one.")
 	ic.status("jump nope", `No network called "nope"`)
 
-	ic.status("addnetwork lonely", "Usage: addnetwork")
+	ic.status("addnetwork", "Usage: addnetwork")
+	ic.status("addnetwork lonely", `No network "lonely" in the directory`)
 	ic.status("addnetwork x irc.example.org port", `"port" isn't a port`)
 	ic.status("addnetwork x irc.example.org 70000", `"70000" isn't a port`)
 	ic.status("addnet one irc.example.org", "You already have a network called one.")
@@ -286,5 +293,47 @@ func TestWebStatus(t *testing.T) {
 	gone := store.Network{ID: 999, Name: "gone"}
 	if out := run(gone, "show"); !has(out, "This network no longer exists.") {
 		t.Fatalf("show gone: %q", out)
+	}
+}
+
+func TestStatusDirectory(t *testing.T) {
+	r := newRig(t)
+	run := func(cmd string) []string {
+		var out []string
+		r.srv.WebStatus(r.user.ID, r.network("one"), cmd, func(s string) { out = append(out, s) })
+		return out
+	}
+	if out := run("directory"); !anyHas(out, "The network directory is empty here") {
+		t.Fatalf("no directory: %q", out)
+	}
+	path := filepath.Join(t.TempDir(), "networks.json")
+	os.WriteFile(path, []byte(`{"version": 1, "networks": [
+		{"id": "libera", "name": "Libera.Chat", "description": "FOSS", "servers": [{"host": "irc.libera.chat", "port": 6697, "tls": true}, {"host": "irc.libera.chat", "port": 6667}], "channels": ["#libera"]},
+		{"id": "efnet", "name": "EFnet", "servers": [{"host": "irc.efnet.org", "port": 6667}]}
+	]}`), 0o644)
+	d := directory.New(path, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := d.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	r.srv.SetDirectory(d)
+	if out := run("directory"); !anyHas(out, "libera") || !anyHas(out, "irc.libera.chat:+6697") || !anyHas(out, "irc.efnet.org:6667") || !anyHas(out, "2 networks.") {
+		t.Fatalf("directory: %q", out)
+	}
+	if out := run("directory foss"); !anyHas(out, "1 network.") {
+		t.Fatalf("search: %q", out)
+	}
+	if out := run("directory nothing here"); !anyHas(out, `No network in the directory matches "nothing here"`) {
+		t.Fatalf("no match: %q", out)
+	}
+	// by id: the TLS servers and the suggested channels
+	if out := run("addnetwork Libera"); !anyHas(out, "Added libera (irc.libera.chat:+6697, nick alice)") {
+		t.Fatalf("addnetwork: %q", out)
+	}
+	n := r.network("libera")
+	if len(n.Servers) != 1 || !n.Servers[0].TLS || n.Port != 6697 || len(n.Channels) != 1 || n.Channels[0] != "#libera" {
+		t.Fatalf("added: %+v", n)
+	}
+	if out := run("addnetwork nope"); !anyHas(out, `No network "nope" in the directory`) {
+		t.Fatalf("unknown id: %q", out)
 	}
 }
