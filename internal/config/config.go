@@ -80,6 +80,10 @@ type Config struct {
 	// ModulesOff are modules (internal/modules) switched off server-wide.
 	ModulesOff []string
 	Secrets    Secrets
+	// NetworkDirectory is where the list of IRC networks users pick from
+	// comes from (internal/directory): an http(s) URL or a local file.
+	// Empty turns it off.
+	NetworkDirectory string
 
 	// WriteConf (settings_write_conf) makes evrd write settings changed in
 	// the admin UI back into this file, on every node.
@@ -341,7 +345,9 @@ func Default() *Config {
 		Limits:   Limits{MaxNetworks: 0, MaxClients: 0, BacklogLines: 2000},
 		Outbound: Outbound{ConnectRate: 5},
 		Metrics:  Metrics{Interval: 15 * time.Second},
-		fromFile: map[string]bool{},
+
+		NetworkDirectory: DefaultNetworkDirectory,
+		fromFile:         map[string]bool{},
 	}
 }
 
@@ -435,6 +441,9 @@ func (c *Config) ApplyEnv() error {
 			return fmt.Errorf("EVRD_TRUSTED_PROXIES: %w", err)
 		}
 		c.Auth.TrustedProxies = ps
+	}
+	if v := os.Getenv("EVRD_NETWORK_DIRECTORY"); v != "" {
+		c.NetworkDirectory = directorySource(v)
 	}
 	if v := os.Getenv("EVRD_UPSTREAM_PREFIX6"); v != "" {
 		p, err := netip.ParsePrefix(v)
@@ -555,6 +564,8 @@ func (c *Config) set(key, val string) error {
 		c.Cluster.LeaseTTL, err = time.ParseDuration(val)
 	case "connect_rate":
 		c.Outbound.ConnectRate, err = strconv.ParseFloat(val, 64)
+	case "network_directory":
+		c.NetworkDirectory = directorySource(val)
 	case "modules_off": // repeatable, or several per line
 		c.ModulesOff = append(c.ModulesOff, strings.Fields(val)...)
 	case "bindhost": // repeatable, or several per line
@@ -587,6 +598,20 @@ func (c *Config) set(key, val string) error {
 		return fmt.Errorf("unknown directive")
 	}
 	return err
+}
+
+// DefaultNetworkDirectory is where the network directory is published (the
+// evrd website).
+const DefaultNetworkDirectory = "https://evrd.sh/api/networks/v1.json"
+
+// directorySource reads a network_directory value: "off" (or "no", "none")
+// turns it off, like leaving it empty.
+func directorySource(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "off", "no", "none":
+		return ""
+	}
+	return strings.TrimSpace(v)
 }
 
 func parseBool(v string) (bool, error) {

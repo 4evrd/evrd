@@ -31,6 +31,7 @@ import (
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/certs"
 	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/listen"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/settings"
@@ -55,8 +56,9 @@ type Server struct {
 	cfgp    atomic.Pointer[config.Config]
 	// settings, when set, edits the server settings (Admin → Settings).
 	settings *settings.Manager
-	certs    *certs.Manager // nil: no certificate report
-	webApp   string         // web_root: the built web app to serve, or ""
+	certs    *certs.Manager       // nil: no certificate report
+	dir      *directory.Directory // nil: no network directory
+	webApp   string               // web_root: the built web app to serve, or ""
 	log      *slog.Logger
 	up       websocket.Upgrader
 }
@@ -166,6 +168,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/networks/{id}", user(s.handleUpdateNetwork))
 	mux.HandleFunc("GET /api/bindhosts", user(s.handleBindHosts))
 	mux.HandleFunc("GET /api/modules", s.auth.RequireUser(s.handleModules))
+	mux.HandleFunc("GET /api/directory", s.auth.RequireUser(s.handleDirectory))
 	mux.HandleFunc("DELETE /api/networks/{id}", user(s.handleDeleteNetwork))
 	mux.HandleFunc("POST /api/networks/{id}/connect", user(s.handleConnect))
 	mux.HandleFunc("POST /api/networks/{id}/disconnect", user(s.handleDisconnect))
@@ -185,6 +188,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/metrics", adminAny(s.handleAdminMetrics))
 	mux.HandleFunc("GET /api/admin/settings", adminAny(s.handleGetSettings))
 	mux.HandleFunc("PATCH /api/admin/settings", adminAny(s.handleSaveSettings))
+	mux.HandleFunc("POST /api/admin/directory/refresh", adminAny(s.handleRefreshDirectory))
 	mux.HandleFunc("GET /api/admin/users", adminAny(s.handleAdminListUsers))
 	mux.HandleFunc("POST /api/admin/users", adminAny(s.handleAdminCreateUser))
 	mux.HandleFunc("GET /api/admin/users/{id}", admin(s.handleAdminGetUser))

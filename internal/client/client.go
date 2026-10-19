@@ -19,6 +19,7 @@ import (
 
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/listen"
 )
 
@@ -36,6 +37,19 @@ type Server struct {
 	tlsOnce sync.Once
 	tlsConf *tls.Config
 	tlsErr  error
+
+	dir *directory.Directory // nil: none
+}
+
+// SetDirectory gives *status the network directory (addnetwork <id>).
+func (s *Server) SetDirectory(d *directory.Directory) { s.dir = d }
+
+// directory is the network directory, an empty one when there's none.
+func (s *Server) directory() *directory.Directory {
+	if s.dir == nil {
+		return directory.New("", nil, nil)
+	}
+	return s.dir
 }
 
 func NewServer(b *bouncer.Bouncer, acc *accounts.Service, log *slog.Logger, tlsCert, tlsKey string) *Server {

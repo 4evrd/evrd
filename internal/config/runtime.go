@@ -89,6 +89,10 @@ var Specs = []Spec{
 		get:   func(c *Config) string { return strings.Join(c.Outbound.BindHosts, " ") },
 		reset: func(c *Config) { c.Outbound.BindHosts = nil }},
 
+	{Key: "network_directory", Group: "Network directory", Label: "Directory source", Kind: "string", Env: "EVRD_NETWORK_DIRECTORY",
+		Help: "Where the list of IRC networks users pick from when adding one comes from: an http(s) URL (checked twice a day) or a file. Empty turns the list off.",
+		get:  func(c *Config) string { return c.NetworkDirectory }},
+
 	{Key: "tls", Group: "HTTPS & TLS", Label: "Certificate", Kind: "choice", Options: []string{"acme", "selfsigned", "files"},
 		Help: "For the IRC ports, and for the web app when evrd serves HTTPS itself. Let's Encrypt (acme) gets and renews one automatically, accepting the CA's subscriber agreement.",
 		get:  func(c *Config) string { return c.TLSSource() }},
@@ -230,6 +234,8 @@ func (c *Config) setEmpty(key string) {
 		c.Metrics.OTLPEndpoint = ""
 	case "metrics_url":
 		c.Metrics.QueryURL = ""
+	case "network_directory":
+		c.NetworkDirectory = ""
 	case "acme_email":
 		c.TLS.ACMEEmail = ""
 	case "acme_ca":

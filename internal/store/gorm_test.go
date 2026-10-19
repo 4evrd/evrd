@@ -539,6 +539,20 @@ func TestCertCache(t *testing.T) {
 	}
 }
 
+func TestCached(t *testing.T) {
+	st := open(t)
+	if _, err := st.Cached("directory"); err != ErrNotFound {
+		t.Fatalf("missing: %v", err)
+	}
+	if err := st.PutCached("directory", "v1"); err != nil {
+		t.Fatal(err)
+	}
+	st.PutCached("directory", "v2") // replaces
+	if d, err := st.Cached("directory"); err != nil || d != "v2" {
+		t.Fatalf("got %q %v", d, err)
+	}
+}
+
 func TestMigrateLegacyMessagesStopsOnError(t *testing.T) {
 	st := open(t)
 	db := st.(*gormStore).db
