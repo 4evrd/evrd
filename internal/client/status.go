@@ -4,6 +4,7 @@ package client
 // from any IRC client, like ZNC's *status.
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"github.com/4evrd/evrd/internal/modules"
@@ -362,6 +363,12 @@ func (se *session) cmdShow(args []string) {
 	se.statusf("  nick %s · altnick %s · ident %s · realname %s", n.Nick, orElse(n.AltNick, "(default)"),
 		orElse(n.Username, "(nick)"), orElse(n.Realname, "(nick)"))
 	se.statusf("  sasl password %s · sasl user %s · bindhost %s", pw, orElse(n.SASLUser, "(ident)"), orElse(n.BindHost, "(default)"))
+	se.statusf("  auth %s · servicesnick %s · identifyargs %s · identifyon %s · ghost %s · joinafterauth %s · authtimeout %ds",
+		n.Auth(), orElse(n.ServicesNick, "NickServ"), orElse(n.IdentifyArgs, "auto"), orElse(n.IdentifyOn, "connect"),
+		orElse(n.GhostCmd, "off"), onOff(n.JoinAfterAuth), cmp.Or(n.AuthTimeout, store.DefaultAuthTimeout))
+	if n.AuthCommand != "" {
+		se.statusf("  authcommand %s", n.AuthCommand)
+	}
 	se.statusf("  quitmsg %s · encoding %s", orElse(n.QuitMsg, "(default)"), orElse(n.Encoding, "UTF-8"))
 	se.statusf("  trustallcerts %s · trustpki %s · %d trusted fingerprint(s)", onOff(n.TrustAllCerts), onOff(n.TrustPKI), len(n.Fingerprints))
 	se.statusf("  floodrate %g · floodburst %d · joindelay %ds", n.FloodRate, n.FloodBurst, n.JoinDelay)
@@ -377,7 +384,8 @@ func onOff(b bool) string {
 
 // settingNames are the fields set can change, in help order.
 var settingNames = []string{"name", "host", "port", "tls", "nick", "altnick", "ident", "realname",
-	"password", "sasluser", "bindhost", "quitmsg", "encoding", "trustallcerts", "trustpki",
+	"password", "sasluser", "auth", "servicesnick", "identifyargs", "identifyon", "authcommand", "ghost",
+	"joinafterauth", "authtimeout", "bindhost", "quitmsg", "encoding", "trustallcerts", "trustpki",
 	"floodrate", "floodburst", "joindelay"}
 
 var settings = func() map[string]bool {
@@ -390,7 +398,7 @@ var settings = func() map[string]bool {
 
 func (se *session) cmdSet(args []string) {
 	usage := func() {
-		se.statusf("Usage: set [network] <setting> <value> — settings: name host port tls nick ident realname password")
+		se.statusf("Usage: set [network] <setting> <value> — settings: name host port tls nick ident realname password auth …")
 	}
 	if len(args) < 2 {
 		usage()
@@ -455,6 +463,28 @@ func (se *session) cmdSet(args []string) {
 		text(&n.AltNick)
 	case "sasluser":
 		text(&n.SASLUser)
+	case "auth":
+		text(&n.AuthMethod)
+	case "servicesnick":
+		text(&n.ServicesNick)
+	case "identifyargs":
+		text(&n.IdentifyArgs)
+		if strings.EqualFold(n.IdentifyArgs, "auto") {
+			n.IdentifyArgs = ""
+		}
+	case "identifyon":
+		text(&n.IdentifyOn)
+	case "authcommand":
+		text(&n.AuthCommand)
+	case "ghost":
+		text(&n.GhostCmd)
+		if strings.EqualFold(n.GhostCmd, "off") {
+			n.GhostCmd = ""
+		}
+	case "joinafterauth":
+		if !bool_(&n.JoinAfterAuth) {
+			return
+		}
 	case "quitmsg":
 		text(&n.QuitMsg)
 	case "encoding":
@@ -484,16 +514,19 @@ func (se *session) cmdSet(args []string) {
 			return
 		}
 		n.FloodRate = v
-	case "floodburst", "joindelay":
+	case "floodburst", "joindelay", "authtimeout":
 		v, err := strconv.Atoi(value)
 		if err != nil {
 			se.statusf("%s is a whole number.", field)
 			return
 		}
-		if field == "floodburst" {
+		switch field {
+		case "floodburst":
 			n.FloodBurst = v
-		} else {
+		case "joindelay":
 			n.JoinDelay = v
+		default:
+			n.AuthTimeout = v
 		}
 	case "nick":
 		n.Nick = value
@@ -535,7 +568,7 @@ func (se *session) cmdSet(args []string) {
 	}
 	se.srv.b.Reconfigure(n)
 	shown := value
-	if field == "password" {
+	if field == "password" || field == "authcommand" {
 		shown = "(hidden)"
 		if clear {
 			shown = "(cleared)"

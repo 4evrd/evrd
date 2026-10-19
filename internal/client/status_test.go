@@ -200,6 +200,43 @@ func TestStatusSetEverySetting(t *testing.T) {
 	}
 }
 
+func TestStatusSetServicesLogin(t *testing.T) {
+	r := newRig(t)
+	ic := r.attached()
+	two := r.network("two")
+	for _, c := range []struct{ cmd, want string }{
+		{"set two auth command", "The command login needs a command"},
+		{"set two authcommand /msg X@channels.undernet.org LOGIN %account% %password%", "Saved authcommand = (hidden) on two."},
+		{"set two auth command", "Saved auth = command on two."},
+		{"set two auth carrier-pigeon", "The login method is auto, sasl"},
+		{"set two servicesnick NickServ@services.dal.net", "Saved servicesnick = NickServ@services.dal.net on two."},
+		{"set two identifyargs password", "Saved identifyargs = password on two."},
+		{"set two identifyon prompt", "Saved identifyon = prompt on two."},
+		{"set two ghost regain", "Saved ghost = regain on two."},
+		{"set two joinafterauth maybe", "joinafterauth is on or off."},
+		{"set two joinafterauth on", "Saved joinafterauth = on on two."},
+		{"set two authtimeout soon", "authtimeout is a whole number."},
+		{"set two authtimeout 30", "Saved authtimeout = 30 on two."},
+	} {
+		ic.status(c.cmd, c.want)
+	}
+	n, _ := r.st.NetworkByID(two.ID)
+	if n.AuthMethod != store.AuthCommand || n.ServicesNick != "NickServ@services.dal.net" || n.IdentifyArgs != "password" ||
+		n.IdentifyOn != "prompt" || n.GhostCmd != "regain" || !n.JoinAfterAuth || n.AuthTimeout != 30 ||
+		!strings.HasPrefix(n.AuthCommand, "/msg X@") {
+		t.Fatalf("saved: %+v", n)
+	}
+	ic.status("show two", "two — disconnected")
+	ic.expect("auth command · servicesnick NickServ@services.dal.net · identifyargs password · identifyon prompt · ghost regain · joinafterauth on · authtimeout 30s")
+	ic.expect("authcommand /msg X@channels.undernet.org LOGIN %account% %password%")
+	ic.status("set two ghost off", "Saved ghost = off on two.")
+	ic.status("set two identifyargs auto", "Saved identifyargs = auto on two.")
+	n, _ = r.st.NetworkByID(two.ID)
+	if n.GhostCmd != "" || n.IdentifyArgs != "" {
+		t.Fatalf("not cleared: %+v", n)
+	}
+}
+
 func TestStatusPlayback(t *testing.T) {
 	r := newRig(t)
 	ic := r.attached()

@@ -40,6 +40,9 @@ func NormalizeNetwork(n *store.Network) error {
 	case strings.ContainsAny(n.QuitMsg, "\r\n"):
 		return invalid("the quit message must be one line")
 	}
+	if err := normalizeAuth(n); err != nil {
+		return err
+	}
 
 	// Servers: the list wins; a bare Host/Port/TLS (older callers, *status)
 	// becomes a one-server list.
@@ -133,6 +136,41 @@ func NormalizeNetwork(n *store.Network) error {
 	return nil
 }
 
+// normalizeAuth checks the services login settings (docs/services.md).
+func normalizeAuth(n *store.Network) error {
+	n.AuthMethod = strings.ToLower(strings.TrimSpace(n.AuthMethod))
+	n.ServicesNick = strings.TrimSpace(n.ServicesNick)
+	n.IdentifyArgs = strings.ToLower(strings.TrimSpace(n.IdentifyArgs))
+	n.IdentifyOn = strings.ToLower(strings.TrimSpace(n.IdentifyOn))
+	n.GhostCmd = strings.ToLower(strings.TrimSpace(n.GhostCmd))
+	n.AuthCommand = strings.TrimSpace(n.AuthCommand)
+	if n.AuthMethod == "" {
+		n.AuthMethod = store.AuthAuto
+	}
+	if n.IdentifyOn == "connect" {
+		n.IdentifyOn = ""
+	}
+	switch {
+	case !slices.Contains([]string{store.AuthAuto, store.AuthSASL, store.AuthNickServ, store.AuthCommand, store.AuthNone}, n.AuthMethod):
+		return invalid("the login method is auto, sasl, nickserv, command or none")
+	case strings.ContainsAny(n.ServicesNick, " ,:!\r\n") || len(n.ServicesNick) > 64:
+		return invalid("the services nick is one word, like NickServ or NickServ@services.dal.net")
+	case !slices.Contains([]string{"", store.IdentifyAccount, store.IdentifyPassword}, n.IdentifyArgs):
+		return invalid("IDENTIFY takes the account and password, just the password, or (empty) whichever fits")
+	case !slices.Contains([]string{"", store.IdentifyOnPrompt}, n.IdentifyOn):
+		return invalid("identify on connect or on prompt")
+	case !slices.Contains([]string{"", "ghost", "regain", "recover"}, n.GhostCmd):
+		return invalid("free a taken nick with ghost, regain or recover (or not at all)")
+	case strings.ContainsAny(n.AuthCommand, "\r\n") || len(n.AuthCommand) > 400:
+		return invalid("the login command is one line")
+	case n.AuthMethod == store.AuthCommand && n.AuthCommand == "":
+		return invalid("the command login needs a command, like PRIVMSG X@channels.undernet.org :LOGIN %%account%% %%password%%")
+	case n.AuthTimeout < 0 || n.AuthTimeout > 300:
+		return invalid("the login timeout is 0–300 seconds")
+	}
+	return nil
+}
+
 func validNick(nick string) bool { return !strings.ContainsAny(nick, " ,*?!@#:") }
 
 // NormalizeFingerprint lowercases a fingerprint and drops colons and spaces.
@@ -171,5 +209,8 @@ func NeedsReconnect(a, b store.Network) bool {
 	return !slices.Equal(a.ServerList(), b.ServerList()) || a.Nick != b.Nick || a.Username != b.Username ||
 		a.Realname != b.Realname || a.Password != b.Password || a.SASLUser != b.SASLUser ||
 		a.BindHost != b.BindHost || a.TrustAllCerts != b.TrustAllCerts || a.TrustPKI != b.TrustPKI ||
-		!slices.Equal(a.Fingerprints, b.Fingerprints) || a.Encoding != b.Encoding
+		!slices.Equal(a.Fingerprints, b.Fingerprints) || a.Encoding != b.Encoding ||
+		a.Auth() != b.Auth() || a.ServicesNick != b.ServicesNick || a.IdentifyArgs != b.IdentifyArgs ||
+		a.IdentifyOn != b.IdentifyOn || a.AuthCommand != b.AuthCommand || a.GhostCmd != b.GhostCmd ||
+		a.JoinAfterAuth != b.JoinAfterAuth || a.AuthTimeout != b.AuthTimeout
 }

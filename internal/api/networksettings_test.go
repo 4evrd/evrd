@@ -76,6 +76,41 @@ func TestNetworkSettingsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestNetworkServicesLogin(t *testing.T) {
+	e := newEnv(t)
+	e.user("dee", store.RoleUser)
+	c := e.login("dee")
+	code, n := c.do("POST", "/api/networks", map[string]any{
+		"name": "dalnet", "host": "irc.dal.net", "port": 6667, "nick": "dee", "password": "ns-secret",
+		"authMethod": "nickserv", "servicesNick": "NickServ@services.dal.net", "identifyArgs": "password",
+		"identifyOn": "prompt", "ghost": "ghost", "joinAfterAuth": true, "authTimeout": 20,
+	})
+	if code != 200 {
+		t.Fatalf("create: %d %v", code, n)
+	}
+	for k, want := range map[string]any{
+		"authMethod": "nickserv", "servicesNick": "NickServ@services.dal.net", "identifyArgs": "password",
+		"identifyOn": "prompt", "ghost": "ghost", "joinAfterAuth": true, "authTimeout": 20.0, "hasPassword": true,
+		"authCommand": "",
+	} {
+		if n[k] != want {
+			t.Errorf("%s = %v, want %v", k, n[k], want)
+		}
+	}
+	if _, ok := n["password"]; ok {
+		t.Fatal("the password went back to the browser")
+	}
+	id := strconv.Itoa(int(n["id"].(float64)))
+	code, out := c.do("PATCH", "/api/networks/"+id, map[string]any{"authMethod": "command",
+		"authCommand": "PRIVMSG X@channels.undernet.org :LOGIN %account% %password%"})
+	if code != 200 || out["authMethod"] != "command" || out["servicesNick"] != "NickServ@services.dal.net" {
+		t.Fatalf("patch: %d %v", code, out)
+	}
+	if code, _ := c.do("PATCH", "/api/networks/"+id, map[string]any{"authMethod": "telepathy"}); code != 422 {
+		t.Fatalf("a made-up method: %d", code)
+	}
+}
+
 func TestBindHostsAndUserSettings(t *testing.T) {
 	e := newEnv(t)
 	e.acc.SetBindHosts([]string{"192.0.2.1"})

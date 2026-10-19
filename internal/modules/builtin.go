@@ -85,7 +85,7 @@ type perform struct {
 func (p *perform) Registered() {
 	n := 0
 	for _, c := range p.cmds {
-		for _, l := range clientCommand(strings.ReplaceAll(c, "%nick%", p.h.Nick())) {
+		for _, l := range ClientCommand(strings.ReplaceAll(c, "%nick%", p.h.Nick())) {
 			p.h.Send(l)
 			n++
 		}
@@ -97,9 +97,9 @@ func (p *perform) Registered() {
 
 func (p *perform) Line(irc.Message) {}
 
-// clientCommand turns a command as typed in a client ("/msg x hi", "/mode
+// ClientCommand turns a command as typed in a client ("/msg x hi", "/mode
 // …") into IRC lines; anything else is sent as it is.
-func clientCommand(c string) []string {
+func ClientCommand(c string) []string {
 	c = strings.TrimSpace(c)
 	if c == "" {
 		return nil
@@ -346,7 +346,7 @@ func (a *alias) ClientLine(line string) bool {
 	}
 	expanded = strings.ReplaceAll(expanded, "%nick%", a.h.Nick())
 	for _, c := range strings.Split(expanded, ";") {
-		for _, l := range clientCommand(c) {
+		for _, l := range ClientCommand(c) {
 			a.h.SendAsUser(l)
 		}
 	}

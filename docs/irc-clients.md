@@ -38,7 +38,7 @@ The web chat understands `/join`, `/part`, `/msg`, `/query`, `/me`, `/notice`,
 | `addnetwork <id>` / `directory [search]` | add a network from the [network directory](network-directory.md) by its id (`addnetwork libera`); list or search it |
 | `delnetwork <network>` | remove a network and its history |
 | `show [network]` | a network's settings (default: this one) |
-| `set [network] <setting> <value>` | change `name`, `host`, `port` (`+port` = TLS), `tls`, `nick`, `altnick`, `ident`, `realname`, `password`, `sasluser`, `bindhost`, `quitmsg`, `encoding`, `trustallcerts`, `trustpki`, `floodrate`, `floodburst`, `joindelay` (`-` clears); reconnects when needed |
+| `set [network] <setting> <value>` | change `name`, `host`, `port` (`+port` = TLS), `tls`, `nick`, `altnick`, `ident`, `realname`, `password`, `sasluser`, `auth`, `servicesnick`, `identifyargs`, `identifyon`, `authcommand`, `ghost`, `joinafterauth`, `authtimeout` ([services login](services.md)), `bindhost`, `quitmsg`, `encoding`, `trustallcerts`, `trustpki`, `floodrate`, `floodburst`, `joindelay` (`-` clears); reconnects when needed |
 | `listservers` / `addserver <host> [[+]port] [pass]` / `delserver <host> [port]` | the network's servers, tried in turn |
 | `listfingerprints` / `addfingerprint <sha-256>` / `delfingerprint <sha-256>` | trusted server certificates |
 | `detach <#chan>` | hide a channel from IRC clients (still joined and logged); `/join` brings it back |
@@ -50,7 +50,9 @@ Anything you send shows up in the web console and on
 your other attached clients too — all sessions share one upstream connection.
 
 Upstream networks authenticate with **SASL PLAIN** when the network has a
-password and the server supports it (falling back to a server `PASS`).
+password and the server supports it, else by identifying to NickServ once
+connected — or however the network's Authentication settings say: see
+[Logging in to services](services.md).
 
 Playback for clients without `server-time` carries timestamps in the text
 (`[12:34:56] hello`); change the format, time zone and how much is played back

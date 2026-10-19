@@ -45,6 +45,14 @@ type networkInput struct {
 	BindHost      *string                           `json:"bindHost"`
 	Password      *string                           `json:"password"` // SASL
 	SASLUser      *string                           `json:"saslUser"`
+	AuthMethod    *string                           `json:"authMethod"`
+	ServicesNick  *string                           `json:"servicesNick"`
+	IdentifyArgs  *string                           `json:"identifyArgs"`
+	IdentifyOn    *string                           `json:"identifyOn"`
+	AuthCommand   *string                           `json:"authCommand"`
+	GhostCmd      *string                           `json:"ghost"`
+	JoinAfterAuth *bool                             `json:"joinAfterAuth"`
+	AuthTimeout   *int                              `json:"authTimeout"`
 	TrustAllCerts *bool                             `json:"trustAllCerts"`
 	TrustPKI      *bool                             `json:"trustPKI"`
 	Fingerprints  *[]string                         `json:"fingerprints"`
@@ -85,6 +93,18 @@ func (in networkInput) apply(n *store.Network) {
 	str(&n.BindHost, in.BindHost)
 	str(&n.Password, in.Password)
 	str(&n.SASLUser, in.SASLUser)
+	str(&n.AuthMethod, in.AuthMethod)
+	str(&n.ServicesNick, in.ServicesNick)
+	str(&n.IdentifyArgs, in.IdentifyArgs)
+	str(&n.IdentifyOn, in.IdentifyOn)
+	str(&n.AuthCommand, in.AuthCommand)
+	str(&n.GhostCmd, in.GhostCmd)
+	if in.JoinAfterAuth != nil {
+		n.JoinAfterAuth = *in.JoinAfterAuth
+	}
+	if in.AuthTimeout != nil {
+		n.AuthTimeout = *in.AuthTimeout
+	}
 	str(&n.Encoding, in.Encoding)
 	if in.Servers != nil {
 		old := n.ServerList()
@@ -547,7 +567,7 @@ func (s *Server) networkDTO(n store.Network) map[string]any {
 		health = map[string]any{
 			"status": string(h.Status), "lastError": h.LastError, "lastErrorAt": unixT(h.LastErrorAt), "hint": h.Hint,
 			"attempts": h.Attempts, "retryIn": int(h.RetryIn.Seconds()), "connectedAt": unixT(h.ConnectedAt),
-			"server": h.Server, "untrustedFingerprint": h.UntrustedFingerprint,
+			"server": h.Server, "untrustedFingerprint": h.UntrustedFingerprint, "auth": h.Auth,
 		}
 		if h.Lag >= 0 {
 			health["lag"] = h.Lag.Milliseconds()
@@ -567,6 +587,8 @@ func (s *Server) networkDTO(n store.Network) map[string]any {
 		"servers":     serversDTO(n.ServerList()),
 		"altNick":     n.AltNick, "quitMsg": n.QuitMsg, "bindHost": n.BindHost, "saslUser": n.SASLUser,
 		"trustAllCerts": n.TrustAllCerts, "trustPKI": n.TrustPKI, "fingerprints": orEmpty(n.Fingerprints),
+		"authMethod": n.Auth(), "servicesNick": n.ServicesNick, "identifyArgs": n.IdentifyArgs, "identifyOn": n.IdentifyOn,
+		"authCommand": n.AuthCommand, "ghost": n.GhostCmd, "joinAfterAuth": n.JoinAfterAuth, "authTimeout": n.AuthTimeout,
 		"encoding": n.Encoding, "floodRate": n.FloodRate, "floodBurst": n.FloodBurst, "joinDelay": n.JoinDelay,
 		"channelSettings": orEmptyMap(n.ChannelSettings),
 		"modules":         orEmptyModules(n.Modules),

@@ -81,6 +81,9 @@ type Health struct {
 	// UntrustedFingerprint is the SHA-256 of the last certificate refused,
 	// so the user can choose to trust it.
 	UntrustedFingerprint string `json:"untrustedFingerprint,omitempty"`
+	// Auth is how the services login went on this connection (AuthPending,
+	// AuthIdentified…); "" when there was none.
+	Auth string `json:"auth,omitempty"`
 }
 
 // Event is something worth telling the user about.
@@ -144,6 +147,7 @@ type Conn struct {
 	serverIdx    int
 	serverPass   string // the current server's PASS (then no SASL-fallback PASS)
 	saslOK       bool   // SASL succeeded on this connection (then no NickServ IDENTIFY)
+	auth         authState
 	serverErr    string // the server's ERROR line on this connection: why it closed
 
 	// modules (see modules.go): their calls are serialized by modMu
@@ -409,6 +413,8 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	c.serverIdx++
 	c.serverPass = sv.Password
 	c.saslOK = false
+	c.auth = authState{gen: c.auth.gen + 1}
+	c.health.Auth = ""
 	c.serverErr = ""
 	c.health.Server = net.JoinHostPort(sv.Host, strconv.Itoa(sv.Port))
 	c.mu.Unlock()
@@ -672,11 +678,27 @@ func (c *Conn) handle(m irc.Message) {
 	case "903": // RPL_SASLSUCCESS
 		c.mu.Lock()
 		c.saslOK = true
+		c.health.Auth = AuthIdentified
 		c.mu.Unlock()
+		c.note("evrd", false, "Logged in with SASL as "+orElse(c.net.SASLUser, orElse(c.net.Username, c.net.Nick)))
 		c.send("CAP END")
 	case "902", "904", "905", "906", "908": // SASL failures
 		c.log.Warn("SASL failed, continuing unauthenticated", "network", c.net.Name)
+		c.saslFailed(lastParam(m))
 		c.send("CAP END")
+	case "900": // RPL_LOGGEDIN: after registration, the answer to IDENTIFY
+		if c.Status() == StatusConnected {
+			c.mu.Lock()
+			gen := c.auth.gen
+			c.mu.Unlock()
+			c.authDone(gen, true, lastParam(m))
+		}
+	case "401", "440": // no such nick, services down
+		c.servicesMissing(m)
+	case "477": // ERR_NEEDREGGEDNICK: a channel for logged-in users only
+		if h := Hint(lastParam(m)); h != "" {
+			c.note("evrd", false, h)
+		}
 	case "001": // RPL_WELCOME — registration complete
 		moduleLogin := c.modsLogIn()
 		c.mu.Lock()
@@ -684,30 +706,14 @@ func (c *Conn) handle(m irc.Message) {
 			c.nick = m.Params[0] // the server's word on our nick
 		}
 		saved := append([]string(nil), c.saved...)
-		settings, delay0 := c.chanSettings, c.joinDelay
+		settings := c.chanSettings
 		away := c.away
-		identify := c.net.Password != "" && !c.saslOK && !moduleLogin
 		c.health.Status, c.health.ConnectedAt = StatusConnected, time.Now()
 		c.health.Attempts, c.health.RetryIn, c.health.Lag = 0, 0, -1
 		c.mu.Unlock()
-		if identify {
-			// No SASL here: log in the way ZNC's nickserv module does, before
-			// joining (some channels need you identified).
-			c.send(identifyLine(c.net))
-		}
-		joins := joinLines(saved, settings)
-		if delay0 > 0 {
-			go func() {
-				time.Sleep(delay0)
-				for _, l := range joins {
-					c.send(l)
-				}
-			}()
-		} else {
-			for _, l := range joins {
-				c.send(l)
-			}
-		}
+		// Log in to services (unless SASL did) before joining: some
+		// channels need you identified.
+		c.login(moduleLogin, joinLines(saved, settings))
 		if away != "" {
 			c.send("AWAY :" + away)
 		}
@@ -787,6 +793,9 @@ func (c *Conn) handle(m irc.Message) {
 		for _, ch := range chans {
 			c.event("nick", ch, old, "", nu)
 		}
+		if me {
+			c.nickChanged(nu)
+		}
 	case "QUIT":
 		who := nickOf(m.Prefix)
 		reason := lastParamIf(m, 1)
@@ -796,7 +805,12 @@ func (c *Conn) handle(m irc.Message) {
 			delete(c.members[strings.ToLower(ch)], strings.ToLower(who))
 		}
 		split := len(chans) > 0 && isSplitReason(reason) && c.splits.quit(time.Now())
+		ghost := c.auth.ghosted && strings.EqualFold(who, c.net.Nick)
+		gen := c.auth.gen
 		c.mu.Unlock()
+		if ghost {
+			c.takeNick(gen) // the ghost is gone
+		}
 		for _, ch := range chans {
 			c.event("quit", ch, who, reason, "")
 		}
@@ -857,6 +871,9 @@ func (c *Conn) handle(m irc.Message) {
 			c.event("mode", m.Params[0], nickOf(m.Prefix), strings.Join(m.Params[1:], " "), "")
 		}
 	case "PRIVMSG", "NOTICE":
+		if c.fromServices(m.Prefix) {
+			c.servicesSaid(m)
+		}
 		c.handleMessage(m)
 	}
 }
@@ -870,8 +887,12 @@ func (c *Conn) event(kind, channel, who, text, extra string) {
 	})
 }
 
-// note adds to the connection log.
+// note adds to the connection log. The network's password never shows,
+// even when a server or services repeat it.
 func (c *Conn) note(from string, bad bool, text string) {
+	if p := c.net.Password; len(p) >= 4 {
+		text = strings.ReplaceAll(text, p, "••••••")
+	}
 	if c.onLog != nil {
 		c.onLog(LogEntry{At: time.Now(), From: from, Text: text, Bad: bad})
 	}
@@ -1014,38 +1035,35 @@ func (c *Conn) handleCap(m irc.Message) {
 	if len(m.Params) > 2 {
 		caps = m.Params[2]
 	}
+	method := c.net.Auth()
+	sasl := c.net.Password != "" && (method == store.AuthAuto || method == store.AuthSASL)
+	// without SASL: say so, and (auto only) try the password as PASS
+	noSASL := func(why string) {
+		if sasl && method == store.AuthSASL {
+			c.saslFailed(why)
+		}
+		if sasl && method == store.AuthAuto && c.serverPass == "" {
+			c.send("PASS " + c.net.Password)
+		}
+		c.send("CAP END")
+	}
 	switch sub {
 	case "LS":
-		if c.net.Password != "" && strings.Contains(caps, "sasl") {
+		if sasl && strings.Contains(caps, "sasl") {
 			c.send("CAP REQ :sasl")
 		} else {
-			if c.net.Password != "" && c.serverPass == "" {
-				c.send("PASS " + c.net.Password)
-			}
-			c.send("CAP END")
+			noSASL("the server doesn't offer SASL")
 		}
 	case "ACK":
 		if strings.Contains(caps, "sasl") {
+			c.note("evrd", false, "Logging in with SASL as "+orElse(c.net.SASLUser, orElse(c.net.Username, c.net.Nick)))
 			c.send("AUTHENTICATE PLAIN")
 		} else {
 			c.send("CAP END")
 		}
 	case "NAK":
-		if c.net.Password != "" && c.serverPass == "" {
-			c.send("PASS " + c.net.Password)
-		}
-		c.send("CAP END")
+		noSASL("the server refused the SASL capability")
 	}
-}
-
-// identifyLine is the NickServ login for networks without SASL: IDENTIFY
-// with the account name when it differs from the nick (Atheme, Anope 2), or
-// just the password.
-func identifyLine(n store.Network) string {
-	if n.SASLUser != "" && !strings.EqualFold(n.SASLUser, n.Nick) {
-		return "PRIVMSG NickServ :IDENTIFY " + n.SASLUser + " " + n.Password
-	}
-	return "PRIVMSG NickServ :IDENTIFY " + n.Password
 }
 
 // sendSASL responds to an AUTHENTICATE + challenge with a SASL PLAIN payload:

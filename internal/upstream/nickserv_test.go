@@ -110,11 +110,11 @@ func TestNickServIdentifyWithoutSASL(t *testing.T) {
 
 func TestNickServIdentifyUsesTheAccountName(t *testing.T) {
 	n := store.Network{Nick: "thelion_", SASLUser: "thelion", Password: "pw"}
-	if got := identifyLine(n); got != "PRIVMSG NickServ :IDENTIFY thelion pw" {
+	if got := identifyLine(n, n.Nick); got != "PRIVMSG NickServ :IDENTIFY thelion pw" {
 		t.Fatalf("%q", got)
 	}
 	n.SASLUser = "TheLion_"
-	if got := identifyLine(n); got != "PRIVMSG NickServ :IDENTIFY pw" {
+	if got := identifyLine(n, n.Nick); got != "PRIVMSG NickServ :IDENTIFY pw" {
 		t.Fatalf("%q", got)
 	}
 }

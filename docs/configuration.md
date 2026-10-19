@@ -150,8 +150,10 @@ ZNC offers without modules:
   time the link drops.
 - **Identity** — nick, alternate nick, ident, real name, quit message, bind host
   (empty fields use the account defaults).
-- **Authentication** — SASL PLAIN account and password (sent as PASS if the
-  network has no SASL).
+- **Authentication** — how evrd logs in to services: SASL PLAIN, IDENTIFY to
+  NickServ (or `NickServ@services.dal.net`…), a command of your own (Undernet's
+  X), or none; presets for common networks; GHOST/REGAIN a taken nick; join
+  channels only once identified. See [Logging in to services](services.md).
 - **Certificates** — verify with the system CAs (TrustPKI), trust everything
   (TrustAllCerts), and trusted SHA-256 fingerprints. A refused certificate's
   fingerprint is shown with a button to trust it.
@@ -172,8 +174,9 @@ TIME itself); and the addresses allowed to sign in, web and IRC.
 `*status` has the same: `listservers`, `addserver`, `delserver`,
 `listfingerprints`, `addfingerprint`, `delfingerprint` (and ZNC's
 `AddTrustedServerFingerprint` names), `detach`, and `set` for altnick,
-sasluser, bindhost, quitmsg, encoding, trustallcerts, trustpki, floodrate,
-floodburst, joindelay.
+sasluser, auth, servicesnick, identifyargs, identifyon, authcommand, ghost,
+joinafterauth, authtimeout, bindhost, quitmsg, encoding, trustallcerts,
+trustpki, floodrate, floodburst, joindelay.
 
 ## HTTPS and certificates
 
@@ -292,6 +295,7 @@ curl -X PUT http://127.0.0.1:8098/api/provision/users/alice \
 
 Networks take the same fields as the web app's network editor (`servers`,
 `nick`, `altNick`, `username`, `realname`, `saslUser`, `password`,
+`authMethod` and the other [services login](services.md) fields,
 `channels`, `channelSettings`, `trustAllCerts`, `fingerprints`, …). The
 answer lists each network as `created`, `exists` (that name is already there,
 so a call can be repeated) or `failed` with the reason. `connect` connects every

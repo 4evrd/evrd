@@ -147,6 +147,27 @@ type Network struct {
 	Password string `gorm:"serializer:secret"`
 	SASLUser string
 
+	// How evrd logs in to the network's services (docs/services.md). The
+	// zero values are what evrd always did: SASL when offered, else
+	// IDENTIFY to NickServ once connected.
+	AuthMethod   string // see Auth
+	ServicesNick string // where IDENTIFY goes: "" = NickServ ("NickServ@services.dal.net", "NS")
+	// IdentifyArgs: IdentifyAccount sends IDENTIFY account password,
+	// IdentifyPassword just the password; "" names the account only when
+	// it isn't the nick in use.
+	IdentifyArgs string
+	IdentifyOn   string // "" (once connected) or IdentifyOnPrompt (when services ask)
+	// AuthCommand is AuthCommand's line (raw IRC or /msg …), with %nick%,
+	// %account% and %password% (a template: the password stays in Password).
+	AuthCommand string
+	// GhostCmd frees the nick when it's taken: "", "ghost", "regain" or
+	// "recover", sent to the services nick.
+	GhostCmd string
+	// JoinAfterAuth holds the channel joins until services confirm the
+	// login (or AuthTimeout seconds pass; 0 = DefaultAuthTimeout).
+	JoinAfterAuth bool
+	AuthTimeout   int
+
 	// Server certificates: accepted if the SHA-256 fingerprint is listed, or
 	// TrustAllCerts is set, or (TrustPKI) the chain verifies for the host.
 	TrustAllCerts bool
@@ -195,6 +216,30 @@ type ChannelSettings struct {
 	Detached bool `json:"detached,omitempty"`
 	// Disabled channels keep their settings but aren't joined on connect.
 	Disabled bool `json:"disabled,omitempty"`
+}
+
+// Services login methods (Network.AuthMethod).
+const (
+	AuthAuto     = "auto"     // SASL PLAIN when offered, else IDENTIFY (and PASS)
+	AuthSASL     = "sasl"     // SASL PLAIN only
+	AuthNickServ = "nickserv" // IDENTIFY to the services nick once connected
+	AuthCommand  = "command"  // the user's own line once connected (Undernet's X…)
+	AuthNone     = "none"     // no login (or a module's, like q)
+
+	IdentifyAccount  = "account"  // IDENTIFY account password (Atheme, Anope)
+	IdentifyPassword = "password" // IDENTIFY password (older services)
+	IdentifyOnPrompt = "prompt"   // identify when services ask
+
+	DefaultAuthTimeout = 15 // seconds to wait for services to answer
+)
+
+// Auth is the network's login method: AuthAuto for rows saved before there
+// was a choice.
+func (n Network) Auth() string {
+	if n.AuthMethod == "" {
+		return AuthAuto
+	}
+	return n.AuthMethod
 }
 
 // ServerList is the network's servers, falling back to Host/Port/TLS for

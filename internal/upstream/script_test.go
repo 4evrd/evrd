@@ -28,10 +28,22 @@ type peer struct {
 	c    net.Conn
 	n    int // which connection (0 = the first)
 	nick string
+	// ended: CAP END came while the nick was taken (services_test.go)
+	ended bool
 
-	mu    sync.Mutex
-	lines []string
+	mu       sync.Mutex
+	lines    []string
+	welcomed string // the nick once registered (services_test.go)
 }
+
+// me is the client's nick since registering ("" before).
+func (p *peer) me() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.welcomed
+}
+
+func (p *peer) registered() bool { return p.me() != "" }
 
 func (p *peer) send(format string, a ...any) {
 	fmt.Fprintf(p.c, format+"\r\n", a...)
