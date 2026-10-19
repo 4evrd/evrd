@@ -6,6 +6,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"github.com/4evrd/evrd/internal/modules"
 	"slices"
 	"strconv"
 	"strings"
@@ -48,6 +49,10 @@ func init() {
 		{"detach", "<#channel>[,…]", "Hide channels from IRC clients; evrd stays in them and keeps logging. /join brings them back.", (*session).cmdDetach},
 		{"channels", "", "The channels saved for this network (JOIN and PART update it).", (*session).cmdChannels},
 		{"playback", "<channel|nick> [lines]", fmt.Sprintf("Replay a buffer's last lines (default 50, up to %d).", maxPlayback), (*session).cmdPlayback},
+		{"modules", "", "This network's modules: which are on, and what each does.", (*session).cmdModules},
+		{"loadmod", "<module>", "Switch a module on for this network.", (*session).cmdLoadMod},
+		{"unloadmod", "<module>", "Switch a module off for this network.", (*session).cmdUnloadMod},
+		{"modset", "<module> <setting> <value>", "Change a module's setting (lines: separate them with \" | \").", (*session).cmdModSet},
 		{"info", "", "Your account, limits and attached clients.", (*session).cmdInfo},
 		{"version", "", "The evrd version.", (*session).cmdVersion},
 	}
@@ -737,4 +742,103 @@ func (se *session) cmdDetach(args []string) {
 		return
 	}
 	se.detach(strings.Split(args[0], ","))
+}
+
+func (se *session) cmdModules([]string) {
+	n, ok := se.network(nil)
+	if !ok {
+		return
+	}
+	off := se.srv.b.ModulesOff()
+	for _, m := range modules.All() {
+		state := "off"
+		switch {
+		case off[m.Name]:
+			state = "unavailable (switched off by an admin)"
+		case n.Modules[m.Name].Enabled:
+			state = "ON"
+		}
+		se.statusf("%-10s %s — %s", m.Name, state, m.Description)
+	}
+	se.statusf("loadmod <module> / unloadmod <module> switch one on or off; modset <module> <setting> <value> changes a setting (or use the web app).")
+}
+
+func (se *session) setModule(name string, f func(*store.ModuleConfig) error, done string) {
+	n, ok := se.network(nil)
+	if !ok {
+		return
+	}
+	info, ok := modules.Get(name)
+	if !ok {
+		se.statusf("No module %q. modules lists them.", name)
+		return
+	}
+	before := n
+	mods := map[string]store.ModuleConfig{}
+	for k, v := range n.Modules {
+		mods[k] = v
+	}
+	mc := mods[info.Name]
+	settings := map[string]string{}
+	for k, v := range mc.Settings {
+		settings[k] = v
+	}
+	mc.Settings = settings
+	if err := f(&mc); err != nil {
+		se.statusf("%s", err)
+		return
+	}
+	mods[info.Name] = mc
+	cfgs := map[string]modules.Config{}
+	for k, v := range mods {
+		cfgs[k] = modules.Config{Enabled: v.Enabled, Settings: v.Settings}
+	}
+	if err := modules.Check(cfgs); err != nil {
+		se.statusf("%s.", capitalize(err.Error()))
+		return
+	}
+	n.Modules = mods
+	se.saveNetwork(before, n, strings.ReplaceAll(done, "%n", n.Name))
+}
+
+func (se *session) cmdLoadMod(args []string) {
+	if len(args) != 1 {
+		se.statusf("Usage: loadmod <module>")
+		return
+	}
+	if se.srv.b.ModulesOff()[strings.ToLower(args[0])] {
+		se.statusf("An admin has switched %s off on this server.", args[0])
+		return
+	}
+	se.setModule(args[0], func(m *store.ModuleConfig) error { m.Enabled = true; return nil }, strings.ToLower(args[0])+" is on for %n.")
+}
+
+func (se *session) cmdUnloadMod(args []string) {
+	if len(args) != 1 {
+		se.statusf("Usage: unloadmod <module>")
+		return
+	}
+	se.setModule(args[0], func(m *store.ModuleConfig) error { m.Enabled = false; return nil }, strings.ToLower(args[0])+" is off for %n.")
+}
+
+func (se *session) cmdModSet(args []string) {
+	if len(args) < 2 {
+		se.statusf("Usage: modset <module> <setting> <value> (an empty value goes back to the default)")
+		return
+	}
+	value := strings.Join(args[2:], " ")
+	se.setModule(args[0], func(m *store.ModuleConfig) error {
+		info, _ := modules.Get(args[0])
+		for _, st := range info.Settings {
+			if st.Key == args[1] && st.Kind == "lines" {
+				value = strings.Join(strings.Split(value, " | "), "\n")
+			}
+		}
+		if value == "" {
+			delete(m.Settings, args[1])
+		} else {
+			m.Settings[args[1]] = value
+		}
+		return nil
+	}, fmt.Sprintf("Set %s's %s on %%n.", strings.ToLower(args[0]), args[1]))
 }

@@ -180,6 +180,9 @@ func (c *Conn) ctcp(prefix, target, text string) bool {
 		return false
 	}
 	from := nickOf(prefix)
+	if c.modsDropCTCP(from, cmd) {
+		return true // a flood: neither answered nor passed on
+	}
 	reply := func(s string) { c.send("NOTICE " + from + " :\x01" + cmd + " " + s + "\x01") }
 	c.mu.Lock()
 	custom, ok := c.ctcpReplies[cmd]

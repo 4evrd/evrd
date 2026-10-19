@@ -264,6 +264,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	b.SetDialer(ob.DialFrom)
+	b.SetModulesOff(cfg.ModulesOff)
 	if linksSocket != "" {
 		b.SetLinks(links.NewClient(linksSocket))
 		log.Info("connection holder on: IRC connections survive restarts", "socket", linksSocket)
@@ -345,6 +346,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 		acc.SetBindHosts(live.Outbound.BindHosts)
 		am.SetConfig(live.Auth)
 		ob.SetRate(live.Outbound.ConnectRate)
+		b.SetModulesOff(live.ModulesOff)
 		if err := certMgr.Apply(&live); err != nil {
 			log.Warn("tls", "err", err)
 		}

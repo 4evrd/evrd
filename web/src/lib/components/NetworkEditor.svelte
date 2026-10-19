@@ -19,7 +19,15 @@
   const settings = $derived(me.settings || {})
 
   const ENCODINGS = ['ISO-8859-1', 'ISO-8859-15', 'windows-1252', 'ISO-8859-2', 'windows-1250', 'windows-1251', 'KOI8-R', 'ISO-8859-7', 'ISO-8859-9', 'Shift_JIS', 'EUC-JP', 'ISO-2022-JP', 'GBK', 'Big5', 'EUC-KR']
-  const SECTIONS = [['servers', 'Servers'], ['identity', 'Identity'], ['sasl', 'Authentication'], ['tls', 'Certificates'], ['channels', 'Channels'], ['advanced', 'Advanced']]
+  const SECTIONS = [['servers', 'Servers'], ['identity', 'Identity'], ['sasl', 'Authentication'], ['tls', 'Certificates'], ['channels', 'Channels'], ['modules', 'Modules'], ['advanced', 'Advanced']]
+
+  // Modules: what evrd offers (and an admin hasn't switched off server-wide)
+  let available = $state([])
+  api.modules().then((m) => (available = m)).catch(() => {})
+  const mod = (name) => (f.modules[name] ||= { enabled: false, settings: {} })
+  function setMod(name, on) { mod(name).enabled = on }
+  const val = (m, s) => f.modules[m.name]?.settings?.[s.key] ?? s.default ?? ''
+  function setVal(m, s, v) { mod(m.name).settings[s.key] = v }
 
   // The live state and the connection log, refreshed while the page is open
   // (the form keeps what's being edited).
@@ -50,6 +58,7 @@
   function fromNet(n) {
     const cs = n.channelSettings || {}
     return {
+      modules: Object.fromEntries(Object.entries(n.modules || {}).map(([k, v]) => [k, { enabled: !!v.enabled, settings: { ...(v.settings || {}) } }])),
       name: n.name, enabled: n.enabled,
       servers: (n.servers?.length ? n.servers : [{ host: n.host, port: n.port, tls: n.tls }]).map((s) => ({ host: s.host, port: String(s.port), tls: s.tls, hasPassword: !!s.hasPassword, password: undefined })),
       nick: n.nick, altNick: n.altNick || '', username: n.username || '', realname: n.realname || '', quitMsg: n.quitMsg || '', bindHost: n.bindHost || '',
@@ -62,6 +71,7 @@
   }
   function blank() {
     return {
+      modules: {},
       name: '', enabled: true,
       servers: [{ host: '', port: '6697', tls: true, hasPassword: false, password: undefined }],
       nick: me.defaultNick || me.username, altNick: '', username: '', realname: '', quitMsg: '', bindHost: '',
@@ -143,6 +153,7 @@
       encoding: f.encodingName ? (f.encodingAlways ? '' : '^') + f.encodingName : '',
       floodRate: f.floodOn ? +f.floodRate : 0, floodBurst: +f.floodBurst || 9, joinDelay: +f.joinDelay || 0,
       channels: f.channels.map((c) => c.name), channelSettings: chanSettings,
+      modules: f.modules || {},
     }
     if (!binds.locked) b.bindHost = f.bindHost.trim()
     if (f.password !== undefined) b.password = f.password
@@ -380,6 +391,40 @@
         </div>
       </section>
 
+      <section class="card" id="modules" aria-labelledby="modules-h">
+        <div class="panel-grid">
+          <div class="od-stack"><h2 id="modules-h">Modules</h2><p class="desc">Extra behaviour for this network, like ZNC’s modules. Changes apply when you save — without reconnecting; perform’s commands run at the next sign-in.</p></div>
+          <div class="mod-list">
+            {#each available as m (m.name)}
+              {@const on = !!f.modules[m.name]?.enabled}
+              <div class="mod" class:on data-testid="module-{m.name}">
+                <div class="check-row">
+                  <span class="od-field"><span id="mod-{m.name}-l">{m.title}{#if m.znc}<span class="chip" style="margin-left:8px">ZNC {m.znc}</span>{/if}</span><span>{m.description}</span></span>
+                  {#if m.off}<span class="chip">Switched off by an admin</span>
+                  {:else}<Switch checked={on} labelledby="mod-{m.name}-l" onchange={(v) => setMod(m.name, v)} />{/if}
+                </div>
+                {#if on && !m.off && m.settings?.length}
+                  <div class="mod-settings">
+                    {#each m.settings as st (st.key)}
+                      {@const fid = `mod-${m.name}-${st.key}`}
+                      {#if st.kind === 'lines'}
+                        <Field id={fid} label={st.label} help={st.help}><textarea class="input mono" id={fid} rows="4" value={val(m, st)} oninput={(e) => setVal(m, st, e.currentTarget.value)}></textarea></Field>
+                      {:else if st.kind === 'bool'}
+                        <div class="check-row"><span class="od-field"><span id="{fid}-l">{st.label}</span>{#if st.help}<span>{st.help}</span>{/if}</span><Switch checked={['yes', 'true', 'on', '1'].includes(String(val(m, st)).toLowerCase())} labelledby="{fid}-l" onchange={(v) => setVal(m, st, v ? 'yes' : 'no')} /></div>
+                      {:else}
+                        <Field id={fid} label={st.label} help={st.help}><input class="input mono" id={fid} inputmode={st.kind === 'number' ? 'numeric' : 'text'} value={val(m, st)} oninput={(e) => setVal(m, st, e.currentTarget.value)} /></Field>
+                      {/if}
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {:else}
+              <p class="desc">Loading modules…</p>
+            {/each}
+          </div>
+        </div>
+      </section>
+
       <section class="card" id="advanced" aria-labelledby="advanced-h">
         <div class="panel-grid">
           <div class="od-stack"><h2 id="advanced-h">Advanced</h2><p class="desc">Character set for networks that don’t use UTF-8, and how fast evrd may send.</p></div>
@@ -441,6 +486,10 @@
 
 <style>
   .back { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
+  .mod-list { display: grid; gap: var(--s3); }
+  .mod { padding: var(--s3) var(--s4); border-radius: var(--r-row); border: 1px solid var(--line-soft); background: var(--bg-deep); display: grid; gap: var(--s3); }
+  .mod.on { border-color: var(--line-2); }
+  .mod-settings { display: grid; gap: var(--s3); padding-top: var(--s2); border-top: 1px solid var(--line-soft); }
   :global(.flip) { transform: rotate(180deg); }
   :global(.flip-v) { transform: rotate(180deg); }
   .editor { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: var(--s6); align-items: start; margin-top: var(--s6); }

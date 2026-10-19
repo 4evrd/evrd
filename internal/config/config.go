@@ -77,7 +77,9 @@ type Config struct {
 	Cluster  Cluster
 	Outbound Outbound
 	Metrics  Metrics
-	Secrets  Secrets
+	// ModulesOff are modules (internal/modules) switched off server-wide.
+	ModulesOff []string
+	Secrets    Secrets
 
 	// WriteConf (settings_write_conf) makes evrd write settings changed in
 	// the admin UI back into this file, on every node.
@@ -553,6 +555,8 @@ func (c *Config) set(key, val string) error {
 		c.Cluster.LeaseTTL, err = time.ParseDuration(val)
 	case "connect_rate":
 		c.Outbound.ConnectRate, err = strconv.ParseFloat(val, 64)
+	case "modules_off": // repeatable, or several per line
+		c.ModulesOff = append(c.ModulesOff, strings.Fields(val)...)
 	case "bindhost": // repeatable, or several per line
 		c.Outbound.BindHosts = append(c.Outbound.BindHosts, strings.Fields(val)...)
 	case "settings_write_conf":

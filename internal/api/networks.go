@@ -11,6 +11,7 @@ import (
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/modules"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
 )
@@ -53,6 +54,7 @@ type networkInput struct {
 	JoinDelay     *int                              `json:"joinDelay"`
 	Channels      *[]string                         `json:"channels"`
 	ChannelOpts   *map[string]store.ChannelSettings `json:"channelSettings"`
+	Modules       *map[string]store.ModuleConfig    `json:"modules"`
 }
 
 // serverInput is a server in an edit; a nil password keeps the one saved
@@ -66,6 +68,9 @@ type serverInput struct {
 
 // apply copies the set fields onto n.
 func (in networkInput) apply(n *store.Network) {
+	if in.Modules != nil {
+		n.Modules = *in.Modules
+	}
 	str := func(dst *string, v *string) {
 		if v != nil {
 			*dst = *v
@@ -150,6 +155,9 @@ func (in networkInput) apply(n *store.Network) {
 func (s *Server) checkNetwork(u store.User, n *store.Network, before *store.Network) error {
 	if err := accounts.NormalizeNetwork(n); err != nil {
 		return err
+	}
+	if err := modules.Check(toModuleConfigs(n.Modules)); err != nil {
+		return &accounts.ValidationError{Message: err.Error()}
 	}
 	if before == nil || n.BindHost != before.BindHost {
 		if err := s.acc.CheckBindHost(u, n.BindHost); err != nil {
@@ -561,6 +569,7 @@ func (s *Server) networkDTO(n store.Network) map[string]any {
 		"trustAllCerts": n.TrustAllCerts, "trustPKI": n.TrustPKI, "fingerprints": orEmpty(n.Fingerprints),
 		"encoding": n.Encoding, "floodRate": n.FloodRate, "floodBurst": n.FloodBurst, "joinDelay": n.JoinDelay,
 		"channelSettings": orEmptyMap(n.ChannelSettings),
+		"modules":         orEmptyModules(n.Modules),
 		"unread":          unread, "mentions": mentions,
 	}
 	for k, v := range health {
@@ -635,4 +644,36 @@ func orEmptyMap(m map[string]store.ChannelSettings) map[string]store.ChannelSett
 		return map[string]store.ChannelSettings{}
 	}
 	return m
+}
+
+func toModuleConfigs(in map[string]store.ModuleConfig) map[string]modules.Config {
+	out := map[string]modules.Config{}
+	for k, v := range in {
+		out[k] = modules.Config{Enabled: v.Enabled, Settings: v.Settings}
+	}
+	return out
+}
+
+func orEmptyModules(m map[string]store.ModuleConfig) map[string]store.ModuleConfig {
+	if m == nil {
+		return map[string]store.ModuleConfig{}
+	}
+	return m
+}
+
+// handleModules lists the modules networks can use, and which an admin has
+// switched off server-wide.
+func (s *Server) handleModules(w http.ResponseWriter, r *http.Request) {
+	off := map[string]bool{}
+	for _, n := range s.cfg().ModulesOff {
+		off[strings.ToLower(n)] = true
+	}
+	out := []map[string]any{}
+	for _, m := range modules.All() {
+		out = append(out, map[string]any{
+			"name": m.Name, "title": m.Title, "description": m.Description, "znc": m.ZNC,
+			"settings": m.Settings, "off": off[m.Name],
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
 }

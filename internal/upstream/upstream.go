@@ -33,8 +33,10 @@ import (
 	"github.com/4evrd/evrd/internal/irc"
 	"github.com/4evrd/evrd/internal/irctls"
 	"github.com/4evrd/evrd/internal/links"
+	"github.com/4evrd/evrd/internal/modules"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/telemetry"
+	"reflect"
 )
 
 // Status is the lifecycle state of an upstream connection.
@@ -143,12 +145,19 @@ type Conn struct {
 	serverPass   string // the current server's PASS (then no SASL-fallback PASS)
 	saslOK       bool   // SASL succeeded on this connection (then no NickServ IDENTIFY)
 	serverErr    string // the server's ERROR line on this connection: why it closed
-	idle         func() bool
-	version      string
-	links        Holder
-	linkID       string
-	detaching    func() bool
-	tryResume    bool // the first connection tries the holder's link first
+
+	// modules (see modules.go): their calls are serialized by modMu
+	modMu     sync.Mutex
+	mods      []modules.Module
+	modCtx    context.Context
+	modCfg    map[string]store.ModuleConfig
+	modsOff   func() map[string]bool
+	idle      func() bool
+	version   string
+	links     Holder
+	linkID    string
+	detaching func() bool
+	tryResume bool // the first connection tries the holder's link first
 }
 
 // maxPending caps the lines held for an upstream that isn't registered yet.
@@ -172,6 +181,8 @@ type Options struct {
 	// OnLog receives the connection log: evrd's steps and the server's
 	// lines that explain a connection (see LogEntry).
 	OnLog func(LogEntry)
+	// ModulesOff lists modules an admin switched off server-wide.
+	ModulesOff func() map[string]bool
 	// Dial opens the TCP connection (TLS is added on top). The bouncer uses
 	// it to pace connects and pick the source address; nil dials directly.
 	Dial func(ctx context.Context, host string, port int) (net.Conn, error)
@@ -215,6 +226,8 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		onChannels:   opts.OnChannels,
 		onEvent:      opts.OnEvent,
 		onLog:        opts.OnLog,
+		modCfg:       n.Modules,
+		modsOff:      opts.ModulesOff,
 		dial:         opts.Dial,
 		links:        opts.Links,
 		linkID:       opts.LinkID,
@@ -261,8 +274,12 @@ func (c *Conn) Reconfigure(n store.Network, defaultQuit string, ctcp map[string]
 	c.joinDelay = time.Duration(n.JoinDelay) * time.Second
 	c.chanSettings = n.ChannelSettings
 	c.ctcpReplies = upperKeys(ctcp)
+	modsChanged := !reflect.DeepEqual(c.modCfg, n.Modules)
 	c.mu.Unlock()
 	c.flood.set(n.FloodRate, n.FloodBurst)
+	if modsChanged {
+		c.setModules(n.Modules)
+	}
 }
 
 // ChannelSettings returns a channel's options.
@@ -495,6 +512,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	// Measure lag every pingEvery; the read deadline below turns silence into
 	// a ping timeout.
 	go c.pingLoop(dctx)
+	c.startModules(dctx)
 
 	if resumed != nil {
 		c.resume(resumed)
@@ -539,6 +557,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 			continue // answered (or blocked) here
 		}
 		c.handle(m)
+		c.modsLine(m)
 		c.broadcastRaw(line) // full-fidelity feed for attached IRC clients
 	}
 
@@ -645,6 +664,7 @@ func (c *Conn) handle(m irc.Message) {
 		c.log.Warn("SASL failed, continuing unauthenticated", "network", c.net.Name)
 		c.send("CAP END")
 	case "001": // RPL_WELCOME — registration complete
+		moduleLogin := c.modsLogIn()
 		c.mu.Lock()
 		if len(m.Params) > 0 {
 			c.nick = m.Params[0] // the server's word on our nick
@@ -652,7 +672,7 @@ func (c *Conn) handle(m irc.Message) {
 		saved := append([]string(nil), c.saved...)
 		settings, delay0 := c.chanSettings, c.joinDelay
 		away := c.away
-		identify := c.net.Password != "" && !c.saslOK
+		identify := c.net.Password != "" && !c.saslOK && !moduleLogin
 		c.health.Status, c.health.ConnectedAt = StatusConnected, time.Now()
 		c.health.Attempts, c.health.RetryIn, c.health.Lag = 0, 0, -1
 		c.mu.Unlock()
@@ -686,6 +706,7 @@ func (c *Conn) handle(m irc.Message) {
 		}
 		c.notify(Event{Kind: "connected", Title: "Connected to " + c.net.Name, Detail: fmt.Sprintf("%s:%d as %s", c.net.Host, c.net.Port, c.Nick())})
 		c.note("evrd", false, "Signed in as "+c.Nick())
+		c.modsRegistered()
 	case "005": // RPL_ISUPPORT
 		for _, tok := range m.Params[1:] {
 			if v, ok := strings.CutPrefix(tok, "PREFIX=("); ok {

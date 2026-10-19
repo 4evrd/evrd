@@ -243,3 +243,45 @@ func TestAdminsSeeAUsersConnectionLog(t *testing.T) {
 	}
 	_ = root
 }
+
+func TestNetworkModules(t *testing.T) {
+	e := newEnv(t)
+	e.user("root", store.RoleAdmin)
+	e.user("fay", store.RoleUser)
+	fay := e.login("fay")
+	_, n := fay.do("POST", "/api/networks", map[string]any{"name": "lib", "host": "irc.example.invalid", "port": 6697, "tls": true, "nick": "fay", "enabled": false})
+	nid := strconv.FormatInt(int64(n["id"].(float64)), 10)
+
+	code, out := fay.do("PATCH", "/api/networks/"+nid, map[string]any{"modules": map[string]any{
+		"perform":    map[string]any{"enabled": true, "settings": map[string]string{"commands": "/mode %nick% +i"}},
+		"kickrejoin": map[string]any{"enabled": false, "settings": map[string]string{"delay": "3"}},
+	}})
+	if code != 200 {
+		t.Fatalf("save: %d %v", code, out)
+	}
+	mods := out["modules"].(map[string]any)
+	if p := mods["perform"].(map[string]any); p["enabled"] != true || p["settings"].(map[string]any)["commands"] != "/mode %nick% +i" {
+		t.Fatalf("modules: %v", mods)
+	}
+	for _, bad := range []map[string]any{
+		{"nosuch": map[string]any{"enabled": true}},
+		{"kickrejoin": map[string]any{"enabled": true, "settings": map[string]string{"delay": "soon"}}},
+		{"perform": map[string]any{"enabled": true, "settings": map[string]string{"bogus": "x"}}},
+	} {
+		if code, out := fay.do("PATCH", "/api/networks/"+nid, map[string]any{"modules": bad}); code != 422 {
+			t.Fatalf("%v: %d %v", bad, code, out)
+		}
+	}
+
+	// the list, with an admin's off switch
+	e.login("root").do("PATCH", "/api/admin/settings", map[string]any{"set": map[string]string{"modules_off": "autoop"}})
+	code, list := fay.doAny("GET", "/api/modules", nil)
+	got := map[string]bool{}
+	for _, m := range list.([]any) {
+		mm := m.(map[string]any)
+		got[mm["name"].(string)] = mm["off"].(bool)
+	}
+	if code != 200 || len(got) != 9 || !got["autoop"] || got["perform"] {
+		t.Fatalf("modules list: %d %v", code, got)
+	}
+}
