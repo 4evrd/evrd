@@ -196,6 +196,8 @@ func (se *session) handleCap(m irc.Message) {
 func (se *session) attach() bool {
 	login, password, ok := strings.Cut(se.pass, ":")
 	if !ok || password == "" {
+		// Never log PASS itself: without a colon it may be just the password.
+		se.srv.log.Info("irc sign-in without a password", "ip", se.clientIP(), "pass_sent", se.pass != "")
 		se.numeric("464", ":Password required — use PASS <user>[/<network>]:<password>")
 		return false
 	}
@@ -207,16 +209,24 @@ func (se *session) attach() bool {
 	switch {
 	case errors.Is(err, accounts.ErrSuspended):
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("suspended"))
+		se.loginFailed(username, network, "suspended")
 		se.numeric("465", ":This account is suspended")
+		return false
+	case errors.Is(err, accounts.ErrNeedsClientPassword):
+		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("invalid"))
+		se.loginFailed(username, network, "sso_needs_client_password")
+		se.numeric("464", ":Invalid credentials — this account signs in with SSO, so use an IRC client password from "+se.srv.clientsPage())
 		return false
 	case err != nil:
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("invalid"))
+		se.loginFailed(username, network, "invalid")
 		se.numeric("464", ":Invalid credentials")
 		return false
 	}
 	se.uid, se.acct = u.ID, u
 	if ip := se.clientIP(); ip != "" && !accounts.HostAllowed(u, ip) {
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("host_denied"))
+		se.loginFailed(username, network, "host_denied")
 		se.numeric("464", ":Signing in from "+ip+" isn't allowed for this account")
 		return false
 	}
@@ -714,6 +724,12 @@ func (se *session) clientIP() string {
 		return se.fromIP
 	}
 	return remoteHost(se.conn)
+}
+
+// loginFailed logs a refused IRC sign-in, one line per attempt (never the
+// password).
+func (se *session) loginFailed(username, network, reason string) {
+	se.srv.log.Warn("irc sign-in failed", "user", username, "network", network, "ip", se.clientIP(), "reason", reason)
 }
 
 // clientName boils a CTCP VERSION reply down to the client's name:

@@ -39,6 +39,8 @@ type Server struct {
 	tlsErr  error
 
 	dir *directory.Directory // nil: none
+
+	publicURL string // the web app's address; "" when unknown
 }
 
 // SetDirectory gives *status the network directory (addnetwork <id>).
@@ -50,6 +52,18 @@ func (s *Server) directory() *directory.Directory {
 		return directory.New("", nil, nil)
 	}
 	return s.dir
+}
+
+// SetPublicURL is where the web app is served (config public_url), named in
+// sign-in hints.
+func (s *Server) SetPublicURL(u string) { s.publicURL = strings.TrimRight(u, "/") }
+
+// clientsPage is where users make IRC client passwords.
+func (s *Server) clientsPage() string {
+	if s.publicURL == "" {
+		return "the web app's IRC clients page"
+	}
+	return s.publicURL + "/clients"
 }
 
 func NewServer(b *bouncer.Bouncer, acc *accounts.Service, log *slog.Logger, tlsCert, tlsKey string) *Server {

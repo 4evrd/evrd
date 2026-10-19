@@ -282,6 +282,13 @@ func TestIRCLoginAndClientPasswords(t *testing.T) {
 	if _, _, err := s.IRCLogin("bob", secret); !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("someone else's client password: %v", err)
 	}
+	// bob has no password of his own (SSO): the error says so; alice's doesn't.
+	if _, _, err := s.IRCLogin("bob", "his sso password"); !errors.Is(err, ErrNeedsClientPassword) || !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("sso account: %v", err)
+	}
+	if _, _, err := s.IRCLogin("alice", "wrong"); errors.Is(err, ErrNeedsClientPassword) {
+		t.Fatalf("password account: %v", err)
+	}
 
 	u.Suspended = true
 	st.UpdateUser(u)
