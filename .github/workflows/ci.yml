@@ -82,7 +82,50 @@ jobs:
           path: |
             coverage.out
             coverage.html
-          retention-days: 14
+            test.out
+          retention-days: 30
+
+  # A comment on the pull request with its coverage, against main's (from
+  # main's last green run). One comment, updated on every push. Not for PRs
+  # from forks, whose token can't comment.
+  coverage:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [core, web]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # main's coverage artifact
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-go
+          path: pr
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-web
+          path: pr
+      - name: main's coverage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci --branch main --event push --status success -L 1 --json databaseId -q '.[0].databaseId')
+          if [ -n "$id" ] && gh run download "$id" -R "$GITHUB_REPOSITORY" -n coverage-go -D base; then echo "main: run $id"; else echo "no coverage from main yet"; fi
+      - name: Comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          base=; [ -f base/coverage.out ] && base=base
+          sh scripts/coverage-comment.sh pr $base > comment.md
+          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate -q '.[] | select(.body | startswith("<!-- evrd-coverage -->")) | .id' | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@comment.md >/dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@comment.md >/dev/null
+          fi
 
   # History and cluster tests against a real ScyllaDB (dev/ci-scylla.sh starts
   # one in Docker and runs the tests next to it).
@@ -115,6 +158,11 @@ jobs:
         run: |
           pnpm test:coverage 2>&1 | tee coverage.txt
           { echo "### Web unit test coverage"; echo; echo '```'; grep -E "^(ℹ|#) " coverage.txt | grep -E "file|---|\.js|all files" | sed -E 's/^(ℹ|#) //'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-web
+          path: web/coverage.txt
+          retention-days: 30
       - name: Build
         run: pnpm build
 
