@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { login, freshUser, addNetwork, uniq } from './helpers.js'
+import { login, freshUser, addNetwork, uniq, choose } from './helpers.js'
 import { IRC } from './irc.js'
 
 // Logging in to services on the dev ergo server, which has a real NickServ
@@ -116,9 +116,9 @@ test('NickServ (Atheme/Anope preset): identifies, then joins a registered-only c
   const id = await addViaPage(page, {
     name: 'NS', nick: acct, channels: [chan],
     fill: async () => {
-      await page.locator('#authPreset').selectOption('atheme')
-      await expect(page.locator('#authMethod')).toHaveValue('nickserv')
-      await expect(page.locator('#identifyArgs')).toHaveValue('account')
+      await choose(page, page.locator('#authPreset'), 'NickServ — Atheme or Anope')
+      await expect(page.locator('#authMethod')).toHaveText(/IDENTIFY to NickServ/)
+      await expect(page.locator('#identifyArgs')).toHaveText(/Account and password/)
       await page.locator('#saslUser').fill(acct)
       await page.locator('#saslPass').fill(pw)
       await page.getByRole('switch', { name: 'Join channels after identifying' }).click()
@@ -137,7 +137,7 @@ test('NickServ (Atheme/Anope preset): identifies, then joins a registered-only c
   expect(n).toMatchObject({ authMethod: 'nickserv', identifyArgs: 'account', joinAfterAuth: true, hasPassword: true })
   expect(n.password).toBeUndefined()
   await page.reload()
-  await expect(page.locator('#authPreset')).toHaveValue('atheme')
+  await expect(page.locator('#authPreset')).toHaveText(/NickServ — Atheme or Anope/)
   await expect(page.getByRole('switch', { name: 'Join channels after identifying' })).toHaveAttribute('aria-checked', 'true')
 })
 
@@ -147,7 +147,7 @@ test('a wrong password: refused, explained, and the registered-only channel stay
   const id = await addViaPage(page, {
     name: 'Bad', nick: acct, channels: [chan],
     fill: async () => {
-      await page.locator('#authMethod').selectOption('nickserv')
+      await choose(page, page.locator('#authMethod'), 'IDENTIFY to NickServ')
       await page.locator('#saslUser').fill(acct)
       await page.locator('#saslPass').fill('not-the-password')
       await page.getByRole('switch', { name: 'Join channels after identifying' }).click()
@@ -164,13 +164,13 @@ test('a wrong password: refused, explained, and the registered-only channel stay
 test('SASL only, automatic, and a command of my own each log in', async ({ page }) => {
   const { acct, pw } = await register()
   const methods = [
-    { name: 'Sasl', set: async () => page.locator('#authPreset').selectOption('sasl'), says: `Logged in with SASL as ${acct}` },
-    { name: 'Auto', set: async () => expect(page.locator('#authPreset')).toHaveValue('auto'), says: `Logged in with SASL as ${acct}` },
+    { name: 'Sasl', set: async () => choose(page, page.locator('#authPreset'), 'SASL only (Libera.Chat, ergo…)'), says: `Logged in with SASL as ${acct}` },
+    { name: 'Auto', set: async () => expect(page.locator('#authPreset')).toHaveText(/Automatic \(SASL, then NickServ\)/), says: `Logged in with SASL as ${acct}` },
     {
       name: 'Cmd',
       set: async () => {
-        await page.locator('#authMethod').selectOption('command')
-        await expect(page.locator('#authPreset')).toHaveValue('custom')
+        await choose(page, page.locator('#authMethod'), 'A command of my own')
+        await expect(page.locator('#authPreset')).toHaveText(/Custom/)
         await page.locator('#authCommand').fill('/msg NickServ IDENTIFY %account% %password%')
       },
       says: `Identified to services: You're now logged in as ${acct}`,

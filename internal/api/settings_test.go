@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -68,5 +69,19 @@ func TestTLSSettings(t *testing.T) {
 	}
 	if code, _ := set(map[string]string{"tls": "letsencrypt"}); code != 422 {
 		t.Fatalf("an unknown source: %d", code)
+	}
+}
+
+// The forms mark encrypted fields only when a key is set.
+func TestConfigSaysWhetherSecretsAreEncrypted(t *testing.T) {
+	e := newEnv(t)
+	t.Cleanup(func() { store.SetSecretKeys(nil) })
+	store.SetSecretKeys(nil)
+	if _, cfg := e.anon().do("GET", "/api/config", nil); cfg["secretsEncrypted"] != false {
+		t.Fatalf("without a key: %v", cfg["secretsEncrypted"])
+	}
+	store.SetSecretKeys(bytes.Repeat([]byte{3}, 32))
+	if _, cfg := e.anon().do("GET", "/api/config", nil); cfg["secretsEncrypted"] != true {
+		t.Fatalf("with a key: %v", cfg["secretsEncrypted"])
 	}
 }

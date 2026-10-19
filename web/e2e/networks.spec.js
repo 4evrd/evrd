@@ -278,3 +278,36 @@ test('modules an admin switches off are unavailable', async ({ page }) => {
     await admin.dispose()
   }
 })
+
+test('fields stored encrypted carry a lock that says so', async ({ page }) => {
+  const n = await u.api.post('/api/networks', { name: 'Locks', host: 'ircd', port: 6667, tls: false, nick: u.name, enabled: false })
+  await page.goto(`/networks/${n.id}`)
+  // the dev stack sets secret_key, so passwords and the login command are encrypted
+  for (const label of ['Password', 'Server password']) {
+    const row = page.locator('.field', { has: page.getByLabel(label, { exact: true }) }).first()
+    await expect(row.getByTestId('encrypted')).toHaveAccessibleName('Encrypted: this is stored encrypted, not as plaintext')
+  }
+  // fields that aren't secret don't
+  await expect(page.locator('.field', { has: page.getByLabel('Nickname', { exact: true }) }).getByTestId('encrypted')).toHaveCount(0)
+  // hovering shows the tip
+  const lock = page.locator('.field', { has: page.getByLabel('Password', { exact: true }) }).getByTestId('encrypted')
+  await lock.hover()
+  await expect.poll(() => lock.evaluate((e) => getComputedStyle(e, '::after').opacity)).toBe('1')
+  expect(await lock.evaluate((e) => getComputedStyle(e, '::after').content)).toContain('not as plaintext')
+})
+
+test('a network’s page says how to connect a client to it', async ({ page }) => {
+  const n = await u.api.post('/api/networks', { name: 'Hookup', host: 'ircd', port: 6667, tls: false, nick: u.name, enabled: false })
+  await page.goto(`/networks/${n.id}`)
+  const box = page.getByTestId('connect-box')
+  await expect(box.getByRole('heading', { name: 'Connect a client' })).toBeVisible()
+  await expect(box).toContainText('localhost')
+  await expect(box).toContainText('6697 · TLS')
+  await expect(box.getByTestId('connect-pass')).toHaveText(`${u.name}/Hookup:password`)
+  await expect(box).toContainText('your account password or a client password')
+  await expect(box.getByRole('link', { name: 'client password' })).toHaveAttribute('href', '/clients')
+  await expect(page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Connect a client' })).toHaveAttribute('href', '#connect')
+  // a new network has no page yet: no box
+  await page.goto('/networks/new')
+  await expect(page.getByTestId('connect-box')).toHaveCount(0)
+})

@@ -211,7 +211,10 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		"ircHost":       s.cfg().IRCHost,
 		"ircPorts":      ircPorts(s.cfg().Listen),
 		"ircSelfSigned": s.selfSigned(),
-		"version":       version.Version,
+		// saved passwords and module settings are encrypted (secret_key set):
+		// the forms mark those fields
+		"secretsEncrypted": store.SecretsEncrypted(),
+		"version":          version.Version,
 	})
 }
 

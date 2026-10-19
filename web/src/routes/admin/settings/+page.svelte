@@ -5,6 +5,7 @@
   import { onMount } from 'svelte'
   import Icon from '$lib/components/Icon.svelte'
   import Select from '$lib/components/Select.svelte'
+  import Encrypted from '$lib/components/Encrypted.svelte'
   import Switch from '$lib/components/Switch.svelte'
   import { api } from '$lib/api.js'
   import { session } from '$lib/session.svelte.js'
@@ -183,7 +184,7 @@
               {@const locked = f.source === 'env'}
               <div class="setting" data-testid="setting-{f.key}">
                 <div class="od-stack meta">
-                  <label for="s-{f.key}" class="name">{f.label} <span class="code key">{f.key}</span></label>
+                  <label for="s-{f.key}" class="name">{f.label} <span class="code key">{f.key}</span></label>{#if f.kind === 'secret'}<Encrypted />{/if}
                   {#if f.help}<p class="help">{f.help}</p>{/if}
                   <div class="od-cluster chips-s">
                     <span class="chip src-{f.source}">{SOURCE[f.source]}{f.source === 'env' && f.env ? ` · ${f.env}` : ''}</span>

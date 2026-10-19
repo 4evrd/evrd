@@ -10,11 +10,12 @@
   import Select from './Select.svelte'
   import Switch from './Switch.svelte'
   import StatusChip from './StatusChip.svelte'
+  import Copy from './Copy.svelte'
   import ConnLog from './ConnLog.svelte'
   import DirectoryPicker from './DirectoryPicker.svelte'
   import { api } from '$lib/api.js'
   import { fromDirectory, loginHint } from '$lib/directory.js'
-  import { session, refreshNets, refreshMe } from '$lib/session.svelte.js'
+  import { session, refreshNets, refreshMe, ircPort } from '$lib/session.svelte.js'
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
   import { check, splitChannels } from '$lib/validate.js'
   import { METHODS, PRESETS, presetOf, applyPreset, usesPassword, checkAuth, authLabel } from '$lib/services.js'
@@ -250,6 +251,7 @@
 
   <div class="editor">
     <nav class="toc" aria-label="Sections">
+      {#if net}<a href="#connect">Connect a client</a>{/if}
       {#each SECTIONS as [k, l]}<a href="#{k}">{l}</a>{/each}
       {#if net}<a href="#log">Connection log</a><a href="#danger">Remove</a>{/if}
     </nav>
@@ -292,6 +294,24 @@
         </div>
       {/if}
 
+      {#if net}
+        <section class="card" id="connect" aria-labelledby="connect-h" data-testid="connect-box">
+          <div class="panel-grid">
+            <div class="od-stack"><h2 id="connect-h">Connect a client</h2><p class="desc">Point your IRC client at evrd to use {net.name} — you get what you missed, then the live feed.</p></div>
+            <div class="kv-list">
+              <div class="kv"><div class="od-field"><span class="k">Server</span><span class="v mono">{session.config?.ircHost}</span></div><Copy text={session.config?.ircHost || ''} label="Copy server" /></div>
+              <div class="kv"><div class="od-field"><span class="k">Port</span><span class="v mono">{ircPort().port}{ircPort().tls ? ' · TLS' : ' · no TLS'}</span></div><Copy text={String(ircPort().port)} label="Copy port" /></div>
+              <div class="kv"><div class="od-field"><span class="k">Server password</span><span class="v mono" data-testid="connect-pass">{me.username}/{net.name}:<i>password</i></span></div><Copy text="{me.username}/{net.name}:" label="Copy server password" /></div>
+              <p class="desc" style="font-size:var(--fs-xs)">
+                {#if me.hasPassword}<i>password</i> is your account password or a <a href="/clients">client password</a>.
+                {:else}You sign in with {session.config?.ssoLabel || 'single sign-on'}, so <i>password</i> is a <a href="/clients">client password</a> — not your {session.config?.ssoLabel || 'SSO'} password.{/if}
+                {#if session.config?.ircSelfSigned && ircPort().tls} The certificate is self-signed: accept it in your client.{/if}
+              </p>
+            </div>
+          </div>
+        </section>
+      {/if}
+
       <section class="card" id="general" aria-labelledby="general-h">
         <div class="panel-grid">
           <div class="od-stack"><h2 id="general-h">Network</h2><p class="desc">The name is how clients pick it: <span class="code">{me.username}/{f.name || 'name'}:password</span>.</p></div>
@@ -316,7 +336,7 @@
                 <Field id="sv-host-{i}" label="Server" err={errs[`sv-host-${i}`]}><input class="input mono" id="sv-host-{i}" placeholder="irc.libera.chat" spellcheck="false" autocomplete="off" bind:value={sv.host} aria-invalid={!!errs[`sv-host-${i}`]} /></Field>
                 <Field id="sv-port-{i}" label="Port" err={errs[`sv-port-${i}`]}><input class="input mono" id="sv-port-{i}" inputmode="numeric" bind:value={sv.port} aria-invalid={!!errs[`sv-port-${i}`]} /></Field>
                 <div class="tls"><span class="label" id="sv-tls-l-{i}">TLS</span><Switch checked={sv.tls} labelledby="sv-tls-l-{i}" onchange={(v) => setTLS(sv, v)} /></div>
-                <Field id="sv-pass-{i}" label="Server password" help={pwState(sv.hasPassword, sv.password) === 'saved' ? 'Saved — type to replace.' : pwState(sv.hasPassword, sv.password) === 'cleared' ? 'Will be removed.' : 'Sent as PASS. Usually empty.'}>
+                <Field id="sv-pass-{i}" label="Server password" encrypted help={pwState(sv.hasPassword, sv.password) === 'saved' ? 'Saved — type to replace.' : pwState(sv.hasPassword, sv.password) === 'cleared' ? 'Will be removed.' : 'Sent as PASS. Usually empty.'}>
                   <div class="input-group">
                     <input class="input mono" id="sv-pass-{i}" type="password" autocomplete="new-password" placeholder={sv.hasPassword && sv.password === undefined ? '•••••••• (unchanged)' : ''} value={sv.password ?? ''} oninput={(e) => (sv.password = e.currentTarget.value)} />
                     {#if sv.hasPassword && sv.password !== ''}<button class="btn btn-ghost btn-sm" type="button" onclick={() => (sv.password = '')}>Clear</button>{/if}
@@ -368,18 +388,14 @@
           </div>
           <div class="form-grid">
             <Field id="authPreset" label="Network services">
-              <select class="select" id="authPreset" value={presetOf(f)} onchange={(e) => applyPreset(f, e.currentTarget.value)}>
-                {#each PRESETS as p}<option value={p.key}>{p.label}</option>{/each}
-              </select>
+              <Select id="authPreset" value={presetOf(f)} onchange={(v) => applyPreset(f, v)} options={PRESETS.map((p) => ({ value: p.key, label: p.label }))} />
             </Field>
             <Field id="authMethod" label="Login method">
-              <select class="select" id="authMethod" bind:value={f.authMethod}>
-                {#each METHODS as [k, l]}<option value={k}>{l}</option>{/each}
-              </select>
+              <Select id="authMethod" bind:value={f.authMethod} options={METHODS.map(([k, l]) => ({ value: k, label: l }))} />
             </Field>
             {#if usesPassword(f)}
               <Field id="saslUser" label="Account name" help="Usually your registered nick."><input class="input mono" id="saslUser" spellcheck="false" autocomplete="off" placeholder={f.authMethod === 'sasl' || f.authMethod === 'auto' ? f.username || f.nick || 'nick' : f.nick || 'nick'} bind:value={f.saslUser} /></Field>
-              <Field id="saslPass" label="Password" help={pwState(f.hasPassword, f.password) === 'saved' ? 'A password is saved. Type a new one to replace it.' : pwState(f.hasPassword, f.password) === 'cleared' ? 'Will be removed: evrd won’t log in.' : 'Your services password. Leave empty if you don’t have an account.'}>
+              <Field id="saslPass" label="Password" encrypted help={pwState(f.hasPassword, f.password) === 'saved' ? 'A password is saved. Type a new one to replace it.' : pwState(f.hasPassword, f.password) === 'cleared' ? 'Will be removed: evrd won’t log in.' : 'Your services password. Leave empty if you don’t have an account.'}>
                 <div class="input-group">
                   <input class="input mono" id="saslPass" type="password" autocomplete="new-password" placeholder={f.hasPassword && f.password === undefined ? '•••••••• (unchanged)' : ''} value={f.password ?? ''} oninput={(e) => (f.password = e.currentTarget.value)} />
                   {#if f.hasPassword && f.password !== ''}<button class="btn btn-ghost btn-sm" type="button" onclick={() => (f.password = '')}>Clear</button>{/if}
@@ -392,30 +408,30 @@
             {#if f.authMethod === 'auto' || f.authMethod === 'nickserv'}
               <Field id="servicesNick" label="Services nick" help={f.authMethod === 'auto' ? 'Used when the network has no SASL.' : 'Where IDENTIFY goes. /NS sends the server’s own NS command.'} err={errs.servicesNick}><input class="input mono" id="servicesNick" spellcheck="false" autocomplete="off" placeholder="NickServ" bind:value={f.servicesNick} aria-invalid={!!errs.servicesNick} /></Field>
               <Field id="identifyArgs" label="IDENTIFY sends">
-                <select class="select" id="identifyArgs" bind:value={f.identifyArgs}>
-                  <option value="">The account only when it isn’t the nick in use</option>
-                  <option value="account">Account and password (Atheme, Anope)</option>
-                  <option value="password">Just the password (older services)</option>
-                </select>
+                <Select id="identifyArgs" bind:value={f.identifyArgs} options={[
+                  { value: '', label: 'The account only when it isn’t the nick in use' },
+                  { value: 'account', label: 'Account and password (Atheme, Anope)' },
+                  { value: 'password', label: 'Just the password (older services)' },
+                ]} />
               </Field>
               <Field id="identifyOn" label="Identify">
-                <select class="select" id="identifyOn" bind:value={f.identifyOn}>
-                  <option value="">As soon as evrd is connected</option>
-                  <option value="prompt">When NickServ asks for the password</option>
-                </select>
+                <Select id="identifyOn" bind:value={f.identifyOn} options={[
+                  { value: '', label: 'As soon as evrd is connected' },
+                  { value: 'prompt', label: 'When NickServ asks for the password' },
+                ]} />
               </Field>
             {/if}
             {#if f.authMethod === 'command'}
-              <Field id="authCommand" label="Login command" span help="Raw IRC, or /msg target text. <span class='code'>%account%</span>, <span class='code'>%password%</span> and <span class='code'>%nick%</span> are filled in — don’t type the password itself." err={errs.authCommand}><input class="input mono" id="authCommand" spellcheck="false" autocomplete="off" placeholder="PRIVMSG X@channels.undernet.org :LOGIN %account% %password%" bind:value={f.authCommand} aria-invalid={!!errs.authCommand} /></Field>
+              <Field id="authCommand" label="Login command" span encrypted help="Raw IRC, or /msg target text. <span class='code'>%account%</span>, <span class='code'>%password%</span> and <span class='code'>%nick%</span> are filled in — don’t type the password itself." err={errs.authCommand}><input class="input mono" id="authCommand" spellcheck="false" autocomplete="off" placeholder="PRIVMSG X@channels.undernet.org :LOGIN %account% %password%" bind:value={f.authCommand} aria-invalid={!!errs.authCommand} /></Field>
             {/if}
             {#if f.authMethod !== 'none'}
               <Field id="ghost" label="When the nick is taken" help="After logging in, ask services to free it, then switch to it.">
-                <select class="select" id="ghost" bind:value={f.ghost}>
-                  <option value="">Keep the alternate nick</option>
-                  <option value="ghost">GHOST it</option>
-                  <option value="regain">REGAIN it (Atheme)</option>
-                  <option value="recover">RECOVER it (Anope)</option>
-                </select>
+                <Select id="ghost" bind:value={f.ghost} options={[
+                  { value: '', label: 'Keep the alternate nick' },
+                  { value: 'ghost', label: 'GHOST it' },
+                  { value: 'regain', label: 'REGAIN it (Atheme)' },
+                  { value: 'recover', label: 'RECOVER it (Anope)' },
+                ]} />
               </Field>
               <Field id="authTimeout" label="Wait for services" help="Seconds to wait for an answer (0 = 15)." err={errs.authTimeout}><input class="input mono" id="authTimeout" inputmode="numeric" bind:value={f.authTimeout} aria-invalid={!!errs.authTimeout} /></Field>
               <div class="check-row span-2"><span class="od-field"><span id="jaa-l">Join channels after identifying</span><span>Holds the joins until services confirm the login, for channels only logged-in users may join (+r).</span></span><Switch checked={f.joinAfterAuth} labelledby="jaa-l" onchange={(v) => (f.joinAfterAuth = v)} /></div>
@@ -500,11 +516,11 @@
                     {#each m.settings as st (st.key)}
                       {@const fid = `mod-${m.name}-${st.key}`}
                       {#if st.kind === 'lines'}
-                        <Field id={fid} label={st.label} help={st.help}><textarea class="input mono" id={fid} rows="4" value={val(m, st)} oninput={(e) => setVal(m, st, e.currentTarget.value)}></textarea></Field>
+                        <Field id={fid} label={st.label} help={st.help} encrypted><textarea class="input mono" id={fid} rows="4" value={val(m, st)} oninput={(e) => setVal(m, st, e.currentTarget.value)}></textarea></Field>
                       {:else if st.kind === 'bool'}
                         <div class="check-row"><span class="od-field"><span id="{fid}-l">{st.label}</span>{#if st.help}<span>{st.help}</span>{/if}</span><Switch checked={['yes', 'true', 'on', '1'].includes(String(val(m, st)).toLowerCase())} labelledby="{fid}-l" onchange={(v) => setVal(m, st, v ? 'yes' : 'no')} /></div>
                       {:else}
-                        <Field id={fid} label={st.label} help={st.help}><input class="input mono" id={fid} inputmode={st.kind === 'number' ? 'numeric' : 'text'} value={val(m, st)} oninput={(e) => setVal(m, st, e.currentTarget.value)} /></Field>
+                        <Field id={fid} label={st.label} help={st.help} encrypted><input class="input mono" id={fid} inputmode={st.kind === 'number' ? 'numeric' : 'text'} value={val(m, st)} oninput={(e) => setVal(m, st, e.currentTarget.value)} /></Field>
                       {/if}
                     {/each}
                   </div>
