@@ -103,6 +103,18 @@ func TestStatusChannelsAndDetach(t *testing.T) {
 	eventually(t, "detached saved", func() bool { return r.network("one").Channel("#one").Detached })
 }
 
+func TestZNCRawCommand(t *testing.T) {
+	r := newRig(t)
+	ic := r.attached()
+	// /znc ListNetworks: one word, then with arguments split as a client sends them
+	ic.send("ZNC ListNetworks")
+	ic.expect("one")
+	ic.send("ZNC addnetwork three irc.example.org")
+	ic.expect("Added three (irc.example.org:+6697")
+	ic.send("ZNC :help")
+	ic.expect("evrd commands")
+}
+
 func TestStatusNetworkCommandErrors(t *testing.T) {
 	r := newRig(t)
 	ic := r.attached()

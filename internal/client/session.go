@@ -555,6 +555,10 @@ func (se *session) handleClient(m irc.Message) {
 		se.send(fmt.Sprintf(":%s PONG %s :%s", serverName, serverName, lastParam(m)))
 	case "QUIT":
 		se.conn.Close()
+	case "ZNC":
+		// ZNC's raw command (/znc ListNetworks, /quote znc …): a *status
+		// command, as ZNC takes it, so ZNC habits and scripts work here
+		se.statusCommand(strings.Join(m.Params, " "))
 	case "PRIVMSG", "NOTICE":
 		if len(m.Params) < 2 {
 			return
