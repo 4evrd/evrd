@@ -60,7 +60,7 @@ jobs:
         run: go test -coverprofile=coverage.out -covermode=atomic ./... | tee test.out
       - name: Coverage
         env:
-          FLOOR: "50" # percent of statements; goes to 80 (the target) once reached — PRs can't lower it meanwhile (the coverage job)
+          FLOOR: "50" # a backstop for the total; the real rule is per package and file, in the coverage job
         run: |
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub("%","",$3); print $3}')
           {
@@ -112,6 +112,7 @@ jobs:
         run: |
           id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci --branch main --event push --status success -L 1 --json databaseId -q '.[0].databaseId')
           if [ -n "$id" ] && gh run download "$id" -R "$GITHUB_REPOSITORY" -n coverage-go -D base; then echo "main: run $id"; else echo "no coverage from main yet"; fi
+          [ -z "$id" ] || gh run download "$id" -R "$GITHUB_REPOSITORY" -n coverage-web -D base || true
       - name: Comment
         env:
           GH_TOKEN: ${{ github.token }}
@@ -126,8 +127,9 @@ jobs:
           else
             gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@comment.md >/dev/null
           fi
-          # the ratchet: a PR doesn't lower coverage below main's
-          if [ -f dropped ]; then echo "::error::Go coverage drops below main's — add tests"; exit 1; fi
+          # every package and file: 80%, or (until it gets there) no lower
+          # than main has it
+          if [ -f dropped ]; then while read -r l; do echo "::error::coverage: $l"; done < dropped; exit 1; fi
 
   # History and cluster tests against a real ScyllaDB (dev/ci-scylla.sh starts
   # one in Docker and runs the tests next to it).
