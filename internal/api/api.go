@@ -177,6 +177,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/me/clients", user(s.handleMyClients))
 	mux.HandleFunc("GET /api/me/events", user(s.handleMyEvents))
 	mux.HandleFunc("GET /api/overview", user(s.handleOverview))
+	mux.HandleFunc("GET /api/reconnects", user(s.handleReconnects))
 	mux.HandleFunc("GET /api/networks/{id}/stream", user(s.handleStream))
 
 	// administration
@@ -188,6 +189,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/users", adminAny(s.handleAdminCreateUser))
 	mux.HandleFunc("GET /api/admin/users/{id}", admin(s.handleAdminGetUser))
 	mux.HandleFunc("GET /api/admin/users/{id}/overview", admin(s.handleAdminUserOverview))
+	mux.HandleFunc("GET /api/admin/users/{id}/reconnects", admin(s.handleAdminUserReconnects))
 	mux.HandleFunc("GET /api/admin/users/{id}/networks/{nid}/log", admin(s.handleAdminNetworkLog))
 	mux.HandleFunc("PATCH /api/admin/users/{id}", admin(s.handleAdminUpdateUser))
 	mux.HandleFunc("DELETE /api/admin/users/{id}", admin(s.handleAdminDeleteUser))

@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -209,7 +210,8 @@ func TestNetworkLogIsTheOwnersOnly(t *testing.T) {
 
 	code, log := fay.doAny("GET", "/api/networks/"+id+"/log", nil)
 	entries, _ := log.([]any)
-	if code != 200 || len(entries) == 0 || entries[0].(map[string]any)["text"] != "Switched on" {
+	// newest first; the connection may already have logged more
+	if code != 200 || !slices.ContainsFunc(entries, func(e any) bool { return e.(map[string]any)["text"] == "Switched on" }) {
 		t.Fatalf("owner: %d %v", code, log)
 	}
 	if code, _ := e.login("gus").doAny("GET", "/api/networks/"+id+"/log", nil); code != 404 {

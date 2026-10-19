@@ -45,6 +45,7 @@ export const api = {
   clients: () => req('GET', '/api/me/clients'),
   events: (limit = 50) => req('GET', `/api/me/events?limit=${limit}`),
   overview: () => req('GET', '/api/overview'),
+  reconnects: () => req('GET', '/api/reconnects'),
 
   networks: () => req('GET', '/api/networks'),
   network: (id) => req('GET', `/api/networks/${id}`),
@@ -96,6 +97,7 @@ export const api = {
     createUser: (u) => req('POST', '/api/admin/users', u),
     user: (id) => req('GET', `/api/admin/users/${id}`),
     userOverview: (id) => req('GET', `/api/admin/users/${id}/overview`),
+    userReconnects: (id) => req('GET', `/api/admin/users/${id}/reconnects`),
     networkLog: (id, nid) => req('GET', `/api/admin/users/${id}/networks/${nid}/log`),
     metrics: (range) => req('GET', `/api/admin/metrics?range=${encodeURIComponent(range)}`),
     updateUser: (id, patch) => req('PATCH', `/api/admin/users/${id}`, patch),

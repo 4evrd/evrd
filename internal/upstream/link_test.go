@@ -78,7 +78,8 @@ func TestRetryBacksOffAndStops(t *testing.T) {
 	port := dead.Addr().(*net.TCPAddr).Port
 	dead.Close()
 	var rec logRec
-	c := New(store.Network{Name: "Net", Nick: "me", Host: "127.0.0.1", Port: port}, quiet, Options{OnLog: rec.add})
+	var events eventRec
+	c := New(store.Network{Name: "Net", Nick: "me", Host: "127.0.0.1", Port: port}, quiet, Options{OnLog: rec.add, OnEvent: events.add})
 	if c.Status() != StatusDisconnected {
 		t.Fatal("a new connection is disconnected")
 	}
@@ -92,6 +93,15 @@ func TestRetryBacksOffAndStops(t *testing.T) {
 	}
 	if !rec.has("evrd", "Couldn't connect: connection refused", true) || !rec.has("evrd", "nothing listens on that port", false) {
 		t.Fatalf("log: %+v", rec.all())
+	}
+	// A failed attempt is an event, with the hint, once per error rather
+	// than at every retry.
+	if !events.has("failed", "Net: couldn't connect: connection refused") {
+		t.Fatal("no failed event")
+	}
+	eventually(t, "a second attempt", func() bool { return c.Health().Attempts > 1 })
+	if events.count("failed") != 1 || events.count("disconnected") != 0 {
+		t.Fatalf("events: %d failed, %d disconnected", events.count("failed"), events.count("disconnected"))
 	}
 	c.SendRaw("PRIVMSG x :held")
 	cancel()

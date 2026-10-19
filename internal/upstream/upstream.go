@@ -85,7 +85,7 @@ type Health struct {
 
 // Event is something worth telling the user about.
 type Event struct {
-	Kind   string // connected | disconnected | netsplit
+	Kind   string // connected | disconnected | failed (couldn't connect) | netsplit
 	Title  string
 	Detail string
 	At     time.Time
@@ -322,6 +322,7 @@ func upperKeys(m map[string]string) map[string]string {
 func (c *Conn) Run(ctx context.Context) {
 	backoff := time.Second
 	lastHint := "" // logged once per kind of failure, not every attempt
+	lastFail := "" // a failed attempt is an event once per error, until connected
 	defer func() {
 		c.mu.Lock()
 		c.health.Status, c.health.Lag, c.health.RetryIn = StatusDisconnected, -1, 0
@@ -343,6 +344,7 @@ func (c *Conn) Run(ctx context.Context) {
 		}
 		if wasConnected {
 			backoff = time.Second // a working link that dropped: retry quickly
+			lastFail = ""
 		}
 		// Jitter, so connections dropped together don't all retry together.
 		wait := backoff/2 + time.Duration(rand.Int64N(int64(backoff)))
@@ -365,9 +367,21 @@ func (c *Conn) Run(ctx context.Context) {
 			h.RetryIn = wait
 		})
 		c.log.Warn("upstream disconnected", "network", c.net.Name, "err", err)
-		telemetry.UpstreamDisconnects.Add(ctx, 1, telemetry.Attrs("user", c.userAttr, "network", c.netAttr))
+		kind := "failed"
 		if wasConnected {
+			kind = "dropped"
+		}
+		telemetry.UpstreamDisconnects.Add(ctx, 1, telemetry.Attrs("user", c.userAttr, "network", c.netAttr, "kind", kind))
+		switch {
+		case wasConnected:
 			c.notify(Event{Kind: "disconnected", Title: c.net.Name + " " + msg, Detail: fmt.Sprintf("Reconnecting in %s", roundDur(wait))})
+		case msg != lastFail:
+			lastFail = msg
+			detail := hint
+			if detail == "" {
+				detail = "Trying again in " + roundDur(wait)
+			}
+			c.notify(Event{Kind: "failed", Title: c.net.Name + ": couldn't connect: " + msg, Detail: detail})
 		}
 		select {
 		case <-ctx.Done():

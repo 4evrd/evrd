@@ -227,9 +227,12 @@ type UserEvent struct {
 	ID     int64     `gorm:"primaryKey"`
 	UserID int64     `gorm:"index:idx_user_event,priority:1;not null"`
 	At     time.Time `gorm:"index:idx_user_event,priority:2"`
-	Kind   string
-	Title  string
-	Detail string
+	// NetworkID is the network it's about (0: none, or recorded before
+	// events carried it).
+	NetworkID int64 `gorm:"not null;default:0"`
+	Kind      string
+	Title     string
+	Detail    string
 }
 
 // Node is an evrd process in the cluster, as it advertises itself.

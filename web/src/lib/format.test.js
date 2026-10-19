@@ -1,7 +1,7 @@
 // Unit tests for the formatting helpers: pnpm test:unit
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { nodeBadge, device, limit, ratio, chartMax, cap, date, ago, dur, since, clock, kfmt, level, short, netColor, netGlow, hue, greeting } from './format.js'
+import { nodeBadge, device, limit, ratio, chartMax, cap, date, ago, dur, since, clock, kfmt, level, short, netColor, netGlow, hue, greeting, hourAt, hourSpan, hourRows, lanes } from './format.js'
 
 test('node badges: the node letter, or a host name’s first letter', () => {
   assert.equal(nodeBadge('node-a'), 'A')
@@ -114,4 +114,23 @@ test('devices on every platform', () => {
   assert.equal(device('Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0'), 'Firefox on Linux')
   assert.equal(device('Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Mobile Safari/537.36'), 'Chrome on Android')
   assert.equal(device('curl/8.10.1'), 'Browser')
+})
+
+test('hourly charts: the point under the pointer, its hour and values', () => {
+  assert.equal(hourAt(0, 25), 0)
+  assert.equal(hourAt(0.5, 25), 12)
+  assert.equal(hourAt(1, 25), 24)
+  assert.equal(hourAt(-0.2, 25), 0)
+  assert.equal(hourAt(1.3, 25), 24)
+  const start = new Date(2026, 9, 19, 9, 0).getTime() / 1000
+  assert.equal(hourSpan(start, 1), '09:00–10:00')
+  assert.equal(hourSpan(start, 24), '08:00–now')
+  const rows = hourRows([{ name: 'a', color: 'x', points: [1, 5] }, { name: 'b', color: 'y', points: [2, 9] }, { name: 'c', color: 'z', points: [3] }], 1)
+  assert.deepEqual(rows.map((r) => [r.name, r.value]), [['b', 9], ['a', 5], ['c', 0]])
+})
+
+test('marker labels stack instead of overlapping', () => {
+  const got = lanes([{ x: 100, w: 80 }, { x: 0, w: 50 }, { x: 120, w: 80 }, { x: 130, w: 80 }, { x: 140, w: 80 }, { x: 300, w: 10 }])
+  assert.deepEqual(got.map((m) => [m.x, m.lane]), [[0, 0], [100, 0], [120, 1], [130, 2], [140, -1], [300, 0]])
+  assert.deepEqual(lanes([{ x: 0, w: 10 }, { x: 5, w: 10 }], 1).map((m) => m.lane), [0, -1])
 })

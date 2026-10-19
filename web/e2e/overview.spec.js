@@ -61,5 +61,47 @@ test('traffic is charted from VictoriaMetrics', async ({ page }) => {
     await expect(page.locator('section[aria-labelledby="traffic-h"] .legend')).toContainText('Dev')
     await expect(page.getByText('Traffic charts need a metrics store.')).toHaveCount(0)
     expect((await u.api.get('/api/overview')).traffic.series.map((s) => s.network)).toContain(net.id)
+    // hovering reads the hour off: each network's lines in it
+    const plot = page.locator('section[aria-labelledby="traffic-h"] .chart-hover')
+    const box = await plot.boundingBox()
+    await plot.hover({ position: { x: box.width - 2, y: box.height / 2 } })
+    const readout = page.getByTestId('chart-readout')
+    await expect(readout).toContainText('–now')
+    await expect(readout).toContainText('Dev')
+    await page.getByRole('heading', { name: 'Lines per hour, last 24h' }).hover()
+    await expect(readout).toHaveCount(0)
   } finally { irc.close() }
+})
+
+test('reconnects: which network, how often and why', async ({ page }) => {
+  test.setTimeout(150000)
+  await addNetwork(u.api, { name: 'Dev', nick: u.name })
+  // pointed at a port nothing listens on: every attempt fails
+  const bad = await u.api.post('/api/networks', { name: 'Closed', host: 'ircd', port: 6699, tls: false, nick: u.name })
+  await u.api.post(`/api/networks/${bad.id}/connect`)
+  await login(page, u.name, u.password)
+  await page.getByTestId('reconnects-link').click()
+  await expect(page).toHaveURL(/\/reconnects$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Reconnects' })).toBeVisible()
+
+  // the failing network, with the reason, before the metrics arrive
+  const row = page.getByTestId('reconnects-net').filter({ hasText: 'Closed' })
+  await expect(row).toContainText('connection refused', { timeout: 20000 })
+  await expect(row).toContainText('nothing listens on that port')
+  await expect(page.getByTestId('reconnects-net').filter({ hasText: 'Dev' })).toHaveCount(0)
+  // one event per error, not one per retry
+  const events = page.getByTestId('reconnects-events')
+  await expect(events).toContainText("Closed: couldn't connect: connection refused")
+  // counted once metrics are exported (every 15s)
+  await expect.poll(async () => (await u.api.get('/api/reconnects')).networks.find((n) => n.id === bad.id)?.failed || 0, { timeout: 120000, intervals: [5000] }).toBeGreaterThan(0)
+  await page.reload()
+  await expect(row).toContainText(/[1-9]\d* failed/)
+  await expect(row.locator('.rc-hours span.on')).not.toHaveCount(0)
+
+  // its events only, then its connection log
+  await row.getByRole('button', { name: 'Its events' }).click()
+  await expect(page.getByRole('heading', { name: 'Events · Closed' })).toBeVisible()
+  await row.getByRole('link', { name: 'Connection log' }).click()
+  await expect(page).toHaveURL(new RegExp(`/networks/${bad.id}#log$`))
+  await u.api.post(`/api/networks/${bad.id}/disconnect`)
 })

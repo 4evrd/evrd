@@ -68,7 +68,11 @@ func (s *Server) handleMyEvents(w http.ResponseWriter, r *http.Request) {
 func eventsDTO(evs []store.UserEvent) []map[string]any {
 	out := []map[string]any{}
 	for _, e := range evs {
-		out = append(out, map[string]any{"at": e.At.Unix(), "kind": e.Kind, "title": e.Title, "detail": e.Detail})
+		d := map[string]any{"at": e.At.Unix(), "kind": e.Kind, "title": e.Title, "detail": e.Detail}
+		if e.NetworkID != 0 {
+			d["network"] = e.NetworkID
+		}
+		out = append(out, d)
 	}
 	return out
 }
@@ -291,22 +295,59 @@ func (s *Server) userTraffic(ctx context.Context, userID int64, nets []store.Net
 	end := time.Now().Truncate(time.Hour).Add(time.Hour)
 	start := end.Add(-24 * time.Hour)
 	out.start = start.Unix()
-	// Point i covers the hour ending at start+i hours. The last one ends in
-	// the future, where VictoriaMetrics has nothing, so the hour in progress
-	// is an instant query at now over the part of it that has passed.
-	series, err := mq.Range(ctx,
-		fmt.Sprintf(`sum by (network) (increase_pure(%s{user=%s}[1h]))`, metricLines, user), start, end.Add(-time.Hour), time.Hour)
+	series, err := hourlyByNetwork(ctx, mq, func(window string) string {
+		return fmt.Sprintf(`sum by (network) (increase_pure(%s{user=%s}[%s]))`, metricLines, user, window)
+	}, end)
 	if err != nil {
 		out.err = err.Error()
 		return out
 	}
+	out.available = true
+	names := map[string]string{}
+	for _, n := range nets {
+		names[strconv.FormatInt(n.ID, 10)] = n.Name
+	}
+	for _, se := range series {
+		id := se.Labels["network"]
+		name, ok := names[id]
+		if !ok {
+			continue // a deleted network
+		}
+		pts := hourSlots(se, start)
+		var sum float64
+		for _, v := range pts[1:] { // the first point covers the hour before the window
+			sum += v
+		}
+		nid, _ := strconv.ParseInt(id, 10, 64)
+		out.perNet[nid] = sum
+		out.series = append(out.series, map[string]any{"network": nid, "name": name, "points": pts})
+	}
+	if v, err := mq.Scalar(ctx, fmt.Sprintf(`sum(increase_pure(%s{user=%s}[24h]))`, metricDisconnects, user)); err == nil {
+		out.reconnects = int64(math.Round(v))
+	}
+	// Minutes in the last day with a network down, summed over networks.
+	if v, err := mq.Scalar(ctx, fmt.Sprintf(`sum(count_over_time((%s{user=%s} == 0)[24h:1m]))`, metricUp, user)); err == nil {
+		out.offlineMin = int64(math.Round(v))
+	}
+	return out
+}
+
+// hourlyByNetwork reads 25 hourly points per network for the day ending at
+// end (a whole hour, in the future): query(window) sums by network over a
+// window. Point i covers the hour ending at end-24h+i hours. The last one
+// ends in the future, where VictoriaMetrics has nothing, so the hour in
+// progress is an instant query at now over the part of it that has passed.
+func hourlyByNetwork(ctx context.Context, mq *metricsq.Client, query func(window string) string, end time.Time) ([]metricsq.Series, error) {
+	start := end.Add(-24 * time.Hour)
+	series, err := mq.Range(ctx, query("1h"), start, end.Add(-time.Hour), time.Hour)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	elapsed := max(now.Sub(end.Add(-time.Hour)).Truncate(time.Second), time.Minute)
-	current, err := mq.Range(ctx,
-		fmt.Sprintf(`sum by (network) (increase_pure(%s{user=%s}[%ds]))`, metricLines, user, int(elapsed.Seconds())), now, now, time.Minute)
+	current, err := mq.Range(ctx, query(fmt.Sprintf("%ds", int(elapsed.Seconds()))), now, now, time.Minute)
 	if err != nil {
-		out.err = err.Error()
-		return out
+		return nil, err
 	}
 	for _, c := range current {
 		if len(c.Points) == 0 {
@@ -324,40 +365,19 @@ func (s *Server) userTraffic(ctx context.Context, userID int64, nets []store.Net
 			series = append(series, metricsq.Series{Labels: c.Labels, Points: [][2]float64{p}})
 		}
 	}
-	out.available = true
-	names := map[string]string{}
-	for _, n := range nets {
-		names[strconv.FormatInt(n.ID, 10)] = n.Name
-	}
-	for _, se := range series {
-		id := se.Labels["network"]
-		name, ok := names[id]
-		if !ok {
-			continue // a deleted network
+	return series, nil
+}
+
+// hourSlots puts a series' points into the 25 hourly slots from start.
+func hourSlots(se metricsq.Series, start time.Time) []float64 {
+	pts := make([]float64, 25)
+	for _, p := range se.Points {
+		i := int((int64(p[0]) - start.Unix()) / 3600)
+		if i >= 0 && i < len(pts) && !math.IsNaN(p[1]) {
+			pts[i] = math.Round(p[1])
 		}
-		pts := make([]float64, 25)
-		var sum float64
-		for _, p := range se.Points {
-			i := int((int64(p[0]) - start.Unix()) / 3600)
-			if i >= 0 && i < len(pts) && !math.IsNaN(p[1]) {
-				pts[i] = math.Round(p[1])
-				if i > 0 { // the first point covers the hour before the window
-					sum += p[1]
-				}
-			}
-		}
-		nid, _ := strconv.ParseInt(id, 10, 64)
-		out.perNet[nid] = sum
-		out.series = append(out.series, map[string]any{"network": nid, "name": name, "points": pts})
 	}
-	if v, err := mq.Scalar(ctx, fmt.Sprintf(`sum(increase_pure(%s{user=%s}[24h]))`, metricDisconnects, user)); err == nil {
-		out.reconnects = int64(math.Round(v))
-	}
-	// Minutes in the last day with a network down, summed over networks.
-	if v, err := mq.Scalar(ctx, fmt.Sprintf(`sum(count_over_time((%s{user=%s} == 0)[24h:1m]))`, metricUp, user)); err == nil {
-		out.offlineMin = int64(math.Round(v))
-	}
-	return out
+	return pts
 }
 
 // --- admin overview ------------------------------------------------------------

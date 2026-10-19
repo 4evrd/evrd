@@ -226,7 +226,7 @@ func (b *Bouncer) Connect(networkID int64) error {
 			}
 			b.observe(n, conn.Nick(), m)
 		},
-		OnEvent:     func(e upstream.Event) { b.AddEvent(n.UserID, e.Kind, e.Title, e.Detail) },
+		OnEvent:     func(e upstream.Event) { b.addNetworkEvent(n.UserID, n.ID, e.Kind, e.Title, e.Detail) },
 		OnLog:       func(e upstream.LogEntry) { b.netlog.add(networkID, e) },
 		ModulesOff:  b.modulesOff,
 		AltNick:     u.DefaultAltNick,

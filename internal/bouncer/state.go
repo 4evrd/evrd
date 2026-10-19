@@ -145,7 +145,12 @@ func (b *Bouncer) RefreshAway(userID int64) { b.refreshAway(userID) }
 
 // AddEvent records an entry in a user's activity feed.
 func (b *Bouncer) AddEvent(userID int64, kind, title, detail string) {
-	e := store.UserEvent{UserID: userID, At: time.Now(), Kind: kind, Title: title, Detail: detail}
+	b.addNetworkEvent(userID, 0, kind, title, detail)
+}
+
+// addNetworkEvent records an entry about one of the user's networks.
+func (b *Bouncer) addNetworkEvent(userID, networkID int64, kind, title, detail string) {
+	e := store.UserEvent{UserID: userID, NetworkID: networkID, At: time.Now(), Kind: kind, Title: title, Detail: detail}
 	if err := b.store.AddUserEvent(e); err != nil {
 		b.log.Warn("record user event", "user", userID, "err", err)
 	}
