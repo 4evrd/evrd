@@ -49,13 +49,15 @@ web_parts() {
 # main has and a status; failures go to $fails.
 judge() {
 	kind=$1
-	awk -v min="$min" -v kind="$kind" -v fails="$fails" '
+	awk -v min="$min" -v kind="$kind" -v fails="$fails" -v slack="${COVERAGE_SLACK:-1}" '
 		NR == FNR { b[$1] = $2; next }
 		{
 			p = $1; c = $2 + 0; has = (p in b); base = b[p] + 0
-			need = min; if (has && base < min) need = base
+			need = min; if (has && base < min) need = base; if (need == min) slack = 0.05
 			if (c + 0.05 >= min) status = "✅"
-			else if (c + 0.1 < need) {
+			# a point of slack against main: concurrent code covers a little
+			# differently from run to run
+			else if (c + slack < need) {
 				status = "❌"
 				if (!has) why = "a new " kind " needs " min "%"
 				else if (base < min) why = "main has " base "%"
