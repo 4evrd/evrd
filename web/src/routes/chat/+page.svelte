@@ -9,11 +9,13 @@
   import Icon from '$lib/components/Icon.svelte'
   import Select from '$lib/components/Select.svelte'
   import StatusChip from '$lib/components/StatusChip.svelte'
+  import Msg from '$lib/components/Msg.svelte'
   import { api } from '$lib/api.js'
   import { session, refreshNets } from '$lib/session.svelte.js'
   import { toast } from '$lib/ui.svelte.js'
   import { clock, hue } from '$lib/format.js'
   import { parse, describe, isChan, isEvent, COMMANDS } from '$lib/chat.js'
+  import { t, i18n } from '$lib/i18n.svelte.js'
 
   let nets = $state([])
   let netId = $state(null)
@@ -139,7 +141,7 @@
     logs = {}; readAt = {}; missed = {}; buf = ''; chan = null
     nick = net?.currentNick || net?.nick || ''
     if (net && net.status === 'disconnected') {
-      try { await api.connect(id); toast(`Connecting to ${net.name}…`) } catch (e) { toast(e.message, 'bad') }
+      try { await api.connect(id); toast(t('chat.connecting', { network: net.name })) } catch (e) { toast(e.message, 'bad') }
     }
     await loadBuffers()
     if (want) {
@@ -157,19 +159,19 @@
     e.preventDefault()
     const cmd = parse(text, buf)
     if (!cmd) return
-    const fail = () => { toast('Not connected — nothing was sent', 'bad'); return false }
+    const fail = () => { toast(t('chat.notConnected'), 'bad'); return false }
     if (cmd.error) { local(cmd.error); return }
-    if (cmd.help) { text = ''; for (const [c, d] of COMMANDS) local(`${c} — ${d}`); return }
+    if (cmd.help) { text = ''; for (const [c, d] of COMMANDS) local(`${c} — ${t(d)}`); return }
     if (cmd.close) {
       text = ''
-      if (isChan(buf)) { local('That’s a channel — /part to leave it.'); return }
+      if (isChan(buf)) { local(t('chat.closeChannel')); return }
       bufs = bufs.filter((b) => !same(b.name, buf))
       const next = channels[0] || queries[0]
       if (next) select(next.name); else buf = ''
       return
     }
     if (cmd.say !== undefined) {
-      if (!buf) { toast('Pick a channel first', 'bad'); return }
+      if (!buf) { toast(t('chat.pickChannelFirst'), 'bad'); return }
       if (!stream?.send(buf, cmd.say)) return fail()
     }
     if (cmd.raw && !stream?.raw(cmd.raw)) return fail()
@@ -194,7 +196,7 @@
   }
 
   async function markAllRead() {
-    try { await api.markRead(netId); await loadBuffers(); refreshNets(); toast(`Marked ${net.name} as read`) } catch (e) { toast(e.message, 'bad') }
+    try { await api.markRead(netId); await loadBuffers(); refreshNets(); toast(t('chat.markedRead', { network: net.name })) } catch (e) { toast(e.message, 'bad') }
   }
 
   onMount(async () => {
@@ -229,11 +231,11 @@
       if (key !== day) {
         day = key
         const today = new Date().toDateString(), yest = new Date(Date.now() - 86400000).toDateString()
-        out.push({ sep: key === today ? 'Today' : key === yest ? 'Yesterday' : d.toLocaleDateString('en', { weekday: 'long', day: 'numeric', month: 'short' }) })
+        out.push({ sep: key === today ? t('chat.today') : key === yest ? t('chat.yesterday') : d.toLocaleDateString(i18n.locale, { weekday: 'long', day: 'numeric', month: 'short' }) })
       }
       if (!marked && i === start && after) {
         marked = true
-        out.push({ backlog: `Missed while away · ${after} line${after === 1 ? '' : 's'}` })
+        out.push({ backlog: t('chat.missed', { count: after }) })
       }
       out.push(m)
     }
@@ -241,8 +243,8 @@
   })
   const isHighlight = (m) => !same(m.sender, nick) && nick && new RegExp(`(^|[^\\w\\[\\]\\\\\`^{|}-])${nick.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\w\\[\\]\\\\\`^{|}-])`, 'i').test(m.text || '')
   const groups = $derived.by(() => {
-    if (!chan || !isChan(buf)) return [['In this chat', '', [nick, buf].filter(Boolean)]]
-    const g = [['Operators', '@', []], ['Half-ops', '%', []], ['Voiced', '+', []], ['Everyone else', '', []]]
+    if (!chan || !isChan(buf)) return [[t('chat.inThisChat'), '', [nick, buf].filter(Boolean)]]
+    const g = [[t('chat.operators'), '@', []], [t('chat.halfOps'), '%', []], [t('chat.voiced'), '+', []], [t('chat.everyoneElse'), '', []]]
     for (const m of chan.members || []) {
       const p = m.prefix
       const i = p === '~' || p === '&' || p === '@' ? 0 : p === '%' ? 1 : p === '+' ? 2 : 3
@@ -252,51 +254,51 @@
   })
 </script>
 
-<svelte:head><title>{buf ? `${buf} · ${net?.name}` : 'Chat'} · evrd</title></svelte:head>
+<svelte:head><title>{buf ? `${buf} · ${net?.name}` : t('chat.title')} · evrd</title></svelte:head>
 
 {#if !nets.length}
-  <div style="padding:var(--s7)"><div class="empty card"><span class="ic"><Icon name="globe" /></span><h3>No networks yet</h3><p>Add a network to start chatting.</p><a class="btn btn-primary btn-sm" href="/networks/new"><Icon name="plus" />Add network</a></div></div>
+  <div style="padding:var(--s7)"><div class="empty card"><span class="ic"><Icon name="globe" /></span><h3>{t('chat.noNetworks')}</h3><p>{t('chat.noNetworksHelp')}</p><a class="btn btn-primary btn-sm" href="/networks/new"><Icon name="plus" />{t('chat.addNetwork')}</a></div></div>
 {:else}
   <div class="chat">
-    <nav class="buffers" class:open={showPane} id="buffers" aria-label="Buffers">
+    <nav class="buffers" class:open={showPane} id="buffers" aria-label={t('chat.buffers')}>
       <div class="net-switch">
-        <div class="od-row"><span class="caps">Network</span>{#if net}<StatusChip status={net.status} />{/if}</div>
+        <div class="od-row"><span class="caps">{t('chat.network')}</span>{#if net}<StatusChip status={net.status} />{/if}</div>
         <div class="net-select">
-          <label class="sr-only" for="net-pick">Network</label>
+          <label class="sr-only" for="net-pick">{t('chat.network')}</label>
           <Select id="net-pick" strong value={netId} onchange={(v) => switchNet(v)} testid="net-pick"
             options={nets.map((n) => ({ ...n, value: n.id, label: n.name }))}>
             {#snippet option(n, closed)}
               <span class="net-dot {n.status}" aria-hidden="true"></span>
               <span class="od-truncate net-opt-name">{n.name}</span>
               {#if closed}
-                {#if otherMentions}<span class="count mention" title="Mentions on your other networks" aria-label="{otherMentions} mentions on other networks">{otherMentions}</span>{/if}
-              {:else if n.mentions}<span class="count mention" aria-label="{n.mentions} mentions">{n.mentions}</span>
-              {:else if n.unread}<span class="count" aria-label="{n.unread} unread">{n.unread}</span>{/if}
+                {#if otherMentions}<span class="count mention" title={t('chat.otherMentionsTitle')} aria-label={t('chat.otherMentions', { count: otherMentions })}>{otherMentions}</span>{/if}
+              {:else if n.mentions}<span class="count mention" aria-label={t('chat.mentions', { count: n.mentions })}>{n.mentions}</span>
+              {:else if n.unread}<span class="count" aria-label={t('chat.unread', { count: n.unread })}>{n.unread}</span>{/if}
             {/snippet}
           </Select>
         </div>
         {#if net}
           <div class="od-row" style="justify-content:space-between;font-size:var(--fs-xs)">
             <span class="muted mono od-truncate">{nick} · {net.host}</span>
-            <span class="od-nowrap muted">{net.lag != null ? `${net.lag} ms lag` : net.status === 'connected' ? 'measuring lag' : 'no link'}</span>
+            <span class="od-nowrap muted">{net.lag != null ? t('chat.lag', { ms: net.lag }) : net.status === 'connected' ? t('chat.measuringLag') : t('chat.noLink')}</span>
           </div>
         {/if}
       </div>
       <div class="od-stack" style="--od-gap:4px">
-        <span class="caps" style="padding:0 12px">Channels</span>
+        <span class="caps" style="padding:0 12px">{t('chat.channels')}</span>
         <div class="buf-list">
           {#each channels as b (b.name)}
             <button class="buf" class:unread={b.unread || b.mentions} type="button" aria-current={same(b.name, buf)} onclick={() => select(b.name)}>
               <Icon name="hash" /><span class="od-truncate">{b.name.replace(/^#/, '')}</span>
-              {#if b.mentions}<span class="count mention" aria-label="{b.mentions} mentions">{b.mentions}</span>{:else if b.unread}<span class="count" class:hot={b.unread > 30} aria-label="{b.unread} unread">{b.unread}</span>{/if}
+              {#if b.mentions}<span class="count mention" aria-label={t('chat.mentions', { count: b.mentions })}>{b.mentions}</span>{:else if b.unread}<span class="count" class:hot={b.unread > 30} aria-label={t('chat.unread', { count: b.unread })}>{b.unread}</span>{/if}
             </button>
           {:else}
-            <p class="desc" style="padding:0 12px;font-size:var(--fs-xs)">No channels. <span class="code">/join #channel</span> to join one.</p>
+            <p class="desc" style="padding:0 12px;font-size:var(--fs-xs)"><Msg key="chat.noChannels">{#snippet join()}<span class="code">/join #channel</span>{/snippet}</Msg></p>
           {/each}
         </div>
       </div>
       <div class="od-stack" style="--od-gap:4px">
-        <span class="caps" style="padding:0 12px">Messages</span>
+        <span class="caps" style="padding:0 12px">{t('chat.messages')}</span>
         <div class="buf-list">
           {#each queries as b (b.name)}
             <button class="buf" class:unread={b.unread || b.mentions} type="button" aria-current={same(b.name, buf)} onclick={() => select(b.name)}>
@@ -304,7 +306,7 @@
               {#if b.mentions || b.unread}<span class="count mention">{b.mentions || b.unread}</span>{/if}
             </button>
           {:else}
-            <p class="desc" style="padding:0 12px;font-size:var(--fs-xs)">No private messages.</p>
+            <p class="desc" style="padding:0 12px;font-size:var(--fs-xs)">{t('chat.noQueries')}</p>
           {/each}
         </div>
       </div>
@@ -312,15 +314,15 @@
 
     <section class="log-pane" aria-labelledby="buf-title">
       <header class="log-head">
-        <button class="icon-btn pane-toggle" type="button" aria-controls="buffers" aria-expanded={showPane} aria-label="Show buffers" onclick={() => (showPane = !showPane)}><Icon name="panel" /></button>
+        <button class="icon-btn pane-toggle" type="button" aria-controls="buffers" aria-expanded={showPane} aria-label={t('chat.showBuffers')} onclick={() => (showPane = !showPane)}><Icon name="panel" /></button>
         <div class="od-field od-fill">
           <span id="buf-title" class="od-truncate">{buf || net?.name}</span>
-          <span class="topic od-truncate">{isChan(buf) ? chan?.topic || 'No topic set' : buf ? `Private conversation on ${net?.name}` : ''}</span>
+          <span class="topic od-truncate">{isChan(buf) ? chan?.topic || t('chat.noTopic') : buf ? t('chat.privateOn', { network: net?.name }) : ''}</span>
         </div>
-        <span class="live" class:on={live} title={live ? 'Live' : 'Reconnecting…'}><span class="dot" aria-hidden="true"></span>{live ? 'Live' : 'Offline'}</span>
+        <span class="live" class:on={live} title={live ? t('chat.live') : t('chat.reconnecting')}><span class="dot" aria-hidden="true"></span>{live ? t('chat.live') : t('chat.offline')}</span>
         <div class="actions">
-          <button class="icon-btn hide-sm" type="button" aria-label="Mark all as read" onclick={markAllRead}><Icon name="check" /></button>
-          <a class="icon-btn" href="/networks/{netId}" aria-label="Network settings"><Icon name="sliders" /></a>
+          <button class="icon-btn hide-sm" type="button" aria-label={t('chat.markAllRead')} onclick={markAllRead}><Icon name="check" /></button>
+          <a class="icon-btn" href="/networks/{netId}" aria-label={t('chat.networkSettings')}><Icon name="sliders" /></a>
         </div>
       </header>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -334,24 +336,24 @@
           {:else}<div class="msg" class:self={same(m.sender, nick)} class:highlight={isHighlight(m)}><time>{clock(m.time)}</time><span class="nick" style="--c:{hue(m.sender)}" title={m.sender}>{m.kind === 'notice' ? `-${m.sender}-` : m.sender}</span><span class="text">{m.text}</span></div>
           {/if}
         {:else}
-          <p class="desc">{buf ? 'No messages yet.' : 'Pick a channel.'}</p>
+          <p class="desc">{buf ? t('chat.noMessages') : t('chat.pickChannel')}</p>
         {/each}
       </div>
       <form class="composer" onsubmit={send}>
-        <label class="sr-only" for="say">Message</label>
-        <input class="input od-fill" id="say" autocomplete="off" placeholder={buf ? `Message ${buf} — /help for commands` : '/join #channel'} bind:value={text} bind:this={inputEl} aria-label="Message" />
-        <button class="btn btn-primary" type="submit" aria-label="Send" style="min-height:48px;min-width:48px;padding:0 14px" disabled={!text.trim()}><Icon name="send" /><span class="hide-sm">Send</span></button>
+        <label class="sr-only" for="say">{t('chat.message')}</label>
+        <input class="input od-fill" id="say" autocomplete="off" placeholder={buf ? t('chat.messagePlaceholder', { buffer: buf }) : '/join #channel'} bind:value={text} bind:this={inputEl} aria-label={t('chat.message')} />
+        <button class="btn btn-primary" type="submit" aria-label={t('chat.send')} style="min-height:48px;min-width:48px;padding:0 14px" disabled={!text.trim()}><Icon name="send" /><span class="hide-sm">{t('chat.send')}</span></button>
       </form>
     </section>
 
     <aside class="members" aria-labelledby="mem-h">
-      <div class="member-head"><h2 id="mem-h" class="caps">Members</h2><span class="count calm">{isChan(buf) ? (chan?.members?.length ?? 0) : 2}</span></div>
+      <div class="member-head"><h2 id="mem-h" class="caps">{t('chat.members')}</h2><span class="count calm">{isChan(buf) ? (chan?.members?.length ?? 0) : 2}</span></div>
       {#each groups as [g, mode, list]}
         <div class="member-group">
           <span class="caps" style="padding:12px 8px 4px">{g}</span>
           {#each list as mbr}
             {@const name = typeof mbr === 'string' ? mbr : mbr.nick}
-            <span class="member"><span class="mode" aria-label={mode === '@' ? 'operator' : mode === '+' ? 'voiced' : mode === '%' ? 'half-op' : ''}>{typeof mbr === 'string' ? '' : mbr.prefix}</span><span class="od-truncate" style="color:{same(name, nick) ? 'var(--primary)' : 'inherit'}">{name}</span></span>
+            <span class="member"><span class="mode" aria-label={mode === '@' ? t('chat.modeOp') : mode === '+' ? t('chat.modeVoice') : mode === '%' ? t('chat.modeHalfOp') : ''}>{typeof mbr === 'string' ? '' : mbr.prefix}</span><span class="od-truncate" style="color:{same(name, nick) ? 'var(--primary)' : 'inherit'}">{name}</span></span>
           {/each}
         </div>
       {/each}

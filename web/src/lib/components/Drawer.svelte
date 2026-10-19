@@ -3,6 +3,7 @@
   import { tick } from 'svelte'
   import Icon from './Icon.svelte'
   import { drawers, closeDrawers } from '$lib/ui.svelte.js'
+  import { t } from '$lib/i18n.svelte.js'
 
   let { id, title, sub = '', head = null, children, foot = null } = $props()
   let el = $state()
@@ -20,7 +21,7 @@
     {#if head}{@render head()}{:else}
       <div class="od-stack"><h2 id="{id}-title">{title}</h2>{#if sub}<p>{sub}</p>{/if}</div>
     {/if}
-    <button class="icon-btn" type="button" data-close aria-label="Close" onclick={closeDrawers}><Icon name="x" /></button>
+    <button class="icon-btn" type="button" data-close aria-label={t('ui.close')} onclick={closeDrawers}><Icon name="x" /></button>
   </div>
   {@render children()}
   {#if foot}<div class="drawer-foot">{@render foot()}</div>{/if}

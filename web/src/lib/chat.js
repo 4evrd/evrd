@@ -1,24 +1,27 @@
 // The web chat's slash commands and event wording. parse() turns a line typed
 // in a buffer into what to send; describe() words a channel event the same way
-// the bouncer replays it to IRC clients.
+// the bouncer replays it to IRC clients. The words are in i18n/<lang>/chat.js.
+
+import { t } from './i18n.svelte.js'
 
 export const isChan = (t) => /^[#&+!]/.test(t || '')
 
+// [syntax, message key of its description]
 export const COMMANDS = [
-  ['/join #channel [key]', 'Join a channel (it’s saved to this network)'],
-  ['/part [#channel] [reason]', 'Leave a channel (default: this one)'],
-  ['/msg nick text', 'Message someone — opens a private buffer'],
-  ['/query nick', 'Open a private buffer'],
-  ['/me text', 'An action: * you text'],
-  ['/notice target text', 'Send a notice'],
-  ['/nick newnick', 'Change your nick'],
-  ['/topic [text]', 'Set this channel’s topic'],
-  ['/mode [target] modes', 'Set modes (default: this channel)'],
-  ['/kick nick [reason]', 'Kick someone from this channel'],
-  ['/close', 'Close this private buffer'],
-  ['/quote line', 'Send a raw IRC line (replies show in IRC clients)'],
-  ['/status command', 'Bouncer commands, same as /msg *status (try /status help)'],
-  ['/help', 'This list'],
+  ['/join #channel [key]', 'chat.cmd.join'],
+  ['/part [#channel] [reason]', 'chat.cmd.part'],
+  ['/msg nick text', 'chat.cmd.msg'],
+  ['/query nick', 'chat.cmd.query'],
+  ['/me text', 'chat.cmd.me'],
+  ['/notice target text', 'chat.cmd.notice'],
+  ['/nick newnick', 'chat.cmd.nick'],
+  ['/topic [text]', 'chat.cmd.topic'],
+  ['/mode [target] modes', 'chat.cmd.mode'],
+  ['/kick nick [reason]', 'chat.cmd.kick'],
+  ['/close', 'chat.cmd.close'],
+  ['/quote line', 'chat.cmd.quote'],
+  ['/status command', 'chat.cmd.status'],
+  ['/help', 'chat.cmd.help'],
 ]
 
 // parse returns one of:
@@ -38,19 +41,19 @@ export function parse(input, target) {
   const [, cmd, rest = ''] = line.match(/^\/(\S+)\s*(.*)$/)
   const args = rest.split(/\s+/).filter(Boolean)
   const here = isChan(target) ? target : ''
-  const need = (ok, usage) => (ok ? null : { error: `Usage: ${usage}` })
+  const need = (ok, usage) => (ok ? null : { error: t('chat.usage', { usage }) })
 
   switch (cmd.toLowerCase()) {
     case 'join': case 'j':
       return need(args[0], '/join #channel') || { raw: `JOIN ${isChan(args[0]) ? args[0] : '#' + args[0]}${args[1] ? ' ' + args[1] : ''}` }
     case 'part': case 'leave': {
       const ch = isChan(args[0]) ? args.shift() : here
-      if (!ch) return { error: 'Which channel? /part #channel' }
+      if (!ch) return { error: t('chat.whichChannel') }
       return { raw: `PART ${ch}${args.length ? ' :' + args.join(' ') : ''}` }
     }
     case 'msg': case 'privmsg': {
       const m = rest.match(/^(\S+)\s+(.+)$/)
-      if (!m) return { error: 'Usage: /msg nick text' }
+      if (!m) return { error: t('chat.usage', { usage: '/msg nick text' }) }
       if (/^\*status$/i.test(m[1])) return { status: m[2], open: '*status' }
       return isChan(m[1]) ? { send: { target: m[1], text: m[2] } } : { open: m[1], send: { target: m[1], text: m[2] } }
     }
@@ -58,7 +61,7 @@ export function parse(input, target) {
       return { status: rest || 'help', open: '*status' }
     case 'query': case 'q': {
       const m = rest.match(/^(\S+)\s*(.*)$/)
-      if (!m) return { error: 'Usage: /query nick' }
+      if (!m) return { error: t('chat.usage', { usage: '/query nick' }) }
       if (/^\*status$/i.test(m[1])) return { status: m[2] || 'help', open: '*status' }
       return { open: m[1], send: m[2] ? { target: m[1], text: m[2] } : undefined }
     }
@@ -66,18 +69,18 @@ export function parse(input, target) {
       return need(rest && target, '/me text') || { send: { target, text: rest, kind: 'action' } }
     case 'notice': {
       const m = rest.match(/^(\S+)\s+(.+)$/)
-      return m ? { send: { target: m[1], text: m[2], kind: 'notice' } } : { error: 'Usage: /notice target text' }
+      return m ? { send: { target: m[1], text: m[2], kind: 'notice' } } : { error: t('chat.usage', { usage: '/notice target text' }) }
     }
     case 'nick':
       return need(args.length === 1, '/nick newnick') || { raw: `NICK ${args[0]}` }
     case 'topic':
-      if (!here) return { error: 'Use /topic in a channel.' }
+      if (!here) return { error: t('chat.inChannel', { command: '/topic' }) }
       return { raw: rest ? `TOPIC ${here} :${rest}` : `TOPIC ${here}` }
     case 'mode':
-      if (!args.length) return { error: 'Usage: /mode [target] modes' }
+      if (!args.length) return { error: t('chat.usage', { usage: '/mode [target] modes' }) }
       return { raw: isChan(args[0]) || !here ? `MODE ${rest}` : `MODE ${here} ${rest}` }
     case 'kick': {
-      if (!here) return { error: 'Use /kick in a channel.' }
+      if (!here) return { error: t('chat.inChannel', { command: '/kick' }) }
       const [nick, ...why] = args
       return need(nick, '/kick nick [reason]') || { raw: `KICK ${here} ${nick}${why.length ? ' :' + why.join(' ') : ''}` }
     }
@@ -88,19 +91,21 @@ export function parse(input, target) {
     case 'help': case 'commands':
       return { help: true }
   }
-  return { error: `/${cmd} isn’t supported here — try /help, or use an IRC client.` }
+  return { error: t('chat.unsupported', { command: '/' + cmd }) }
 }
 
 export function describe(m) {
-  const why = (s) => (s ? ` (${s})` : '')
+  const v = { nick: m.sender, other: m.extra, text: m.text }
+  // part, quit and kick have a form with the reason
+  const why = (k) => t(m.text ? `${k}Reason` : k, v)
   switch (m.kind) {
-    case 'join': return `${m.sender} joined`
-    case 'part': return `${m.sender} left${why(m.text)}`
-    case 'quit': return `${m.sender} quit${why(m.text)}`
-    case 'kick': return `${m.sender} kicked ${m.extra}${why(m.text)}`
-    case 'nick': return `${m.sender} is now known as ${m.extra}`
-    case 'topic': return `${m.sender} changed the topic to: ${m.text}`
-    case 'mode': return `${m.sender} set mode ${m.text}`
+    case 'join': return t('chat.ev.join', v)
+    case 'part': return why('chat.ev.part')
+    case 'quit': return why('chat.ev.quit')
+    case 'kick': return why('chat.ev.kick')
+    case 'nick': return t('chat.ev.nick', v)
+    case 'topic': return t('chat.ev.topic', v)
+    case 'mode': return t('chat.ev.mode', v)
   }
   return m.text
 }
