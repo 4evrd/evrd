@@ -277,11 +277,12 @@ test('metrics: every chart, ranges and the busiest networks', async ({ page }) =
   for (const id of ['messages', 'links', 'clients', 'lag', 'connects', 'logins', 'cluster']) {
     await expect(page.getByTestId(`metric-${id}`)).toBeVisible()
   }
-  // the dev stack has links up and two nodes: there's something to draw,
-  // once the first export (every 15s) has landed
+  // every node reports its users from the start (links only once some
+  // test has added a network): there's something to draw once the first
+  // export (every 15s) has landed
   await expect(async () => {
     await page.reload()
-    await expect(page.getByTestId('metric-links').locator('svg path.line')).not.toHaveCount(0, { timeout: 3000 })
+    await expect(page.getByTestId('metric-cluster').locator('svg path.line')).not.toHaveCount(0, { timeout: 3000 })
   }).toPass({ timeout: 60000 })
   await expect(page.getByTestId('metric-cluster').locator('.legend')).toContainText('node-')
   await page.getByRole('tab', { name: '7 days' }).click()
