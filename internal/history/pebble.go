@@ -314,7 +314,8 @@ func (s *pebbleStore) Networks() ([]int64, error) {
 	for ok := it.First(); ok; {
 		id := int64(binary.BigEndian.Uint64(it.Key()[1:9]))
 		out = append(out, id)
-		ok = it.SeekGE(networkPrefix(prefixBuffer, id+1))
+		// Skip the rest of this network (id+1 would wrap around for -1).
+		ok = it.SeekGE(upperBound(networkPrefix(prefixBuffer, id)))
 	}
 	return out, it.Error()
 }
