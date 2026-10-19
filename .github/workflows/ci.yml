@@ -73,7 +73,7 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
+      - uses: pnpm/action-setup@v6 # version from package.json "packageManager"
         with:
           package_json_file: web/package.json
       - uses: actions/setup-node@v4
@@ -105,7 +105,7 @@ jobs:
       COMPOSE: -f docker-compose.dev.yml -f docker-compose.e2e.yml
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: web/package.json
       - uses: actions/setup-node@v4
@@ -238,7 +238,7 @@ jobs:
           restore-keys: |
             dist-go-${{ hashFiles('go.sum') }}-
             dist-go-
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: web/package.json
       - uses: actions/setup-node@v4
