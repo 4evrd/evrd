@@ -14,10 +14,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -114,6 +116,11 @@ func shortCertErr(err error) string {
 	return err.Error()
 }
 
+// ErrHungUp is the server closing the connection before the TLS handshake
+// finished: it may be refusing this address for now, or busy, or not speak
+// TLS on that port.
+var ErrHungUp = errors.New("the server hung up during the TLS handshake")
+
 // Handshake runs the TLS handshake over raw. When the server answers in
 // plain text instead (a plain-text port, or a refusal sent before any TLS:
 // "ERROR :*** Banned: …"), the error says what it said rather than
@@ -125,6 +132,9 @@ func Handshake(ctx context.Context, raw net.Conn, cfg *tls.Config) (*tls.Conn, e
 	if err == nil {
 		rec.stop()
 		return tc, nil
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) {
+		return nil, ErrHungUp
 	}
 	var rh tls.RecordHeaderError
 	if !errors.As(err, &rh) {

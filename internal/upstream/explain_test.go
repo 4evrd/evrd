@@ -24,6 +24,8 @@ func TestHint(t *testing.T) {
 		"connection refused":                                                        "nothing listens on that port",
 		"connection timed out":                                                      "didn't answer",
 		"TLS certificate rejected":                                                  "certificate couldn't be verified",
+		"Closing Link: Wollino[unknown@2001:db8::1] (SASL authentication required)": "only lets in people who log in with SASL",
+		"the server hung up during the TLS handshake":                               "hung up before the secure connection",
 	} {
 		if got := Hint(msg); !strings.Contains(got, want) {
 			t.Errorf("%q: hint %q, want it to mention %q", msg, got, want)

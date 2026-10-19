@@ -389,8 +389,8 @@ func TestHandshakePlainTextEdgeCases(t *testing.T) {
 	}
 }
 
-func TestHandshakeOtherErrorsPassThrough(t *testing.T) {
-	// the server closes without a word: not a record header error
+func TestHandshakeHangUp(t *testing.T) {
+	// the server closes without a word: it hung up, said plainly
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -408,8 +408,7 @@ func TestHandshakeOtherErrorsPassThrough(t *testing.T) {
 	}
 	defer raw.Close()
 	_, err = Handshake(context.Background(), raw, Config("irc.example.org", Trust{TrustAll: true}, nil))
-	var rh tls.RecordHeaderError
-	if err == nil || errors.As(err, &rh) || strings.Contains(err.Error(), "the server") {
+	if !errors.Is(err, ErrHungUp) {
 		t.Fatalf("got %v", err)
 	}
 }

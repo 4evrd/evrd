@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"syscall"
 	"time"
 
@@ -114,7 +115,12 @@ func (c *Client) Open(ctx context.Context, link string, tcp net.Conn, tlsOn bool
 		if resp.Fingerprint != "" {
 			return nil, &irctls.UntrustedCertError{Fingerprint: resp.Fingerprint, Reason: resp.Error}
 		}
-		return nil, fmt.Errorf("links: %s", resp.Error)
+		// The server's failure, which the holder only passes on: no "links:"
+		// prefix. Holders before ErrHungUp say just "EOF".
+		if resp.Error == "EOF" || resp.Error == "unexpected EOF" || resp.Error == irctls.ErrHungUp.Error() || strings.Contains(resp.Error, "connection reset") {
+			return nil, irctls.ErrHungUp
+		}
+		return nil, errors.New(resp.Error)
 	}
 	return &stream{UnixConn: conn, r: r}, nil
 }
