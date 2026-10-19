@@ -59,6 +59,7 @@ export const api = {
   buffers: (id) => req('GET', `/api/networks/${id}/buffers`),
   networkLog: (id) => req('GET', `/api/networks/${id}/log`),
   modules: () => req('GET', '/api/modules'),
+  directory: () => req('GET', '/api/directory'),
   channel: (id, target) => req('GET', `/api/networks/${id}/channel?${q({ target })}`),
   markRead: (id, target = '') => req('POST', `/api/networks/${id}/read`, { target }),
 
@@ -93,6 +94,7 @@ export const api = {
     overview: () => req('GET', '/api/admin/overview'),
     settings: () => req('GET', '/api/admin/settings'),
     saveSettings: (set, reset) => req('PATCH', '/api/admin/settings', { set, reset }),
+    refreshDirectory: () => req('POST', '/api/admin/directory/refresh'),
     users: () => req('GET', '/api/admin/users'),
     createUser: (u) => req('POST', '/api/admin/users', u),
     user: (id) => req('GET', `/api/admin/users/${id}`),

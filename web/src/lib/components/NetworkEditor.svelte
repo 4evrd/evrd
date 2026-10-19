@@ -10,7 +10,9 @@
   import Switch from './Switch.svelte'
   import StatusChip from './StatusChip.svelte'
   import ConnLog from './ConnLog.svelte'
+  import DirectoryPicker from './DirectoryPicker.svelte'
   import { api } from '$lib/api.js'
+  import { fromDirectory, loginHint } from '$lib/directory.js'
   import { session, refreshNets, refreshMe } from '$lib/session.svelte.js'
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
   import { check, splitChannels } from '$lib/validate.js'
@@ -90,6 +92,23 @@
     if (id == null) { f = blank(); return }
     try { net = await api.network(id); f = fromNet(net) } catch (e) { loadErr = e.status === 404 ? 'That network doesn’t exist (or isn’t yours).' : e.message }
   })
+
+  // ---- the network directory (adding only): picking one fills in its
+  // name, servers and suggested channels; identity stays the user's.
+  let manual = $state(false)
+  let picked = $state(null)
+  function pick(n) {
+    const p = fromDirectory(n)
+    f.name = p.name
+    f.servers = p.servers
+    f.channels = p.channels
+    picked = n
+    errs = {}
+  }
+  function enterManually() {
+    manual = true
+    tick().then(() => document.getElementById('name')?.focus())
+  }
 
   // ---- servers
   function addServer() { f.servers = [...f.servers, { host: '', port: f.servers[0]?.tls === false ? '6667' : '6697', tls: f.servers[0]?.tls ?? true, hasPassword: false, password: undefined }]; tick().then(() => document.getElementById(`sv-host-${f.servers.length - 1}`)?.focus()) }
@@ -248,6 +267,20 @@
             <span>If you know this is the right server (a self-signed certificate, say), trust this exact certificate.</span>
             <div><button class="btn btn-sm" type="button" onclick={trustSeen}><Icon name="check" />Trust this certificate</button></div>
           </div>
+        </div>
+      {/if}
+
+      {#if id == null && !manual}
+        <DirectoryPicker picked={picked?.id} onpick={pick} onmanual={enterManually} />
+      {/if}
+      {#if id == null && picked}
+        <div class="callout" role="status" data-testid="directory-picked">
+          <Icon name="check" />
+          <span>
+            <b>{picked.name}</b>: its servers{picked.channels?.length ? ' and channels' : ''} are filled in below. Check your nickname under <a href="#identity">Identity</a>, then add it.
+            {#if loginHint(picked)}{loginHint(picked)}{/if}
+            {#if picked.homepage}<a href={picked.homepage} target="_blank" rel="noopener noreferrer">About {picked.name}</a>{/if}
+          </span>
         </div>
       {/if}
 
