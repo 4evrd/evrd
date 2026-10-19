@@ -60,38 +60,40 @@ func Fingerprint(cert *x509.Certificate) string {
 }
 
 // Config is the TLS client config for host. onUntrusted, if set, is told
-// the fingerprint of a refused certificate.
+// the fingerprint of a refused certificate. PKI validation uses the
+// config's RootCAs: nil, the system roots, unless the caller sets it.
 func Config(host string, t Trust, onUntrusted func(fingerprint string)) *tls.Config {
-	return &tls.Config{
+	cfg := &tls.Config{
 		ServerName:         host,
 		InsecureSkipVerify: true, // verified below
-		VerifyConnection: func(cs tls.ConnectionState) error {
-			if len(cs.PeerCertificates) == 0 {
-				return &UntrustedCertError{Reason: "no certificate"}
+	}
+	cfg.VerifyConnection = func(cs tls.ConnectionState) error {
+		if len(cs.PeerCertificates) == 0 {
+			return &UntrustedCertError{Reason: "no certificate"}
+		}
+		leaf := cs.PeerCertificates[0]
+		fp := Fingerprint(leaf)
+		if slices.Contains(t.Fingerprints, fp) || t.TrustAll {
+			return nil
+		}
+		reason := "certificate validation is off for this network"
+		if t.TrustPKI {
+			opts := x509.VerifyOptions{DNSName: host, Roots: cfg.RootCAs, Intermediates: x509.NewCertPool()}
+			for _, ic := range cs.PeerCertificates[1:] {
+				opts.Intermediates.AddCert(ic)
 			}
-			leaf := cs.PeerCertificates[0]
-			fp := Fingerprint(leaf)
-			if slices.Contains(t.Fingerprints, fp) || t.TrustAll {
+			_, err := leaf.Verify(opts)
+			if err == nil {
 				return nil
 			}
-			reason := "certificate validation is off for this network"
-			if t.TrustPKI {
-				opts := x509.VerifyOptions{DNSName: host, Intermediates: x509.NewCertPool()}
-				for _, ic := range cs.PeerCertificates[1:] {
-					opts.Intermediates.AddCert(ic)
-				}
-				_, err := leaf.Verify(opts)
-				if err == nil {
-					return nil
-				}
-				reason = shortCertErr(err)
-			}
-			if onUntrusted != nil {
-				onUntrusted(fp)
-			}
-			return &UntrustedCertError{Fingerprint: fp, Reason: reason}
-		},
+			reason = shortCertErr(err)
+		}
+		if onUntrusted != nil {
+			onUntrusted(fp)
+		}
+		return &UntrustedCertError{Fingerprint: fp, Reason: reason}
 	}
+	return cfg
 }
 
 func shortCertErr(err error) string {
