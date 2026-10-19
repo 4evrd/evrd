@@ -65,8 +65,10 @@ type Member struct {
 
 // Health is a connection's link state, for the web app and metrics.
 type Health struct {
-	Status      Status        `json:"status"`
-	LastError   string        `json:"lastError,omitempty"`
+	Status    Status `json:"status"`
+	LastError string `json:"lastError,omitempty"`
+	// Hint says what LastError means and what to do about it.
+	Hint        string        `json:"hint,omitempty"`
 	LastErrorAt time.Time     `json:"lastErrorAt"`
 	Attempts    int           `json:"attempts"` // failed attempts since last connected
 	RetryIn     time.Duration `json:"retryIn"`  // wait before the next attempt
@@ -96,6 +98,7 @@ type Conn struct {
 	// joins or parts a channel.
 	onChannels func([]string)
 	onEvent    func(Event)
+	onLog      func(LogEntry)
 	dial       func(ctx context.Context, host string, port int) (net.Conn, error)
 	altNick    string
 	pingEvery  time.Duration
@@ -139,6 +142,7 @@ type Conn struct {
 	serverIdx    int
 	serverPass   string // the current server's PASS (then no SASL-fallback PASS)
 	saslOK       bool   // SASL succeeded on this connection (then no NickServ IDENTIFY)
+	serverErr    string // the server's ERROR line on this connection: why it closed
 	idle         func() bool
 	version      string
 	links        Holder
@@ -165,6 +169,9 @@ type Options struct {
 	OnChannels func([]string)
 	// OnEvent is called with link events (connected, lost, netsplit). May be nil.
 	OnEvent func(Event)
+	// OnLog receives the connection log: evrd's steps and the server's
+	// lines that explain a connection (see LogEntry).
+	OnLog func(LogEntry)
 	// Dial opens the TCP connection (TLS is added on top). The bouncer uses
 	// it to pace connects and pick the source address; nil dials directly.
 	Dial func(ctx context.Context, host string, port int) (net.Conn, error)
@@ -207,6 +214,7 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		persist:      opts.Persist,
 		onChannels:   opts.OnChannels,
 		onEvent:      opts.OnEvent,
+		onLog:        opts.OnLog,
 		dial:         opts.Dial,
 		links:        opts.Links,
 		linkID:       opts.LinkID,
@@ -296,6 +304,7 @@ func upperKeys(m map[string]string) map[string]string {
 // jittered exponential backoff (up to a minute).
 func (c *Conn) Run(ctx context.Context) {
 	backoff := time.Second
+	lastHint := "" // logged once per kind of failure, not every attempt
 	defer func() {
 		c.mu.Lock()
 		c.health.Status, c.health.Lag, c.health.RetryIn = StatusDisconnected, -1, 0
@@ -321,9 +330,20 @@ func (c *Conn) Run(ctx context.Context) {
 		// Jitter, so connections dropped together don't all retry together.
 		wait := backoff/2 + time.Duration(rand.Int64N(int64(backoff)))
 		msg := describeErr(err)
+		hint := Hint(msg)
+		if wasConnected {
+			c.note("evrd", true, "Disconnected: "+msg)
+		} else {
+			c.note("evrd", true, "Couldn't connect: "+msg)
+		}
+		if hint != "" && hint != lastHint {
+			c.note("evrd", false, hint)
+		}
+		lastHint = hint
+		c.note("evrd", false, "Trying again in "+roundDur(wait))
 		c.update(func(h *Health) {
 			h.Status, h.Lag = StatusReconnecting, -1
-			h.LastError, h.LastErrorAt = msg, time.Now()
+			h.LastError, h.LastErrorAt, h.Hint = msg, time.Now(), hint
 			h.Attempts++
 			h.RetryIn = wait
 		})
@@ -358,6 +378,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	c.serverIdx++
 	c.serverPass = sv.Password
 	c.saslOK = false
+	c.serverErr = ""
 	c.health.Server = net.JoinHostPort(sv.Host, strconv.Itoa(sv.Port))
 	c.mu.Unlock()
 	var conn net.Conn
@@ -371,11 +392,13 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		switch {
 		case rerr == nil:
 			conn, resumed, held = rc, res, true
+			c.note("evrd", false, fmt.Sprintf("Picked up the connection the holder kept while evrd restarted (as %s)", res.Nick))
 		case !errors.Is(rerr, links.ErrNoLink):
 			c.log.Warn("resume held link", "network", c.net.Name, "err", rerr)
 		}
 	}
 	if conn == nil {
+		c.note("evrd", false, fmt.Sprintf("Connecting to %s port %d%s", sv.Host, sv.Port, map[bool]string{true: " with TLS", false: " without TLS"}[sv.TLS]))
 		if c.dial != nil {
 			conn, err = c.dial(dctxDial, sv.Host, sv.Port)
 		} else {
@@ -386,11 +409,17 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 			telemetry.UpstreamConnects.Add(ctx, 1, telemetry.Result("error"))
 			return false, err
 		}
+		if ra := conn.RemoteAddr(); ra != nil {
+			c.note("evrd", false, "Connected to "+ra.String())
+		}
 		if c.links != nil {
 			hc, herr := c.links.Open(dctxDial, c.linkID, conn, sv.TLS, sv.Host, c.trust())
 			switch {
 			case herr == nil:
 				conn, held = hc, true
+				if sv.TLS {
+					c.note("evrd", false, "TLS handshake done")
+				}
 			case errors.Is(herr, links.ErrUnavailable):
 				// no holder: connect directly, as without one
 				c.log.Warn("connection holder unreachable — connecting directly", "network", c.net.Name, "err", herr)
@@ -418,6 +447,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 			return false, err
 		}
 		conn = tc
+		c.note("evrd", false, "TLS handshake done")
 		c.mu.Lock()
 		c.health.UntrustedFingerprint = ""
 		c.mu.Unlock()
@@ -479,6 +509,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		user := orElse(c.net.Username, c.net.Nick)
 		real := orElse(c.net.Realname, c.net.Nick)
 		c.send(fmt.Sprintf("USER %s 0 * :%s", user, real))
+		c.note("evrd", false, "Signing in as "+c.net.Nick)
 	}
 
 	sc := bufio.NewScanner(conn)
@@ -486,8 +517,24 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	conn.SetReadDeadline(time.Now().Add(c.readLimit))
 	for sc.Scan() {
 		conn.SetReadDeadline(time.Now().Add(c.readLimit))
-		line := c.codec.decode(sc.Bytes())
+		raw := sc.Bytes()
+		if len(raw) > 1 && (raw[0] == 0x15 || raw[0] == 0x16) && raw[1] == 0x03 {
+			// a TLS alert or handshake: this port wants TLS
+			c.mu.Lock()
+			c.serverErr = "the server speaks TLS on this port"
+			c.mu.Unlock()
+			break
+		}
+		line := c.codec.decode(raw)
 		m := irc.Parse(line)
+		if logged(c.Status() == StatusConnected, m.Command, m.Prefix, m.Params) {
+			c.note("server", m.Command == "ERROR" || m.Command == "KILL" || (len(m.Command) == 3 && m.Command[0] >= '4' && m.Command[0] <= '9'), line)
+		}
+		if m.Command == "ERROR" {
+			c.mu.Lock()
+			c.serverErr = lastParam(m)
+			c.mu.Unlock()
+		}
 		if m.Command == "PRIVMSG" && len(m.Params) == 2 && c.ctcp(m.Prefix, m.Params[0], m.Params[1]) {
 			continue // answered (or blocked) here
 		}
@@ -507,6 +554,11 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	if err == nil {
 		err = io.EOF
 	}
+	c.mu.Lock()
+	if c.serverErr != "" && (errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed)) {
+		err = errors.New(c.serverErr) // the server said why
+	}
+	c.mu.Unlock()
 	return !h.ConnectedAt.IsZero() && h.Status == StatusConnected, err
 }
 
@@ -633,6 +685,7 @@ func (c *Conn) handle(m irc.Message) {
 			c.send(l)
 		}
 		c.notify(Event{Kind: "connected", Title: "Connected to " + c.net.Name, Detail: fmt.Sprintf("%s:%d as %s", c.net.Host, c.net.Port, c.Nick())})
+		c.note("evrd", false, "Signed in as "+c.Nick())
 	case "005": // RPL_ISUPPORT
 		for _, tok := range m.Params[1:] {
 			if v, ok := strings.CutPrefix(tok, "PREFIX=("); ok {
@@ -780,6 +833,13 @@ func (c *Conn) event(kind, channel, who, text, extra string) {
 		NetworkID: c.net.ID, Target: channel, Sender: who,
 		Kind: kind, Text: text, Extra: extra, Time: time.Now(),
 	})
+}
+
+// note adds to the connection log.
+func (c *Conn) note(from string, bad bool, text string) {
+	if c.onLog != nil {
+		c.onLog(LogEntry{At: time.Now(), From: from, Text: text, Bad: bad})
+	}
 }
 
 func (c *Conn) notify(e Event) {

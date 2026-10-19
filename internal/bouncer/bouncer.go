@@ -43,6 +43,7 @@ type Bouncer struct {
 	mu      sync.Mutex
 	ctx     context.Context
 	conns   map[int64]*entry               // network id -> live connection
+	netlog  netLogs                        // each network's connection log
 	clients map[int64]map[*client]struct{} // user id -> attached IRC clients
 	streams map[int64]map[*client]struct{} // user id -> open web chat sockets
 
@@ -131,6 +132,7 @@ func (b *Bouncer) DeleteNetwork(userID, networkID int64) error {
 	if err := b.store.DeleteNetwork(userID, networkID); err != nil {
 		return err
 	}
+	b.netlog.drop(networkID)
 	return b.history.DeleteNetwork(networkID)
 }
 
@@ -223,6 +225,7 @@ func (b *Bouncer) Connect(networkID int64) error {
 			b.observe(n, conn.Nick(), m)
 		},
 		OnEvent:     func(e upstream.Event) { b.AddEvent(n.UserID, e.Kind, e.Title, e.Detail) },
+		OnLog:       func(e upstream.LogEntry) { b.netlog.add(networkID, e) },
 		AltNick:     u.DefaultAltNick,
 		QuitMsg:     u.QuitMsg,
 		CTCPReplies: u.CTCPReplies,
@@ -247,6 +250,7 @@ func (b *Bouncer) Connect(networkID int64) error {
 	}
 	go conn.Run(cctx)
 	b.log.Info("connecting network", "network", n.Name, "host", n.Host)
+	b.logNote(networkID, "Switched on")
 
 	return b.store.SetNetworkEnabled(networkID, true)
 }
@@ -259,6 +263,7 @@ func (b *Bouncer) Disconnect(networkID int64) error {
 	b.mu.Unlock()
 	if e != nil {
 		e.cancel()
+		b.logNote(networkID, "Switched off")
 	}
 	return b.store.SetNetworkEnabled(networkID, false)
 }
@@ -327,6 +332,7 @@ func (b *Bouncer) Reconnect(networkID int64) error {
 	if _, ok := b.ConnFor(networkID); !ok {
 		return nil
 	}
+	b.logNote(networkID, "Settings changed: reconnecting")
 	b.Disconnect(networkID)
 	return b.Connect(networkID)
 }

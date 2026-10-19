@@ -2,7 +2,7 @@
   // The full network settings page, ZNC-style: servers (tried in turn),
   // identity, SASL, certificate trust, channels and the advanced knobs.
   // id = null adds a network.
-  import { onMount, tick } from 'svelte'
+  import { onMount, onDestroy, tick } from 'svelte'
   import { goto } from '$app/navigation'
   import Icon from './Icon.svelte'
   import Field from './Field.svelte'
@@ -19,6 +19,23 @@
 
   const ENCODINGS = ['ISO-8859-1', 'ISO-8859-15', 'windows-1252', 'ISO-8859-2', 'windows-1250', 'windows-1251', 'KOI8-R', 'ISO-8859-7', 'ISO-8859-9', 'Shift_JIS', 'EUC-JP', 'ISO-2022-JP', 'GBK', 'Big5', 'EUC-KR']
   const SECTIONS = [['servers', 'Servers'], ['identity', 'Identity'], ['sasl', 'Authentication'], ['tls', 'Certificates'], ['channels', 'Channels'], ['advanced', 'Advanced']]
+
+  // The live state and the connection log, refreshed while the page is open
+  // (the form keeps what's being edited).
+  let live = $state(null)
+  let log = $state(null)
+  let logTimer
+  async function poll() {
+    if (id == null) return
+    try { const [n, l] = await Promise.all([api.network(id), api.networkLog(id)]); live = n; log = l } catch { /* keep the last */ }
+  }
+  onDestroy(() => clearInterval(logTimer))
+  const state = $derived(live || net)
+  const clockS = (t) => new Date(t).toTimeString().slice(0, 8)
+  async function copyLog() {
+    const text = (log || []).map((e) => `${new Date(e.at).toISOString()} ${e.from}${e.bad ? ' !' : ''} ${e.text}`).join('\n')
+    try { await navigator.clipboard.writeText(text); toast('Copied the connection log') } catch { toast('Couldn’t copy', 'bad') }
+  }
 
   let net = $state(null)          // as loaded (null while adding)
   let f = $state(null)            // the form
@@ -56,6 +73,8 @@
   }
 
   onMount(async () => {
+    poll()
+    logTimer = setInterval(poll, 5000)
     try { const b = await api.bindHosts(); binds = { ...b, hosts: b.hosts || [] } } catch { /* no bind hosts */ }
     if (id == null) { f = blank(); return }
     try { net = await api.network(id); f = fromNet(net) } catch (e) { loadErr = e.status === 404 ? 'That network doesn’t exist (or isn’t yours).' : e.message }
@@ -184,7 +203,7 @@
     </div>
     {#if net}
       <div class="od-cluster">
-        <StatusChip status={net.status} />
+        <StatusChip status={state.status} />
         <a class="btn" href="/chat?net={net.id}"><Icon name="message" />Open chat</a>
       </div>
     {/if}
@@ -193,11 +212,21 @@
   <div class="editor">
     <nav class="toc" aria-label="Sections">
       {#each SECTIONS as [k, l]}<a href="#{k}">{l}</a>{/each}
-      {#if net}<a href="#danger">Remove</a>{/if}
+      {#if net}<a href="#log">Connection log</a><a href="#danger">Remove</a>{/if}
     </nav>
 
     <form class="form sections" novalidate onsubmit={save} aria-label={id == null ? 'Add a network' : `Edit ${net.name}`}>
       {#if formErr}<div class="callout bad" role="alert" id="form-err"><Icon name="alert" /><span>{formErr}</span></div>{/if}
+      {#if state && state.status !== 'connected' && state.status !== 'disconnected' && state.lastError && !state.untrustedFingerprint}
+        <div class="callout bad" role="status" data-testid="conn-problem">
+          <Icon name="alert" />
+          <div class="od-stack" style="--od-gap:6px">
+            <span><b>Can’t connect{state.server ? ' to ' + state.server : ''}:</b> {state.lastError}.</span>
+            {#if state.hint}<span>{state.hint}</span>{/if}
+            <span class="faint" style="font-size:var(--fs-xs)">{state.retryIn ? `Trying again in ${state.retryIn}s` : 'Trying again'}{state.attempts > 1 ? ` · attempt ${state.attempts}` : ''} · <a href="#log">connection log</a></span>
+          </div>
+        </div>
+      {/if}
       {#if net?.untrustedFingerprint && net.status !== 'connected'}
         <div class="callout warn" role="alert">
           <Icon name="shield" />
@@ -380,6 +409,24 @@
       </section>
 
       {#if net}
+        <section class="card" id="log" aria-labelledby="log-h">
+          <div class="section-head" style="margin-bottom:var(--s3)">
+            <div class="od-stack"><h2 id="log-h">Connection log</h2><p class="desc">What evrd did and what the server said while connecting — newest last. What evrd sends isn’t shown (it can carry passwords).</p></div>
+            {#if log?.length}<button class="btn btn-ghost btn-sm" type="button" onclick={copyLog}><Icon name="copy" />Copy</button>{/if}
+          </div>
+          {#if !log}
+            <div class="skel" style="height:80px"></div>
+          {:else if !log.length}
+            <p class="desc" style="font-size:var(--fs-sm)">Nothing yet: entries appear when evrd connects this network.</p>
+          {:else}
+            <ol class="conn-log" data-testid="conn-log">
+              {#each log as e, i (i)}
+                <li class:bad={e.bad} class:server={e.from === 'server'}><time>{clockS(e.at)}</time><span class="from">{e.from}</span><span class="text">{e.text}</span></li>
+              {/each}
+            </ol>
+          {/if}
+        </section>
+
         <section class="card danger-card" id="danger" aria-labelledby="danger-h">
           <div class="panel-grid">
             <div class="od-stack"><h2 id="danger-h">Remove network</h2><p class="desc">Disconnects and deletes its settings and chat history.</p></div>
@@ -398,6 +445,13 @@
 
 <style>
   .back { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
+  .conn-log { list-style: none; margin: 0; padding: var(--s2) 0; max-height: 360px; overflow-y: auto; border-radius: var(--r-row); background: var(--bg-deep); border: 1px solid var(--line-soft); font-family: var(--font-mono); font-size: var(--fs-xs); }
+  .conn-log li { display: grid; grid-template-columns: 64px 52px minmax(0, 1fr); gap: var(--s2); padding: 2px var(--s3); }
+  .conn-log time { color: var(--faint); }
+  .conn-log .from { color: var(--muted); }
+  .conn-log .server .from { color: var(--cyan); }
+  .conn-log .text { overflow-wrap: anywhere; white-space: pre-wrap; }
+  .conn-log .bad .text, .conn-log .bad .from { color: var(--signal); }
   :global(.flip) { transform: rotate(180deg); }
   :global(.flip-v) { transform: rotate(180deg); }
   .editor { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: var(--s6); align-items: start; margin-top: var(--s6); }

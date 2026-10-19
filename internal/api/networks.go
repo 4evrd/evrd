@@ -294,6 +294,16 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// handleNetworkLog is a network's connection log: what evrd did and what
+// the server said while connecting, newest last.
+func (s *Server) handleNetworkLog(w http.ResponseWriter, r *http.Request) {
+	n, ok := s.ownedNetwork(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, s.b.NetworkLog(n.ID))
+}
+
 func (s *Server) handleBuffers(w http.ResponseWriter, r *http.Request) {
 	n, ok := s.ownedNetwork(w, r)
 	if !ok {
@@ -507,7 +517,7 @@ func (s *Server) networkDTO(n store.Network) map[string]any {
 		nick = c.Nick() // the live nick, after any /nick
 		h := c.Health()
 		health = map[string]any{
-			"status": string(h.Status), "lastError": h.LastError, "lastErrorAt": unixT(h.LastErrorAt),
+			"status": string(h.Status), "lastError": h.LastError, "lastErrorAt": unixT(h.LastErrorAt), "hint": h.Hint,
 			"attempts": h.Attempts, "retryIn": int(h.RetryIn.Seconds()), "connectedAt": unixT(h.ConnectedAt),
 			"server": h.Server, "untrustedFingerprint": h.UntrustedFingerprint,
 		}

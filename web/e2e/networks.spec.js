@@ -204,3 +204,37 @@ test('old deep links and the chat settings button lead to the page', async ({ pa
   await page.getByRole('link', { name: 'Network settings' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Deep' })).toBeVisible()
 })
+
+test('a network that can’t connect says why, and the connection log shows what happened', async ({ page }) => {
+  {
+    // one that works, one pointed at a port nothing listens on
+    const ok = await addNetwork(u.api, { name: 'Dev', nick: u.name })
+    const bad = await u.api.post('/api/networks', { name: 'Closed', host: 'ircd', port: 6699, tls: false, nick: u.name })
+    await u.api.post(`/api/networks/${bad.id}/connect`)
+
+    await page.goto(`/networks/${bad.id}`)
+    const problem = page.getByTestId('conn-problem')
+    await expect(problem).toContainText('connection refused', { timeout: 20000 })
+    await expect(problem).toContainText('nothing listens on that port')
+    const log = page.getByTestId('conn-log')
+    await expect(log).toContainText('Switched on')
+    await expect(log).toContainText('Connecting to ircd port 6699 without TLS')
+    await expect(log.locator('li.bad', { hasText: "Couldn't connect: connection refused" })).not.toHaveCount(0)
+    await expect(log).toContainText('Trying again in')
+
+    // the networks list says why too, and links to the log
+    await page.goto('/networks')
+    const closed = card(page, 'Closed')
+    await expect(closed).toContainText('nothing listens on that port')
+    await closed.getByRole('link', { name: 'Connection log' }).click()
+    await expect(page).toHaveURL(new RegExp(`/networks/${bad.id}#log$`))
+
+    // a working network's log: the sign-in, the server's side, no passwords
+    await page.goto(`/networks/${ok.id}`)
+    const okLog = page.getByTestId('conn-log')
+    await expect(okLog).toContainText('Signed in as', { timeout: 20000 })
+    await expect(okLog.locator('li.server')).not.toHaveCount(0)
+    await expect(okLog).not.toContainText('PASS ')
+    await expect(page.getByTestId('conn-problem')).toHaveCount(0)
+  }
+})

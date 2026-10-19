@@ -170,6 +170,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/networks/{id}/disconnect", user(s.handleDisconnect))
 	mux.HandleFunc("GET /api/networks/{id}/messages", user(s.handleMessages))
 	mux.HandleFunc("GET /api/networks/{id}/buffers", user(s.handleBuffers))
+	mux.HandleFunc("GET /api/networks/{id}/log", user(s.handleNetworkLog))
 	mux.HandleFunc("GET /api/networks/{id}/channel", user(s.handleChannel))
 	mux.HandleFunc("POST /api/networks/{id}/read", user(s.handleMarkRead))
 	mux.HandleFunc("GET /api/me/clients", user(s.handleMyClients))

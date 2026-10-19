@@ -114,7 +114,7 @@
         </div>
         <div class="status-line"><StatusChip status={n.status} /><span class="chip nick"><Icon name="user" />{n.currentNick || n.nick}</span></div>
         {#if (n.status === 'reconnecting' || n.status === 'connecting') && n.lastError}
-          <div class="err-note"><Icon name="alert" class="i-sm" /><span>{n.lastError.charAt(0).toUpperCase() + n.lastError.slice(1)}{n.lastErrorAt ? ` at ${clock(n.lastErrorAt)}` : ''}. {n.retryIn ? `Retrying in ${n.retryIn}s` : 'Retrying'}{n.attempts > 1 ? ` · attempt ${n.attempts}` : ''}.</span></div>
+          <div class="err-note"><Icon name="alert" class="i-sm" /><span>{n.lastError.charAt(0).toUpperCase() + n.lastError.slice(1)}{n.lastErrorAt ? ` at ${clock(n.lastErrorAt)}` : ''}. {n.retryIn ? `Retrying in ${n.retryIn}s` : 'Retrying'}{n.attempts > 1 ? ` · attempt ${n.attempts}` : ''}.{#if n.hint}<br /><span class="faint">{n.hint}</span>{/if} <a href="/networks/{n.id}#log">Connection log</a></span></div>
         {/if}
         <div class="stats">
           <div class="od-stat"><span>{n.channels.length}</span><span>Channels</span></div>

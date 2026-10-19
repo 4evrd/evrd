@@ -196,3 +196,23 @@ func TestSelfSignedHint(t *testing.T) {
 		t.Fatal("a self-signed certificate wasn't flagged")
 	}
 }
+
+func TestNetworkLogIsTheOwnersOnly(t *testing.T) {
+	e := newEnv(t)
+	e.user("fay", store.RoleUser)
+	e.user("gus", store.RoleUser)
+	fay := e.login("fay")
+	_, n := fay.do("POST", "/api/networks", map[string]any{"name": "lib", "host": "irc.example.invalid", "port": 6697, "tls": true, "nick": "fay", "enabled": false})
+	id := strconv.FormatInt(int64(n["id"].(float64)), 10)
+	fay.do("POST", "/api/networks/"+id+"/connect", nil)
+	defer fay.do("POST", "/api/networks/"+id+"/disconnect", nil)
+
+	code, log := fay.doAny("GET", "/api/networks/"+id+"/log", nil)
+	entries, _ := log.([]any)
+	if code != 200 || len(entries) == 0 || entries[0].(map[string]any)["text"] != "Switched on" {
+		t.Fatalf("owner: %d %v", code, log)
+	}
+	if code, _ := e.login("gus").doAny("GET", "/api/networks/"+id+"/log", nil); code != 404 {
+		t.Fatalf("someone else got %d", code)
+	}
+}

@@ -56,6 +56,7 @@ export const api = {
   disconnect: (id) => req('POST', `/api/networks/${id}/disconnect`),
   messages: (id, target) => req('GET', `/api/networks/${id}/messages?${q({ target })}`),
   buffers: (id) => req('GET', `/api/networks/${id}/buffers`),
+  networkLog: (id) => req('GET', `/api/networks/${id}/log`),
   channel: (id, target) => req('GET', `/api/networks/${id}/channel?${q({ target })}`),
   markRead: (id, target = '') => req('POST', `/api/networks/${id}/read`, { target }),
 
