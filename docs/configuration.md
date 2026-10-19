@@ -303,6 +303,11 @@ listed network, new or already there — so a migration can create everything
 first, take the old bouncer off IRC, then call again with `connect` (no nick
 clash in between).
 
+`bindHost` is taken as given, as an admin may set one: a ZNC user's vhost
+comes over though it isn't on the `bind_hosts` list. On a network that's
+already there, a `bindHost` in the call replaces its bind host (reconnecting
+it if it's up), so a repeat can fill one in.
+
 A new account has no password and is **claimable**: the first SSO sign-in
 with the same username *and* email links to it — so the provider account must
 be the owner's, not a look-alike. After that it's an ordinary SSO account.
