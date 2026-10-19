@@ -8,6 +8,7 @@
   import Field from './Field.svelte'
   import Switch from './Switch.svelte'
   import StatusChip from './StatusChip.svelte'
+  import ConnLog from './ConnLog.svelte'
   import { api } from '$lib/api.js'
   import { session, refreshNets, refreshMe } from '$lib/session.svelte.js'
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
@@ -31,7 +32,6 @@
   }
   onDestroy(() => clearInterval(logTimer))
   const state = $derived(live || net)
-  const clockS = (t) => new Date(t).toTimeString().slice(0, 8)
   async function copyLog() {
     const text = (log || []).map((e) => `${new Date(e.at).toISOString()} ${e.from}${e.bad ? ' !' : ''} ${e.text}`).join('\n')
     try { await navigator.clipboard.writeText(text); toast('Copied the connection log') } catch { toast('Couldn’t copy', 'bad') }
@@ -419,11 +419,7 @@
           {:else if !log.length}
             <p class="desc" style="font-size:var(--fs-sm)">Nothing yet: entries appear when evrd connects this network.</p>
           {:else}
-            <ol class="conn-log" data-testid="conn-log">
-              {#each log as e, i (i)}
-                <li class:bad={e.bad} class:server={e.from === 'server'}><time>{clockS(e.at)}</time><span class="from">{e.from}</span><span class="text">{e.text}</span></li>
-              {/each}
-            </ol>
+            <ConnLog entries={log} />
           {/if}
         </section>
 
@@ -445,13 +441,6 @@
 
 <style>
   .back { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
-  .conn-log { list-style: none; margin: 0; padding: var(--s2) 0; max-height: 360px; overflow-y: auto; border-radius: var(--r-row); background: var(--bg-deep); border: 1px solid var(--line-soft); font-family: var(--font-mono); font-size: var(--fs-xs); }
-  .conn-log li { display: grid; grid-template-columns: 64px 52px minmax(0, 1fr); gap: var(--s2); padding: 2px var(--s3); }
-  .conn-log time { color: var(--faint); }
-  .conn-log .from { color: var(--muted); }
-  .conn-log .server .from { color: var(--cyan); }
-  .conn-log .text { overflow-wrap: anywhere; white-space: pre-wrap; }
-  .conn-log .bad .text, .conn-log .bad .from { color: var(--signal); }
   :global(.flip) { transform: rotate(180deg); }
   :global(.flip-v) { transform: rotate(180deg); }
   .editor { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: var(--s6); align-items: start; margin-top: var(--s6); }

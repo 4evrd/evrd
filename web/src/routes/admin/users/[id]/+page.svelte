@@ -11,6 +11,7 @@
   import Copy from '$lib/components/Copy.svelte'
   import BouncerSettings from '$lib/components/BouncerSettings.svelte'
   import UserOverview from '$lib/components/UserOverview.svelte'
+  import ConnLog from '$lib/components/ConnLog.svelte'
   import { api } from '$lib/api.js'
   import { session, refreshMe } from '$lib/session.svelte.js'
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
@@ -58,6 +59,14 @@
   let allSessions = $state(false)
   const sessions = $derived([...(ov?.sessions || [])].sort((a, b) => b.lastSeenAt - a.lastSeenAt))
   const shownSessions = $derived(allSessions ? sessions : sessions.slice(0, 5))
+
+  // connection logs, opened per network (refreshed with the page)
+  let logs = $state({})
+  async function loadLog(nid) {
+    try { logs[nid] = await api.admin.networkLog(id, nid) } catch (e) { logs[nid] = [{ at: Date.now(), from: 'evrd', text: 'Couldn’t load the log: ' + e.message, bad: true }] }
+  }
+  function toggleLog(nid) { if (logs[nid]) delete logs[nid]; else loadLog(nid) }
+  $effect(() => { if (cur) for (const k of Object.keys(logs)) loadLog(+k) })
 
   async function patch(body, msg) {
     try {
@@ -158,7 +167,11 @@
             <div><span class="caps">Up for</span><span class="mono">{n.status === 'connected' ? since(n.connectedAt) : '—'}</span></div>
             <div><span class="caps">Unread</span><span class="mono">{n.unread}{n.mentions ? ` · ${n.mentions} mention${n.mentions === 1 ? '' : 's'}` : ''}</span></div>
           </div>
-          {#if n.lastError && n.status !== 'connected'}<p class="callout warn"><Icon name="alert" /><span>{n.lastError}</span></p>{/if}
+          {#if n.lastError && n.status !== 'connected'}<p class="callout warn" data-testid="net-problem"><Icon name="alert" /><span><b>{n.lastError}.</b>{#if n.hint} {n.hint}{/if}</span></p>{/if}
+          <div><button class="btn btn-ghost btn-sm" type="button" aria-expanded={!!logs[n.id]} onclick={() => toggleLog(n.id)}><Icon name={logs[n.id] ? 'chevronDown' : 'chevron'} class="i-sm" />Connection log</button></div>
+          {#if logs[n.id]}
+            {#if logs[n.id].length}<ConnLog entries={logs[n.id]} />{:else}<p class="desc" style="font-size:var(--fs-xs)">Nothing logged yet: entries appear when evrd connects this network.</p>{/if}
+          {/if}
           <div class="chan-chips">
             {#each live?.buffers || [] as b}
               <span class="chan-chip"><Icon name="hash" class="i-sm" /><span>{b.name.replace(/^#/, '')}</span>{#if b.members != null}<span class="faint">{b.members}</span>{/if}{#if b.mentions}<span class="count mention">{b.mentions}</span>{:else if b.unread}<span class="count">{b.unread}</span>{/if}</span>

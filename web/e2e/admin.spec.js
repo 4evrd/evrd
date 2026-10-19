@@ -308,3 +308,21 @@ test('a user’s page lists their latest web sign-ins, the rest behind a button'
     await expect(signins).toHaveCount(5)
   } finally { for (const s of extra) await s.dispose(); await u.cleanup() }
 })
+
+test('admins see why a user’s network can’t connect, and its connection log', async ({ page }) => {
+  const u = await freshUser('alog')
+  try {
+    const bad = await u.api.post('/api/networks', { name: 'Closed', host: 'ircd', port: 6699, tls: false, nick: u.name })
+    await u.api.post(`/api/networks/${bad.id}/connect`)
+    await page.goto(`/admin/users/${u.id}`)
+    const net = page.locator('#networks .net-card', { hasText: 'Closed' })
+    await expect(net.getByTestId('net-problem')).toContainText('connection refused', { timeout: 30000 })
+    await expect(net.getByTestId('net-problem')).toContainText('nothing listens on that port')
+    await net.getByRole('button', { name: 'Connection log' }).click()
+    const log = net.getByTestId('conn-log')
+    await expect(log).toContainText('Connecting to ircd port 6699 without TLS')
+    await expect(log.locator('li.bad', { hasText: "Couldn't connect: connection refused" })).not.toHaveCount(0)
+    await net.getByRole('button', { name: 'Connection log' }).click()
+    await expect(log).toHaveCount(0)
+  } finally { await u.cleanup() }
+})

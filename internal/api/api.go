@@ -187,6 +187,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/users", adminAny(s.handleAdminCreateUser))
 	mux.HandleFunc("GET /api/admin/users/{id}", admin(s.handleAdminGetUser))
 	mux.HandleFunc("GET /api/admin/users/{id}/overview", admin(s.handleAdminUserOverview))
+	mux.HandleFunc("GET /api/admin/users/{id}/networks/{nid}/log", admin(s.handleAdminNetworkLog))
 	mux.HandleFunc("PATCH /api/admin/users/{id}", admin(s.handleAdminUpdateUser))
 	mux.HandleFunc("DELETE /api/admin/users/{id}", admin(s.handleAdminDeleteUser))
 	mux.HandleFunc("POST /api/admin/users/{id}/password", admin(s.handleAdminSetPassword))

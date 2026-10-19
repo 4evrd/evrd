@@ -95,6 +95,7 @@ export const api = {
     createUser: (u) => req('POST', '/api/admin/users', u),
     user: (id) => req('GET', `/api/admin/users/${id}`),
     userOverview: (id) => req('GET', `/api/admin/users/${id}/overview`),
+    networkLog: (id, nid) => req('GET', `/api/admin/users/${id}/networks/${nid}/log`),
     metrics: (range) => req('GET', `/api/admin/metrics?range=${encodeURIComponent(range)}`),
     updateUser: (id, patch) => req('PATCH', `/api/admin/users/${id}`, patch),
     deleteUser: (id) => req('DELETE', `/api/admin/users/${id}`),

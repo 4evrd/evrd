@@ -216,3 +216,30 @@ func TestNetworkLogIsTheOwnersOnly(t *testing.T) {
 		t.Fatalf("someone else got %d", code)
 	}
 }
+
+func TestAdminsSeeAUsersConnectionLog(t *testing.T) {
+	e := newEnv(t)
+	root := e.user("root", store.RoleAdmin)
+	fay := e.user("fay", store.RoleUser)
+	gus := e.user("gus", store.RoleUser)
+	fc := e.login("fay")
+	_, n := fc.do("POST", "/api/networks", map[string]any{"name": "lib", "host": "irc.example.invalid", "port": 6697, "tls": true, "nick": "fay", "enabled": false})
+	nid := strconv.FormatInt(int64(n["id"].(float64)), 10)
+	fc.do("POST", "/api/networks/"+nid+"/connect", nil)
+	defer fc.do("POST", "/api/networks/"+nid+"/disconnect", nil)
+	id := func(u store.User) string { return strconv.FormatInt(u.ID, 10) }
+
+	code, log := e.login("root").doAny("GET", "/api/admin/users/"+id(fay)+"/networks/"+nid+"/log", nil)
+	if entries, _ := log.([]any); code != 200 || len(entries) == 0 {
+		t.Fatalf("admin: %d %v", code, log)
+	}
+	// the network has to be that user's
+	if code, _ := e.login("root").doAny("GET", "/api/admin/users/"+id(gus)+"/networks/"+nid+"/log", nil); code != 404 {
+		t.Fatalf("another user's network: %d", code)
+	}
+	// and it's admins only
+	if code, _ := e.login("gus").doAny("GET", "/api/admin/users/"+id(fay)+"/networks/"+nid+"/log", nil); code != 403 {
+		t.Fatalf("a user got %d", code)
+	}
+	_ = root
+}
