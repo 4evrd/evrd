@@ -24,6 +24,7 @@ packages() {
 }
 delta() { awk -v a="$1" -v b="$2" 'BEGIN { d = a - b; if (d > 0.05) printf "+%.1f", d; else if (d < -0.05) printf "%.1f", d; else printf "±0" }'; }
 
+target=${COVERAGE_TARGET:-80}
 echo '<!-- evrd-coverage -->'
 pr_total=$(total "$pr/coverage.out")
 if [ -n "$base" ] && [ -f "$base/coverage.out" ]; then
@@ -32,9 +33,17 @@ if [ -n "$base" ] && [ -f "$base/coverage.out" ]; then
 	icon="🟰"
 	case $d in +*) icon="📈" ;; -*) icon="📉" ;; esac
 	echo "### $icon Go coverage: **${pr_total}%** ($d vs main's ${base_total}%)"
+	if awk -v p="$pr_total" -v b="$base_total" 'BEGIN { exit !(p + 0.1 < b) }'; then
+		echo
+		echo "> [!WARNING]"
+		echo "> Coverage would drop below main's. Add tests for what this changes (the coverage job fails until then)."
+		: >"${DROPPED_FILE:-/dev/null}"
+	fi
 else
 	echo "### Go coverage: **${pr_total}%**"
 fi
+echo
+awk -v p="$pr_total" -v t="$target" 'BEGIN { if (p + 0 >= t + 0) printf "🎯 At or above the %s%% target.\n", t; else printf "🎯 Target %s%%: %.1f points to go.\n", t, t - p }'
 echo
 
 if [ -n "$base" ] && [ -f "$base/test.out" ]; then
