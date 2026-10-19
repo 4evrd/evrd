@@ -159,7 +159,7 @@ type Network struct {
 	IdentifyOn   string // "" (once connected) or IdentifyOnPrompt (when services ask)
 	// AuthCommand is AuthCommand's line (raw IRC or /msg …), with %nick%,
 	// %account% and %password% (a template: the password stays in Password).
-	AuthCommand string
+	AuthCommand string `gorm:"serializer:secret"`
 	// GhostCmd frees the nick when it's taken: "", "ghost", "regain" or
 	// "recover", sent to the services nick.
 	GhostCmd string
@@ -191,7 +191,7 @@ type Network struct {
 
 	// Modules are the network's modules (internal/modules) by name: on or
 	// off, and their settings.
-	Modules map[string]ModuleConfig `gorm:"serializer:json"`
+	Modules map[string]ModuleConfig `gorm:"serializer:secretjson"` // encrypted like passwords
 }
 
 // ModuleConfig is one module on a network.

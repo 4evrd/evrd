@@ -1,7 +1,8 @@
 package store
 
-// Secrets at rest. Network passwords (SASL/NickServ, per-server PASS) are
-// encrypted in the database with AES-256-GCM under a server key that lives
+// Secrets at rest. Network passwords (SASL/NickServ, per-server PASS), the
+// services login command and module settings (perform's commands can hold
+// an OPER or IDENTIFY password) are encrypted in the database with AES-256-GCM under a server key that lives
 // outside it (config secret_key / EVRD_SECRET_KEY), so a dump or backup of
 // the database doesn't hand them out. Every node needs the same key.
 //
@@ -44,6 +45,7 @@ var keys = &keyring{aeads: map[string]cipher.AEAD{}}
 func init() {
 	schema.RegisterSerializer("secret", secretSerializer{})
 	schema.RegisterSerializer("secretservers", serversSerializer{})
+	schema.RegisterSerializer("secretjson", secretJSONSerializer{})
 }
 
 // SetSecretKeys sets the key secrets are encrypted with (32 bytes) and any
@@ -232,22 +234,64 @@ func (serversSerializer) Value(_ context.Context, _ *schema.Field, _ reflect.Val
 	return string(b), err
 }
 
+// secretJSONSerializer stores a field as JSON, encrypted as a whole. JSON
+// saved before it was encrypted (the plain json serializer) still reads.
+type secretJSONSerializer struct{}
+
+func (secretJSONSerializer) Scan(ctx context.Context, field *schema.Field, dst reflect.Value, dbValue any) error {
+	var stored string
+	switch v := dbValue.(type) {
+	case nil:
+	case string:
+		stored = v
+	case []byte:
+		stored = string(v)
+	default:
+		return fmt.Errorf("store: unexpected %T for a secret", dbValue)
+	}
+	plain, err := openSecret(stored)
+	if err != nil {
+		return err
+	}
+	out := reflect.New(field.FieldType)
+	if plain != "" {
+		if err := json.Unmarshal([]byte(plain), out.Interface()); err != nil {
+			return err
+		}
+	}
+	return field.Set(ctx, dst, out.Elem().Interface())
+}
+
+func (secretJSONSerializer) Value(_ context.Context, _ *schema.Field, _ reflect.Value, fieldValue any) (any, error) {
+	b, err := json.Marshal(fieldValue)
+	if err != nil {
+		return nil, err
+	}
+	if string(b) == "null" || string(b) == "{}" {
+		return "", nil // nothing to hide (and nothing for EncryptSecrets to redo)
+	}
+	return sealSecret(string(b))
+}
+
 // EncryptSecrets rewrites any network secret, saved setting or certificate
 // that isn't
 // encrypted under the current key (plaintext from before a key was set, or an
 // old key's). It reports how many rows it rewrote.
 func (s *gormStore) EncryptSecrets() (int, error) {
 	var rows []struct {
-		ID       int64
-		Password string
-		Servers  string
+		ID          int64
+		Password    string
+		Servers     string
+		AuthCommand string
+		Modules     string
 	}
-	if err := s.db.Table("networks").Select("id", "password", "coalesce(servers, '') as servers").Scan(&rows).Error; err != nil {
+	if err := s.db.Table("networks").Select("id", "password", "coalesce(servers, '') as servers",
+		"coalesce(auth_command, '') as auth_command", "coalesce(modules, '') as modules").Scan(&rows).Error; err != nil {
 		return 0, err
 	}
 	n := 0
 	for _, r := range rows {
-		stale := !current(r.Password)
+		stale := !current(r.Password) || !current(r.AuthCommand) || !current(r.Modules)
 		var list []Server
 		if r.Servers != "" && json.Unmarshal([]byte(r.Servers), &list) == nil {
 			for _, sv := range list {
@@ -261,7 +305,7 @@ func (s *gormStore) EncryptSecrets() (int, error) {
 		if err := s.db.First(&net, r.ID).Error; err != nil {
 			return n, err
 		}
-		if err := s.db.Model(&Network{ID: net.ID}).Select("password", "servers").Updates(&net).Error; err != nil {
+		if err := s.db.Model(&Network{ID: net.ID}).Select("password", "servers", "auth_command", "modules").Updates(&net).Error; err != nil {
 			return n, err
 		}
 		n++

@@ -24,7 +24,7 @@ are stored in the database and win over the file (see below).
 | `provision_token` (`EVRD_PROVISION_TOKEN`) | — | turns on the [provisioning API](#provisioning-api) for tools that create accounts |
 | `db` (`EVRD_DB`) | `sqlite:evrd.db` | accounts and settings: `postgres://user:pass@host/evrd?sslmode=disable` or `sqlite:/path/evrd.db` |
 | `history` (`EVRD_HISTORY`) | `pebble:history` | chat history: `pebble:/var/lib/evrd/history` (one node) or `scylla://host1,host2:9042/evrd` (shared) |
-| `secret_key` (`EVRD_SECRET_KEY`), `secret_key_file`, `secret_key_old` | — | encrypts saved network passwords; see [Saved passwords](#saved-passwords) |
+| `secret_key` (`EVRD_SECRET_KEY`), `secret_key_file`, `secret_key_old` | — | encrypts saved network passwords and module settings; see [Saved passwords](#saved-passwords) |
 | `public_url` | — | the web app's address, e.g. `https://bnc.example.org` (SSO redirects back here) |
 | `irc_host` | `localhost` | the host name users give their IRC clients (shown in the web app) |
 | `password_login` | `yes` | allow password sign-in to the web app; `no` leaves only single sign-on (Admin → Settings refuses it until SSO is set up) |
@@ -311,10 +311,11 @@ with the token); anyone with it can create accounts.
 
 ## Saved passwords
 
-Network passwords (the SASL password and server passwords), the values
-set in Admin → Settings (such as the SSO client secret) and the keys of the
-certificates evrd keeps are encrypted in the
-database with AES-256-GCM under a key that lives outside it:
+Network passwords (the SASL password and server passwords), a network's
+services login command, its module settings (perform's commands can carry an
+`OPER` or `IDENTIFY` password), the values set in Admin → Settings (such as
+the SSO client secret) and the keys of the certificates evrd keeps are
+encrypted in the database with AES-256-GCM under a key that lives outside it:
 
 ```
 secret_key      <32 bytes, base64>   # or EVRD_SECRET_KEY, or secret_key_file /path
@@ -323,8 +324,8 @@ secret_key_old  <previous key>       # optional: still decrypts while rotating
 
 `evrctl genkey` makes a key. Every node needs the same one; keep it out of
 database backups. At startup evrd encrypts anything saved before a key was
-set and re-encrypts anything under an old key — network passwords and
-settings alike — so rotating is: set the new
+set and re-encrypts anything under an old key — network passwords, module
+settings and settings alike — so rotating is: set the new
 `secret_key`, move the old one to `secret_key_old`, restart, then drop it.
 Without a key evrd still runs and warns that these are stored in plaintext.
 Account passwords and client passwords are bcrypt hashes either way.
