@@ -15,6 +15,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="docs/configuration.md">Configuration</a> ·
   <a href="docs/irc-clients.md">IRC clients</a> ·
+  <a href="docs/services.md">Services login</a> ·
   <a href="docs/openbsd.md">OpenBSD</a> ·
   <a href="docs/clustering.md">Clustering</a> ·
   <a href="docs/development.md">Development</a>

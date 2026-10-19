@@ -16,6 +16,24 @@ func open(t *testing.T) Store {
 	return st
 }
 
+func TestNetworkAuthAndItsColumns(t *testing.T) {
+	st := open(t)
+	if (Network{}).Auth() != AuthAuto || (Network{AuthMethod: AuthNickServ}).Auth() != AuthNickServ {
+		t.Fatal("an empty method is auto")
+	}
+	n, err := st.CreateNetwork(Network{UserID: 1, Name: "dal", Nick: "a", Host: "h", AuthMethod: AuthNickServ,
+		ServicesNick: "NickServ@services.dal.net", IdentifyArgs: IdentifyPassword, IdentifyOn: IdentifyOnPrompt,
+		AuthCommand: "x", GhostCmd: "ghost", JoinAfterAuth: true, AuthTimeout: 9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := st.NetworkByID(n.ID)
+	if got.ServicesNick != "NickServ@services.dal.net" || got.IdentifyArgs != IdentifyPassword || got.IdentifyOn != IdentifyOnPrompt ||
+		got.AuthCommand != "x" || got.GhostCmd != "ghost" || !got.JoinAfterAuth || got.AuthTimeout != 9 || got.Auth() != AuthNickServ {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestDeleteUserRemovesEverythingTheyOwn(t *testing.T) {
 	st := open(t)
 	u, _ := st.CreateUser(User{Username: "alice"})

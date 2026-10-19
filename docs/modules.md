@@ -26,9 +26,9 @@ the next sign-in. What modules do shows in the network's connection log.
 | `autoop`, `autovoice` | autoop, autovoice | Gives ops or voice to the people you list when they join a channel where you have ops. | **Who**: one per line, a `nick!user@host` mask (or a nick) and optionally channels: `*!*@friend.example.org #home,#work`. |
 | `alias` | alias | Your own commands for IRC clients: `/op #chan nick` becomes what you define. | **Aliases**: `name = commands`, with `%1`, `%2`… (`%1+` for the rest) and `%nick%`; several commands separated by `;`. |
 | `ctcpflood` | ctcpflood | Stops answering CTCP requests, and passing them on, while too many arrive at once. | **Most CTCPs** (4) **in seconds** (2). |
-| `q` | q | Logs in to QuakeNet's Q with the network's account and password (Authentication), instead of NickServ, and hides your host. | **Hide my host** (yes). |
+| `q` | q | Logs in to QuakeNet's Q with the network's account and password (Authentication), instead of NickServ, and hides your host. The QuakeNet preset under Authentication switches it on. | **Hide my host** (yes). |
 
-Logging in to NickServ, SASL, saving channels, away when nobody's attached,
+Logging in to NickServ, SASL ([services](services.md)), saving channels, away when nobody's attached,
 playback and logs aren't modules: evrd does them itself.
 
 ## For admins

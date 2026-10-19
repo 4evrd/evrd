@@ -124,9 +124,9 @@ test('identity, SASL, certificates and advanced settings are saved', async ({ pa
   // the trust-everything switch warns
   await page.getByRole('switch', { name: 'Trust every certificate' }).click()
   await expect(page.getByText(/Certificates aren’t checked for this network/)).toBeVisible()
-  // the SASL password can be cleared
+  // the services password can be cleared
   await page.getByRole('button', { name: 'Clear', exact: true }).last().click()
-  await expect(page.getByText('Will be removed: evrd connects without SASL.')).toBeVisible()
+  await expect(page.getByText('Will be removed: evrd won’t log in.')).toBeVisible()
 })
 
 test('channels: keys, detached and join-on-connect', async ({ page }) => {

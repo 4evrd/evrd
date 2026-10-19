@@ -29,7 +29,18 @@ var hints = []struct {
 		"The server refuses connections from this bouncer's address. Try another server of the network — some only ban per server — or ask the network's staff why; the server's own words are in the connection log."},
 	{regexp.MustCompile(`(?i)(throttl|too fast|too many (connections|clients|users)|reconnect(ing)? too|wait .* (before|between)|connection limit|session limit|clones)`),
 		"The server limits how often, or how many, connections come from one address — other users of this bouncer on the same network count too. evrd keeps retrying, more slowly each time."},
-	{regexp.MustCompile(`(?i)(password (incorrect|mismatch|required)|bad password|invalid password|sasl authentication failed|authentication failed|login unsuccessful)`),
+	// services and channels that need a login (see services.go)
+	{regexp.MustCompile(`(?i)(must be (registered|identified|logged in)|need (to be )?(identified|logged in|a registered nick)|registered nick|\(\+r\)|registered-only)`),
+		"That channel only lets in people logged in to an account. Set up Authentication, and switch on “Join channels after identifying” so evrd joins once services confirm the login."},
+	{regexp.MustCompile(`(?i)(isn't registered|is not (a )?registered|not a registered|no such account|account does not exist|unknown account)`),
+		"That account isn't registered on this network. Check the account name under Authentication, or register it first (/msg NickServ REGISTER)."},
+	{regexp.MustCompile(`(?i)(suspended|frozen)`),
+		"Services have suspended or frozen this account. Ask the network's staff."},
+	{regexp.MustCompile(`(?i)(services didn't answer|no services nick|services are (down|unavailable))`),
+		"Services didn't answer the way evrd expected. Check the login method and services nick under Authentication: DALnet's is NickServ@services.dal.net, Undernet logs in to X and QuakeNet to Q (pick their presets)."},
+	{regexp.MustCompile(`(?i)(doesn't offer SASL|refused the SASL capability)`),
+		"This network has no SASL. Choose Automatic or NickServ under Authentication, so evrd identifies once connected."},
+	{regexp.MustCompile(`(?i)(password (is )?(incorrect|mismatch|required|wrong)|(bad|invalid|incorrect|wrong) password|invalid (account )?credentials|sasl authentication failed|authentication failed|login (unsuccessful|failed))`),
 		"The password was refused. Check the account and password under Authentication (and a server password, if the server needs one)."},
 	{regexp.MustCompile(`(?i)(didn't answer with TLS|plain-text port)`),
 		"This port doesn't speak TLS. Use the server's TLS port (often 6697, sometimes 9999 or 7000), or switch TLS off for this server."},
@@ -74,8 +85,8 @@ func logged(registered bool, command, prefix string, params []string) bool {
 		return true
 	}
 	switch command {
-	case "432", "433", "436", "437", "463", "464", "465", "466", "484", "902", "904", "905", "906", "908":
-		return true // nick, ban, password and SASL trouble
+	case "432", "433", "436", "437", "463", "464", "465", "466", "477", "484", "902", "904", "905", "906", "908":
+		return true // nick, ban, password, SASL and +r channel trouble
 	case "NOTICE":
 		// from the server itself (no nick!user@host), not from a person
 		return !strings.Contains(prefix, "!")

@@ -1,6 +1,7 @@
 <script>
   // The full network settings page, ZNC-style: servers (tried in turn),
-  // identity, SASL, certificate trust, channels and the advanced knobs.
+  // identity, services login, certificate trust, channels and the advanced
+  // knobs.
   // id = null adds a network.
   import { onMount, onDestroy, tick } from 'svelte'
   import { goto } from '$app/navigation'
@@ -16,6 +17,7 @@
   import { session, refreshNets, refreshMe } from '$lib/session.svelte.js'
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
   import { check, splitChannels } from '$lib/validate.js'
+  import { METHODS, PRESETS, presetOf, applyPreset, usesPassword, checkAuth, authLabel } from '$lib/services.js'
 
   let { id = null } = $props()
   const me = $derived(session.me)
@@ -66,6 +68,8 @@
       servers: (n.servers?.length ? n.servers : [{ host: n.host, port: n.port, tls: n.tls }]).map((s) => ({ host: s.host, port: String(s.port), tls: s.tls, hasPassword: !!s.hasPassword, password: undefined })),
       nick: n.nick, altNick: n.altNick || '', username: n.username || '', realname: n.realname || '', quitMsg: n.quitMsg || '', bindHost: n.bindHost || '',
       saslUser: n.saslUser || '', password: undefined, hasPassword: n.hasPassword,
+      authMethod: n.authMethod || 'auto', servicesNick: n.servicesNick || '', identifyArgs: n.identifyArgs || '', identifyOn: n.identifyOn || '',
+      ghost: n.ghost || '', authCommand: n.authCommand || '', joinAfterAuth: !!n.joinAfterAuth, authTimeout: String(n.authTimeout || 0),
       trustPKI: n.trustPKI, trustAllCerts: n.trustAllCerts, fingerprints: [...(n.fingerprints || [])],
       encodingName: (n.encoding || '').replace(/^\^/, ''), encodingAlways: !!n.encoding && !n.encoding.startsWith('^'),
       floodOn: n.floodRate > 0, floodRate: String(n.floodRate > 0 ? n.floodRate : 2), floodBurst: String(n.floodBurst || 9), joinDelay: String(n.joinDelay || 0),
@@ -79,6 +83,7 @@
       servers: [{ host: '', port: '6697', tls: true, hasPassword: false, password: undefined }],
       nick: me.defaultNick || me.username, altNick: '', username: '', realname: '', quitMsg: '', bindHost: '',
       saslUser: '', password: undefined, hasPassword: false,
+      authMethod: 'auto', servicesNick: '', identifyArgs: '', identifyOn: '', ghost: '', authCommand: '', joinAfterAuth: false, authTimeout: '0',
       trustPKI: true, trustAllCerts: false, fingerprints: [],
       encodingName: '', encodingAlways: false,
       floodOn: true, floodRate: '2', floodBurst: '9', joinDelay: '0', channels: [],
@@ -158,6 +163,7 @@
       e.floodBurst = Number.isInteger(+f.floodBurst) && +f.floodBurst >= 1 && +f.floodBurst <= 1000 ? '' : 'Whole number of lines, 1–1000.'
     }
     e.joinDelay = Number.isInteger(+f.joinDelay) && +f.joinDelay >= 0 && +f.joinDelay <= 600 ? '' : 'Seconds, 0–600.'
+    Object.assign(e, checkAuth(f))
     errs = Object.fromEntries(Object.entries(e).filter(([, v]) => v))
     return !Object.keys(errs).length
   }
@@ -169,6 +175,8 @@
       servers: f.servers.map((sv) => ({ host: sv.host.trim(), port: +sv.port, tls: sv.tls, ...(sv.password !== undefined ? { password: sv.password } : {}) })),
       nick: f.nick.trim(), altNick: f.altNick.trim(), username: f.username.trim(), realname: f.realname.trim(), quitMsg: f.quitMsg.trim(),
       saslUser: f.saslUser.trim(),
+      authMethod: f.authMethod, servicesNick: f.servicesNick.trim(), identifyArgs: f.identifyArgs, identifyOn: f.identifyOn,
+      ghost: f.ghost, authCommand: f.authCommand.trim(), joinAfterAuth: f.joinAfterAuth, authTimeout: +f.authTimeout || 0,
       trustPKI: f.trustPKI, trustAllCerts: f.trustAllCerts, fingerprints: f.fingerprints,
       encoding: f.encodingName ? (f.encodingAlways ? '' : '^') + f.encodingName : '',
       floodRate: f.floodOn ? +f.floodRate : 0, floodBurst: +f.floodBurst || 9, joinDelay: +f.joinDelay || 0,
@@ -353,15 +361,65 @@
 
       <section class="card" id="sasl" aria-labelledby="sasl-h">
         <div class="panel-grid">
-          <div class="od-stack"><h2 id="sasl-h">Authentication</h2><p class="desc">SASL logs you in to your account (NickServ) while connecting. If the network has no SASL, evrd sends the password as PASS instead.</p></div>
+          <div class="od-stack">
+            <h2 id="sasl-h">Authentication</h2>
+            <p class="desc">How evrd logs in to your account with the network’s services: SASL while connecting, or IDENTIFY to NickServ once connected. Pick your network’s kind to fill it in. <a href="https://github.com/4evrd/evrd/blob/main/docs/services.md" target="_blank" rel="noreferrer">More</a></p>
+            {#if state?.auth}<p class="desc" data-testid="auth-state"><span class="chip">{authLabel(state.auth)}</span></p>{/if}
+          </div>
           <div class="form-grid">
-            <Field id="saslUser" label="Account name" help="Usually your registered nick."><input class="input mono" id="saslUser" spellcheck="false" autocomplete="off" placeholder={f.username || f.nick || 'nick'} bind:value={f.saslUser} /></Field>
-            <Field id="saslPass" label="Password" help={pwState(f.hasPassword, f.password) === 'saved' ? 'A password is saved. Type a new one to replace it.' : pwState(f.hasPassword, f.password) === 'cleared' ? 'Will be removed: evrd connects without SASL.' : 'Leave empty if you don’t use SASL.'}>
-              <div class="input-group">
-                <input class="input mono" id="saslPass" type="password" autocomplete="new-password" placeholder={f.hasPassword && f.password === undefined ? '•••••••• (unchanged)' : ''} value={f.password ?? ''} oninput={(e) => (f.password = e.currentTarget.value)} />
-                {#if f.hasPassword && f.password !== ''}<button class="btn btn-ghost btn-sm" type="button" onclick={() => (f.password = '')}>Clear</button>{/if}
-              </div>
+            <Field id="authPreset" label="Network services">
+              <select class="select" id="authPreset" value={presetOf(f)} onchange={(e) => applyPreset(f, e.currentTarget.value)}>
+                {#each PRESETS as p}<option value={p.key}>{p.label}</option>{/each}
+              </select>
             </Field>
+            <Field id="authMethod" label="Login method">
+              <select class="select" id="authMethod" bind:value={f.authMethod}>
+                {#each METHODS as [k, l]}<option value={k}>{l}</option>{/each}
+              </select>
+            </Field>
+            {#if usesPassword(f)}
+              <Field id="saslUser" label="Account name" help="Usually your registered nick."><input class="input mono" id="saslUser" spellcheck="false" autocomplete="off" placeholder={f.authMethod === 'sasl' || f.authMethod === 'auto' ? f.username || f.nick || 'nick' : f.nick || 'nick'} bind:value={f.saslUser} /></Field>
+              <Field id="saslPass" label="Password" help={pwState(f.hasPassword, f.password) === 'saved' ? 'A password is saved. Type a new one to replace it.' : pwState(f.hasPassword, f.password) === 'cleared' ? 'Will be removed: evrd won’t log in.' : 'Your services password. Leave empty if you don’t have an account.'}>
+                <div class="input-group">
+                  <input class="input mono" id="saslPass" type="password" autocomplete="new-password" placeholder={f.hasPassword && f.password === undefined ? '•••••••• (unchanged)' : ''} value={f.password ?? ''} oninput={(e) => (f.password = e.currentTarget.value)} />
+                  {#if f.hasPassword && f.password !== ''}<button class="btn btn-ghost btn-sm" type="button" onclick={() => (f.password = '')}>Clear</button>{/if}
+                </div>
+              </Field>
+            {/if}
+            {#if f.authMethod === 'none' && f.modules?.q?.enabled}
+              <p class="desc span-2">The q module logs in to QuakeNet’s Q with this account and password.</p>
+            {/if}
+            {#if f.authMethod === 'auto' || f.authMethod === 'nickserv'}
+              <Field id="servicesNick" label="Services nick" help={f.authMethod === 'auto' ? 'Used when the network has no SASL.' : 'Where IDENTIFY goes. /NS sends the server’s own NS command.'} err={errs.servicesNick}><input class="input mono" id="servicesNick" spellcheck="false" autocomplete="off" placeholder="NickServ" bind:value={f.servicesNick} aria-invalid={!!errs.servicesNick} /></Field>
+              <Field id="identifyArgs" label="IDENTIFY sends">
+                <select class="select" id="identifyArgs" bind:value={f.identifyArgs}>
+                  <option value="">The account only when it isn’t the nick in use</option>
+                  <option value="account">Account and password (Atheme, Anope)</option>
+                  <option value="password">Just the password (older services)</option>
+                </select>
+              </Field>
+              <Field id="identifyOn" label="Identify">
+                <select class="select" id="identifyOn" bind:value={f.identifyOn}>
+                  <option value="">As soon as evrd is connected</option>
+                  <option value="prompt">When NickServ asks for the password</option>
+                </select>
+              </Field>
+            {/if}
+            {#if f.authMethod === 'command'}
+              <Field id="authCommand" label="Login command" span help="Raw IRC, or /msg target text. <span class='code'>%account%</span>, <span class='code'>%password%</span> and <span class='code'>%nick%</span> are filled in — don’t type the password itself." err={errs.authCommand}><input class="input mono" id="authCommand" spellcheck="false" autocomplete="off" placeholder="PRIVMSG X@channels.undernet.org :LOGIN %account% %password%" bind:value={f.authCommand} aria-invalid={!!errs.authCommand} /></Field>
+            {/if}
+            {#if f.authMethod !== 'none'}
+              <Field id="ghost" label="When the nick is taken" help="After logging in, ask services to free it, then switch to it.">
+                <select class="select" id="ghost" bind:value={f.ghost}>
+                  <option value="">Keep the alternate nick</option>
+                  <option value="ghost">GHOST it</option>
+                  <option value="regain">REGAIN it (Atheme)</option>
+                  <option value="recover">RECOVER it (Anope)</option>
+                </select>
+              </Field>
+              <Field id="authTimeout" label="Wait for services" help="Seconds to wait for an answer (0 = 15)." err={errs.authTimeout}><input class="input mono" id="authTimeout" inputmode="numeric" bind:value={f.authTimeout} aria-invalid={!!errs.authTimeout} /></Field>
+              <div class="check-row span-2"><span class="od-field"><span id="jaa-l">Join channels after identifying</span><span>Holds the joins until services confirm the login, for channels only logged-in users may join (+r).</span></span><Switch checked={f.joinAfterAuth} labelledby="jaa-l" onchange={(v) => (f.joinAfterAuth = v)} /></div>
+            {/if}
           </div>
         </div>
       </section>
