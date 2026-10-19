@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 	_ "time/tzdata" // time zones for playback timestamps, even in images without tzdata
@@ -354,6 +355,9 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 		}
 	})
 	go sm.Run(ctx)
+	// A listener that fails stops evrd; it then exits 1, not 0, so a service
+	// manager sees the failure.
+	var failed atomic.Bool
 	if cc.Enabled() {
 		irc.SetCluster(cl, cc.Secret)
 		srv.SetCluster(cl, cc.Secret)
@@ -361,6 +365,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 		go func() {
 			if err := srv.ListenInternal(ctx, cc.InternalListen); err != nil {
 				log.Error("internal api", "err", err)
+				failed.Store(true)
 				stop()
 			}
 		}()
@@ -383,6 +388,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 		go func() {
 			if err := srv.ListenAndServeTLS(ctx, cfg.HTTPSListen, certMgr.TLSConfig()); err != nil {
 				log.Error("https", "err", err)
+				failed.Store(true)
 				stop()
 			}
 		}()
@@ -391,6 +397,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 		go func() {
 			if err := srv.ListenAndServeHTTP(ctx, cfg.HTTPListen, certMgr.HTTPHandler(cfg.HTTPSListen)); err != nil {
 				log.Error("http", "err", err)
+				failed.Store(true)
 				stop()
 			}
 		}()
@@ -403,6 +410,9 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 	// Shutting down: hand this node's users to the others before closing the
 	// stores underneath them.
 	<-clusterDone
+	if failed.Load() {
+		return 1
+	}
 	return 0
 }
 
