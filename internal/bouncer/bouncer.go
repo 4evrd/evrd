@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/4evrd/evrd/internal/history"
@@ -42,10 +43,11 @@ type Bouncer struct {
 
 	mu      sync.Mutex
 	ctx     context.Context
-	conns   map[int64]*entry               // network id -> live connection
-	netlog  netLogs                        // each network's connection log
-	clients map[int64]map[*client]struct{} // user id -> attached IRC clients
-	streams map[int64]map[*client]struct{} // user id -> open web chat sockets
+	conns   map[int64]*entry                // network id -> live connection
+	netlog  netLogs                         // each network's connection log
+	modsOff atomic.Pointer[map[string]bool] // modules switched off server-wide
+	clients map[int64]map[*client]struct{}  // user id -> attached IRC clients
+	streams map[int64]map[*client]struct{}  // user id -> open web chat sockets
 
 	rmu   sync.Mutex
 	reads map[int64]*netReads // network id -> unread state (networks run here)
@@ -226,6 +228,7 @@ func (b *Bouncer) Connect(networkID int64) error {
 		},
 		OnEvent:     func(e upstream.Event) { b.AddEvent(n.UserID, e.Kind, e.Title, e.Detail) },
 		OnLog:       func(e upstream.LogEntry) { b.netlog.add(networkID, e) },
+		ModulesOff:  b.modulesOff,
 		AltNick:     u.DefaultAltNick,
 		QuitMsg:     u.QuitMsg,
 		CTCPReplies: u.CTCPReplies,
@@ -570,4 +573,33 @@ func orElse(s, fallback string) string {
 		return s
 	}
 	return fallback
+}
+
+// SetModulesOff switches modules off (or back on) server-wide, at once on
+// every running connection.
+func (b *Bouncer) SetModulesOff(names []string) {
+	off := map[string]bool{}
+	for _, n := range names {
+		off[strings.ToLower(n)] = true
+	}
+	b.modsOff.Store(&off)
+	b.mu.Lock()
+	conns := make([]*upstream.Conn, 0, len(b.conns))
+	for _, e := range b.conns {
+		conns = append(conns, e.conn)
+	}
+	b.mu.Unlock()
+	for _, c := range conns {
+		c.RestartModules()
+	}
+}
+
+// ModulesOff are the modules switched off server-wide.
+func (b *Bouncer) ModulesOff() map[string]bool { return b.modulesOff() }
+
+func (b *Bouncer) modulesOff() map[string]bool {
+	if p := b.modsOff.Load(); p != nil {
+		return *p
+	}
+	return nil
 }

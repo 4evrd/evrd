@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { login, confirm, freshUser, addNetwork } from './helpers.js'
+import { login, confirm, freshUser, addNetwork, session, ADMIN, ADMIN_PASS } from './helpers.js'
 
 let u
 test.beforeEach(async ({ page }) => {
@@ -236,5 +236,41 @@ test('a network that can’t connect says why, and the connection log shows what
     await expect(okLog.locator('li.server')).not.toHaveCount(0)
     await expect(okLog).not.toContainText('PASS ')
     await expect(page.getByTestId('conn-problem')).toHaveCount(0)
+  }
+})
+
+test('modules: switch perform on, give it a command, and it runs at sign-in', async ({ page }) => {
+  const chan = '#perf' + Date.now().toString(36).slice(-5)
+  const n = await u.api.post('/api/networks', { name: 'Mods', host: 'ircd', port: 6667, tls: false, nick: u.name })
+  await page.goto(`/networks/${n.id}`)
+  const perform = page.getByTestId('module-perform')
+  await expect(perform).toContainText('ZNC perform')
+  await perform.getByRole('switch').click()
+  await perform.getByLabel('Commands').fill(`/join ${chan}\n/mode %nick% +i`)
+  await save(page)
+  await expect(page.getByText('Saved Mods')).toBeVisible()
+  const saved = await u.api.get(`/api/networks/${n.id}`)
+  expect(saved.modules.perform).toEqual({ enabled: true, settings: { commands: `/join ${chan}\n/mode %nick% +i` } })
+
+  // it runs when the network signs in
+  await u.api.post(`/api/networks/${n.id}/connect`)
+  await expect.poll(async () => (await u.api.get(`/api/networks/${n.id}`)).channels, { timeout: 20000 }).toContain(chan)
+  await page.reload()
+  await expect(page.getByTestId('conn-log')).toContainText('perform: sent 2 commands', { timeout: 20000 })
+  await expect(page.getByTestId('module-perform').getByRole('switch')).toBeChecked()
+})
+
+test('modules an admin switches off are unavailable', async ({ page }) => {
+  const admin = await session(ADMIN, ADMIN_PASS)
+  try {
+    await admin.patch('/api/admin/settings', { set: { modules_off: 'autovoice' } })
+    const n = await u.api.post('/api/networks', { name: 'Off', host: 'ircd', port: 6667, tls: false, nick: u.name })
+    await page.goto(`/networks/${n.id}`)
+    await expect(page.getByTestId('module-autovoice')).toContainText('Switched off by an admin')
+    await expect(page.getByTestId('module-autovoice').getByRole('switch')).toHaveCount(0)
+    await expect(page.getByTestId('module-autoop').getByRole('switch')).toHaveCount(1)
+  } finally {
+    await admin.patch('/api/admin/settings', { reset: ['modules_off'] })
+    await admin.dispose()
   }
 })

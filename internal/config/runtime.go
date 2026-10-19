@@ -108,6 +108,10 @@ var Specs = []Spec{
 	{Key: "tls_key", Group: "HTTPS & TLS", Label: "Key file", Kind: "string", Restart: true,
 		get: func(c *Config) string { return c.TLSKey }},
 
+	{Key: "modules_off", Group: "Modules", Label: "Switched-off modules", Kind: "list",
+		Help:  "Modules nobody can use on this server (e.g. autoop autovoice), space-separated. Running ones stop at once.",
+		get:   func(c *Config) string { return strings.Join(c.ModulesOff, " ") },
+		reset: func(c *Config) { c.ModulesOff = nil }},
 	{Key: "password_login", Group: "Sign-in", Label: "Password sign-in", Kind: "bool",
 		Help: "Let users sign in to the web app with a password. Turn off to use single sign-on only (set it up first). IRC clients still attach with client passwords.",
 		get:  func(c *Config) string { return fmtBool(c.Auth.PasswordLogin) }},

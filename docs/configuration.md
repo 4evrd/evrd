@@ -18,6 +18,7 @@ are stored in the database and win over the file (see below).
 | `https_listen`, `http_listen` | — | evrd serves the web app over HTTPS itself (e.g. `:443`), and redirects plain HTTP (e.g. `:80`) |
 | `web_root` | — | the built web app (`web/build`) for evrd to serve on `api` and `https_listen`, without nginx |
 | `chroot`, `user` | — | confine evrd after startup; see [Confinement](#confinement-chroot-and-user) |
+| `modules_off` | — | [modules](modules.md) nobody on this server can use, space-separated |
 | `links_socket` (`EVRD_LINKS_SOCKET`) | — | the [connection holder](#connection-holder)'s socket: IRC connections stay up while evrd restarts (one node only) |
 | `provision_token` (`EVRD_PROVISION_TOKEN`) | — | turns on the [provisioning API](#provisioning-api) for tools that create accounts |
 | `db` (`EVRD_DB`) | `sqlite:evrd.db` | accounts and settings: `postgres://user:pass@host/evrd?sslmode=disable` or `sqlite:/path/evrd.db` |

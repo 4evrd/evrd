@@ -610,6 +610,10 @@ func (se *session) handleClient(m irc.Message) {
 		// Everything else (JOIN, PART, MODE, WHO, NAMES, TOPIC, LIST, …) goes
 		// straight to the upstream; replies come back over the raw feed. The
 		// upstream saves joins and parts to the network's channel list.
+		// A module (alias) may take the line instead.
+		if se.up.ClientLine(m.String()) {
+			return
+		}
 		se.up.SendRaw(m.String())
 	}
 }

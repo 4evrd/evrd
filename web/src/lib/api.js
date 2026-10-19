@@ -57,6 +57,7 @@ export const api = {
   messages: (id, target) => req('GET', `/api/networks/${id}/messages?${q({ target })}`),
   buffers: (id) => req('GET', `/api/networks/${id}/buffers`),
   networkLog: (id) => req('GET', `/api/networks/${id}/log`),
+  modules: () => req('GET', '/api/modules'),
   channel: (id, target) => req('GET', `/api/networks/${id}/channel?${q({ target })}`),
   markRead: (id, target = '') => req('POST', `/api/networks/${id}/read`, { target }),
 

@@ -329,3 +329,38 @@ func TestStatusShowAndSet(t *testing.T) {
 	ic.expect("(cleared)")
 	eventually(t, "password cleared", func() bool { return r.network("two").Password == "" })
 }
+
+func TestModulesFromStatus(t *testing.T) {
+	r := newRig(t)
+	ic := r.attach("alice/one:alice-password")
+	ic.expect("JOIN #one")
+	ic.send("PRIVMSG *status :loadmod nosuch")
+	ic.expect(`No module "nosuch"`)
+	ic.send("PRIVMSG *status :loadmod alias")
+	ic.expect("alias is on for one.")
+	ic.send("PRIVMSG *status :modset alias aliases hi = /msg %1 hello | yo = /msg %1 yo")
+	ic.expect("Set alias's aliases on one.")
+	eventually(t, "saved", func() bool {
+		m := r.network("one").Modules["alias"]
+		return m.Enabled && m.Settings["aliases"] == "hi = /msg %1 hello\nyo = /msg %1 yo"
+	})
+	ic.send("PRIVMSG *status :modset kickrejoin delay soon")
+	ic.expect("must be a whole number")
+	ic.send("PRIVMSG *status :modules")
+	ic.expect("alias      ON")
+	// the alias works at once, from this client: sent as the user's own
+	// message, so it's saved like one
+	ic.send("HI #one")
+	n := r.network("one")
+	eventually(t, "the alias's message saved", func() bool {
+		for _, m := range chat(r.hist, n.ID, "#one") {
+			if m.Text == "hello" {
+				return true
+			}
+		}
+		return false
+	})
+	ic.send("PRIVMSG *status :unloadmod alias")
+	ic.expect("alias is off for one.")
+	eventually(t, "off", func() bool { return !r.network("one").Modules["alias"].Enabled })
+}

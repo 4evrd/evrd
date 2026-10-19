@@ -167,6 +167,16 @@ type Network struct {
 	Channels        []string                   `gorm:"serializer:json"`
 	ChannelSettings map[string]ChannelSettings `gorm:"serializer:json"` // by lowercased name
 	Enabled         bool
+
+	// Modules are the network's modules (internal/modules) by name: on or
+	// off, and their settings.
+	Modules map[string]ModuleConfig `gorm:"serializer:json"`
+}
+
+// ModuleConfig is one module on a network.
+type ModuleConfig struct {
+	Enabled  bool              `json:"enabled"`
+	Settings map[string]string `json:"settings,omitempty"`
 }
 
 // Server is one of a network's servers.
