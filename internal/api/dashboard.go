@@ -615,6 +615,9 @@ func dbAddr(dsn string) string {
 	if strings.HasPrefix(dsn, "sqlite:") || strings.HasPrefix(dsn, "pebble:") {
 		return strings.SplitN(dsn, ":", 2)[1]
 	}
+	if !strings.Contains(dsn, ":") {
+		return dsn // a bare path: a Pebble directory
+	}
 	rest := dsn
 	if i := strings.Index(rest, "://"); i >= 0 {
 		rest = rest[i+3:]
