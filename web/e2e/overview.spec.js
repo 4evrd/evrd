@@ -96,7 +96,7 @@ test('reconnects: which network, how often and why', async ({ page }) => {
   await expect.poll(async () => (await u.api.get('/api/reconnects')).networks.find((n) => n.id === bad.id)?.failed || 0, { timeout: 120000, intervals: [5000] }).toBeGreaterThan(0)
   await page.reload()
   await expect(row).toContainText(/[1-9]\d* failed/)
-  await expect(row.locator('.rc-hours rect.on')).not.toHaveCount(0)
+  await expect(row.locator('.rc-hours span.on')).not.toHaveCount(0)
 
   // its events only, then its connection log
   await row.getByRole('button', { name: 'Its events' }).click()
