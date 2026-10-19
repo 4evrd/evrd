@@ -53,11 +53,12 @@ judge() {
 		NR == FNR { b[$1] = $2; next }
 		{
 			p = $1; c = $2 + 0; has = (p in b); base = b[p] + 0
-			need = min; if (has && base < min) need = base; if (need == min) slack = 0.05
+			need = min; tol = slack # per part: the minimum itself gets none
+			if (has && base < min) need = base; else tol = 0.05
 			if (c + 0.05 >= min) status = "✅"
 			# a point of slack against main: concurrent code covers a little
 			# differently from run to run
-			else if (c + slack < need) {
+			else if (c + tol < need) {
 				status = "❌"
 				if (!has) why = "a new " kind " needs " min "%"
 				else if (base < min) why = "main has " base "%"
