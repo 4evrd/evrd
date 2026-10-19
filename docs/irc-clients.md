@@ -27,7 +27,9 @@ The web chat understands `/join`, `/part`, `/msg`, `/query`, `/me`, `/notice`,
 `/nick`, `/topic`, `/mode`, `/kick`, `/close`, `/quote` and `/help`, and runs
 `*status` commands too (`/msg *status help`, or `/status help`).
 
-`/msg *status help` lists the bouncer's own commands (ZNC's names work too):
+`/msg *status help` lists the bouncer's own commands. ZNC's names work too
+(`ListNetworks`, `JumpNetwork`, `AddNetwork`…), and so does ZNC's raw command:
+`/znc ListNetworks` (or `/quote znc …`) is the same as `/msg *status ListNetworks`.
 
 | command | does |
 |---|---|
