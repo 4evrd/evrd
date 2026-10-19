@@ -3,8 +3,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/url"
 	"os"
@@ -36,19 +38,30 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "", "path to config file (optional; default $EVRD_CONFIG)")
-	showVersion := flag.Bool("version", false, "print version and exit")
-	flag.Parse()
+	os.Exit(run(context.Background(), os.Args, os.Stdout, os.Stderr))
+}
+
+// run is evrd: args are its command line (args[0] the program name), and the
+// result is the exit status. It serves until ctx is cancelled or SIGINT or
+// SIGTERM arrives. Failures are logged to stderr where they happen.
+func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	configPath := flags.String("config", "", "path to config file (optional; default $EVRD_CONFIG)")
+	showVersion := flags.Bool("version", false, "print version and exit")
+	if err := flags.Parse(args[1:]); err != nil {
+		return flagExit(err)
+	}
 	if *configPath == "" {
 		*configPath = os.Getenv("EVRD_CONFIG") // e.g. set in a container image or compose file
 	}
 
 	if *showVersion {
-		fmt.Println("evrd", version.Version)
-		return
+		fmt.Fprintln(stdout, "evrd", version.Version)
+		return 0
 	}
 
-	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	log := slog.New(slog.NewTextHandler(stderr, nil))
 
 	// The file (or defaults); the environment and the settings saved in the
 	// admin UI are layered on top (see internal/settings).
@@ -57,14 +70,14 @@ func main() {
 		loaded, err := config.LoadFile(*configPath)
 		if err != nil {
 			log.Error("load config", "path", *configPath, "err", err)
-			os.Exit(1)
+			return 1
 		}
 		base = loaded
 	}
 	cfg, err := base.WithSettings(nil)
 	if err != nil {
 		log.Error("environment", "err", err)
-		os.Exit(1)
+		return 1
 	}
 
 	cur, old, err := cfg.SecretKeys()
@@ -73,7 +86,7 @@ func main() {
 	}
 	if err != nil {
 		log.Error("secret key", "err", err)
-		os.Exit(1)
+		return 1
 	}
 	if cur == nil {
 		log.Warn("no secret_key set: network passwords are stored unencrypted (evrctl genkey makes a key)")
@@ -84,7 +97,7 @@ func main() {
 	certMgr := certs.New(log)
 	if err := certMgr.LoadFiles(cfg.TLSCert, cfg.TLSKey); err != nil && cfg.TLSSource() == "files" {
 		log.Error("tls_cert", "err", err)
-		os.Exit(1)
+		return 1
 	}
 
 	// Confine evrd (chroot, user; unveil and pledge on OpenBSD) now that it
@@ -101,12 +114,12 @@ func main() {
 		addrs := append([]string{cfg.API, cfg.HTTPSListen, cfg.HTTPListen, cfg.Cluster.InternalListen, cfg.Cluster.InternalIRCListen}, cfg.Listen...)
 		if err := listen.Prebind(addrs...); err != nil {
 			log.Error("listen", "err", err)
-			os.Exit(1)
+			return 1
 		}
 		jail := *cfg
 		if err := jail.Jail(); err != nil {
 			log.Error("chroot", "err", err)
-			os.Exit(1)
+			return 1
 		}
 		dbDSN, histDSN, webRoot = jail.DB, jail.History, jail.WebRoot
 		if base.WriteConf && cfg.Chroot != "" {
@@ -133,7 +146,7 @@ func main() {
 			in, ok := cfg.InChroot(linksSocket)
 			if cfg.Chroot != "" && !ok {
 				log.Error("links_socket must be inside the chroot", "path", linksSocket, "chroot", cfg.Chroot)
-				os.Exit(1)
+				return 1
 			}
 			linksSocket = in
 			sb.Write = append(sb.Write, linksSocket)
@@ -143,7 +156,7 @@ func main() {
 		sandbox.Preload()
 		if err := sandbox.Enter(sb); err != nil {
 			log.Error("sandbox", "err", err)
-			os.Exit(1)
+			return 1
 		}
 		log.Info("sandboxed", "chroot", cfg.Chroot, "user", cfg.User)
 		if cfg.Chroot != "" {
@@ -157,12 +170,12 @@ func main() {
 	st, err := store.Open(dbDSN)
 	if err != nil {
 		log.Error("open store", "dsn", dbDSN, "err", err)
-		os.Exit(1)
+		return 1
 	}
 	defer st.Close()
 	if n, err := st.EncryptSecrets(); err != nil {
 		log.Error("encrypt saved secrets", "err", err)
-		os.Exit(1)
+		return 1
 	} else if n > 0 {
 		log.Info("re-encrypted saved secrets", "rows", n)
 	}
@@ -174,13 +187,13 @@ func main() {
 	sm, err := settings.New(st, base, nodeID, log)
 	if err != nil {
 		log.Error("load settings", "err", err)
-		os.Exit(1)
+		return 1
 	}
 	cfg = sm.Config()
 	certMgr.SetStore(st)
 	if err := certMgr.Apply(cfg); err != nil {
 		log.Error("tls", "err", err)
-		os.Exit(1)
+		return 1
 	}
 	if cfg.WriteConf && cfg.Cluster.Enabled() {
 		log.Warn("settings_write_conf is on in a cluster: every node rewrites its own config file — usually leave it off and let the database hold settings")
@@ -189,7 +202,7 @@ func main() {
 	hist, err := history.Open(histDSN)
 	if err != nil {
 		log.Error("open history", "store", redact(histDSN), "err", err)
-		os.Exit(1)
+		return 1
 	}
 	defer hist.Close()
 	// History used to live in the SQL database: move any left there, once.
@@ -201,13 +214,13 @@ func main() {
 	})
 	if err != nil {
 		log.Error("move history out of the database", "moved", n, "err", err)
-		os.Exit(1)
+		return 1
 	}
 	if n > 0 {
 		log.Info("moved history out of the database", "messages", n, "to", redact(cfg.History))
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(parent, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	acc := accounts.New(st, cfg.Limits)
@@ -215,7 +228,7 @@ func main() {
 	am, err := auth.New(ctx, st, acc, cfg.Auth, cfg.PublicURL, log)
 	if err != nil {
 		log.Error("set up sign-in", "issuer", cfg.Auth.OIDCIssuer, "err", err)
-		os.Exit(1)
+		return 1
 	}
 	if !cfg.Auth.PasswordLogin && !cfg.Auth.OIDCEnabled() {
 		log.Warn("password_login is off and no oidc_issuer is set — nobody can sign in to the web app")
@@ -228,7 +241,7 @@ func main() {
 	if cc.Enabled() {
 		if cc.Secret == "" || cc.InternalURL == "" || cc.InternalIRCListen == "" || cc.InternalIRCAddr == "" {
 			log.Error("cluster: internal_listen needs cluster_secret, internal_url, internal_irc_listen and internal_irc_addr")
-			os.Exit(1)
+			return 1
 		}
 		if !strings.HasPrefix(cfg.History, "scylla://") && !strings.HasPrefix(cfg.History, "cassandra://") {
 			log.Warn("cluster: history is on local disk — each node will only see its own; use a scylla:// history store")
@@ -247,7 +260,7 @@ func main() {
 	ob, err := outbound.New(outbound.Config{Rate: cfg.Outbound.ConnectRate, Bind: cfg.Outbound.Bind, Prefix6: cfg.Outbound.Prefix6})
 	if err != nil {
 		log.Error("outbound", "err", err)
-		os.Exit(1)
+		return 1
 	}
 	b.SetDialer(ob.DialFrom)
 	if linksSocket != "" {
@@ -259,7 +272,7 @@ func main() {
 	}
 	if err := b.Start(ctx); err != nil {
 		log.Error("start bouncer", "err", err)
-		os.Exit(1)
+		return 1
 	}
 	cl.Tick() // take this node's users before serving anyone
 	b.CloseStrayLinks(ctx)
@@ -278,7 +291,7 @@ func main() {
 	})
 	if err != nil {
 		log.Error("telemetry", "err", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() {
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -298,7 +311,7 @@ func main() {
 	}
 	if err := telemetry.RegisterGauges(gauges); err != nil {
 		log.Error("telemetry gauges", "err", err)
-		os.Exit(1)
+		return 1
 	}
 	if cfg.Metrics.OTLPEndpoint != "" {
 		log.Info("exporting metrics", "endpoint", redact(cfg.Metrics.OTLPEndpoint))
@@ -358,6 +371,7 @@ func main() {
 	// renewal — no restart, so nobody's connections drop.
 	hup := make(chan os.Signal, 1)
 	signal.Notify(hup, syscall.SIGHUP)
+	defer signal.Stop(hup)
 	go func() {
 		for range hup {
 			if err := certMgr.Reload(); err != nil {
@@ -384,11 +398,22 @@ func main() {
 
 	if err := srv.ListenAndServe(ctx, cfg.API); err != nil {
 		log.Error("api server", "err", err)
-		os.Exit(1)
+		return 1
 	}
 	// Shutting down: hand this node's users to the others before closing the
 	// stores underneath them.
 	<-clusterDone
+	return 0
+}
+
+// flagExit is the exit status for a command-line parse error, as
+// flag.ExitOnError would exit: 0 for -h or -help, else 2. The flag package
+// has already printed the error and usage.
+func flagExit(err error) int {
+	if errors.Is(err, flag.ErrHelp) {
+		return 0
+	}
+	return 2
 }
 
 // localPath is the file path in an SQLite or Pebble DSN (not a server's).
