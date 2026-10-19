@@ -43,7 +43,7 @@
       <article class="rc-net" data-testid="reconnects-net">
         <div class="rc-top">
           <span class="rc-name"><b>{n.name}</b>
-            <span class="sub">{#if data.available}{t('overview.rcNetDropped', { count: n.dropped })} · {t('overview.rcNetFailed', { count: n.failed })}{#if n.total > n.dropped + n.failed} · {t('overview.rcNetEarlier', { count: n.total - n.dropped - n.failed })}{/if} · {t('overview.rcNetOffline', { count: n.offlineMin })}{:else}{t('overview.rcAttempts', { count: n.attempts || 0 })}{/if}</span></span>
+            <span class="sub">{#if data.available}{t('overview.rcNetDropped', { count: n.dropped })} · {t('overview.rcNetFailed', { count: n.failed })}{#if n.total > n.dropped + n.failed}{' · '}{t('overview.rcNetEarlier', { count: n.total - n.dropped - n.failed })}{/if} · {t('overview.rcNetOffline', { count: n.offlineMin })}{:else}{t('overview.rcAttempts', { count: n.attempts || 0 })}{/if}</span></span>
           {#if !n.enabled}<span class="chip">{t('overview.rcSwitchedOff')}</span>{/if}
           <StatusChip status={n.status} />
         </div>
