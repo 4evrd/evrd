@@ -21,14 +21,21 @@ type LogEntry struct {
 
 // hints match a failure (evrd's description of it, or what the server said)
 // to what it means and what to do about it. First match wins.
+var (
+	// bannedRE and throttledRE also set how long evrd waits before trying
+	// again (Run): a ban or a throttle only gets longer when retried soon.
+	bannedRE    = regexp.MustCompile(`(?i)\b(banned|k-?lined?|g-?lined?|z-?lined?|d-?lined?|akill|autokill|you are not welcome|access denied)\b`)
+	throttledRE = regexp.MustCompile(`(?i)(throttl|too fast|too many (connections|clients|users)|reconnect(ing)? too|wait .* (before|between)|connection limit|session limit|clones)`)
+)
+
 var hints = []struct {
 	re   *regexp.Regexp
 	hint string
 }{
-	{regexp.MustCompile(`(?i)\b(banned|k-?lined?|g-?lined?|z-?lined?|d-?lined?|akill|autokill|you are not welcome|access denied)\b`),
-		"The server refuses connections from this bouncer's address. Try another server of the network — some only ban per server — or ask the network's staff why; the server's own words are in the connection log."},
-	{regexp.MustCompile(`(?i)(throttl|too fast|too many (connections|clients|users)|reconnect(ing)? too|wait .* (before|between)|connection limit|session limit|clones)`),
-		"The server limits how often, or how many, connections come from one address — other users of this bouncer on the same network count too. evrd keeps retrying, more slowly each time."},
+	{bannedRE,
+		"The server refuses connections from this bouncer's address. evrd waits half an hour before trying again (longer each time), as retrying sooner makes bans longer. Try another server of the network — some only ban per server — or ask the network's staff why; the server's own words are in the connection log."},
+	{throttledRE,
+		"The server limits how often, or how many, connections come from one address — other users of this bouncer on the same network count too. evrd waits at least two minutes between tries."},
 	// services and channels that need a login (see services.go)
 	{regexp.MustCompile(`(?i)(must be (registered|identified|logged in)|need (to be )?(identified|logged in|a registered nick)|registered nick|\(\+r\)|registered-only)`),
 		"That channel only lets in people logged in to an account. Set up Authentication, and switch on “Join channels after identifying” so evrd joins once services confirm the login."},

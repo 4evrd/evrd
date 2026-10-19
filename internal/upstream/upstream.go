@@ -53,7 +53,16 @@ const (
 const (
 	DefaultPingInterval = 30 * time.Second // how often we measure lag
 	DefaultReadTimeout  = 4 * time.Minute  // silence this long is a ping timeout
-	maxBackoff          = 60 * time.Second
+	maxBackoff          = 5 * time.Minute
+	// A link up this long was working: when it drops, evrd reconnects
+	// quickly. One cut off sooner (killed or banned right after
+	// registering) keeps backing off, so it can't reconnect in a loop.
+	stableAfter = 2 * time.Minute
+	// The least evrd waits after the server said it reconnects too fast,
+	// and after a ban (doubling while they go on, up to maxBanWait).
+	throttleWait = 2 * time.Minute
+	banWait      = 30 * time.Minute
+	maxBanWait   = 4 * time.Hour
 )
 
 // ErrPingTimeout is the error when the server goes silent.
@@ -322,9 +331,11 @@ func upperKeys(m map[string]string) map[string]string {
 }
 
 // Run keeps the connection alive until ctx is cancelled, reconnecting with
-// jittered exponential backoff (up to a minute).
+// jittered exponential backoff (up to five minutes; longer after a ban, see
+// retryWait).
 func (c *Conn) Run(ctx context.Context) {
 	backoff := time.Second
+	bans := 0      // bans in a row, each doubling the wait
 	lastHint := "" // logged once per kind of failure, not every attempt
 	lastFail := "" // a failed attempt is an event once per error, until connected
 	defer func() {
@@ -342,17 +353,20 @@ func (c *Conn) Run(ctx context.Context) {
 			}
 			h.RetryIn = 0
 		})
+		started := time.Now()
 		wasConnected, err := c.dialAndServe(ctx)
 		if ctx.Err() != nil {
 			return
 		}
-		if wasConnected {
-			backoff = time.Second // a working link that dropped: retry quickly
-			lastFail = ""
-		}
-		// Jitter, so connections dropped together don't all retry together.
-		wait := backoff/2 + time.Duration(rand.Int64N(int64(backoff)))
 		msg := describeErr(err)
+		if wasConnected {
+			lastFail = ""
+			if time.Since(started) >= stableAfter && !bannedRE.MatchString(msg) {
+				backoff, bans = time.Second, 0 // a working link that dropped: retry quickly
+			}
+		}
+		var wait time.Duration
+		wait, bans = retryWait(backoff, msg, bans)
 		hint := Hint(msg)
 		if wasConnected {
 			c.note("evrd", true, "Disconnected: "+msg)
@@ -396,6 +410,23 @@ func (c *Conn) Run(ctx context.Context) {
 			backoff = min(backoff*2, maxBackoff)
 		}
 	}
+}
+
+// retryWait is how long to wait before the next try, given the backoff and
+// why the last one ended, and the bans in a row so far (returned updated).
+// It's jittered, so connections dropped together don't all retry together.
+func retryWait(backoff time.Duration, msg string, bans int) (time.Duration, int) {
+	jitter := func(d time.Duration) time.Duration { return d/2 + time.Duration(rand.Int64N(int64(d))) }
+	wait := jitter(backoff)
+	switch {
+	case bannedRE.MatchString(msg):
+		bans = min(bans+1, 8) // (the wait stops growing well before)
+		floor := min(banWait<<(bans-1), maxBanWait)
+		wait = max(wait, floor+time.Duration(rand.Int64N(int64(floor/10))))
+	case throttledRE.MatchString(msg):
+		wait = max(wait, throttleWait+time.Duration(rand.Int64N(int64(throttleWait/4))))
+	}
+	return wait, bans
 }
 
 // dialAndServe runs one connection. It reports whether registration
