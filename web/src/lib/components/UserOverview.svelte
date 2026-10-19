@@ -56,8 +56,8 @@
   </a>
   <a class="tile" href={href('/networks?filter=connected', '#networks')}>
     <div class="tile-top"><span class="caps"><Icon name="activity" class="i-sm" />Connected</span>{#if connected}<span class="chip ok live"><span class="dot" aria-hidden="true"></span>Live</span>{:else}<span class="chip">Idle</span>{/if}</div>
-    <div class="od-stat"><span class="n" data-testid="tile-connected">{connected}<small>/ {nets.length}</small></span><span class="u">online{#if retrying} · {retrying} reconnecting{/if}</span></div>
-    <span class="ticks ok" role="img" aria-label="{connected} connected, {retrying} reconnecting">{#each nets as n}<i class:on={n.status !== 'disconnected'} style={n.status === 'reconnecting' || n.status === 'connecting' ? 'background:var(--warn)' : ''}></i>{/each}</span>
+    <div class="od-stat"><span class="n" data-testid="tile-connected">{connected}<small>/ {nets.length}</small></span><span class="u">online{retrying ? ` · ${retrying} reconnecting` : ''}</span></div>
+    <span class="ticks ok" class:dense={nets.length > 40} role="img" aria-label="{connected} connected, {retrying} reconnecting">{#each nets as n}<i class:on={n.status !== 'disconnected'} style={n.status === 'reconnecting' || n.status === 'connecting' ? 'background:var(--warn)' : ''}></i>{/each}</span>
   </a>
   <a class="tile" href={href('/clients', '#clients')}>
     <div class="tile-top"><span class="caps"><Icon name="monitor" class="i-sm" />Clients</span><span class="chip nick">{clients.length} attached</span></div>

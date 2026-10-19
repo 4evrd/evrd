@@ -105,3 +105,21 @@ test('reconnects: which network, how often and why', async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`/networks/${bad.id}#log$`))
   await u.api.post(`/api/networks/${bad.id}/disconnect`)
 })
+
+test('many networks fit in their tile', async ({ page }) => {
+  for (let i = 0; i < 60; i++) await u.api.post('/api/networks', { name: `n${i}`, host: '127.0.0.1', port: 1, nick: u.name })
+  const dead = (await u.api.get('/api/networks')).find((n) => n.name === 'n0')
+  await u.api.post(`/api/networks/${dead.id}/connect`) // nothing listens there: it keeps retrying
+  await login(page, u.name, u.password)
+  const tile = page.locator('.tile', { has: page.getByTestId('tile-connected') })
+  await expect(tile.locator('.ticks i')).toHaveCount(60)
+  await expect(tile).toContainText(/online · 1 reconnecting/, { timeout: 20000 })
+  // the ticks, and the Live/Idle chip, stay inside the tile
+  const box = await tile.boundingBox()
+  for (const el of [tile.locator('.ticks'), tile.locator('.chip')]) {
+    const b = await el.boundingBox()
+    expect(b.x + b.width).toBeLessThanOrEqual(box.x + box.width + 0.5)
+  }
+  const next = await page.locator('.tile', { has: page.getByTestId('tile-clients') }).boundingBox()
+  expect(box.x + box.width).toBeLessThanOrEqual(next.x)
+})
