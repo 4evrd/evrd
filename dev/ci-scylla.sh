@@ -5,6 +5,9 @@
 #
 #   dev/ci-scylla.sh
 #
+# With COVER_OUT set, it also writes a coverage profile there (every
+# internal package the tests exercise), for CI's coverage report.
+#
 # Everything runs in containers on a private network, so it only needs a
 # Docker CLI — the workspace is copied in rather than mounted, which also
 # works when this script itself runs inside a CI job container.
@@ -35,9 +38,12 @@ if [ -z "${ready:-}" ]; then
 	exit 1
 fi
 
+cover=
+[ -z "${COVER_OUT:-}" ] || cover="-coverprofile=/src/scylla.cover -coverpkg=./internal/..."
 docker create --name "$id-test" --network "$id" -w /src \
 	-e CGO_ENABLED=0 -e EVRD_TEST_SCYLLA="$id-scylla:9042" \
-	golang:1.26 go test -count=1 ./internal/history ./internal/clustertest >/dev/null
+	golang:1.26 go test -count=1 $cover ./internal/history ./internal/clustertest >/dev/null
 # Just the Go sources (not node_modules, .git, build output).
 COPYFILE_DISABLE=1 tar --no-xattrs -c --exclude=./web --exclude=./.git --exclude=./tmp --exclude=./bin . | docker cp - "$id-test:/src"
 docker start -a "$id-test"
+[ -z "${COVER_OUT:-}" ] || docker cp "$id-test:/src/scylla.cover" "$COVER_OUT"

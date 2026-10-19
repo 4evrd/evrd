@@ -5,9 +5,11 @@
 #
 #   scripts/coverage-comment.sh <pr-dir> [<base-dir>]
 #
-# <pr-dir> has the pull request's reports: test.out (go test's output, with
-# per-package "coverage: N%"), coverage.out (the profile) and coverage.txt
-# (node --test's coverage). <base-dir>, when there is one, has main's.
+# <pr-dir> has the pull request's reports: coverage.out (the unit tests'
+# profile), scylla.cover (the ScyllaDB job's, if there) and coverage.txt
+# (node --test's coverage). <base-dir>, when there is one, has main's. Go
+# figures come from both profiles merged: a block counts as covered if
+# either run covered it.
 #
 # The rule, for every Go package and every web file: at least $COVERAGE_MIN
 # (80) percent. Until one gets there it may not drop below main's figure, so
@@ -19,16 +21,23 @@ min=${COVERAGE_MIN:-80}
 fails=$(mktemp)
 trap 'rm -f "$fails" "$fails".*' EXIT
 
-# total coverage straight from a profile (go tool cover would need the
-# source of every package in it — main's may have ones this PR removed)
-total() {
-	awk 'NR > 1 && NF == 3 { if (!seen[$1]++) n += $2; if ($3 > 0 && !hit[$1]++) c += $2 }
-		END { if (n) printf "%.1f", 100 * c / n; else print "0.0" }' "$1"
+# merged <dir>: "block statements covered(0/1)" per code block, from the
+# dir's profiles together
+merged() {
+	cat "$1/coverage.out" "$1/scylla.cover" 2>/dev/null | awk '$1 != "mode:" && NF == 3 { n[$1] = $2; if ($3 > 0) hit[$1] = 1 }
+		END { for (b in n) print b, n[b], (b in hit) ? 1 : 0 }'
 }
-# "package percent" per line, from go test's output
+# total coverage from the merged blocks (straight from the profiles: go tool
+# cover would need the source of every package — main's may have ones this
+# PR removed)
+total() {
+	merged "$1" | awk '{ n += $2; if ($3) c += $2 } END { if (n) printf "%.1f", 100 * c / n; else print "0.0" }'
+}
+# "package percent" per line, from the merged blocks
 go_parts() {
-	awk '/coverage: [0-9]/ { p = ""; for (i = 1; i <= NF; i++) { if ($i ~ /^github\.com\/4evrd\/evrd/) p = $i; if ($i == "coverage:") c = $(i+1) }
-		if (p != "") { sub("github.com/4evrd/evrd/", "", p); sub("%", "", c); print p, c } }' "$1" | sort
+	merged "$1" | awk '{ f = $1; sub(/:.*/, "", f); sub(/\/[^\/]*$/, "", f); sub("github.com/4evrd/evrd/", "", f)
+		n[f] += $2; if ($3) c[f] += $2 }
+		END { for (p in n) if (n[p]) printf "%s %.1f\n", p, 100 * c[p] / n[p] }' | sort
 }
 # "file percent" per line, from node --test's coverage table (lines column)
 web_parts() {
@@ -57,13 +66,13 @@ judge() {
 		}' "$3" "$2"
 }
 
-pr_total=$(total "$pr/coverage.out")
-go_parts "$pr/test.out" >"$fails.go"
+pr_total=$(total "$pr")
+go_parts "$pr" >"$fails.go"
 web_parts "$pr/coverage.txt" >"$fails.web"
 : >"$fails.gobase"
 : >"$fails.webbase"
-if [ -n "$base" ] && [ -f "$base/test.out" ]; then
-	go_parts "$base/test.out" >"$fails.gobase"
+if [ -n "$base" ] && [ -f "$base/coverage.out" ]; then
+	go_parts "$base" >"$fails.gobase"
 	web_parts "$base/coverage.txt" >"$fails.webbase"
 fi
 
@@ -86,7 +95,7 @@ else
 fi
 echo
 if [ -n "$base" ] && [ -f "$base/coverage.out" ]; then
-	echo "Go overall: **${pr_total}%** (main: $(total "$base/coverage.out")%)."
+	echo "Go overall: **${pr_total}%** (main: $(total "$base")%)."
 else
 	echo "Go overall: **${pr_total}%**. _No report from main to compare with yet._"
 fi
@@ -103,7 +112,7 @@ if [ -n "$webrows" ]; then
 	echo "$webrows"
 fi
 echo
-echo "_Go: unit tests (the ScyllaDB tests and e2e aren't counted). Full HTML report: the run's \`coverage-go\` artifact._"
+echo "_Go: the unit tests and the ScyllaDB job together (e2e isn't counted). Profiles: the run's \`coverage-go\` and \`coverage-scylla\` artifacts._"
 
 if [ -s "$fails" ] && [ -n "${DROPPED_FILE:-}" ]; then
 	cp "$fails" "$DROPPED_FILE"
