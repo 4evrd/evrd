@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/4evrd/evrd/internal/realip"
 	"net"
 	"net/netip"
 	"net/url"
@@ -280,6 +281,9 @@ func (c Cluster) Enabled() bool { return c.InternalListen != "" }
 
 // Auth configures sign-in.
 type Auth struct {
+	// TrustedProxies are the proxies whose X-Forwarded-For is believed (nil:
+	// the local host only). Set in the file or environment only.
+	TrustedProxies []netip.Prefix
 	// PasswordLogin allows signing in to the web with a local password.
 	PasswordLogin bool
 	// SessionTTL is how long a web session lasts.
@@ -423,6 +427,13 @@ func (c *Config) ApplyEnv() error {
 			return fmt.Errorf("EVRD_UPSTREAM_BIND: %w", err)
 		}
 	}
+	if v := os.Getenv("EVRD_TRUSTED_PROXIES"); v != "" {
+		ps, err := realip.ParsePrefixes(strings.Fields(v))
+		if err != nil {
+			return fmt.Errorf("EVRD_TRUSTED_PROXIES: %w", err)
+		}
+		c.Auth.TrustedProxies = ps
+	}
 	if v := os.Getenv("EVRD_UPSTREAM_PREFIX6"); v != "" {
 		p, err := netip.ParsePrefix(v)
 		if err != nil {
@@ -505,6 +516,11 @@ func (c *Config) set(key, val string) error {
 		c.Auth.PasswordLogin, err = parseBool(val)
 	case "session_ttl":
 		c.Auth.SessionTTL, err = time.ParseDuration(val)
+	case "trusted_proxies": // repeatable, or several per line
+		var ps []netip.Prefix
+		if ps, err = realip.ParsePrefixes(strings.Fields(val)); err == nil {
+			c.Auth.TrustedProxies = append(c.Auth.TrustedProxies, ps...)
+		}
 	case "cookie_secure":
 		c.Auth.CookieSecure, err = parseBool(val)
 	case "oidc_issuer":

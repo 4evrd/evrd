@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -433,7 +432,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	// Closed when the user is stopped here (suspended, deleted, or moved to
 	// another node); the web chat reconnects and lands on the new owner.
 	att := s.b.TrackStream(auth.User(r).ID, bouncer.ClientInfo{
-		Software: browserName(r.UserAgent()), Networks: []string{n.Name}, IP: clientAddr(r),
+		Software: browserName(r.UserAgent()), Networks: []string{n.Name}, IP: s.clientAddr(r),
 	}, func() { ws.Close() })
 	defer att.Release()
 
@@ -612,19 +611,8 @@ func browserName(ua string) string {
 	return b
 }
 
-// clientAddr is the browser's address (behind the load balancer and any
-// forwarding node, the first X-Forwarded-For entry).
-func clientAddr(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		first, _, _ := strings.Cut(xff, ",")
-		return strings.TrimSpace(first)
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
+// clientAddr is the browser's address (see auth.Manager.ClientIP).
+func (s *Server) clientAddr(r *http.Request) string { return s.auth.ClientIP(r) }
 
 // serversDTO hides server passwords (it says whether one is set).
 func serversDTO(list []store.Server) []map[string]any {

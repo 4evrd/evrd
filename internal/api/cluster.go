@@ -97,6 +97,9 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, node store.Node
 			pr.Out.Header.Set(auth.HeaderSecret, s.secret)
 			pr.Out.Header.Set(auth.HeaderCaller, strconv.FormatInt(caller, 10))
 			pr.Out.Header.Set(auth.HeaderSession, sess)
+			// the browser's address as this node sees it (the owner can't
+			// tell from X-Forwarded-For whom to believe)
+			pr.Out.Header.Set(auth.HeaderClient, s.auth.ClientIP(pr.In))
 		},
 		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
 			s.log.Warn("forward to owner", "node", node.ID, "err", err)

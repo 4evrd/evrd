@@ -445,7 +445,7 @@ func TestClientIP(t *testing.T) {
 	} {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.RemoteAddr = addr
-		if got := clientIP(r); got != want {
+		if got := (&Manager{}).ClientIP(r); got != want {
 			t.Errorf("%s: %q", addr, got)
 		}
 	}

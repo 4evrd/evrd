@@ -21,8 +21,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/4evrd/evrd/internal/realip"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -143,7 +143,7 @@ func (m *Manager) startSession(w http.ResponseWriter, r *http.Request, u store.U
 	now := m.now()
 	err := m.st.CreateSession(store.Session{
 		ID: Hash(token), UserID: u.ID, Method: method, IDToken: idToken,
-		IP: clientIP(r), UserAgent: truncate(r.UserAgent(), 255),
+		IP: m.ClientIP(r), UserAgent: truncate(r.UserAgent(), 255),
 		CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(m.conf().SessionTTL),
 	})
 	if err != nil {
@@ -195,6 +195,7 @@ const (
 	userKey ctxKey = iota
 	sessionKey
 	forwardedKey
+	clientIPKey
 )
 
 // Headers a node sets when it forwards a signed-in request to the node that
@@ -203,6 +204,9 @@ const (
 	HeaderSecret  = "X-Evrd-Cluster-Secret"
 	HeaderCaller  = "X-Evrd-Caller"  // the signed-in user's ID
 	HeaderSession = "X-Evrd-Session" // their session's ID
+	// HeaderClient is the browser's address as the forwarding node worked
+	// it out (believed only with the cluster secret).
+	HeaderClient = "X-Evrd-Client-IP"
 )
 
 // Forwarded authenticates requests arriving on the internal endpoint from
@@ -217,6 +221,9 @@ func (m *Manager) Forwarded(secret string, next http.Handler) http.Handler {
 			return
 		}
 		ctx := context.WithValue(r.Context(), forwardedKey, true)
+		if ip := r.Header.Get(HeaderClient); ip != "" {
+			ctx = context.WithValue(ctx, clientIPKey, ip)
+		}
 		if id, err := strconv.ParseInt(r.Header.Get(HeaderCaller), 10, 64); err == nil {
 			u, err := m.st.UserByID(id)
 			if err != nil || u.Suspended {
@@ -314,7 +321,7 @@ func (m *Manager) PasswordLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.fails.reset(key)
-	if !accounts.HostAllowed(u, clientIP(r)) {
+	if !accounts.HostAllowed(u, m.ClientIP(r)) {
 		telemetry.WebLogins.Add(r.Context(), 1, telemetry.Attrs("method", "password", "result", "host_denied"))
 		writeErr(w, http.StatusForbidden, "signing in from your address isn't allowed for this account")
 		return
@@ -406,7 +413,7 @@ func (m *Manager) Callback(w http.ResponseWriter, r *http.Request) {
 		fail(code)
 		return
 	}
-	if !accounts.HostAllowed(u, clientIP(r)) {
+	if !accounts.HostAllowed(u, m.ClientIP(r)) {
 		fail("host_denied")
 		return
 	}
@@ -574,16 +581,14 @@ func sameOrigin(r *http.Request) bool {
 	return strings.EqualFold(u.Host, host)
 }
 
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		first, _, _ := strings.Cut(xff, ",")
-		return strings.TrimSpace(first)
+// ClientIP is the browser's address: from the forwarding node on a
+// forwarded request, else X-Forwarded-For only from a trusted proxy (see
+// realip).
+func (m *Manager) ClientIP(r *http.Request) string {
+	if ip, ok := r.Context().Value(clientIPKey).(string); ok {
+		return ip
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+	return realip.ClientIP(r, m.conf().TrustedProxies)
 }
 
 func truncate(s string, n int) string {

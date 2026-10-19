@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/store"
 )
 
@@ -199,17 +200,25 @@ func TestBrowserNameAndClientAddr(t *testing.T) {
 			t.Errorf("browserName(%q) = %q, want %q", ua, got, want)
 		}
 	}
+	s := &Server{auth: &auth.Manager{}}
 	r, _ := http.NewRequest("GET", "/", nil)
 	r.RemoteAddr = "192.0.2.1:5555"
-	if got := clientAddr(r); got != "192.0.2.1" {
+	if got := s.clientAddr(r); got != "192.0.2.1" {
 		t.Errorf("clientAddr: %q", got)
 	}
 	r.RemoteAddr = "pipe"
-	if got := clientAddr(r); got != "pipe" {
+	if got := s.clientAddr(r); got != "pipe" {
 		t.Errorf("clientAddr without a port: %q", got)
 	}
+	// X-Forwarded-For counts only from a trusted proxy (loopback by default).
 	r.Header.Set("X-Forwarded-For", " 198.51.100.7 , 10.0.0.1")
-	if got := clientAddr(r); got != "198.51.100.7" {
+	r.RemoteAddr = "192.0.2.1:5555"
+	if got := s.clientAddr(r); got != "192.0.2.1" {
+		t.Errorf("clientAddr with a spoofed X-Forwarded-For: %q", got)
+	}
+	r.Header.Set("X-Forwarded-For", " 198.51.100.7 , 127.0.0.1")
+	r.RemoteAddr = "127.0.0.1:5555"
+	if got := s.clientAddr(r); got != "198.51.100.7" {
 		t.Errorf("clientAddr behind a proxy: %q", got)
 	}
 }
