@@ -8,7 +8,7 @@
   import { session, refreshNets, refreshMe } from '$lib/session.svelte.js'
   import { goto } from '$app/navigation'
   import { toast } from '$lib/ui.svelte.js'
-  import { short, netColor, netGlow, since, clock, limit } from '$lib/format.js'
+  import { short, netColor, netGlow, since, clock, limit, wait } from '$lib/format.js'
 
   let nets = $state(null)
   let timer
@@ -114,7 +114,7 @@
         </div>
         <div class="status-line"><StatusChip status={n.status} /><span class="chip nick"><Icon name="user" />{n.currentNick || n.nick}</span></div>
         {#if (n.status === 'reconnecting' || n.status === 'connecting') && n.lastError}
-          <div class="err-note"><Icon name="alert" class="i-sm" /><span>{n.lastError.charAt(0).toUpperCase() + n.lastError.slice(1)}{n.lastErrorAt ? ` at ${clock(n.lastErrorAt)}` : ''}. {n.retryIn ? `Retrying in ${n.retryIn}s` : 'Retrying'}{n.attempts > 1 ? ` · attempt ${n.attempts}` : ''}.{#if n.hint}<br /><span class="faint">{n.hint}</span>{/if} <a href="/networks/{n.id}#log">Connection log</a></span></div>
+          <div class="err-note"><Icon name="alert" class="i-sm" /><span>{n.lastError.charAt(0).toUpperCase() + n.lastError.slice(1)}{n.lastErrorAt ? ` at ${clock(n.lastErrorAt)}` : ''}. {n.retryIn ? `Retrying in ${wait(n.retryIn)}` : 'Retrying'}{n.attempts > 1 ? ` · attempt ${n.attempts}` : ''}.{#if n.hint}<br /><span class="faint">{n.hint}</span>{/if} <a href="/networks/{n.id}#log">Connection log</a></span></div>
         {/if}
         <div class="stats">
           <div class="od-stat"><span>{n.channels.length}</span><span>Channels</span></div>
@@ -157,4 +157,5 @@
   .add-card .od-stack span:last-child { font-size: var(--fs-sm); }
   :global(.net-card .status-line) { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
   :global(.net-card .err-note) { display: flex; gap: var(--s2); padding: var(--s2) var(--s3); border-radius: var(--r-field); background: var(--warn-soft); color: var(--warn); font-size: var(--fs-xs); }
+  :global(.net-card .err-note > span) { min-width: 0; overflow-wrap: anywhere; }
 </style>

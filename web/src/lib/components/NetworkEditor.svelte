@@ -14,6 +14,7 @@
   import ConnLog from './ConnLog.svelte'
   import DirectoryPicker from './DirectoryPicker.svelte'
   import { api } from '$lib/api.js'
+  import { wait } from '$lib/format.js'
   import { fromDirectory, loginHint } from '$lib/directory.js'
   import { session, refreshNets, refreshMe, ircPort } from '$lib/session.svelte.js'
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
@@ -264,7 +265,7 @@
           <div class="od-stack" style="--od-gap:6px">
             <span><b>Can’t connect{state.server ? ' to ' + state.server : ''}:</b> {state.lastError}.</span>
             {#if state.hint}<span>{state.hint}</span>{/if}
-            <span class="faint" style="font-size:var(--fs-xs)">{state.retryIn ? `Trying again in ${state.retryIn}s` : 'Trying again'}{state.attempts > 1 ? ` · attempt ${state.attempts}` : ''} · <a href="#log">connection log</a></span>
+            <span class="faint" style="font-size:var(--fs-xs)">{state.retryIn ? `Trying again in ${wait(state.retryIn)}` : 'Trying again'}{state.attempts > 1 ? ` · attempt ${state.attempts}` : ''} · <a href="#log">connection log</a></span>
           </div>
         </div>
       {/if}

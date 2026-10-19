@@ -1,7 +1,7 @@
 // Unit tests for the formatting helpers: pnpm test:unit
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { nodeBadge, device, limit, ratio, chartMax, cap, date, ago, dur, since, clock, kfmt, level, short, netColor, netGlow, hue, greeting, hourAt, hourSpan, hourRows, lanes } from './format.js'
+import { nodeBadge, device, limit, ratio, chartMax, cap, date, ago, dur, since, clock, kfmt, level, short, netColor, netGlow, hue, greeting, hourAt, hourSpan, hourRows, lanes, wait } from './format.js'
 
 test('node badges: the node letter, or a host name’s first letter', () => {
   assert.equal(nodeBadge('node-a'), 'A')
@@ -133,4 +133,10 @@ test('marker labels stack instead of overlapping', () => {
   const got = lanes([{ x: 100, w: 80 }, { x: 0, w: 50 }, { x: 120, w: 80 }, { x: 130, w: 80 }, { x: 140, w: 80 }, { x: 300, w: 10 }])
   assert.deepEqual(got.map((m) => [m.x, m.lane]), [[0, 0], [100, 0], [120, 1], [130, 2], [140, -1], [300, 0]])
   assert.deepEqual(lanes([{ x: 0, w: 10 }, { x: 5, w: 10 }], 1).map((m) => m.lane), [0, -1])
+})
+
+test('wait', () => {
+  for (const [secs, want] of [[3, '3s'], [59, '59s'], [60, '1m'], [1800, '30m'], [3720, '1h 2m'], [0, 'now'], [null, '—']]) {
+    assert.equal(wait(secs), want, `wait(${secs})`)
+  }
 })

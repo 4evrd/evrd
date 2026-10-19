@@ -8,7 +8,7 @@
   // logHref: (network) => where its connection log is
   import Icon from '$lib/components/Icon.svelte'
   import StatusChip from '$lib/components/StatusChip.svelte'
-  import { clock, ago, since, hourSpan } from '$lib/format.js'
+  import { clock, ago, since, hourSpan, wait } from '$lib/format.js'
 
   let { data = null, logHref = () => null } = $props()
 
@@ -55,7 +55,7 @@
           <div class="rc-axis" aria-hidden="true"><span>24h ago</span><span>now</span></div>
         {/if}
         {#if n.lastError}
-          <p class="callout {n.status === 'connected' ? '' : 'warn'}"><Icon name="alert" /><span><b>{n.status === 'connected' ? 'Last error' : 'Now'}: {n.lastError}</b>{#if n.lastErrorAt}{' '}<span class="faint">({ago(n.lastErrorAt)})</span>{/if}.{#if n.hint}{' '}{n.hint}{/if}{#if n.status !== 'connected' && n.retryIn}{' '}Trying again in {n.retryIn}s.{/if}</span></p>
+          <p class="callout {n.status === 'connected' ? '' : 'warn'}"><Icon name="alert" /><span><b>{n.status === 'connected' ? 'Last error' : 'Now'}: {n.lastError}</b>{#if n.lastErrorAt}{' '}<span class="faint">({ago(n.lastErrorAt)})</span>{/if}.{#if n.hint}{' '}{n.hint}{/if}{#if n.status !== 'connected' && n.retryIn}{' '}Trying again in {wait(n.retryIn)}.{/if}</span></p>
         {:else if n.status === 'connected'}
           <p class="desc" style="font-size:var(--fs-xs)">Connected now{n.connectedAt ? `, for ${since(n.connectedAt)}` : ''}{n.server ? ` to ${n.server}` : ''}.</p>
         {/if}
