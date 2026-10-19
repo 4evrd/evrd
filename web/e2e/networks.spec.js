@@ -265,8 +265,12 @@ test('modules an admin switches off are unavailable', async ({ page }) => {
   try {
     await admin.patch('/api/admin/settings', { set: { modules_off: 'autovoice' } })
     const n = await u.api.post('/api/networks', { name: 'Off', host: 'ircd', port: 6667, tls: false, nick: u.name })
-    await page.goto(`/networks/${n.id}`)
-    await expect(page.getByTestId('module-autovoice')).toContainText('Switched off by an admin')
+    // requests are spread over the stack's two nodes, and the one the admin
+    // didn't use picks the change up at its next settings poll (5s)
+    await expect(async () => {
+      await page.goto(`/networks/${n.id}`)
+      await expect(page.getByTestId('module-autovoice')).toContainText('Switched off by an admin', { timeout: 1000 })
+    }).toPass({ timeout: 20000 })
     await expect(page.getByTestId('module-autovoice').getByRole('switch')).toHaveCount(0)
     await expect(page.getByTestId('module-autoop').getByRole('switch')).toHaveCount(1)
   } finally {
