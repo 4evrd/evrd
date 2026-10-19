@@ -411,8 +411,8 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		c.health.UntrustedFingerprint = ""
 		c.mu.Unlock()
 	} else if sv.TLS {
-		tc := tls.Client(conn, c.tlsConfig(sv.Host))
-		if err := tc.HandshakeContext(dctxDial); err != nil {
+		tc, err := irctls.Handshake(dctxDial, conn, c.tlsConfig(sv.Host))
+		if err != nil {
 			conn.Close()
 			telemetry.UpstreamConnects.Add(ctx, 1, telemetry.Result("error"))
 			return false, err

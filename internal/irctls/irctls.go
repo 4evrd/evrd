@@ -6,14 +6,19 @@
 package irctls
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Trust is how a network's certificates are checked.
@@ -105,4 +110,75 @@ func shortCertErr(err error) string {
 		return "invalid"
 	}
 	return err.Error()
+}
+
+// Handshake runs the TLS handshake over raw. When the server answers in
+// plain text instead (a plain-text port, or a refusal sent before any TLS:
+// "ERROR :*** Banned: …"), the error says what it said rather than
+// crypto/tls's "first record does not look like a TLS handshake".
+func Handshake(ctx context.Context, raw net.Conn, cfg *tls.Config) (*tls.Conn, error) {
+	rec := &recorder{Conn: raw}
+	tc := tls.Client(rec, cfg)
+	err := tc.HandshakeContext(ctx)
+	if err == nil {
+		rec.stop()
+		return tc, nil
+	}
+	var rh tls.RecordHeaderError
+	if !errors.As(err, &rh) {
+		return nil, err
+	}
+	// the rest of the server's line, if it hasn't all arrived yet
+	raw.SetReadDeadline(time.Now().Add(time.Second))
+	if !bytes.ContainsAny(rec.first(), "\r\n") {
+		more := make([]byte, 256)
+		n, _ := raw.Read(more)
+		rec.add(more[:n])
+	}
+	line, _, _ := strings.Cut(strings.TrimLeft(string(rec.first()), "\r\n"), "\n")
+	line = strings.TrimSpace(strings.ToValidUTF8(line, "?"))
+	if line == "" || strings.IndexFunc(line, func(r rune) bool { return r < 0x20 && r != '\t' }) >= 0 {
+		return nil, err
+	}
+	if len(line) > 200 {
+		line = line[:200] + "…"
+	}
+	if why, ok := strings.CutPrefix(line, "ERROR :"); ok {
+		return nil, fmt.Errorf("the server refused the connection: %s", why)
+	}
+	return nil, fmt.Errorf("the server didn't answer with TLS on this port — it said %q (is it a plain-text port?)", line)
+}
+
+// recorder keeps the first bytes read, for Handshake's error.
+type recorder struct {
+	net.Conn
+	mu   sync.Mutex
+	buf  []byte
+	done bool
+}
+
+func (r *recorder) Read(p []byte) (int, error) {
+	n, err := r.Conn.Read(p)
+	r.add(p[:n])
+	return n, err
+}
+
+func (r *recorder) add(b []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.done && len(r.buf) < 512 {
+		r.buf = append(r.buf, b[:min(len(b), 512-len(r.buf))]...)
+	}
+}
+
+func (r *recorder) first() []byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]byte(nil), r.buf...)
+}
+
+func (r *recorder) stop() {
+	r.mu.Lock()
+	r.done, r.buf = true, nil
+	r.mu.Unlock()
 }

@@ -278,3 +278,25 @@ func TestHolderUnavailable(t *testing.T) {
 		t.Fatalf("tcp closed: %v", err)
 	}
 }
+
+func TestAPlainTextRefusalComesBackThroughTheHolder(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		c, err := ln.Accept()
+		if err == nil {
+			c.Write([]byte("ERROR :*** Banned: Please use another server.\r\n"))
+			time.Sleep(50 * time.Millisecond)
+			c.Close()
+		}
+	}()
+	_, cl := startHolder(t)
+	tcp, _ := net.Dial("tcp", ln.Addr().String())
+	_, err = cl.Open(context.Background(), "n1", tcp, true, "irc.test", irctls.Trust{TrustPKI: true})
+	if err == nil || !strings.Contains(err.Error(), "refused the connection: *** Banned: Please use another server.") {
+		t.Fatalf("err: %v", err)
+	}
+}

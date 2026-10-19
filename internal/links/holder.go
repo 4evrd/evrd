@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
@@ -194,9 +193,8 @@ func (h *Holder) open(c *net.UnixConn, w *bufio.Writer, req request, fd int) {
 		return
 	}
 	if req.TLS {
-		tc := tls.Client(conn, irctls.Config(req.Host, req.Trust, nil))
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		err := tc.HandshakeContext(ctx)
+		tc, err := irctls.Handshake(ctx, conn, irctls.Config(req.Host, req.Trust, nil))
 		cancel()
 		if err != nil {
 			conn.Close()
