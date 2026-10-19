@@ -4,6 +4,7 @@
   import Reconnects from '$lib/components/Reconnects.svelte'
   import { api } from '$lib/api.js'
   import { toast } from '$lib/ui.svelte.js'
+  import { t } from '$lib/i18n.svelte.js'
 
   let data = $state(null)
   let timer
@@ -14,15 +15,15 @@
   onDestroy(() => clearInterval(timer))
 </script>
 
-<svelte:head><title>Reconnects · evrd</title></svelte:head>
+<svelte:head><title>{t('overview.rcPageTitle')}</title></svelte:head>
 
 <div class="page-head enter">
   <div class="titles">
-    <h1>Reconnects</h1>
-    <p>Your networks’ last 24 hours: links that dropped, connection attempts that failed, and why.</p>
+    <h1>{t('overview.rcTitle')}</h1>
+    <p>{t('overview.rcIntro')}</p>
   </div>
 </div>
 
-<section class="card enter" aria-label="Reconnects by network">
+<section class="card enter" aria-label={t('overview.rcByNetwork')}>
   <Reconnects {data} logHref={(n) => `/networks/${n.id}#log`} />
 </section>

@@ -6,6 +6,7 @@
   // start:  unix seconds of points[0]; step: seconds between points
   // unit:   shown after values ('ms', …)
   import { netColor, chartMax } from '$lib/format.js'
+  import { i18n, t } from '$lib/i18n.svelte.js'
 
   let { series = [], start = 0, step = 3600, unit = '' } = $props()
 
@@ -28,7 +29,7 @@
   const fmt = (v) => (v == null ? '—' : (Math.abs(v) >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'k' : String(Math.round(v * 10) / 10)) + (unit ? ' ' + unit : ''))
   const label = (i) => {
     const d = new Date((start + i * step) * 1000)
-    return step >= 3600 ? d.toLocaleDateString('en', { weekday: 'short' }) + ' ' + d.toTimeString().slice(0, 5) : d.toTimeString().slice(0, 5)
+    return step >= 3600 ? d.toLocaleDateString(i18n.locale, { weekday: 'short' }) + ' ' + d.toTimeString().slice(0, 5) : d.toTimeString().slice(0, 5)
   }
   const ticks = $derived([0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * (n - 1))))
 
@@ -57,7 +58,7 @@
     </svg>
     {#if hover != null}<span class="when" style="left:{(hover / (n - 1)) * 100}%">{label(hover)}</span>{/if}
   </div>
-  <div class="axis">{#each ticks as t}<span>{t === n - 1 ? 'now' : label(t)}</span>{/each}</div>
+  <div class="axis">{#each ticks as k}<span>{k === n - 1 ? t('format.now') : label(k)}</span>{/each}</div>
 </div>
 
 <style>
