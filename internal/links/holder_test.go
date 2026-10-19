@@ -591,8 +591,13 @@ func TestClientErrors(t *testing.T) {
 	if _, _, err := refuse.Resume(ctx, "n1"); err == nil || err.Error() != "links: nope" || errors.Is(err, ErrNoLink) {
 		t.Errorf("Resume: %v", err)
 	}
-	if _, err := refuse.Open(ctx, "n1", dialTCP(), false, "h", irctls.Trust{}); err == nil || err.Error() != "links: nope" {
+	// Open's failure is the server's, passed on: no "links:" prefix
+	if _, err := refuse.Open(ctx, "n1", dialTCP(), false, "h", irctls.Trust{}); err == nil || err.Error() != "nope" {
 		t.Errorf("Open: %v", err)
+	}
+	// an older holder's bare "EOF" from a TLS handshake is the server hanging up
+	if _, err := fakeHolder(t, `{"error":"EOF"}`+"\n").Open(ctx, "n1", dialTCP(), true, "h", irctls.Trust{}); !errors.Is(err, irctls.ErrHungUp) {
+		t.Errorf("Open EOF: %v", err)
 	}
 
 	garbled := fakeHolder(t, "<html>\n")

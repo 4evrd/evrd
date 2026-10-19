@@ -647,6 +647,7 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
 .event { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: var(--s3); padding: var(--s2) 0; font-size: var(--fs-sm); border-top: 1px solid var(--line-soft); }
 .event time { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--faint); padding-top: 2px; }
 .event .od-field span:last-child { font-size: var(--fs-xs); color: var(--muted); }
+.event .od-field span { overflow-wrap: anywhere; } /* long fingerprints and host masks wrap */
 
 /* ===========================================================================
    networks — card grid
