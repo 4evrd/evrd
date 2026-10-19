@@ -158,8 +158,11 @@ separate process, holds every connection to the IRC networks while evrd is
 away — it answers the servers' pings and keeps what arrives — and the new
 evrd picks each one up again: no quit, no rejoin, no lost nick, and messages
 from the gap land in history. Users' own clients do reconnect to evrd (they
-reconnect by themselves). evrd-links rarely changes; the installer restarts it
-only when it did, which drops the IRC connections that once.
+reconnect by themselves). evrd-links rarely changes, and restarting it
+drops the IRC connections, so the installer restarts it only when it must:
+when the new evrd can't talk to the old holder. A holder that just changed
+is installed and takes over at the next reboot; `-H` restarts it at once,
+or run `rcctl restart evrd_links` when it suits you.
 See [the design](design/connection-holder.md).
 
 ## Backups

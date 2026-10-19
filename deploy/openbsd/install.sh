@@ -33,6 +33,9 @@
 #	-r		write a new config (the old one is kept as .bak)
 #	-y		don't ask: use the options and defaults
 #	-n		install, but don't start evrd
+#	-H		restart the connection holder now if it changed (drops
+#			everyone's IRC connections once); otherwise a new
+#			holder takes over at the next reboot
 #
 # What goes where:
 #	/usr/local/bin/evrd, evrctl	the programs
@@ -67,7 +70,7 @@ examples=/usr/local/share/examples/evrd
 web_host= certs= front= https_port= web_port= email= irc_host= irc_port= plain_port= admin=
 oidc_issuer= oidc_id= oidc_label= oidc_role=
 version= archive= reconf=no batch=no start=yes
-while getopts d:c:w:s:p:e:o:O:L:R:i:t:P:a:v:f:ryn opt; do
+while getopts d:c:w:s:p:e:o:O:L:R:i:t:P:a:v:f:rynH opt; do
 	case $opt in
 	d) web_host=$OPTARG ;;
 	c) certs=$OPTARG ;;
@@ -88,6 +91,7 @@ while getopts d:c:w:s:p:e:o:O:L:R:i:t:P:a:v:f:ryn opt; do
 	r) reconf=yes ;;
 	y) batch=yes ;;
 	n) start=no ;;
+	H) holder_now=yes ;;
 	*) echo "options: https://github.com/4evrd/evrd/blob/main/docs/openbsd.md#without-questions" >&2; exit 2 ;;
 	esac
 done
@@ -366,14 +370,22 @@ if [ -f /usr/local/bin/evrd ] && [ "$(sha256 -q /usr/local/bin/evrd)" = "$(sha25
 fi
 # The holder keeps everyone's IRC connections while evrd restarts. It
 # rarely changes; when it does, restarting it drops the connections once.
-holder=no links_changed=no links_running=no
+# Restarting a running holder drops everyone, so the installer only does it
+# when it must: when the new evrd can't talk to the old holder (its protocol
+# changed). A holder that merely changed is installed and takes over at the
+# next reboot, or now with -H.
+holder=no links_changed=no links_running=no links_proto=same old_proto=
 if [ -f "$src/evrd-links" ]; then
 	holder=yes
 	rcctl check evrd_links >/dev/null 2>&1 && links_running=yes
 	if [ ! -f /usr/local/bin/evrd-links ] || [ "$(sha256 -q /usr/local/bin/evrd-links)" != "$(sha256 -q "$src/evrd-links")" ]; then
 		links_changed=yes
+		old_proto=$(/usr/local/bin/evrd-links -version 2>/dev/null || true)
 	fi
 	install -o root -g bin -m 555 "$src/evrd-links" /usr/local/bin/
+	if [ "$links_changed" = yes ] && [ "$old_proto" != "$(/usr/local/bin/evrd-links -version 2>/dev/null)" ]; then
+		links_proto=changed
+	fi
 fi
 install -o root -g bin -m 555 "$src/evrd" "$src/evrctl" /usr/local/bin/
 rm -rf "$jail/web.new" "$jail/web.old"
@@ -731,11 +743,17 @@ if [ "$start" = yes ]; then
 	if [ "$holder" = yes ]; then
 		if [ "$links_running" = no ]; then
 			rcctl start evrd_links >/dev/null
-		elif [ "$links_changed" = yes ]; then
+		elif [ "$links_changed" = yes ] && { [ "$links_proto" = changed ] || [ "${holder_now:-no}" = yes ]; }; then
 			# evrd reconnects everyone through the new holder
-			say "the connection holder changed: restarting it (IRC connections drop once)"
+			if [ "$links_proto" = changed ]; then
+				say "the connection holder's protocol changed: restarting it (IRC connections drop once)"
+			else
+				say "restarting the connection holder (-H): IRC connections drop once"
+			fi
 			rcctl restart evrd_links >/dev/null
 			changed=yes
+		elif [ "$links_changed" = yes ]; then
+			say "a new connection holder is installed; it takes over at the next reboot (or now, dropping IRC connections once: rcctl restart evrd_links)"
 		fi
 		rcctl check evrd_links >/dev/null || say "evrd-links didn't start — evrd connects directly (see /var/log/daemon)"
 	fi
