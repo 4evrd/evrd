@@ -33,17 +33,24 @@ type env struct {
 
 func newEnv(t *testing.T, mutate ...func(*config.Config)) *env {
 	t.Helper()
+	st, err := store.Open("sqlite:" + filepath.Join(t.TempDir(), "evrd.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	return newEnvOn(t, st, mutate...)
+}
+
+// newEnvOn is newEnv on an existing store: several of them sharing one are
+// the nodes of a cluster.
+func newEnvOn(t *testing.T, st store.Store, mutate ...func(*config.Config)) *env {
+	t.Helper()
 	cfg := config.Default()
 	cfg.Auth.CookieSecure = false
 	cfg.Limits = config.Limits{MaxNetworks: 2, MaxClients: 3, BacklogLines: 100}
 	for _, m := range mutate {
 		m(cfg)
 	}
-	st, err := store.Open("sqlite:" + filepath.Join(t.TempDir(), "evrd.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { st.Close() })
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	acc := accounts.New(st, cfg.Limits)
 	am, err := auth.New(context.Background(), st, acc, cfg.Auth, "", log)
