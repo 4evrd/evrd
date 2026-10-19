@@ -8,7 +8,13 @@
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte'
   import ChangePassword from '$lib/components/ChangePassword.svelte'
   import Icon from '$lib/components/Icon.svelte'
+  import Msg from '$lib/components/Msg.svelte'
   import { session, load, logout } from '$lib/session.svelte.js'
+  import { i18n, t } from '$lib/i18n.svelte.js'
+  import { useI18n } from '$lib/format.js'
+
+  // format.js is plain JS: give it the app's language
+  useI18n(t, i18n)
 
   let { children } = $props()
   let retrying = $state(false)
@@ -24,28 +30,28 @@
 </script>
 
 {#if session.phase === 'loading'}
-  <div class="loading-shell" aria-busy="true"><span class="brand"><span class="brand-mark" aria-hidden="true">#</span><span class="brand-text"><b>evrd</b><span>Loading…</span></span></span></div>
+  <div class="loading-shell" aria-busy="true"><span class="brand"><span class="brand-mark" aria-hidden="true">#</span><span class="brand-text"><b>evrd</b><span>{t('common.loading')}</span></span></span></div>
 {:else if session.phase === 'signedOut'}
   <Login />
 {:else if session.phase === 'error'}
   <div class="solo">
-    <span class="brand"><span class="brand-mark" aria-hidden="true">#</span><span class="brand-text"><b>evrd</b><span>IRC bouncer</span></span></span>
+    <span class="brand"><span class="brand-mark" aria-hidden="true">#</span><span class="brand-text"><b>evrd</b><span>{t('shell.tagline')}</span></span></span>
     <div class="callout bad" role="alert" id="load-error">
       <Icon name="alert" />
       <div class="od-stack">
-        <span><b>Couldn’t reach the bouncer.</b> Your IRC connections are probably fine — the web app just can’t talk to the daemon right now.</span>
-        <div><button class="btn btn-sm" type="button" onclick={retry} disabled={retrying}>{#if retrying}<span class="spinner" aria-hidden="true"></span>Retrying…{:else}<Icon name="refresh" />Try again{/if}</button></div>
+        <span><Msg key="shell.loadError">{#snippet title()}<b>{t('shell.loadErrorTitle')}</b>{/snippet}</Msg></span>
+        <div><button class="btn btn-sm" type="button" onclick={retry} disabled={retrying}>{#if retrying}<span class="spinner" aria-hidden="true"></span>{t('shell.retrying')}{:else}<Icon name="refresh" />{t('shell.tryAgain')}{/if}</button></div>
       </div>
     </div>
   </div>
 {:else if session.me?.mustChangePassword}
   <div class="solo" style="max-width:720px">
-    <span class="brand"><span class="brand-mark" aria-hidden="true">#</span><span class="brand-text"><b>evrd</b><span>IRC bouncer</span></span></span>
+    <span class="brand"><span class="brand-mark" aria-hidden="true">#</span><span class="brand-text"><b>evrd</b><span>{t('shell.tagline')}</span></span></span>
     <main id="main" class="card enter" style="display:grid;gap:var(--s5)">
-      <div class="od-stack"><span class="caps">One more step</span><h1>Choose your own password</h1>
-        <p class="desc">You signed in with a temporary password from an admin. Pick one only you know to continue.</p></div>
+      <div class="od-stack"><span class="caps">{t('shell.oneMoreStep')}</span><h1>{t('shell.choosePassword')}</h1>
+        <p class="desc">{t('shell.tempPassword')}</p></div>
       <ChangePassword username={session.me.username} />
-      <div><button class="btn btn-ghost btn-sm" type="button" onclick={logout}><Icon name="logout" />Sign out</button></div>
+      <div><button class="btn btn-ghost btn-sm" type="button" onclick={logout}><Icon name="logout" />{t('shell.signOut')}</button></div>
     </main>
   </div>
 {:else}

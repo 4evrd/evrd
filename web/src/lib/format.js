@@ -1,3 +1,18 @@
+import en from './i18n/en/format.js'
+
+// format.js stays plain JS so Node tests can use it: the root layout hands it
+// the app's t() and i18n state (useI18n); until then it speaks English.
+let i18n = { locale: 'en' }
+let t = (key, vars = {}) => {
+  let m = en[key]
+  if (typeof m === 'object') m = m[new Intl.PluralRules('en').select(Number(vars.count ?? 0))] ?? m.other
+  return m.replace(/\{(\w+)\}/g, (all, name) => (name in vars ? String(vars[name]) : all))
+}
+export function useI18n(translate, state) {
+  t = translate
+  i18n = state
+}
+
 export const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '')
 
 // unix seconds -> "Mar 14, 2025" / "Mar 2" this year
@@ -5,33 +20,33 @@ export function date(unix) {
   if (!unix) return '—'
   const d = new Date(unix * 1000)
   const sameYear = d.getFullYear() === new Date().getFullYear()
-  return d.toLocaleDateString('en', sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString(i18n.locale, sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 // unix seconds -> "just now" / "12 minutes ago" / "3 weeks ago"
 export function ago(unix) {
-  if (!unix) return 'never'
+  if (!unix) return t('format.never')
   const s = Math.max(0, Math.round(Date.now() / 1000 - unix))
-  if (s < 60) return 'just now'
-  if (s < 3600) { const m = Math.floor(s / 60); return `${m} minute${m === 1 ? '' : 's'} ago` }
-  if (s < 86400) { const h = Math.floor(s / 3600); return `${h} hour${h === 1 ? '' : 's'} ago` }
-  if (s < 14 * 86400) { const d = Math.floor(s / 86400); return d === 1 ? 'yesterday' : `${d} days ago` }
-  if (s < 60 * 86400) return `${Math.floor(s / 604800)} weeks ago`
+  if (s < 60) return t('format.justNow')
+  if (s < 3600) return t('format.minutesAgo', { count: Math.floor(s / 60) })
+  if (s < 86400) return t('format.hoursAgo', { count: Math.floor(s / 3600) })
+  if (s < 14 * 86400) { const d = Math.floor(s / 86400); return d === 1 ? t('format.yesterday') : t('format.daysAgo', { count: d }) }
+  if (s < 60 * 86400) return t('format.weeksAgo', { count: Math.floor(s / 604800) })
   return date(unix)
 }
 
 // seconds -> "12m", "6d", "11d 4h", "now"
 export function dur(secs) {
   if (secs == null || secs < 0) return '—'
-  if (secs < 60) return 'now'
-  if (secs < 3600) return `${Math.floor(secs / 60)}m`
-  if (secs < 86400) { const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60); return m ? `${h}h ${m}m` : `${h}h` }
+  if (secs < 60) return t('format.now')
+  if (secs < 3600) return t('format.minutes', { m: Math.floor(secs / 60) })
+  if (secs < 86400) { const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60); return m ? t('format.hoursMinutes', { h, m }) : t('format.hours', { h }) }
   const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600)
-  return h ? `${d}d ${h}h` : `${d}d`
+  return h ? t('format.daysHours', { d, h }) : t('format.days', { d })
 }
 export const since = (unix) => (unix ? dur(Math.round(Date.now() / 1000 - unix)) : '—')
 // a wait in seconds -> "45s", "30m", "1h 2m" (dur, but seconds under a minute)
-export const wait = (secs) => (secs > 0 && secs < 60 ? `${Math.round(secs)}s` : dur(secs))
+export const wait = (secs) => (secs > 0 && secs < 60 ? t('format.seconds', { s: Math.round(secs) }) : dur(secs))
 
 // "HH:MM"
 export const clock = (unix) => new Date(unix * 1000).toTimeString().slice(0, 5)
@@ -41,7 +56,7 @@ export function kfmt(n) {
   if (n == null) return '—'
   if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M'
   if (n >= 1e4) return (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k'
-  return n.toLocaleString('en')
+  return n.toLocaleString(i18n.locale)
 }
 
 // A limit for display: 0 is unlimited.
@@ -67,15 +82,15 @@ export const hue = (n) => HUES[[...(n || '')].reduce((a, c) => a + c.charCodeAt(
 // A greeting for the time of day.
 export function greeting() {
   const h = new Date().getHours()
-  return h < 5 ? 'Up late' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening'
+  return t(h < 5 ? 'format.greetingLate' : h < 12 ? 'format.greetingMorning' : h < 18 ? 'format.greetingAfternoon' : 'format.greetingEvening')
 }
 
 // device names a browser from its user agent: "Chrome on macOS".
 export function device(ua) {
-  if (!ua) return 'Unknown device'
-  const b = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser'
+  if (!ua) return t('format.unknownDevice')
+  const b = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : t('format.browser')
   const os = /iPhone|iPad/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'macOS' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : ''
-  return os ? `${b} on ${os}` : b
+  return os ? t('format.browserOn', { browser: b, os }) : b
 }
 
 // nodeBadge is a node's one-letter badge: node-a → A, a host name → its
@@ -103,7 +118,7 @@ export const hourAt = (frac, n) => Math.max(0, Math.min(n - 1, Math.round(frac *
 
 // hourSpan names the hour point i covers: it ends at start + i hours, and the
 // last one is the hour in progress.
-export const hourSpan = (start, i, n = 25) => (i === n - 1 ? `${clock(start + (i - 1) * 3600)}–now` : `${clock(start + (i - 1) * 3600)}–${clock(start + i * 3600)}`)
+export const hourSpan = (start, i, n = 25) => (i === n - 1 ? t('format.untilNow', { from: clock(start + (i - 1) * 3600) }) : `${clock(start + (i - 1) * 3600)}–${clock(start + i * 3600)}`)
 
 // hourRows is each series' value at point i, the biggest first.
 export const hourRows = (series, i) => series.map((s) => ({ name: s.name, color: s.color, value: s.points[i] || 0 })).sort((a, b) => b.value - a.value)
