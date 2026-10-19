@@ -14,6 +14,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"strings"
@@ -30,8 +31,8 @@ import (
 	"sort"
 )
 
-func usage() {
-	fmt.Fprintln(os.Stderr, `usage: evrctl [-config file | -db dsn] <command> [args]
+func (c *ctl) usage() {
+	fmt.Fprintln(c.stderr, `usage: evrctl [-config file | -db dsn] <command> [args]
 
 commands:
   version                                  print evrctl version
@@ -55,121 +56,167 @@ commands:
                                            a pebble store, and run it once.`)
 }
 
+// ctl is one run of evrctl: where it reads and writes.
+type ctl struct {
+	stdin          io.Reader
+	stdout, stderr io.Writer
+}
+
+// exitStatus ends evrctl with a status, anything to say already said.
+type exitStatus int
+
+func (e exitStatus) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
+
+// flagStatus is how a flag parse error ends evrctl, as flag.ExitOnError
+// would: 0 for -h, else 2 (the flag package has printed the error).
+func flagStatus(err error) error {
+	if errors.Is(err, flag.ErrHelp) {
+		return exitStatus(0)
+	}
+	return exitStatus(2)
+}
+
 func main() {
-	cfgPath := flag.String("config", "", "evrd config file to read the db DSN from (default $EVRD_CONFIG)")
-	db := flag.String("db", "", "storage DSN (default: from -config, else sqlite:evrd.db)")
-	flag.Usage = usage
-	flag.Parse()
+	os.Exit(run(os.Args, os.Stdin, os.Stdout, os.Stderr))
+}
+
+// run is evrctl: args are its command line (args[0] the program name), and
+// the result is the exit status. Errors are printed as "evrctl: <error>",
+// with status 1.
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	c := &ctl{stdin: stdin, stdout: stdout, stderr: stderr}
+	err := c.main(args)
+	var st exitStatus
+	switch {
+	case err == nil:
+		return 0
+	case errors.As(err, &st):
+		return int(st)
+	default:
+		fmt.Fprintf(stderr, "evrctl: %v\n", err)
+		return 1
+	}
+}
+
+func (c *ctl) main(argv []string) error {
+	flags := flag.NewFlagSet(argv[0], flag.ContinueOnError)
+	flags.SetOutput(c.stderr)
+	cfgPath := flags.String("config", "", "evrd config file to read the db DSN from (default $EVRD_CONFIG)")
+	db := flags.String("db", "", "storage DSN (default: from -config, else sqlite:evrd.db)")
+	flags.Usage = c.usage
+	if err := flags.Parse(argv[1:]); err != nil {
+		return flagStatus(err)
+	}
 	if *cfgPath == "" {
 		*cfgPath = os.Getenv("EVRD_CONFIG") // e.g. set in a container image or compose file
 	}
-	args := flag.Args()
+	args := flags.Args()
 	if len(args) == 0 {
-		usage()
-		os.Exit(2)
+		c.usage()
+		return exitStatus(2)
 	}
 
 	switch args[0] {
 	case "version":
-		fmt.Println("evrctl", version.Version)
-		return
+		fmt.Fprintln(c.stdout, "evrctl", version.Version)
+		return nil
 	case "genkey":
 		// A key for secret_key / EVRD_SECRET_KEY.
 		k := make([]byte, 32)
 		if _, err := rand.Read(k); err != nil {
-			fatal("%v", err)
+			return err
 		}
-		fmt.Println(base64.StdEncoding.EncodeToString(k))
-		return
+		fmt.Fprintln(c.stdout, base64.StdEncoding.EncodeToString(k))
+		return nil
 	case "history":
 		if len(args) > 1 && args[1] == "import-znc" {
 			cfg := config.Default()
 			if *cfgPath != "" {
-				c, err := config.Load(*cfgPath)
+				l, err := config.Load(*cfgPath)
 				if err != nil {
-					fatal("load config: %v", err)
+					return fmt.Errorf("load config: %v", err)
 				}
-				cfg = c
+				cfg = l
 			}
 			if *db != "" {
 				cfg.DB = *db
 			}
-			importZNC(cfg, args[2:])
-			return
+			return c.importZNC(cfg, args[2:])
 		}
-		historyCmd(args[1:])
+		return c.historyCmd(args[1:])
 	case "user":
 		cfg := config.Default()
 		if *cfgPath != "" {
-			c, err := config.Load(*cfgPath)
+			l, err := config.Load(*cfgPath)
 			if err != nil {
-				fatal("load config: %v", err)
+				return fmt.Errorf("load config: %v", err)
 			}
-			cfg = c
+			cfg = l
 		}
 		if *db != "" {
 			cfg.DB = *db
 		}
-		userCmd(cfg, args[1:])
+		return c.userCmd(cfg, args[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "evrctl: unknown command %q\n", args[0])
-		usage()
-		os.Exit(2)
+		fmt.Fprintf(c.stderr, "evrctl: unknown command %q\n", args[0])
+		c.usage()
+		return exitStatus(2)
 	}
 }
 
-func userCmd(cfg *config.Config, args []string) {
+func (c *ctl) userCmd(cfg *config.Config, args []string) error {
 	if len(args) == 0 {
-		usage()
-		os.Exit(2)
+		c.usage()
+		return exitStatus(2)
 	}
 	cur, oldKeys, err := cfg.SecretKeys()
 	if err == nil {
 		err = store.SetSecretKeys(cur, oldKeys...)
 	}
 	if err != nil {
-		fatal("secret key: %v", err)
+		return fmt.Errorf("secret key: %v", err)
 	}
 	// Run as evrd's user (when started as root), so a database this creates
 	// is evrd's to write.
 	if err := sandbox.Drop(cfg.User); err != nil {
-		fatal("user: %v", err)
+		return fmt.Errorf("user: %v", err)
 	}
 	st, err := store.Open(cfg.DB)
 	if err != nil {
-		fatal("open store: %v", err)
+		return fmt.Errorf("open store: %v", err)
 	}
 	defer st.Close()
 	acc := accounts.New(st, cfg.Limits)
 
-	find := func(name string) store.User {
+	find := func(name string) (store.User, error) {
 		u, err := st.UserByUsername(name)
 		if errors.Is(err, store.ErrNotFound) {
-			fatal("no user %q", name)
-		} else if err != nil {
-			fatal("%v", err)
+			return u, fmt.Errorf("no user %q", name)
 		}
-		return u
+		return u, err
 	}
 
 	switch args[0] {
 	case "add":
-		fs := flag.NewFlagSet("user add", flag.ExitOnError)
+		fs := flag.NewFlagSet("user add", flag.ContinueOnError)
+		fs.SetOutput(c.stderr)
 		admin := fs.Bool("admin", false, "make the account an admin")
 		email := fs.String("email", "", "email address")
-		fs.Parse(args[1:])
+		if err := fs.Parse(args[1:]); err != nil {
+			return flagStatus(err)
+		}
 		rest := fs.Args()
 		if len(rest) < 1 || len(rest) > 2 {
-			fatal("usage: evrctl user add [-admin] [-email e] <name> [password]")
+			return fmt.Errorf("usage: evrctl user add [-admin] [-email e] <name> [password]")
 		}
 		in := accounts.CreateInput{Username: rest[0], Email: *email, Role: store.RoleUser}
 		if len(rest) == 2 {
 			in.Password = rest[1]
 		}
 		if in.Password == "-" { // from stdin, kept out of ps and shell history
-			line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+			line, err := bufio.NewReader(c.stdin).ReadString('\n')
 			if err != nil && line == "" {
-				fatal("read password: %v", err)
+				return fmt.Errorf("read password: %v", err)
 			}
 			in.Password = strings.TrimRight(line, "\r\n")
 		}
@@ -178,16 +225,16 @@ func userCmd(cfg *config.Config, args []string) {
 		}
 		u, err := acc.Create(in)
 		if err != nil {
-			fatal("create user: %v", err)
+			return fmt.Errorf("create user: %v", err)
 		}
-		fmt.Printf("created %s %q (id %d)\n", u.Role, u.Username, u.ID)
+		fmt.Fprintf(c.stdout, "created %s %q (id %d)\n", u.Role, u.Username, u.ID)
 
 	case "list":
 		users, err := st.ListUsers()
 		if err != nil {
-			fatal("list users: %v", err)
+			return fmt.Errorf("list users: %v", err)
 		}
-		tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+		tw := tabwriter.NewWriter(c.stdout, 0, 4, 2, ' ', 0)
 		fmt.Fprintln(tw, "ID\tUSERNAME\tROLE\tSIGN-IN\tSTATUS\tLAST SIGN-IN")
 		for _, u := range users {
 			signin := "password"
@@ -207,163 +254,187 @@ func userCmd(cfg *config.Config, args []string) {
 		tw.Flush()
 
 	case "passwd":
-		need(args, 3, "user passwd <name> <password>")
-		u := find(args[1])
+		if err := need(args, 3, "user passwd <name> <password>"); err != nil {
+			return err
+		}
+		u, err := find(args[1])
+		if err != nil {
+			return err
+		}
 		if err := acc.SetPassword(&u, args[2]); err != nil {
-			fatal("%v", err)
+			return err
 		}
 		_ = st.DeleteUserSessions(u.ID, "")
-		fmt.Printf("password set for %q (web sessions signed out)\n", u.Username)
+		fmt.Fprintf(c.stdout, "password set for %q (web sessions signed out)\n", u.Username)
 
 	case "role":
-		need(args, 3, "user role <name> user|admin")
-		u := find(args[1])
+		if err := need(args, 3, "user role <name> user|admin"); err != nil {
+			return err
+		}
+		u, err := find(args[1])
+		if err != nil {
+			return err
+		}
 		if args[2] != store.RoleUser && args[2] != store.RoleAdmin {
-			fatal("role must be user or admin")
+			return fmt.Errorf("role must be user or admin")
 		}
 		if err := acc.GuardAdminChange(u, args[2] == store.RoleAdmin); err != nil {
-			fatal("%v", err)
+			return err
 		}
 		u.Role = args[2]
 		if err := st.UpdateUser(u); err != nil {
-			fatal("%v", err)
+			return err
 		}
-		fmt.Printf("%q is now %s\n", u.Username, u.Role)
+		fmt.Fprintf(c.stdout, "%q is now %s\n", u.Username, u.Role)
 
 	case "suspend":
 		if len(args) < 2 || len(args) > 3 {
-			fatal("usage: evrctl user suspend <name> [reason]")
+			return fmt.Errorf("usage: evrctl user suspend <name> [reason]")
 		}
-		u := find(args[1])
+		u, err := find(args[1])
+		if err != nil {
+			return err
+		}
 		if err := acc.GuardAdminChange(u, false); err != nil {
-			fatal("%v", err)
+			return err
 		}
 		u.Suspended = true
 		if len(args) == 3 {
 			u.SuspendedReason = args[2]
 		}
 		if err := st.UpdateUser(u); err != nil {
-			fatal("%v", err)
+			return err
 		}
 		_ = st.DeleteUserSessions(u.ID, "")
-		fmt.Printf("suspended %q\n", u.Username)
+		fmt.Fprintf(c.stdout, "suspended %q\n", u.Username)
 
 	case "unsuspend":
-		need(args, 2, "user unsuspend <name>")
-		u := find(args[1])
+		if err := need(args, 2, "user unsuspend <name>"); err != nil {
+			return err
+		}
+		u, err := find(args[1])
+		if err != nil {
+			return err
+		}
 		u.Suspended, u.SuspendedReason = false, ""
 		if err := st.UpdateUser(u); err != nil {
-			fatal("%v", err)
+			return err
 		}
-		fmt.Printf("unsuspended %q\n", u.Username)
+		fmt.Fprintf(c.stdout, "unsuspended %q\n", u.Username)
 
 	case "delete":
-		need(args, 2, "user delete <name>")
-		u := find(args[1])
+		if err := need(args, 2, "user delete <name>"); err != nil {
+			return err
+		}
+		u, err := find(args[1])
+		if err != nil {
+			return err
+		}
 		if err := acc.GuardAdminChange(u, false); err != nil {
-			fatal("%v", err)
+			return err
 		}
 		if err := st.DeleteUser(u.ID); err != nil {
-			fatal("%v", err)
+			return err
 		}
-		fmt.Printf("deleted %q (id %d)\n", u.Username, u.ID)
+		fmt.Fprintf(c.stdout, "deleted %q (id %d)\n", u.Username, u.ID)
 
 	default:
-		fatal("unknown user subcommand %q", args[0])
+		return fmt.Errorf("unknown user subcommand %q", args[0])
 	}
+	return nil
 }
 
-func historyCmd(args []string) {
+func (c *ctl) historyCmd(args []string) error {
 	if len(args) != 3 || args[0] != "copy" {
-		fatal("usage: evrctl history copy <from> <to>")
+		return fmt.Errorf("usage: evrctl history copy <from> <to>")
 	}
 	from, err := history.Open(args[1])
 	if err != nil {
-		fatal("open %s: %v", args[1], err)
+		return fmt.Errorf("open %s: %v", args[1], err)
 	}
 	defer from.Close()
 	to, err := history.Open(args[2])
 	if err != nil {
-		fatal("open %s: %v", args[2], err)
+		return fmt.Errorf("open %s: %v", args[2], err)
 	}
 	nets, err := from.Networks()
 	if err != nil {
-		fatal("list networks: %v", err)
+		return fmt.Errorf("list networks: %v", err)
 	}
 	total := 0
 	for _, id := range nets {
 		bufs, err := from.Buffers(id)
 		if err != nil {
-			fatal("network %d: %v", id, err)
+			return fmt.Errorf("network %d: %v", id, err)
 		}
 		for _, b := range bufs {
 			// Oldest first, so the destination indexes each buffer from its
 			// first line.
 			msgs, err := from.Recent(id, b, math.MaxInt32)
 			if err != nil {
-				fatal("network %d %s: %v", id, b, err)
+				return fmt.Errorf("network %d %s: %v", id, b, err)
 			}
 			for _, m := range msgs {
 				if err := to.Add(m); err != nil {
-					fatal("write: %v", err)
+					return fmt.Errorf("write: %v", err)
 				}
 			}
 			total += len(msgs)
 		}
-		fmt.Printf("network %d: %d buffers\n", id, len(bufs))
+		fmt.Fprintf(c.stdout, "network %d: %d buffers\n", id, len(bufs))
 	}
 	if err := to.Close(); err != nil { // waits for queued writes
-		fatal("finish writing: %v", err)
+		return fmt.Errorf("finish writing: %v", err)
 	}
-	fmt.Printf("copied %d lines from %d networks\n", total, len(nets))
+	fmt.Fprintf(c.stdout, "copied %d lines from %d networks\n", total, len(nets))
+	return nil
 }
 
-func need(args []string, n int, use string) {
+func need(args []string, n int, use string) error {
 	if len(args) != n {
-		fatal("usage: evrctl %s", use)
+		return fmt.Errorf("usage: evrctl %s", use)
 	}
-}
-
-func fatal(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, "evrctl: "+format+"\n", a...)
-	os.Exit(1)
+	return nil
 }
 
 // importZNC loads a ZNC user's logs into an evrd user's history.
-func importZNC(cfg *config.Config, args []string) {
-	fs := flag.NewFlagSet("history import-znc", flag.ExitOnError)
+func (c *ctl) importZNC(cfg *config.Config, args []string) error {
+	fs := flag.NewFlagSet("history import-znc", flag.ContinueOnError)
+	fs.SetOutput(c.stderr)
 	dry := fs.Bool("dry-run", false, "count what would be imported, write nothing")
 	tz := fs.String("tz", "UTC", "the timezone ZNC wrote its logs in (its user's Timezone setting)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return flagStatus(err)
+	}
 	if fs.NArg() != 2 {
-		fatal("usage: evrctl history import-znc [-dry-run] [-tz zone] <user> <znc-user-dir>")
+		return fmt.Errorf("usage: evrctl history import-znc [-dry-run] [-tz zone] <user> <znc-user-dir>")
 	}
 	loc, err := time.LoadLocation(*tz)
 	if err != nil {
-		fatal("timezone: %v", err)
+		return fmt.Errorf("timezone: %v", err)
 	}
 	cur, oldKeys, err := cfg.SecretKeys()
 	if err == nil {
 		err = store.SetSecretKeys(cur, oldKeys...)
 	}
 	if err != nil {
-		fatal("secret key: %v", err)
+		return fmt.Errorf("secret key: %v", err)
 	}
 	if err := sandbox.Drop(cfg.User); err != nil {
-		fatal("user: %v", err)
+		return fmt.Errorf("user: %v", err)
 	}
 	st, err := store.Open(cfg.DB)
 	if err != nil {
-		fatal("open store: %v", err)
+		return fmt.Errorf("open store: %v", err)
 	}
 	defer st.Close()
 	u, err := st.UserByUsername(fs.Arg(0))
 	if err != nil {
-		fatal("user %q: %v", fs.Arg(0), err)
+		return fmt.Errorf("user %q: %v", fs.Arg(0), err)
 	}
 	nets, err := st.ListNetworks(u.ID)
 	if err != nil {
-		fatal("networks: %v", err)
+		return fmt.Errorf("networks: %v", err)
 	}
 	byName := map[string]store.Network{}
 	for _, n := range nets {
@@ -371,16 +442,16 @@ func importZNC(cfg *config.Config, args []string) {
 	}
 	files, err := zncimport.Find(fs.Arg(1), loc)
 	if err != nil {
-		fatal("find logs: %v", err)
+		return fmt.Errorf("find logs: %v", err)
 	}
 	if len(files) == 0 {
-		fatal("no ZNC logs under %s (want …/moddata/log/<network>/<buffer>/<date>.log)", fs.Arg(1))
+		return fmt.Errorf("no ZNC logs under %s (want …/moddata/log/<network>/<buffer>/<date>.log)", fs.Arg(1))
 	}
 
 	var hist history.Store
 	if !*dry {
 		if hist, err = history.Open(cfg.History); err != nil {
-			fatal("open history (is evrd still running?): %v", err)
+			return fmt.Errorf("open history (is evrd still running?): %v", err)
 		}
 	}
 	lines, skipped := map[string]int{}, map[string]int{}
@@ -399,14 +470,14 @@ func importZNC(cfg *config.Config, args []string) {
 			return hist.Add(m)
 		})
 		if err != nil {
-			fatal("%s: %v", f.Path, err)
+			return fmt.Errorf("%s: %v", f.Path, err)
 		}
 		lines[n.Name] += c
 		total += c
 	}
 	if hist != nil {
 		if err := hist.Close(); err != nil {
-			fatal("finish writing: %v", err)
+			return fmt.Errorf("finish writing: %v", err)
 		}
 	}
 	names := make([]string, 0, len(lines))
@@ -415,23 +486,24 @@ func importZNC(cfg *config.Config, args []string) {
 	}
 	sort.Strings(names)
 	for _, k := range names {
-		fmt.Printf("%-20s %9d lines\n", k, lines[k])
+		fmt.Fprintf(c.stdout, "%-20s %9d lines\n", k, lines[k])
 	}
 	for k, n := range skipped {
-		fmt.Printf("%-20s skipped: %s has no network by that name (%d days of logs)\n", k, u.Username, n)
+		fmt.Fprintf(c.stdout, "%-20s skipped: %s has no network by that name (%d days of logs)\n", k, u.Username, n)
 	}
 	verb := "imported"
 	if *dry {
 		verb = "would import"
 	}
-	fmt.Printf("%s %d lines into %s\n", verb, total, u.Username)
+	fmt.Fprintf(c.stdout, "%s %d lines into %s\n", verb, total, u.Username)
 	if !*dry && (u.BacklogLines == nil || *u.BacklogLines != 0) {
 		// keep it: the prune would cut every buffer back to the limit
 		zero := 0
 		u.BacklogLines = &zero
 		if err := st.UpdateUser(u); err != nil {
-			fatal("set %s's backlog to unlimited: %v", u.Username, err)
+			return fmt.Errorf("set %s's backlog to unlimited: %v", u.Username, err)
 		}
-		fmt.Printf("%s now keeps all history (backlog unlimited; change it under Admin → Users)\n", u.Username)
+		fmt.Fprintf(c.stdout, "%s now keeps all history (backlog unlimited; change it under Admin → Users)\n", u.Username)
 	}
+	return nil
 }
