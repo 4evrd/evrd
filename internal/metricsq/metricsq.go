@@ -36,16 +36,16 @@ func New(base string) *Client {
 	return &Client{base: strings.TrimRight(base, "/"), hc: &http.Client{Timeout: 10 * time.Second, Transport: transport()}}
 }
 
-// transport speaks HTTP/1.1 only, one request per connection at a time. Over
-// HTTP/2 every query shares one connection, and when that connection dies
-// silently (a firewall or proxy on the way forgets it) every later query
-// hangs on it until its deadline. Over HTTP/1.1 a request that times out
-// takes its connection with it, and the next one dials afresh.
+// transport dials a fresh HTTP/1.1 connection for every query. Kept-alive
+// connections to the metrics store die silently on the way (a firewall or
+// proxy forgets them): over HTTP/2 every later query hung on the dead one,
+// and a reused HTTP/1.1 connection ends in EOF. The dashboards make a
+// handful of queries a minute, so a handshake each is cheap.
 func transport() *http.Transport {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.ForceAttemptHTTP2 = false
 	t.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
-	t.IdleConnTimeout = 30 * time.Second
+	t.DisableKeepAlives = true
 	return t
 }
 
@@ -77,6 +77,10 @@ func (c *Client) get(ctx context.Context, path string, q url.Values) (*apiRespon
 		return nil, err
 	}
 	res, err := c.hc.Do(req)
+	if err != nil && ctx.Err() == nil {
+		// once more, on a new connection: the network may have dropped this one
+		res, err = c.hc.Do(req.Clone(ctx))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("metrics: %w", err)
 	}
