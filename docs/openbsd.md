@@ -158,7 +158,7 @@ host changing.
 ```sh
 mkdir -p /var/evrd/ident && chown _evrd /var/evrd/ident
 usermod -d /var/evrd/ident _evrd         # oidentd reads ~_evrd/.oidentd.conf
-echo 'ident_file = /var/evrd/ident/.oidentd.conf' >> /etc/evrd/evrd.conf
+echo 'ident_file /var/evrd/ident/.oidentd.conf' >> /etc/evrd/evrd.conf
 cat >> /etc/oidentd.conf <<'CONF'
 user _evrd {
 	default {
