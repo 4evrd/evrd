@@ -61,6 +61,9 @@ type User struct {
 	// AutoAway marks the user away on every network while no client (IRC or
 	// web) is attached.
 	AutoAway bool `gorm:"not null;default:false"`
+	// Language is the web app's language (a code from the app's list); ""
+	// follows the browser.
+	Language string `gorm:"not null;default:''"`
 
 	// Playback to IRC clients: how many lines per channel and query, and
 	// whether a buffer, once played back, starts empty next time (only lines

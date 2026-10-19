@@ -204,3 +204,22 @@ func TestAdminDeletesOwnAccount(t *testing.T) {
 		t.Fatalf("delete: %d %v", code, out)
 	}
 }
+
+func TestMeLanguage(t *testing.T) {
+	e := newEnv(t)
+	e.user("alice", store.RoleUser)
+	c := e.login("alice")
+	if _, me := c.do("GET", "/api/me", nil); me["language"] != "" {
+		t.Fatalf("default: %v", me["language"])
+	}
+	if code, _ := c.do("PATCH", "/api/me", map[string]any{"language": "klingon"}); code != 422 {
+		t.Fatalf("unknown language: %d", code)
+	}
+	if code, me := c.do("PATCH", "/api/me", map[string]any{"language": " it "}); code != 200 || me["language"] != "it" {
+		t.Fatalf("italian: %d %v", code, me["language"])
+	}
+	// "" goes back to following the browser
+	if code, me := c.do("PATCH", "/api/me", map[string]any{"language": ""}); code != 200 || me["language"] != "" {
+		t.Fatalf("browser: %d %v", code, me["language"])
+	}
+}

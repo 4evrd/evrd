@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -9,6 +10,10 @@ import (
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/store"
 )
+
+// Languages are the web app's languages (web/src/lib/i18n): what an account's
+// language may be set to.
+var Languages = []string{"en", "it", "es", "tr"}
 
 // userDTO is what a user sees about their own account (and what an admin
 // sees, plus the overrides from adminUserDTO).
@@ -19,7 +24,7 @@ func (s *Server) userDTO(u store.User) map[string]any {
 		"suspended": u.Suspended, "suspendedReason": u.SuspendedReason,
 		"hasPassword": u.PasswordHash != "", "sso": u.OIDCSubject != nil,
 		"defaultNick": u.DefaultNick, "defaultAltNick": u.DefaultAltNick, "defaultRealname": u.DefaultRealname,
-		"autoAway": u.AutoAway, "mustChangePassword": u.MustChangePassword,
+		"autoAway": u.AutoAway, "mustChangePassword": u.MustChangePassword, "language": u.Language,
 		"createdAt": u.CreatedAt.Unix(), "lastLoginAt": unix(u.LastLoginAt), "lastSeenAt": unix(u.LastSeenAt),
 		"limits":      s.acc.LimitsFor(u),
 		"usage":       map[string]any{"networks": nets, "clients": s.b.Clients(u.ID), "attached": s.b.Attached(u.ID)},
@@ -61,6 +66,7 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		DefaultRealname *string            `json:"defaultRealname"`
 		DefaultAltNick  *string            `json:"defaultAltNick"`
 		AutoAway        *bool              `json:"autoAway"`
+		Language        *string            `json:"language"`
 		Settings        *userSettingsInput `json:"settings"`
 	}
 	if !decode(w, r, &in) {
@@ -98,6 +104,14 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		u.DefaultNick = nick
+	}
+	if in.Language != nil {
+		l := strings.TrimSpace(*in.Language)
+		if l != "" && !slices.Contains(Languages, l) {
+			writeErr(w, http.StatusUnprocessableEntity, "that language isn't one the web app has")
+			return
+		}
+		u.Language = l
 	}
 	if in.DefaultRealname != nil {
 		u.DefaultRealname = strings.TrimSpace(*in.DefaultRealname)

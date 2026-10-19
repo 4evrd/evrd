@@ -1,6 +1,7 @@
 // Who is signed in, how the server is set up, and the counts the shell shows
 // (networks, mentions) — shared by every screen. Loaded once by the layout.
 import { api, Unauthorized } from './api.js'
+import { setLocale, pick } from './i18n.svelte.js'
 
 export const session = $state({
   phase: 'loading', // loading | signedOut | error | ready
@@ -15,9 +16,12 @@ export async function load() {
   try {
     session.config = await api.config()
     session.me = await api.me()
+    await setLocale(pick(session.me.language))
     session.phase = 'ready'
     refreshNets()
   } catch (e) {
+    // signed out (or broken): the browser's language
+    await setLocale(pick('')).catch(() => {})
     if (e instanceof Unauthorized) session.phase = 'signedOut'
     else { session.error = e.message; session.phase = 'error' }
   }

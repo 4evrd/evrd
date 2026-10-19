@@ -3,6 +3,7 @@
   import Icon from '$lib/components/Icon.svelte'
   import Field from '$lib/components/Field.svelte'
   import Switch from '$lib/components/Switch.svelte'
+  import Select from '$lib/components/Select.svelte'
   import ChangePassword from '$lib/components/ChangePassword.svelte'
   import BouncerSettings from '$lib/components/BouncerSettings.svelte'
   import { api } from '$lib/api.js'
@@ -10,6 +11,7 @@
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
   import { ago, device } from '$lib/format.js'
   import { check } from '$lib/validate.js'
+  import { t, LANGUAGES, pick as pickLocale, setLocale } from '$lib/i18n.svelte.js'
 
   const me = $derived(session.me)
   const TABS = [['profile', 'Profile'], ['bouncer', 'Bouncer'], ['security', 'Security'], ['sessions', 'Sessions'], ['danger', 'Delete account']]
@@ -26,6 +28,8 @@
   let alt = $state(session.me.defaultAltNick)
   let real = $state(session.me.defaultRealname)
   let away = $state(session.me.autoAway)
+  let lang = $state(session.me.language || '')
+  const langOptions = $derived([{ value: '', label: t('account.languageBrowser', { language: LANGUAGES.find((l) => l.code === pickLocale(''))?.name }) }, ...LANGUAGES.map((l) => ({ value: l.code, label: l.name }))])
   let perr = $state({})
   let saving = $state(false)
   async function saveProfile(e) {
@@ -34,9 +38,10 @@
     if (Object.values(perr).some(Boolean)) return
     saving = true
     try {
-      const patch = { defaultNick: nick.trim(), defaultAltNick: alt.trim(), defaultRealname: real.trim(), autoAway: away }
+      const patch = { defaultNick: nick.trim(), defaultAltNick: alt.trim(), defaultRealname: real.trim(), autoAway: away, language: lang }
       if (!me.sso) patch.email = email.trim()
       session.me = await api.updateMe(patch)
+      await setLocale(pickLocale(session.me.language))
       toast('Profile saved')
     } catch (err) { toast(err.message, 'bad') } finally { saving = false }
   }
@@ -101,6 +106,7 @@
             <Field id="p-nick" label="Default nickname" required err={perr.nick}><input class="input mono" id="p-nick" spellcheck="false" bind:value={nick} /></Field>
             <Field id="p-alt" label="Alternate nickname" help="Used when the first one is taken." err={perr.alt}><input class="input mono" id="p-alt" spellcheck="false" bind:value={alt} /></Field>
             <Field id="p-real" label="Real name" help="Shown in /whois. Can be anything." span><input class="input" id="p-real" bind:value={real} /></Field>
+            <Field id="p-lang" label={t('account.language')} help={t('account.languageHelp')} span><Select id="p-lang" bind:value={lang} options={langOptions} testid="lang-select" /></Field>
             <div class="check-row span-2">
               <span class="od-field"><span id="away-l">Mark me away when no client is attached</span><span>evrd sets /away and clears it when you come back.</span></span>
               <Switch checked={away} labelledby="away-l" onchange={(v) => (away = v)} />
