@@ -117,3 +117,28 @@ test('the client limit is enforced', async ({ page }) => {
   await page.goto('/clients')
   await expect(page.locator('#live-h + .chip')).toHaveText('1 of 1')
 })
+
+test('an SSO account is told its SSO password won’t work in IRC clients', async ({ page }) => {
+  // e2e has no SSO provider: answer as an account that signs in with one
+  await page.route('**/api/me', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    const res = await route.fetch()
+    await route.fulfill({ response: res, json: { ...(await res.json()), hasPassword: false } })
+  })
+  await page.route('**/api/config', async (route) => {
+    const res = await route.fetch()
+    await route.fulfill({ response: res, json: { ...(await res.json()), sso: true, ssoLabel: 'Authentik' } })
+  })
+  await page.goto('/clients')
+  const notice = page.getByTestId('sso-notice')
+  await expect(notice).toContainText('Your Authentik password won’t work in an IRC client.')
+  await expect(notice).toContainText(`${u.name}/Dev:client-password`)
+  await notice.getByRole('button', { name: 'Create one' }).click()
+  await expect(page.getByRole('dialog', { name: 'New client password' })).toBeVisible()
+
+  // with a password of its own there's nothing to warn about
+  await page.unrouteAll({ behavior: 'ignoreErrors' })
+  await page.goto('/clients')
+  await expect(page.getByRole('heading', { name: 'Point your client here' })).toBeVisible()
+  await expect(page.getByTestId('sso-notice')).toHaveCount(0)
+})
