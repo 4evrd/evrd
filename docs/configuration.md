@@ -20,6 +20,7 @@ are stored in the database and win over the file (see below).
 | `chroot`, `user` | — | confine evrd after startup; see [Confinement](#confinement-chroot-and-user) |
 | `modules_off` | — | [modules](modules.md) nobody on this server can use, space-separated |
 | `network_directory` (`EVRD_NETWORK_DIRECTORY`) | `https://evrd.sh/api/networks/v1.json` | the [network directory](network-directory.md) users pick from when adding a network: a URL, a local file, or `off` |
+| `ident_file` (`EVRD_IDENT_FILE`) | — | an oidentd user config evrd keeps up to date so networks see users' idents, not evrd's system user; see [Idents](openbsd.md#idents-oidentd) |
 | `links_socket` (`EVRD_LINKS_SOCKET`) | — | the [connection holder](#connection-holder)'s socket: IRC connections stay up while evrd restarts (one node only) |
 | `provision_token` (`EVRD_PROVISION_TOKEN`) | — | turns on the [provisioning API](#provisioning-api) for tools that create accounts |
 | `db` (`EVRD_DB`) | `sqlite:evrd.db` | accounts and settings: `postgres://user:pass@host/evrd?sslmode=disable` or `sqlite:/path/evrd.db` |

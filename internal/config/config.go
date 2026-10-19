@@ -84,6 +84,10 @@ type Config struct {
 	// comes from (internal/directory): an http(s) URL or a local file.
 	// Empty turns it off.
 	NetworkDirectory string
+	// IdentFile is an oidentd user config (~/.oidentd.conf of the user evrd
+	// runs as) that evrd keeps up to date from users' bind hosts, so
+	// networks see their idents (internal/identfile). Empty: none.
+	IdentFile string
 
 	// WriteConf (settings_write_conf) makes evrd write settings changed in
 	// the admin UI back into this file, on every node.
@@ -445,6 +449,9 @@ func (c *Config) ApplyEnv() error {
 	if v := os.Getenv("EVRD_NETWORK_DIRECTORY"); v != "" {
 		c.NetworkDirectory = directorySource(v)
 	}
+	if v := os.Getenv("EVRD_IDENT_FILE"); v != "" {
+		c.IdentFile = v
+	}
 	if v := os.Getenv("EVRD_UPSTREAM_PREFIX6"); v != "" {
 		p, err := netip.ParsePrefix(v)
 		if err != nil {
@@ -566,6 +573,8 @@ func (c *Config) set(key, val string) error {
 		c.Outbound.ConnectRate, err = strconv.ParseFloat(val, 64)
 	case "network_directory":
 		c.NetworkDirectory = directorySource(val)
+	case "ident_file":
+		c.IdentFile = val
 	case "modules_off": // repeatable, or several per line
 		c.ModulesOff = append(c.ModulesOff, strings.Fields(val)...)
 	case "bindhost": // repeatable, or several per line
