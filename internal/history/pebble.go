@@ -219,6 +219,12 @@ func (s *pebbleStore) Buffers(networkID int64) ([]string, error) {
 		return nil, ErrClosed
 	}
 	defer s.life.RUnlock()
+	return s.buffers(networkID)
+}
+
+// buffers is Buffers for a caller already inside enter: taking the read lock
+// again would deadlock against a Close waiting for the write lock.
+func (s *pebbleStore) buffers(networkID int64) ([]string, error) {
 	prefix := networkPrefix(prefixBuffer, networkID)
 	it, err := s.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upperBound(prefix)})
 	if err != nil {
@@ -240,7 +246,7 @@ func (s *pebbleStore) Prune(networkID int64, keep int) error {
 	if keep <= 0 {
 		return nil
 	}
-	buffers, err := s.Buffers(networkID)
+	buffers, err := s.buffers(networkID)
 	if err != nil {
 		return err
 	}
@@ -308,7 +314,8 @@ func (s *pebbleStore) Networks() ([]int64, error) {
 	for ok := it.First(); ok; {
 		id := int64(binary.BigEndian.Uint64(it.Key()[1:9]))
 		out = append(out, id)
-		ok = it.SeekGE(networkPrefix(prefixBuffer, id+1))
+		// Skip the rest of this network (id+1 would wrap around for -1).
+		ok = it.SeekGE(upperBound(networkPrefix(prefixBuffer, id)))
 	}
 	return out, it.Error()
 }
