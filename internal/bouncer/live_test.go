@@ -146,7 +146,9 @@ func TestStartConnectsEnabledNetworks(t *testing.T) {
 	// connecting reaches the activity feed
 	eventually(t, "connected event", func() bool {
 		evs, _ := r.st.UserEvents(alice.ID, time.Time{}, 10)
-		return slices.ContainsFunc(evs, func(e store.UserEvent) bool { return e.Kind == "connected" && e.Title == "Connected to on" })
+		return slices.ContainsFunc(evs, func(e store.UserEvent) bool {
+			return e.Kind == "connected" && e.Title == "Connected to on" && e.NetworkID == on.ID
+		})
 	})
 	// and the connection log
 	if l := r.b.NetworkLog(on.ID); !logHas(l, "Switched on") {

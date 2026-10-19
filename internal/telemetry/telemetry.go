@@ -110,7 +110,7 @@ var (
 	Lines = counter("evrd.irc.lines", "Chat lines relayed, per user and network", "{line}")
 	// UpstreamDisconnects counts dropped upstream connections, per user and
 	// network.
-	UpstreamDisconnects = counter("evrd.upstream.disconnects", "Upstream connections lost", "{disconnect}")
+	UpstreamDisconnects = counter("evrd.upstream.disconnects", "Upstream links lost (kind=dropped) or connection attempts failed (kind=failed)", "{disconnect}")
 	// IRCLogins counts native client attaches, by result.
 	IRCLogins = counter("evrd.irc.logins", "IRC client sign-ins", "{login}")
 	// WebLogins counts web sign-ins, by method and result.
