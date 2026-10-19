@@ -652,6 +652,10 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
 .chat { display: grid; grid-template-columns: 280px minmax(0, 1fr) 232px; height: 100%; min-height: 0; }
 .buffers, .members { min-height: 0; overflow-y: auto; padding: var(--s4); border-right: 1px solid var(--line-soft); background: oklch(17% 0.012 215 / 0.5); display: grid; gap: var(--s4); align-content: start; }
 .members { border-right: 0; border-left: 1px solid var(--line-soft); }
+/* one column that never grows past the pane: long names shorten instead */
+.buffers, .members, .net-switch { grid-template-columns: minmax(0, 1fr); }
+.buffers > *, .members > *, .net-switch > * { min-width: 0; }
+.net-switch .od-row > .od-truncate { min-width: 0; }
 .net-switch { display: grid; gap: var(--s3); padding: var(--s4); border-radius: var(--r-card); background: var(--glass); border: 1px solid var(--line-soft); }
 .net-switch .od-row { justify-content: space-between; }
 .buf-list { display: grid; gap: 2px; }

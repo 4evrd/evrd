@@ -184,3 +184,16 @@ test('chat with no networks points you at adding one', async ({ page }) => {
   await page.getByRole('link', { name: 'Add network' }).last().click()
   await expect(page.getByRole('form', { name: 'Add a network' })).toBeVisible()
 })
+
+test('long names shorten instead of pushing the buffer list into the chat', async ({ page }) => {
+  const long = '#' + uniq('a-very-long-channel-name-that-goes-on-and-on-')
+  await addNetwork(me.api, { name: 'a-network-with-a-long-name-xyz12', nick: (me.name + 'withaverylongnickname').slice(0, 30), channels: [long] })
+  await openChat(page)
+  await page.getByLabel('Network', { exact: true }).selectOption({ label: 'a-network-with-a-long-name-xyz12' })
+  await expect(page.locator('.buf', { hasText: long.slice(1, 20) })).toBeVisible({ timeout: 20000 })
+  const fits = await page.evaluate(() => {
+    const pane = document.querySelector('.buffers').getBoundingClientRect()
+    return [...document.querySelectorAll('.buffers .net-switch, .buffers .buf')].every((e) => e.getBoundingClientRect().right <= pane.right + 0.5)
+  })
+  expect(fits).toBe(true)
+})
