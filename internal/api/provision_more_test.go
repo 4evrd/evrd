@@ -111,3 +111,34 @@ func TestProvisionConnectOnAnotherNode(t *testing.T) {
 		t.Fatal("connected on a node that doesn't own the account")
 	}
 }
+
+// Provisioning brings bind hosts over as they were, though the bouncer
+// offers none to pick, and sets one on a network already there.
+func TestProvisionBindHost(t *testing.T) {
+	e := newEnv(t, func(c *config.Config) { c.ProvisionToken = provisionToken })
+	net := func(name, bind string) map[string]any {
+		n := map[string]any{"name": name, "host": "irc.example.org"}
+		if bind != "" {
+			n["bindHost"] = bind
+		}
+		return n
+	}
+	if _, out := e.provision("bob", map[string]any{"networks": []map[string]any{net("plain", ""), net("vhost", " bob.example.org ")}}); out["networks"].([]any)[1].(map[string]any)["status"] != "created" {
+		t.Fatalf("with a bind host: %v", out)
+	}
+	_, out := e.provision("bob", map[string]any{"networks": []map[string]any{net("plain", "bob.example.org")}})
+	if r := out["networks"].([]any)[0].(map[string]any); r["status"] != "exists" || r["error"] != nil {
+		t.Fatalf("setting it later: %v", r)
+	}
+	u, _ := e.st.UserByUsername("bob")
+	list, _ := e.st.ListNetworks(u.ID)
+	for _, n := range list {
+		if n.BindHost != "bob.example.org" {
+			t.Fatalf("%s: bind host %q", n.Name, n.BindHost)
+		}
+	}
+	// The account itself gains nothing: its own edits still go by the list.
+	if u.IsAdmin() || u.BindHost != "" {
+		t.Fatalf("account: %+v", u)
+	}
+}

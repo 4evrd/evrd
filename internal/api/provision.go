@@ -99,15 +99,24 @@ func (s *Server) handleProvisionUser(w http.ResponseWriter, r *http.Request) {
 		res := provisionedNetwork{Name: n.Name}
 		if id, ok := have[strings.ToLower(n.Name)]; ok {
 			res.ID, res.Status = id, "exists"
+			// A bind host given for one already there is set (an earlier run
+			// may have brought it over without one).
+			if ni.BindHost != nil {
+				if err := s.provisionBindHost(id, n.BindHost); err != nil {
+					res.Status, res.Error = "failed", err.Error()
+					out = append(out, res)
+					continue
+				}
+			}
 			if in.Connect {
 				res.Error = s.provisionConnect(id)
 			}
 			out = append(out, res)
 			continue
 		}
-		// Per-user network limits don't apply: this is an admin bringing an
-		// account over as it was.
-		if err := s.checkNetwork(u, &n, nil); err != nil {
+		// Per-user network limits and the bind host list don't apply: this is
+		// an admin bringing an account over as it was.
+		if err := s.checkNetwork(asAdmin(u), &n, nil); err != nil {
 			res.Status, res.Error = "failed", err.Error()
 			out = append(out, res)
 			continue
@@ -130,6 +139,30 @@ func (s *Server) handleProvisionUser(w http.ResponseWriter, r *http.Request) {
 		"username": u.Username, "id": u.ID, "created": created,
 		"claimable": u.SSOClaimable, "networks": out,
 	})
+}
+
+// asAdmin is u with an admin's say over its networks (any bind host).
+func asAdmin(u store.User) store.User {
+	u.Role = store.RoleAdmin
+	return u
+}
+
+// provisionBindHost sets an existing network's bind host, reconnecting it
+// if it's up so it takes effect.
+func (s *Server) provisionBindHost(id int64, bind string) error {
+	n, err := s.st().NetworkByID(id)
+	bind = strings.TrimSpace(bind)
+	if err != nil || n.BindHost == bind {
+		return err
+	}
+	n.BindHost = bind
+	if err := s.st().UpdateNetwork(n); err != nil {
+		return err
+	}
+	if s.b.Status(id) != "disconnected" {
+		return s.b.Reconnect(id)
+	}
+	return nil
 }
 
 // provisionConnect connects a network, returning why it couldn't ("" if it
