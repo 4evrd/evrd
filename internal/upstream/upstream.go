@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand/v2"
 	"net"
 	"regexp"
 	"sort"
@@ -154,6 +153,7 @@ type Conn struct {
 	flood        flood
 	codec        codec
 	serverIdx    int
+	rests        rests  // servers resting after refusing this address
 	serverPass   string // the current server's PASS (then no SASL-fallback PASS)
 	saslOK       bool   // SASL succeeded on this connection (then no NickServ IDENTIFY)
 	auth         authState
@@ -252,6 +252,7 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		chanSettings: n.ChannelSettings,
 		ctcpReplies:  upperKeys(opts.CTCPReplies),
 		codec:        newCodec(n.Encoding),
+		rests:        rests{},
 		idle:         opts.Idle,
 		version:      opts.Version,
 		pingEvery:    opts.PingInterval,
@@ -331,13 +332,15 @@ func upperKeys(m map[string]string) map[string]string {
 }
 
 // Run keeps the connection alive until ctx is cancelled, reconnecting with
-// jittered exponential backoff (up to five minutes; longer after a ban, see
-// retryWait).
+// jittered exponential backoff (up to five minutes). A server that refuses
+// or throttles this address rests (longer after each ban, see rest.go) while
+// the network's other servers are tried; only when all of them rest does
+// evrd wait, for the first to come back.
 func (c *Conn) Run(ctx context.Context) {
 	backoff := time.Second
-	bans := 0      // bans in a row, each doubling the wait
 	lastHint := "" // logged once per kind of failure, not every attempt
 	lastFail := "" // a failed attempt is an event once per error, until connected
+	servers := c.net.ServerList()
 	defer func() {
 		c.mu.Lock()
 		c.health.Status, c.health.Lag, c.health.RetryIn = StatusDisconnected, -1, 0
@@ -359,14 +362,20 @@ func (c *Conn) Run(ctx context.Context) {
 			return
 		}
 		msg := describeErr(err)
+		now := time.Now()
+		c.mu.Lock()
+		server := c.health.Server
+		stable := wasConnected && now.Sub(started) >= stableAfter
 		if wasConnected {
 			lastFail = ""
-			if time.Since(started) >= stableAfter && !bannedRE.MatchString(msg) {
-				backoff, bans = time.Second, 0 // a working link that dropped: retry quickly
+			if stable && !bannedRE.MatchString(msg) {
+				backoff = time.Second // a working link that dropped: retry quickly
 			}
 		}
-		var wait time.Duration
-		wait, bans = retryWait(backoff, msg, bans)
+		rest := c.rests.ended(server, msg, stable, now)
+		wait := c.rests.retryWait(backoff, servers, now)
+		_, allBanned, allRest := c.rests.allResting(servers, now)
+		c.mu.Unlock()
 		hint := Hint(msg)
 		if wasConnected {
 			c.note("evrd", true, "Disconnected: "+msg)
@@ -377,7 +386,8 @@ func (c *Conn) Run(ctx context.Context) {
 			c.note("evrd", false, hint)
 		}
 		lastHint = hint
-		c.note("evrd", false, "Trying again in "+roundDur(wait))
+		next := restNote(c.net.Name, server, msg, rest, wait, len(servers), allRest, allBanned)
+		c.note("evrd", false, next)
 		c.update(func(h *Health) {
 			h.Status, h.Lag = StatusReconnecting, -1
 			h.LastError, h.LastErrorAt, h.Hint = msg, time.Now(), hint
@@ -397,7 +407,7 @@ func (c *Conn) Run(ctx context.Context) {
 			lastFail = msg
 			detail := hint
 			if detail == "" {
-				detail = "Trying again in " + roundDur(wait)
+				detail = next
 			}
 			c.notify(Event{Kind: "failed", Title: c.net.Name + ": couldn't connect: " + msg, Detail: detail})
 		}
@@ -412,23 +422,6 @@ func (c *Conn) Run(ctx context.Context) {
 	}
 }
 
-// retryWait is how long to wait before the next try, given the backoff and
-// why the last one ended, and the bans in a row so far (returned updated).
-// It's jittered, so connections dropped together don't all retry together.
-func retryWait(backoff time.Duration, msg string, bans int) (time.Duration, int) {
-	jitter := func(d time.Duration) time.Duration { return d/2 + time.Duration(rand.Int64N(int64(d))) }
-	wait := jitter(backoff)
-	switch {
-	case bannedRE.MatchString(msg):
-		bans = min(bans+1, 8) // (the wait stops growing well before)
-		floor := min(banWait<<(bans-1), maxBanWait)
-		wait = max(wait, floor+time.Duration(rand.Int64N(int64(floor/10))))
-	case throttledRE.MatchString(msg):
-		wait = max(wait, throttleWait+time.Duration(rand.Int64N(int64(throttleWait/4))))
-	}
-	return wait, bans
-}
-
 // dialAndServe runs one connection. It reports whether registration
 // completed (the link was up) and why it ended.
 func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
@@ -440,8 +433,10 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		return false, errors.New("no servers configured")
 	}
 	c.mu.Lock()
-	sv := servers[c.serverIdx%len(servers)]
-	c.serverIdx++
+	// (skipping servers that rest after refusing this address, see rest.go)
+	i := c.rests.pick(servers, c.serverIdx, time.Now())
+	sv := servers[i]
+	c.serverIdx = i + 1
 	c.serverPass = sv.Password
 	c.saslOK = false
 	c.auth = authState{gen: c.auth.gen + 1}
@@ -1455,10 +1450,18 @@ func describeErr(err error) string {
 }
 
 func roundDur(d time.Duration) string {
-	if d < time.Second {
+	switch {
+	case d < time.Second:
 		return "a moment"
+	case d < 10*time.Minute:
+		return d.Round(time.Second).String()
 	}
-	return d.Round(time.Second).String()
+	// a long rest: to the minute ("32m", "1h", "4h3m")
+	s := strings.TrimSuffix(d.Round(time.Minute).String(), "0s")
+	if h, ok := strings.CutSuffix(s, "h0m"); ok {
+		return h + "h"
+	}
+	return s
 }
 
 func nickOf(prefix string) string {
