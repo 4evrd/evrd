@@ -54,8 +54,35 @@ jobs:
         run: |
           go build ./cmd/evrd
           go build ./cmd/evrctl
-      - name: Test
-        run: go test ./...
+      # Coverage: the total and each package in the run's summary, the full
+      # HTML report as an artifact, and a floor the total mustn't drop below.
+      - name: Test, with coverage
+        run: go test -coverprofile=coverage.out -covermode=atomic ./... | tee test.out
+      - name: Coverage
+        env:
+          FLOOR: "50" # percent of statements; raise it as tests are added
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub("%","",$3); print $3}')
+          {
+            echo "### Go coverage: ${total}%"
+            echo
+            echo "| Package | Coverage |"
+            echo "|---|---:|"
+            awk '/coverage:/ { for (i=1;i<=NF;i++) if ($i=="coverage:") { sub("github.com/4evrd/evrd/","",$2); print "| " $2 " | " $(i+1) " |" } }' test.out | sort
+            echo
+            echo "Unit tests only — the ScyllaDB tests and e2e run elsewhere. Full report: the coverage-go artifact."
+          } >> "$GITHUB_STEP_SUMMARY"
+          go tool cover -html=coverage.out -o coverage.html
+          echo "Go coverage ${total}% (floor ${FLOOR}%)"
+          awk -v t="$total" -v f="$FLOOR" 'BEGIN { exit !(t+0 >= f+0) }' || { echo "::error::Go coverage ${total}% is below the ${FLOOR}% floor"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-go
+          path: |
+            coverage.out
+            coverage.html
+          retention-days: 14
 
   # History and cluster tests against a real ScyllaDB (dev/ci-scylla.sh starts
   # one in Docker and runs the tests next to it).
@@ -84,8 +111,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: svelte-check
         run: pnpm check
-      - name: Unit tests
-        run: pnpm test:unit
+      - name: Unit tests, with coverage
+        run: |
+          pnpm test:coverage 2>&1 | tee coverage.txt
+          { echo "### Web unit test coverage"; echo; echo '```'; grep -E "^(ℹ|#) " coverage.txt | grep -E "file|---|\.js|all files" | sed -E 's/^(ℹ|#) //'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Build
         run: pnpm build
 

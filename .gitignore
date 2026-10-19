@@ -24,3 +24,7 @@ web/.playwright/
 # chat history from a bare (non-docker) run
 /history/
 /dist/
+coverage.out
+coverage.html
+test.out
+web/coverage.txt
