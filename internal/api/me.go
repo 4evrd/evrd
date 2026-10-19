@@ -78,7 +78,7 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if ip := clientAddr(r); ip != "" && !accounts.HostAllowed(u, ip) {
+		if ip := s.clientAddr(r); ip != "" && !accounts.HostAllowed(u, ip) {
 			writeErr(w, http.StatusUnprocessableEntity, "that list doesn't include the address you're using now ("+ip+") — you'd lock yourself out")
 			return
 		}

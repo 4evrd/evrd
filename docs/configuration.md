@@ -27,6 +27,7 @@ are stored in the database and win over the file (see below).
 | `irc_host` | `localhost` | the host name users give their IRC clients (shown in the web app) |
 | `password_login` | `yes` | allow password sign-in to the web app; `no` leaves only single sign-on (Admin → Settings refuses it until SSO is set up) |
 | `session_ttl` | `720h` | how long a web sign-in lasts |
+| `trusted_proxies` (`EVRD_TRUSTED_PROXIES`) | the local host | the proxies whose `X-Forwarded-For` is believed: addresses or CIDR ranges, space-separated (file or environment only). From anywhere else the connection's own address counts — it's what each user's allowed hosts are checked against. Set it to the proxy's network when the proxy isn't on the same machine (e.g. Docker: `172.16.0.0/12`) |
 | `cookie_secure` | `yes` | HTTPS-only session cookie; `no` only for plain-HTTP testing |
 | `oidc_issuer`, `oidc_client_id`, `oidc_client_secret` (`EVRD_OIDC_CLIENT_SECRET`) | — | single sign-on with any OpenID Connect provider |
 | `oidc_label`, `oidc_auto_create`, `oidc_link_existing`, `oidc_admin_role` | `single sign-on`, `yes`, `no`, — | sign-in button text and account rules for SSO |
