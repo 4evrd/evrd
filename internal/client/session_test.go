@@ -65,6 +65,74 @@ func TestAttachRefusals(t *testing.T) {
 	r.attach("alice:alice-password").expect("Signing in from 127.0.0.1 isn't allowed for this account")
 }
 
+func TestSignInFailuresAreLogged(t *testing.T) {
+	r := newRig(t)
+	sam, err := r.acc.Create(accounts.CreateInput{Username: "sam"}) // SSO: no password of its own
+	if err != nil {
+		t.Fatal(err)
+	}
+	logged := func(want ...string) {
+		t.Helper()
+		eventually(t, strings.Join(want, " "), func() bool {
+			for _, l := range strings.Split(r.logs.String(), "\n") {
+				if strings.Contains(l, "irc sign-in") && containsAll(l, want...) {
+					return true
+				}
+			}
+			return false
+		})
+	}
+
+	sso := "464 alice :Invalid credentials — this account signs in with SSO, so use an IRC client password from "
+	r.attach("sam/one:sso-secret-1").expect(sso + "the web app's IRC clients page")
+	logged("user=sam", "network=one", "ip=127.0.0.1", "reason=sso_needs_client_password")
+	r.srv.SetPublicURL("https://evrd.example.org/")
+	r.attach("sam:sso-secret-2").expect(sso + "https://evrd.example.org/clients")
+
+	// Unknown users and password accounts get the plain refusal.
+	for _, pass := range []string{"nobody:secret-3", "alice/two:secret-4"} {
+		line := r.attach(pass).expect(" 464 ")
+		if !strings.HasSuffix(line, " :Invalid credentials") {
+			t.Errorf("%s: %q", pass, line)
+		}
+	}
+	logged("user=nobody", "reason=invalid")
+	logged("user=alice", "network=two", "reason=invalid")
+
+	// A client password still works for the SSO account.
+	_, secret, _ := r.acc.NewClientPassword(sam.ID, "laptop")
+	r.attach("sam:" + secret).expect("No networks configured")
+
+	r.attach("secret-5").expect("Password required")
+	logged("without a password", "pass_sent=true")
+
+	sam.Suspended = true
+	r.st.UpdateUser(sam)
+	r.attach("sam:" + secret).expect("This account is suspended")
+	logged("user=sam", "reason=suspended")
+
+	a := r.user
+	a.AllowedHosts = []string{"192.0.2.0/24"}
+	r.st.UpdateUser(a)
+	r.attach("alice:alice-password").expect("isn't allowed")
+	logged("user=alice", "reason=host_denied")
+
+	for _, pw := range []string{"sso-secret", "secret-3", "secret-4", "secret-5", "alice-password", secret} {
+		if strings.Contains(r.logs.String(), pw) {
+			t.Errorf("the log has a password (%q):\n%s", pw, r.logs.String())
+		}
+	}
+}
+
+func containsAll(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if !strings.Contains(s, sub) {
+			return false
+		}
+	}
+	return true
+}
+
 func TestClientLimit(t *testing.T) {
 	r := newRig(t)
 	one := 1

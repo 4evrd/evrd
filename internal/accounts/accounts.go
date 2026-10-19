@@ -31,6 +31,9 @@ var (
 	ErrSuspended          = errors.New("account suspended")
 	ErrLastAdmin          = errors.New("this is the last admin — make someone else an admin first")
 	ErrUsernameTaken      = errors.New("that username is taken")
+	// ErrNeedsClientPassword is a failed IRC sign-in to an account with no
+	// password of its own (it signs in with SSO): only client passwords work.
+	ErrNeedsClientPassword = fmt.Errorf("%w: the account signs in with SSO", ErrInvalidCredentials)
 )
 
 // ValidationError is a rule the input broke; Message is safe to show.
@@ -308,6 +311,9 @@ func (s *Service) IRCLogin(username, secret string) (store.User, string, error) 
 				break
 			}
 		}
+	}
+	if !ok && u.PasswordHash == "" {
+		return store.User{}, "", ErrNeedsClientPassword
 	}
 	if !ok {
 		return store.User{}, "", ErrInvalidCredentials

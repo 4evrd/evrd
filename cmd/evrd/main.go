@@ -331,6 +331,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 	srv.SetMetrics(metricsq.New(cfg.Metrics.QueryURL))
 	srv.SetSettings(sm)
 	irc.SetTLSConfig(certMgr.IRCConfig())
+	irc.SetPublicURL(cfg.PublicURL)
 	srv.SetCerts(certMgr)
 	// The network directory users pick from when adding a network: fetched
 	// now and twice a day, the last good copy kept in the database.

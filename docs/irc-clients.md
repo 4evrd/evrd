@@ -57,3 +57,13 @@ connected — or however the network's Authentication settings say: see
 Playback for clients without `server-time` carries timestamps in the text
 (`[12:34:56] hello`); change the format, time zone and how much is played back
 under *Account → Bouncer*.
+
+## Troubleshooting
+
+**`464 :Invalid credentials` with an SSO account.** An account that signs in
+with SSO has no evrd password, and your SSO provider's password doesn't work
+over IRC. Make an IRC client password on the web app's *IRC clients* page
+(`<public_url>/clients`) and use that: `<user>:<client password>`. evrd's
+reply says so when the account signs in with SSO, and every refused sign-in is
+logged (`irc sign-in failed` with the user, network, client IP and reason —
+never the password).

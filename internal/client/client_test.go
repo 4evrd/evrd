@@ -2,14 +2,15 @@ package client
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,6 +32,25 @@ type rig struct {
 	srv  *Server
 	ctx  context.Context
 	user store.User
+	logs *syncBuffer // evrd's log
+}
+
+// syncBuffer is a bytes.Buffer safe to write from the server's goroutines.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
 }
 
 // scratchDir is a temp dir removed when the test ends, best effort: the
@@ -54,7 +74,8 @@ func newRig(t *testing.T) *rig {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logs := &syncBuffer{}
+	log := slog.New(slog.NewTextHandler(logs, nil))
 	acc := accounts.New(st, config.Limits{MaxNetworks: 3, MaxClients: 5})
 	hist, err := history.Open(filepath.Join(data, "history"))
 	if err != nil {
@@ -89,7 +110,7 @@ func newRig(t *testing.T) *rig {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	return &rig{t: t, st: st, hist: hist, addr: addr, b: b, acc: acc, srv: srv, ctx: ctx, user: u}
+	return &rig{t: t, st: st, hist: hist, addr: addr, b: b, acc: acc, srv: srv, ctx: ctx, user: u, logs: logs}
 }
 
 type ircClient struct {
