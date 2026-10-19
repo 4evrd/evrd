@@ -6,6 +6,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"net/http"
 	"sort"
@@ -121,6 +122,13 @@ func (s *Server) handleAdminMetrics(w http.ResponseWriter, r *http.Request) {
 			go func() {
 				defer wg.Done()
 				ss, err := mq.Range(ctx, q.Expr, start, end, rg.step)
+				if err == nil {
+					// The store rounds a range's end down to a whole step, so
+					// the latest minutes come from an instant query at now.
+					if cur, err := mq.Instant(ctx, q.Expr); err == nil {
+						ss = withLatest(ss, cur, end)
+					}
+				}
 				results[i][j] = result{ss, err}
 			}()
 		}
@@ -228,6 +236,29 @@ func (s *Server) handleAdminMetrics(w http.ResponseWriter, r *http.Request) {
 		"start": start.Unix(), "step": int(rg.step.Seconds()), "points": n,
 		"panels": out, "busiest": busiest,
 	})
+}
+
+// withLatest adds each instant result as the point at now to the series
+// with the same labels (or as a series of its own).
+func withLatest(ss, cur []metricsq.Series, now time.Time) []metricsq.Series {
+	for _, c := range cur {
+		if len(c.Points) == 0 {
+			continue
+		}
+		p := [2]float64{float64(now.Unix()), c.Points[0][1]}
+		found := false
+		for i := range ss {
+			if maps.Equal(ss[i].Labels, c.Labels) {
+				ss[i].Points = append(ss[i].Points, p)
+				found = true
+				break
+			}
+		}
+		if !found {
+			ss = append(ss, metricsq.Series{Labels: c.Labels, Points: [][2]float64{p}})
+		}
+	}
+	return ss
 }
 
 func orDeleted(s string) string {
