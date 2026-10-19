@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ADMIN, ADMIN_PASS, login, confirm, session, freshUser } from './helpers.js'
+import { ADMIN, ADMIN_PASS, login, confirm, session, freshUser, choose } from './helpers.js'
 
 // Server settings are global: every test puts back what it changed.
 const restore = async (keys) => {
@@ -80,19 +80,19 @@ test('HTTPS & TLS: who serves HTTPS, the certificate, and fields for the source 
     await expect(page.getByTestId('tls-certs')).toContainText('self-signed')
 
     const source = page.getByTestId('setting-tls').getByRole('combobox')
-    await expect(source).toHaveValue('selfsigned')
+    await expect(source).toHaveText('Self-signed')
     await expect(page.getByTestId('setting-acme_email')).toHaveCount(0)
-    await source.selectOption('acme')
+    await choose(page, source, 'Let’s Encrypt')
     await expect(page.getByTestId('setting-acme_email')).toBeVisible()
     await expect(page.getByTestId('setting-tls_cert')).toHaveCount(0)
 
     // localhost can't get a Let's Encrypt certificate: refused, not saved
     await page.getByRole('button', { name: 'Save changes' }).click()
     await expect(page.getByText(/needs a public host name/)).toBeVisible()
-    await source.selectOption('files')
+    await choose(page, source, 'Certificate files')
     await expect(page.getByTestId('setting-tls_cert')).toBeVisible()
     await page.getByRole('button', { name: 'Discard' }).click()
-    await expect(source).toHaveValue('selfsigned')
+    await expect(source).toHaveText('Self-signed')
   } finally {
     await restore(['tls'])
   }

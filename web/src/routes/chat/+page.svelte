@@ -7,6 +7,7 @@
   import { page } from '$app/state'
   import { goto, replaceState } from '$app/navigation'
   import Icon from '$lib/components/Icon.svelte'
+  import Select from '$lib/components/Select.svelte'
   import StatusChip from '$lib/components/StatusChip.svelte'
   import { api } from '$lib/api.js'
   import { session, refreshNets } from '$lib/session.svelte.js'
@@ -17,6 +18,8 @@
   let nets = $state([])
   let netId = $state(null)
   let net = $derived(nets.find((n) => n.id === netId) || null)
+  // mentions waiting on the networks you're not looking at, on the picker
+  const otherMentions = $derived(nets.reduce((a, n) => a + (n.id === netId ? 0 : n.mentions || 0), 0))
   let bufs = $state([])            // [{ name, unread, mentions, readAt, joined, members, topic }]
   let buf = $state('')
   let logs = $state({})            // name -> message[]
@@ -260,10 +263,17 @@
         <div class="od-row"><span class="caps">Network</span>{#if net}<StatusChip status={net.status} />{/if}</div>
         <div class="net-select">
           <label class="sr-only" for="net-pick">Network</label>
-          <select class="select" id="net-pick" value={netId} onchange={(e) => switchNet(+e.currentTarget.value)}>
-            {#each nets as n}<option value={n.id}>{n.name}</option>{/each}
-          </select>
-          <Icon name="chevronDown" class="i-sm" />
+          <Select id="net-pick" strong value={netId} onchange={(v) => switchNet(v)} testid="net-pick"
+            options={nets.map((n) => ({ ...n, value: n.id, label: n.name }))}>
+            {#snippet option(n, closed)}
+              <span class="net-dot {n.status}" aria-hidden="true"></span>
+              <span class="od-truncate net-opt-name">{n.name}</span>
+              {#if closed}
+                {#if otherMentions}<span class="count mention" title="Mentions on your other networks" aria-label="{otherMentions} mentions on other networks">{otherMentions}</span>{/if}
+              {:else if n.mentions}<span class="count mention" aria-label="{n.mentions} mentions">{n.mentions}</span>
+              {:else if n.unread}<span class="count" aria-label="{n.unread} unread">{n.unread}</span>{/if}
+            {/snippet}
+          </Select>
         </div>
         {#if net}
           <div class="od-row" style="justify-content:space-between;font-size:var(--fs-xs)">
@@ -351,8 +361,10 @@
 
 <style>
   .net-select { position: relative; }
-  .net-select .select { appearance: none; padding-right: 36px; font-weight: 600; }
-  .net-select :global(.i) { position: absolute; right: 12px; top: 13px; color: var(--muted); pointer-events: none; }
+  .net-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .net-dot.connected { background: var(--ok, var(--primary)); }
+  .net-dot.reconnecting, .net-dot.connecting { background: var(--warn); }
+  .net-opt-name { flex: 1; min-width: 0; }
   .member-head { display: flex; justify-content: space-between; align-items: center; }
   .log-head .actions { margin-left: auto; display: flex; gap: var(--s2); }
   .topic { max-width: 64ch; }

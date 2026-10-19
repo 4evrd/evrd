@@ -7,6 +7,7 @@
   import { untrack } from 'svelte'
   import Icon from './Icon.svelte'
   import Field from './Field.svelte'
+  import Select from './Select.svelte'
   import Switch from './Switch.svelte'
   import { api } from '$lib/api.js'
   import { toast } from '$lib/ui.svelte.js'
@@ -85,11 +86,11 @@
         {#if admin}
           <input class="input mono" id="b-bind" placeholder="server default" bind:value={f.bindHost} />
         {:else}
-          <select class="select" id="b-bind" bind:value={f.bindHost} disabled={binds.locked || !binds.hosts.length}>
-            <option value="">Server default</option>
-            {#each binds.hosts as h}<option value={h}>{h}</option>{/each}
-            {#if f.bindHost && !binds.hosts.includes(f.bindHost)}<option value={f.bindHost}>{f.bindHost}</option>{/if}
-          </select>
+          <Select id="b-bind" bind:value={f.bindHost} disabled={binds.locked || !binds.hosts.length} options={[
+            { value: '', label: 'Server default' },
+            ...binds.hosts.map((h) => ({ value: h, label: h })),
+            ...(f.bindHost && !binds.hosts.includes(f.bindHost) ? [{ value: f.bindHost, label: f.bindHost }] : []),
+          ]} />
         {/if}
       </Field>
       {#if admin}

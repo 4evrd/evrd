@@ -6,6 +6,7 @@
   import { goto } from '$app/navigation'
   import Icon from './Icon.svelte'
   import Field from './Field.svelte'
+  import Select from './Select.svelte'
   import Switch from './Switch.svelte'
   import StatusChip from './StatusChip.svelte'
   import ConnLog from './ConnLog.svelte'
@@ -306,11 +307,11 @@
                 <input class="input mono" id="bindHost" list="bindhost-list" placeholder={settings.bindHost || 'server default'} bind:value={f.bindHost} />
                 <datalist id="bindhost-list">{#each binds.hosts as h}<option value={h}></option>{/each}</datalist>
               {:else}
-                <select class="select" id="bindHost" bind:value={f.bindHost} disabled={binds.locked || !binds.hosts.length}>
-                  <option value="">{settings.bindHost ? `Account default (${settings.bindHost})` : 'Server default'}</option>
-                  {#each binds.hosts as h}<option value={h}>{h}</option>{/each}
-                  {#if f.bindHost && !binds.hosts.includes(f.bindHost)}<option value={f.bindHost}>{f.bindHost}</option>{/if}
-                </select>
+                <Select id="bindHost" bind:value={f.bindHost} disabled={binds.locked || !binds.hosts.length} options={[
+                  { value: '', label: settings.bindHost ? `Account default (${settings.bindHost})` : 'Server default' },
+                  ...binds.hosts.map((h) => ({ value: h, label: h })),
+                  ...(f.bindHost && !binds.hosts.includes(f.bindHost) ? [{ value: f.bindHost, label: f.bindHost }] : []),
+                ]} />
               {/if}
             </Field>
           </div>
@@ -430,17 +431,14 @@
           <div class="od-stack"><h2 id="advanced-h">Advanced</h2><p class="desc">Character set for networks that don’t use UTF-8, and how fast evrd may send.</p></div>
           <div class="form-grid">
             <Field id="encoding" label="Encoding">
-              <select class="select" id="encoding" bind:value={f.encodingName}>
-                <option value="">UTF-8</option>
-                {#each ENCODINGS as e}<option value={e}>{e}</option>{/each}
-              </select>
+              <Select id="encoding" bind:value={f.encodingName} options={[{ value: '', label: 'UTF-8' }, ...ENCODINGS.map((e) => ({ value: e, label: e }))]} />
             </Field>
             {#if f.encodingName}
               <Field id="encMode" label="Use it">
-                <select class="select" id="encMode" value={f.encodingAlways ? 'always' : 'fallback'} onchange={(e) => (f.encodingAlways = e.currentTarget.value === 'always')}>
-                  <option value="fallback">Only for text that isn’t UTF-8 (send UTF-8)</option>
-                  <option value="always">For everything (send in {f.encodingName})</option>
-                </select>
+                <Select id="encMode" value={f.encodingAlways ? 'always' : 'fallback'} onchange={(v) => (f.encodingAlways = v === 'always')} options={[
+                  { value: 'fallback', label: 'Only for text that isn’t UTF-8 (send UTF-8)' },
+                  { value: 'always', label: `For everything (send in ${f.encodingName})` },
+                ]} />
               </Field>
             {:else}<span></span>{/if}
             <div class="check-row span-2"><span class="od-field"><span id="flood-l">Flood protection</span><span>Sends a burst, then paces lines so the server doesn’t disconnect you for flooding.</span></span><Switch checked={f.floodOn} labelledby="flood-l" onchange={(v) => (f.floodOn = v)} /></div>
