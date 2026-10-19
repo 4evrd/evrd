@@ -125,3 +125,28 @@ func TestBuffersHideTheNameless(t *testing.T) {
 		}
 	}
 }
+
+func TestModulesOffServerWide(t *testing.T) {
+	st, err := store.Open("sqlite:" + filepath.Join(t.TempDir(), "evrd.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	hist, err := history.Open(filepath.Join(t.TempDir(), "history"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hist.Close()
+	b := New(st, hist, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if len(b.ModulesOff()) != 0 {
+		t.Fatal("modules off before anyone said so")
+	}
+	b.SetModulesOff([]string{"AutoOp", "autovoice"})
+	if off := b.ModulesOff(); !off["autoop"] || !off["autovoice"] || off["perform"] {
+		t.Fatalf("off: %v", off)
+	}
+	b.SetModulesOff(nil)
+	if len(b.ModulesOff()) != 0 {
+		t.Fatal("still off")
+	}
+}

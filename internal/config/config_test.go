@@ -1,6 +1,9 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -13,5 +16,25 @@ func TestExportIntervalDefaultsTo15s(t *testing.T) {
 	s, _ := SpecFor("otel_interval")
 	if got := s.get(c); got != "15s" {
 		t.Fatalf("settings page shows %q", got)
+	}
+}
+
+func TestModulesOff(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "evrd.conf")
+	os.WriteFile(path, []byte("modules_off autoop autovoice\nmodules_off q\n"), 0o600)
+	c, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(c.ModulesOff, " ") != "autoop autovoice q" {
+		t.Fatalf("modules_off: %q", c.ModulesOff)
+	}
+	s, ok := SpecFor("modules_off")
+	if !ok || s.get(c) != "autoop autovoice q" {
+		t.Fatalf("setting: %v %q", ok, s.get(c))
+	}
+	s.reset(c)
+	if len(c.ModulesOff) != 0 {
+		t.Fatal("reset kept them")
 	}
 }
