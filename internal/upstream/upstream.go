@@ -21,6 +21,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/netip"
 	"regexp"
 	"sort"
 	"strconv"
@@ -158,6 +159,9 @@ type Conn struct {
 	saslOK       bool   // SASL succeeded on this connection (then no NickServ IDENTIFY)
 	auth         authState
 	serverErr    string // the server's ERROR line on this connection: why it closed
+	// the socket this attempt dialed, for ident queries (unset between
+	// attempts and on a link resumed from the holder)
+	local, remote netip.AddrPort
 
 	// modules (see modules.go): their calls are serialized by modMu
 	modMu     sync.Mutex
@@ -475,6 +479,9 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		if ra := conn.RemoteAddr(); ra != nil {
 			c.note("evrd", false, "Connected to "+ra.String())
 		}
+		// Kept for ident queries: once in the holder, conn is a unix stream.
+		c.setAddrs(addrPort(conn.LocalAddr()), addrPort(conn.RemoteAddr()))
+		defer c.setAddrs(netip.AddrPort{}, netip.AddrPort{})
 		if c.links != nil {
 			hc, herr := c.links.Open(dctxDial, c.linkID, conn, sv.TLS, sv.Host, c.trust())
 			switch {
@@ -570,9 +577,8 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		}
 		c.send("CAP LS 302")
 		c.send("NICK " + c.net.Nick)
-		user := orElse(c.net.Username, c.net.Nick)
 		real := orElse(c.net.Realname, c.net.Nick)
-		c.send(fmt.Sprintf("USER %s 0 * :%s", user, real))
+		c.send(fmt.Sprintf("USER %s 0 * :%s", c.Ident(), real))
 		c.note("evrd", false, "Signing in as "+c.net.Nick)
 	}
 
@@ -1311,6 +1317,35 @@ func (c *Conn) Health() Health {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.health
+}
+
+// Ident is the ident this connection registers with (USER's user part).
+func (c *Conn) Ident() string { return orElse(c.net.Username, c.net.Nick) }
+
+// Addrs are the local and remote addresses of the socket the current
+// attempt dialed; ok is false between attempts and on a resumed link.
+func (c *Conn) Addrs() (local, remote netip.AddrPort, ok bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.local, c.remote, c.remote.IsValid()
+}
+
+func (c *Conn) setAddrs(local, remote netip.AddrPort) {
+	c.mu.Lock()
+	c.local, c.remote = local, remote
+	c.mu.Unlock()
+}
+
+// addrPort is a socket address as an AddrPort, IPv4 unmapped (invalid if
+// it isn't one).
+func addrPort(a net.Addr) netip.AddrPort {
+	var ap netip.AddrPort
+	if t, ok := a.(*net.TCPAddr); ok {
+		ap = t.AddrPort()
+	} else if a != nil {
+		ap, _ = netip.ParseAddrPort(a.String())
+	}
+	return netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port())
 }
 
 // NetworkID is the network this connection serves.

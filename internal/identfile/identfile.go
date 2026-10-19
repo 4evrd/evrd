@@ -159,7 +159,7 @@ func Entries(ctx context.Context, users []store.User, nets []store.Network, reso
 		if bind == "" {
 			bind = u.BindHost
 		}
-		add(u, bind, clean(n.Username))
+		add(u, bind, Clean(n.Username))
 	}
 
 	var out []Entry
@@ -178,10 +178,10 @@ func Entries(ctx context.Context, users []store.User, nets []store.Network, reso
 			}
 		}
 		if ident == "" {
-			ident = clean(u.DefaultIdent)
+			ident = Clean(u.DefaultIdent)
 		}
 		if ident == "" {
-			ident = clean(u.Username)
+			ident = Clean(u.Username)
 		}
 		if ident != "" {
 			out = append(out, Entry{Addr: a, Ident: ident})
@@ -191,9 +191,9 @@ func Entries(ctx context.Context, users []store.User, nets []store.Network, reso
 	return out
 }
 
-// clean keeps an ident to what's safe in the file and on IRC: letters,
+// Clean keeps an ident to what's safe in the file and on IRC: letters,
 // digits, '.', '_' and '-', at most 10 (servers cut idents there anyway).
-func clean(s string) string {
+func Clean(s string) string {
 	var b strings.Builder
 	for _, r := range s {
 		if r < 0x80 && (r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {

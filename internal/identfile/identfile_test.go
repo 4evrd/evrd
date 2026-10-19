@@ -58,8 +58,8 @@ func TestEntries(t *testing.T) {
 
 func TestClean(t *testing.T) {
 	for in, want := range map[string]string{"weareone": "weareone", "a\" } global { reply \"x": "aglobalrep", "abcdefghijklmn": "abcdefghij", "ünï": "n", "": ""} {
-		if got := clean(in); got != want {
-			t.Errorf("clean(%q) = %q, want %q", in, got, want)
+		if got := Clean(in); got != want {
+			t.Errorf("Clean(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

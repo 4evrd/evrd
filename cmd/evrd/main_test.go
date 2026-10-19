@@ -67,7 +67,7 @@ func noEnv(t *testing.T) {
 		"EVRD_OIDC_CLIENT_SECRET", "EVRD_CLUSTER_SECRET", "EVRD_SECRET_KEY", "EVRD_SECRET_KEY_FILE",
 		"EVRD_PROVISION_TOKEN", "EVRD_LINKS_SOCKET", "EVRD_NODE_ID", "EVRD_INTERNAL_URL",
 		"EVRD_INTERNAL_IRC_ADDR", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "EVRD_METRICS_URL",
-		"EVRD_NETWORK_DIRECTORY",
+		"EVRD_NETWORK_DIRECTORY", "EVRD_IDENTD_LISTEN",
 	} {
 		t.Setenv(v, "")
 	}
@@ -339,8 +339,9 @@ func TestServes(t *testing.T) {
 		os.WriteFile(p, []byte(`{"version": 1, "networks": [{"id": "dev", "name": "Dev", "servers": [{"host": "ircd", "port": 6667}]}]}`), 0o644)
 	}
 
-	httpsAddr, httpAddr := freeAddr(t), freeAddr(t)
+	httpsAddr, httpAddr, identAddr := freeAddr(t), freeAddr(t), freeAddr(t)
 	extra := []string{
+		"identd_listen " + identAddr,
 		"network_directory " + dirs[0],
 		"tls_cert " + certPath, "tls_key " + keyPath,
 		"https_listen " + httpsAddr, "http_listen " + httpAddr,
@@ -420,6 +421,19 @@ func TestServes(t *testing.T) {
 			t.Fatalf("holder links: %+v %v", ls, err)
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+
+	// identd answers (nobody here dialed a server on port 1).
+	ic, err := net.Dial("tcp", identAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ic.SetDeadline(time.Now().Add(5 * time.Second))
+	io.WriteString(ic, "1234 , 1\r\n")
+	reply, _ := io.ReadAll(ic)
+	ic.Close()
+	if string(reply) != "1234 , 1 : ERROR : NO-USER\r\n" {
+		t.Fatalf("identd: %q", reply)
 	}
 
 	// SIGHUP re-reads the certificate files.
@@ -584,6 +598,9 @@ func TestStartupErrors(t *testing.T) {
 		{name: "http port", setup: func(t *testing.T, dir string) []string {
 			return []string{"http_listen " + busyAddr(t)}
 		}, want: "msg=http "},
+		{name: "identd port", setup: func(t *testing.T, dir string) []string {
+			return []string{"identd_listen " + busyAddr(t)}
+		}, want: "msg=identd"},
 		{name: "internal api port", setup: func(t *testing.T, dir string) []string {
 			return []string{"internal_listen " + busyAddr(t), "internal_url http://x", "internal_irc_listen " + freeAddr(t), "internal_irc_addr x:1", "cluster_secret s"}
 		}, want: "msg=\"internal api\""},

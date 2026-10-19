@@ -88,6 +88,9 @@ type Config struct {
 	// runs as) that evrd keeps up to date from users' bind hosts, so
 	// networks see their idents (internal/identfile). Empty: none.
 	IdentFile string
+	// IdentdListen is where evrd answers ident (RFC 1413) queries itself
+	// (internal/identd), e.g. ":113". Empty: off.
+	IdentdListen string
 
 	// WriteConf (settings_write_conf) makes evrd write settings changed in
 	// the admin UI back into this file, on every node.
@@ -468,6 +471,7 @@ func (c *Config) ApplyEnv() error {
 		"EVRD_SECRET_KEY_FILE":    &c.Secrets.KeyFile,
 		"EVRD_PROVISION_TOKEN":    &c.ProvisionToken,
 		"EVRD_LINKS_SOCKET":       &c.LinksSocket,
+		"EVRD_IDENTD_LISTEN":      &c.IdentdListen,
 		"EVRD_NODE_ID":            &c.Cluster.NodeID,
 		"EVRD_INTERNAL_URL":       &c.Cluster.InternalURL,
 		"EVRD_INTERNAL_IRC_ADDR":  &c.Cluster.InternalIRCAddr,
@@ -575,6 +579,8 @@ func (c *Config) set(key, val string) error {
 		c.NetworkDirectory = directorySource(val)
 	case "ident_file":
 		c.IdentFile = val
+	case "identd_listen":
+		c.IdentdListen = val
 	case "modules_off": // repeatable, or several per line
 		c.ModulesOff = append(c.ModulesOff, strings.Fields(val)...)
 	case "bindhost": // repeatable, or several per line
