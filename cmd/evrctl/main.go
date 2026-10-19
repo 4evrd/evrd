@@ -26,6 +26,8 @@ import (
 	"github.com/4evrd/evrd/internal/sandbox"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/version"
+	"github.com/4evrd/evrd/internal/zncimport"
+	"sort"
 )
 
 func usage() {
@@ -45,7 +47,12 @@ commands:
   user delete <name>                       delete an account and everything it owns
   history copy <from> <to>                 copy all chat history between stores, e.g.
                                            pebble:/var/lib/evrd/history scylla://db1,db2/evrd
-                                           (stop evrd first when <from> is a pebble store)`)
+                                           (stop evrd first when <from> is a pebble store)
+  history import-znc [-dry-run] [-tz zone] <user> <znc-user-dir>
+                                           import a ZNC user's logs (e.g. ~/.znc/users/admin) into
+                                           <user>'s networks of the same names; keeps everything
+                                           from then on (backlog unlimited). Stop evrd first with
+                                           a pebble store, and run it once.`)
 }
 
 func main() {
@@ -75,6 +82,21 @@ func main() {
 		fmt.Println(base64.StdEncoding.EncodeToString(k))
 		return
 	case "history":
+		if len(args) > 1 && args[1] == "import-znc" {
+			cfg := config.Default()
+			if *cfgPath != "" {
+				c, err := config.Load(*cfgPath)
+				if err != nil {
+					fatal("load config: %v", err)
+				}
+				cfg = c
+			}
+			if *db != "" {
+				cfg.DB = *db
+			}
+			importZNC(cfg, args[2:])
+			return
+		}
 		historyCmd(args[1:])
 	case "user":
 		cfg := config.Default()
@@ -305,4 +327,111 @@ func need(args []string, n int, use string) {
 func fatal(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "evrctl: "+format+"\n", a...)
 	os.Exit(1)
+}
+
+// importZNC loads a ZNC user's logs into an evrd user's history.
+func importZNC(cfg *config.Config, args []string) {
+	fs := flag.NewFlagSet("history import-znc", flag.ExitOnError)
+	dry := fs.Bool("dry-run", false, "count what would be imported, write nothing")
+	tz := fs.String("tz", "UTC", "the timezone ZNC wrote its logs in (its user's Timezone setting)")
+	fs.Parse(args)
+	if fs.NArg() != 2 {
+		fatal("usage: evrctl history import-znc [-dry-run] [-tz zone] <user> <znc-user-dir>")
+	}
+	loc, err := time.LoadLocation(*tz)
+	if err != nil {
+		fatal("timezone: %v", err)
+	}
+	cur, oldKeys, err := cfg.SecretKeys()
+	if err == nil {
+		err = store.SetSecretKeys(cur, oldKeys...)
+	}
+	if err != nil {
+		fatal("secret key: %v", err)
+	}
+	if err := sandbox.Drop(cfg.User); err != nil {
+		fatal("user: %v", err)
+	}
+	st, err := store.Open(cfg.DB)
+	if err != nil {
+		fatal("open store: %v", err)
+	}
+	defer st.Close()
+	u, err := st.UserByUsername(fs.Arg(0))
+	if err != nil {
+		fatal("user %q: %v", fs.Arg(0), err)
+	}
+	nets, err := st.ListNetworks(u.ID)
+	if err != nil {
+		fatal("networks: %v", err)
+	}
+	byName := map[string]store.Network{}
+	for _, n := range nets {
+		byName[strings.ToLower(n.Name)] = n
+	}
+	files, err := zncimport.Find(fs.Arg(1), loc)
+	if err != nil {
+		fatal("find logs: %v", err)
+	}
+	if len(files) == 0 {
+		fatal("no ZNC logs under %s (want …/moddata/log/<network>/<buffer>/<date>.log)", fs.Arg(1))
+	}
+
+	var hist history.Store
+	if !*dry {
+		if hist, err = history.Open(cfg.History); err != nil {
+			fatal("open history (is evrd still running?): %v", err)
+		}
+	}
+	lines, skipped := map[string]int{}, map[string]int{}
+	total := 0
+	for _, f := range files {
+		n, ok := byName[strings.ToLower(f.Network)]
+		if !ok {
+			skipped[f.Network]++
+			continue
+		}
+		c, err := zncimport.Read(f, func(m history.Message) error {
+			if *dry {
+				return nil
+			}
+			m.NetworkID = n.ID
+			return hist.Add(m)
+		})
+		if err != nil {
+			fatal("%s: %v", f.Path, err)
+		}
+		lines[n.Name] += c
+		total += c
+	}
+	if hist != nil {
+		if err := hist.Close(); err != nil {
+			fatal("finish writing: %v", err)
+		}
+	}
+	names := make([]string, 0, len(lines))
+	for k := range lines {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	for _, k := range names {
+		fmt.Printf("%-20s %9d lines\n", k, lines[k])
+	}
+	for k, n := range skipped {
+		fmt.Printf("%-20s skipped: %s has no network by that name (%d days of logs)\n", k, u.Username, n)
+	}
+	verb := "imported"
+	if *dry {
+		verb = "would import"
+	}
+	fmt.Printf("%s %d lines into %s\n", verb, total, u.Username)
+	if !*dry && (u.BacklogLines == nil || *u.BacklogLines != 0) {
+		// keep it: the prune would cut every buffer back to the limit
+		zero := 0
+		u.BacklogLines = &zero
+		if err := st.UpdateUser(u); err != nil {
+			fatal("set %s's backlog to unlimited: %v", u.Username, err)
+		}
+		fmt.Printf("%s now keeps all history (backlog unlimited; change it under Admin → Users)\n", u.Username)
+	}
 }
