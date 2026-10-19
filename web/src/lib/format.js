@@ -30,6 +30,8 @@ export function dur(secs) {
   return h ? `${d}d ${h}h` : `${d}d`
 }
 export const since = (unix) => (unix ? dur(Math.round(Date.now() / 1000 - unix)) : '—')
+// a wait in seconds -> "45s", "30m", "1h 2m" (dur, but seconds under a minute)
+export const wait = (secs) => (secs > 0 && secs < 60 ? `${Math.round(secs)}s` : dur(secs))
 
 // "HH:MM"
 export const clock = (unix) => new Date(unix * 1000).toTimeString().slice(0, 5)
