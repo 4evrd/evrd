@@ -1,6 +1,6 @@
 export const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '')
 
-// unix seconds -> "14 Mar 2026" / "Mar 2" this year
+// unix seconds -> "Mar 14, 2025" / "Mar 2" this year
 export function date(unix) {
   if (!unix) return '—'
   const d = new Date(unix * 1000)
