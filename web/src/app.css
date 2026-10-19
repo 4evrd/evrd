@@ -842,12 +842,17 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
 .or { display: flex; align-items: center; gap: var(--s3); color: var(--faint); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: var(--track-caps); }
 .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
 .callout { display: flex; gap: var(--s3); align-items: flex-start; padding: var(--s3) var(--s4); border-radius: var(--r-row); background: var(--row); border: 1px solid var(--line-soft); color: var(--muted); font-size: var(--fs-sm); }
-.callout .i { margin-top: 2px; color: var(--primary); flex: none; }
+.callout > .i { margin-top: 2px; color: var(--primary); flex: none; }
 .callout.bad { background: var(--bad-soft); border-color: oklch(68% 0.18 27 / 0.4); color: var(--fg); }
-.callout.bad .i { color: var(--bad); }
+.callout.bad > .i { color: var(--bad); }
 .callout.warn { background: var(--warn-soft); border-color: oklch(82% 0.13 80 / 0.35); color: var(--fg); }
-.callout.warn .i { color: var(--warn); }
+.callout.warn > .i { color: var(--warn); }
 .callout b { color: var(--fg); }
+.callout > .btn { flex: none; align-self: center; }
+/* a callout with a button: the text keeps a readable width, the button wraps under it */
+.callout:has(> .btn) { flex-wrap: wrap; }
+.callout:has(> .btn) > .od-fill { flex: 1 1 240px; }
+.callout:has(> .btn) > .btn { margin-left: calc(16px + var(--s3)); }
 .loading-shell { min-height: 100vh; display: grid; place-items: center; color: var(--muted); }
 .popover { position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: min(380px, 92vw); max-height: 70vh; overflow-y: auto; padding: var(--s4); border-radius: var(--r-card); background: var(--bg-2); border: 1px solid var(--line); box-shadow: var(--shadow); display: grid; gap: var(--s2); }
 .pop-anchor { position: relative; }

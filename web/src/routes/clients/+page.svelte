@@ -68,6 +68,14 @@
   <button class="btn btn-primary" type="button" onclick={openNew}><Icon name="key" />New client password</button>
 </div>
 
+{#if !me.hasPassword}
+  <div class="callout warn enter" role="note" data-testid="sso-notice" style="margin-bottom:var(--s6)">
+    <Icon name="alert" />
+    <span class="od-fill"><b>Your {session.config.ssoLabel || 'SSO'} password won’t work in an IRC client.</b> You sign in to evrd with {session.config.ssoLabel || 'single sign-on'}, so IRC clients need a client password: create one and use it as the last part of the server password, <span class="code">{me.username}/{firstNet}:<i>client-password</i></span>.</span>
+    {#if pws && !pws.length}<button class="btn btn-primary btn-sm" type="button" onclick={openNew}><Icon name="key" />Create one</button>{/if}
+  </div>
+{/if}
+
 <div class="grid-main-side">
   <div class="side-stack" style="display:grid;gap:var(--s6)">
     <section class="card enter" aria-labelledby="conn-h">
