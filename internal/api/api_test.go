@@ -28,6 +28,7 @@ type env struct {
 	srv *httptest.Server
 	st  store.Store
 	acc *accounts.Service
+	api *Server
 }
 
 func newEnv(t *testing.T, mutate ...func(*config.Config)) *env {
@@ -64,7 +65,7 @@ func newEnv(t *testing.T, mutate ...func(*config.Config)) *env {
 	sm.OnChange(func(c *config.Config) { acc.SetDefaults(c.Limits); api.SetConfig(c) })
 	srv := httptest.NewServer(api.Handler())
 	t.Cleanup(srv.Close)
-	return &env{t: t, srv: srv, st: st, acc: acc}
+	return &env{t: t, srv: srv, st: st, acc: acc, api: api}
 }
 
 func (e *env) user(name, role string) store.User {

@@ -292,3 +292,19 @@ test('metrics: every chart, ranges and the busiest networks', async ({ page }) =
   await expect(page.getByTestId('metric-messages')).toContainText('per 5 min')
   await expect(page.getByRole('heading', { name: 'Busiest networks' })).toBeVisible()
 })
+
+test('a user’s page lists their latest web sign-ins, the rest behind a button', async ({ page }) => {
+  const u = await freshUser('ses')
+  const extra = []
+  try {
+    for (let i = 0; i < 6; i++) extra.push(await session(u.name, u.password))
+    await page.goto(`/admin/users/${u.id}`)
+    const signins = page.locator('#clients .row', { hasText: /· password/ })
+    await expect(signins).toHaveCount(5)
+    await page.getByRole('button', { name: /Show all \d+/ }).click()
+    await expect(signins).not.toHaveCount(5)
+    expect(await signins.count()).toBeGreaterThanOrEqual(7)
+    await page.getByRole('button', { name: 'Show fewer' }).click()
+    await expect(signins).toHaveCount(5)
+  } finally { for (const s of extra) await s.dispose(); await u.cleanup() }
+})

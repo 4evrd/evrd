@@ -5,24 +5,13 @@
   // series: [{ name, points: [number|null …] }]   (null: no data there)
   // start:  unix seconds of points[0]; step: seconds between points
   // unit:   shown after values ('ms', …)
-  import { netColor } from '$lib/format.js'
+  import { netColor, chartMax } from '$lib/format.js'
 
   let { series = [], start = 0, step = 3600, unit = '' } = $props()
 
   const W = 600, H = 180, PAD = 6
   const n = $derived(Math.max(2, ...series.map((s) => s.points.length)))
-  // One spike shouldn't flatten everything else: past 4× the 98th
-  // percentile, the scale stops and the spike runs off the top.
-  const max = $derived.by(() => {
-    const vs = series.flatMap((s) => s.points.filter((v) => v != null)).sort((a, b) => a - b)
-    let m = vs.at(-1) || 0
-    const p98 = vs[Math.floor(vs.length * 0.98)] || 0
-    if (vs.length >= 20 && p98 > 0 && m > 4 * p98) m = 4 * p98
-    if (m <= 0) return 1
-    const p = Math.pow(10, Math.floor(Math.log10(m)))
-    for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= m * 1.05) return k * p
-    return 10 * p
-  })
+  const max = $derived(chartMax(series.flatMap((s) => s.points)))
   const x = (i) => (i / (n - 1)) * W
   const y = (v) => H - PAD - (Math.min(v, max * 1.02) / max) * (H - 2 * PAD)
   // gaps where there's no data break the line

@@ -4,7 +4,7 @@
   import Topology from '$lib/components/Topology.svelte'
   import { api } from '$lib/api.js'
   import { session } from '$lib/session.svelte.js'
-  import { ago, since, clock, date, limit, ratio, netColor } from '$lib/format.js'
+  import { ago, since, clock, date, limit, ratio, netColor, nodeBadge } from '$lib/format.js'
 
   const isAdmin = $derived(session.me?.role === 'admin')
   let ov = $state(null)
@@ -29,8 +29,6 @@
   const match = { all: () => true, online: (p) => p.status === 'online', issue: (p) => !!p.issue }
   const label = { all: 'Accounts', online: 'Online now', issue: 'Accounts with an issue' }
   const shown = $derived((ov?.placement || []).filter(match[filter]).map((p) => ({ ...p, key: p.id, source: p.node || '-', dashed: p.status !== 'online' })))
-  // node-a → A; a host name → its first letter
-  const nodeBadge = (id) => (/[-_]([a-z0-9])$/i.exec(id)?.[1] || id[0] || '?').toUpperCase()
   const leftNodes = $derived(nodes.map((n) => ({ id: n.id, color: n.color })))
 
   const attnIcon = { network: ['alert', 'signal'], limit: ['sliders', 'warn'], suspended: ['ban', 'bad'], inactive: ['user', 'warn'] }

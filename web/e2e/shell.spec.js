@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { login, freshUser, addNetwork, uniq } from './helpers.js'
+import { login, freshUser, addNetwork, uniq, BASE } from './helpers.js'
 
 let u, net, chan
 test.beforeEach(async ({ page }) => {
@@ -77,4 +77,21 @@ test('small screens use a drawer for navigation', async ({ page }) => {
   await page.keyboard.press('Escape')
   await expect(page.locator('#sidebar')).not.toHaveClass(/open/)
   await expect(burger).toBeFocused()
+})
+
+test('a long name shortens in the sidebar’s account card instead of overflowing it', async ({ browser }) => {
+  const long = await freshUser('averylongusernameforthe') // 30 characters with the suffix
+  const ctx = await browser.newContext({ baseURL: BASE })
+  const page = await ctx.newPage()
+  try {
+    await login(page, long.name, long.password)
+    const card = page.getByTestId('side-card')
+    await expect(card).toContainText(long.name.slice(0, 12))
+    const fits = await page.evaluate(() => {
+      const foot = document.querySelector('.side-foot').getBoundingClientRect()
+      const card = document.querySelector('[data-testid=side-card]').getBoundingClientRect()
+      return card.right <= foot.right + 0.5
+    })
+    expect(fits).toBe(true)
+  } finally { await ctx.close(); await long.cleanup() }
 })

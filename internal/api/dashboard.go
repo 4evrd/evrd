@@ -225,6 +225,18 @@ func (s *Server) overviewOf(ctx context.Context, u store.User) (map[string]any, 
 	}, nil
 }
 
+// attachedAccounts counts the accounts with an IRC client attached, and the
+// web chats open (online counts both, per user; clients only IRC).
+func attachedAccounts(online, clients map[int64]int) (accounts, web int) {
+	for uid, n := range online {
+		if clients[uid] > 0 {
+			accounts++
+		}
+		web += max(n-clients[uid], 0)
+	}
+	return accounts, web
+}
+
 func pct(part, total float64) int {
 	if total <= 0 {
 		return 0
@@ -557,14 +569,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 			linksUp++
 		}
 	}
-	// IRC clients and the accounts they're attached to; web chats apart.
-	accountsWith, web := 0, 0
-	for uid, c := range live.Online {
-		if live.Clients[uid] > 0 {
-			accountsWith++
-		}
-		web += c - live.Clients[uid]
-	}
+	accountsWith, web := attachedAccounts(live.Online, live.Clients)
 
 	if attention == nil {
 		attention = []map[string]any{}
@@ -572,7 +577,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"users": len(users), "admins": admins, "suspended": suspended, "sso": sso, "online": online,
 		"networks": len(allNets), "linksTotal": linksTotal, "linksUp": linksUp,
-		"connectedNetworks": live.Connected, "attachedClients": live.Attached, "accountsAttached": accountsWith, "webAttached": max(web, 0),
+		"connectedNetworks": live.Connected, "attachedClients": live.Attached, "accountsAttached": accountsWith, "webAttached": web,
 		"defaults": s.acc.Defaults(), "nodes": nodes, "placement": placements, "clustered": s.cl != nil,
 		// the server's clock: the page compares heartbeats against it, so a
 		// browser (or server) whose clock is off doesn't call a live node stale

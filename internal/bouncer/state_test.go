@@ -86,3 +86,42 @@ func TestUnreadAndMarkRead(t *testing.T) {
 		t.Fatalf("read marker not stored: %v", markers)
 	}
 }
+
+func TestBuffersHideTheNameless(t *testing.T) {
+	st, err := store.Open("sqlite:" + filepath.Join(t.TempDir(), "evrd.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	hist, err := history.Open(filepath.Join(t.TempDir(), "history"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hist.Close()
+	b := New(st, hist, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	u, _ := st.CreateUser(store.User{Username: "alice"})
+	n, _ := st.CreateNetwork(store.Network{UserID: u.ID, Name: "net"})
+
+	// what older versions filed prefix-less server notices under
+	now := time.Now()
+	hist.Add(history.Message{NetworkID: n.ID, Target: "", Kind: "notice", Text: "*** Looking up your hostname", Time: now})
+	hist.Add(history.Message{NetworkID: n.ID, Target: "irc.example.org", Sender: "irc.example.org", Kind: "notice", Text: "hi", Time: now})
+	names := func() (out []string) {
+		for _, s := range b.Buffers(n.ID) {
+			out = append(out, s.Name)
+		}
+		return out
+	}
+	// not running here: from history
+	if got := names(); len(got) != 1 || got[0] != "irc.example.org" {
+		t.Fatalf("from history: %q", got)
+	}
+	// running here
+	b.initReads(n)
+	b.observe(n, "alice", history.Message{NetworkID: n.ID, Target: "", Kind: "notice", Text: "*** again", Time: now})
+	for _, name := range names() {
+		if name == "" {
+			t.Fatalf("live buffers include a nameless one: %q", names())
+		}
+	}
+}

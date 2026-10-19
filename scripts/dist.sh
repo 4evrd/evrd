@@ -29,6 +29,10 @@ for t in $targets; do
 	# in): evrd-links stays byte-identical between releases unless its code
 	# or the Go version changed, so upgrades leave it (and the links) up
 	CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -buildvcs=false -ldflags "-s -w" -o "$stage/evrd-links" ./cmd/evrd-links
+	if go version -m "$stage/evrd-links" | grep -q 'vcs\.'; then
+		echo "dist: evrd-links has build-time stamps — it would change every release" >&2
+		exit 1
+	fi
 	cp -R web/build "$stage/web"
 	cp LICENSE README.md "$stage/"
 	tar -C dist -czf "dist/$name.tar.gz" "$name"

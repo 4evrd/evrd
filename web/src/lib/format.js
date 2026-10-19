@@ -75,3 +75,21 @@ export function device(ua) {
   const os = /iPhone|iPad/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'macOS' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : ''
   return os ? `${b} on ${os}` : b
 }
+
+// nodeBadge is a node's one-letter badge: node-a → A, a host name → its
+// first letter.
+export const nodeBadge = (id) => (/[-_]([a-z0-9])$/i.exec(id || '')?.[1] || id?.[0] || '?').toUpperCase()
+
+// chartMax is a round top for a chart's scale. One spike shouldn't flatten
+// everything else: past 4× the 98th percentile the scale stops, and the
+// spike runs off the top.
+export function chartMax(values) {
+  const vs = values.filter((v) => v != null).sort((a, b) => a - b)
+  let m = vs.at(-1) || 0
+  const p98 = vs[Math.floor(vs.length * 0.98)] || 0
+  if (vs.length >= 20 && p98 > 0 && m > 4 * p98) m = 4 * p98
+  if (m <= 0) return 1
+  const p = Math.pow(10, Math.floor(Math.log10(m)))
+  for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= m * 1.05) return k * p
+  return 10 * p
+}
