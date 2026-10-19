@@ -144,6 +144,12 @@ func openScylla(dsn string) (*scyllaStore, error) {
 		}
 	}
 
+	return newScyllaStore(sess), nil
+}
+
+// newScyllaStore wraps a session whose keyspace and tables exist, and starts
+// the writers.
+func newScyllaStore(sess *gocql.Session) *scyllaStore {
 	st := &scyllaStore{
 		s:     sess,
 		queue: make(chan scyllaWrite, scyllaQueue),
@@ -154,7 +160,7 @@ func openScylla(dsn string) (*scyllaStore, error) {
 		st.writers.Add(1)
 		go st.writer()
 	}
-	return st, nil
+	return st
 }
 
 // bucketOf is a time's partition: yyyymm, UTC.
