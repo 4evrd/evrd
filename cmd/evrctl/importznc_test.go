@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,7 +36,10 @@ func TestImportZNC(t *testing.T) {
 	write("moddata/log/Libera/bob/2024-03-10.log", "[11:00:00] <bob> a query\n")
 	write("moddata/log/gone/#x/2024-03-10.log", "[11:00:00] <bob> a deleted network\n")
 
-	importZNC(cfg, []string{"akadmin", znc})
+	c := &ctl{stdout: io.Discard, stderr: io.Discard}
+	if err := c.importZNC(cfg, []string{"akadmin", znc}); err != nil {
+		t.Fatal(err)
+	}
 
 	h, err := history.Open(cfg.History)
 	if err != nil {
