@@ -138,6 +138,7 @@ type Conn struct {
 	codec        codec
 	serverIdx    int
 	serverPass   string // the current server's PASS (then no SASL-fallback PASS)
+	saslOK       bool   // SASL succeeded on this connection (then no NickServ IDENTIFY)
 	idle         func() bool
 	version      string
 	links        Holder
@@ -356,6 +357,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	sv := servers[c.serverIdx%len(servers)]
 	c.serverIdx++
 	c.serverPass = sv.Password
+	c.saslOK = false
 	c.health.Server = net.JoinHostPort(sv.Host, strconv.Itoa(sv.Port))
 	c.mu.Unlock()
 	var conn net.Conn
@@ -583,6 +585,9 @@ func (c *Conn) handle(m irc.Message) {
 			c.sendSASL()
 		}
 	case "903": // RPL_SASLSUCCESS
+		c.mu.Lock()
+		c.saslOK = true
+		c.mu.Unlock()
 		c.send("CAP END")
 	case "902", "904", "905", "906", "908": // SASL failures
 		c.log.Warn("SASL failed, continuing unauthenticated", "network", c.net.Name)
@@ -595,9 +600,15 @@ func (c *Conn) handle(m irc.Message) {
 		saved := append([]string(nil), c.saved...)
 		settings, delay0 := c.chanSettings, c.joinDelay
 		away := c.away
+		identify := c.net.Password != "" && !c.saslOK
 		c.health.Status, c.health.ConnectedAt = StatusConnected, time.Now()
 		c.health.Attempts, c.health.RetryIn, c.health.Lag = 0, 0, -1
 		c.mu.Unlock()
+		if identify {
+			// No SASL here: log in the way ZNC's nickserv module does, before
+			// joining (some channels need you identified).
+			c.send(identifyLine(c.net))
+		}
 		joins := joinLines(saved, settings)
 		if delay0 > 0 {
 			go func() {
@@ -930,6 +941,16 @@ func (c *Conn) handleCap(m irc.Message) {
 		}
 		c.send("CAP END")
 	}
+}
+
+// identifyLine is the NickServ login for networks without SASL: IDENTIFY
+// with the account name when it differs from the nick (Atheme, Anope 2), or
+// just the password.
+func identifyLine(n store.Network) string {
+	if n.SASLUser != "" && !strings.EqualFold(n.SASLUser, n.Nick) {
+		return "PRIVMSG NickServ :IDENTIFY " + n.SASLUser + " " + n.Password
+	}
+	return "PRIVMSG NickServ :IDENTIFY " + n.Password
 }
 
 // sendSASL responds to an AUTHENTICATE + challenge with a SASL PLAIN payload:
