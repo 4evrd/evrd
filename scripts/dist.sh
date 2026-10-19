@@ -18,8 +18,9 @@ cd "$(dirname "$0")/.."
 rm -rf dist && mkdir -p dist
 
 ldflags="-s -w -X github.com/4evrd/evrd/internal/version.Version=$version"
-for t in $targets; do
-	os=${t%/*} arch=${t#*/}
+# build one target's archive
+build() {
+	os=${1%/*} arch=${1#*/}
 	name=evrd_${os}_${arch}
 	stage=dist/$name
 	mkdir -p "$stage"
@@ -31,14 +32,27 @@ for t in $targets; do
 	CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -buildvcs=false -ldflags "-s -w" -o "$stage/evrd-links" ./cmd/evrd-links
 	if go version -m "$stage/evrd-links" | grep -q 'vcs\.'; then
 		echo "dist: evrd-links has build-time stamps — it would change every release" >&2
-		exit 1
+		return 1
 	fi
 	cp -R web/build "$stage/web"
 	cp LICENSE README.md "$stage/"
 	tar -C dist -czf "dist/$name.tar.gz" "$name"
 	rm -rf "$stage"
 	echo "dist: $name.tar.gz"
+}
+
+# Every target at once (go build uses every core per package anyway, but
+# linking and archiving are single-threaded); fail if any fails.
+pids=
+for t in $targets; do
+	build "$t" &
+	pids="$pids $!"
 done
+failed=0
+for p in $pids; do
+	wait "$p" || failed=1
+done
+[ "$failed" = 0 ] || { echo "dist: a build failed" >&2; exit 1; }
 
 cd dist
 if command -v sha256sum >/dev/null; then
