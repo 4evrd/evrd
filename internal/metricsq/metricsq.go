@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -37,16 +38,22 @@ func New(base string) *Client {
 }
 
 // transport dials a fresh HTTP/1.1 connection for every query. Kept-alive
-// connections to the metrics store die silently on the way (a firewall or
-// proxy forgets them): over HTTP/2 every later query hung on the dead one,
-// and a reused HTTP/1.1 connection ends in EOF. The dashboards make a
-// handful of queries a minute, so a handshake each is cheap.
+// connections to the metrics store died silently on the way (a firewall or
+// proxy forgets them) and every later query hung on the dead one; a handful
+// of queries a minute can afford a handshake each.
+//
+// It's built from scratch: a clone of http.DefaultTransport still offers
+// HTTP/2 in the TLS handshake, and a proxy that takes it up (Traefik) then
+// answers in frames an HTTP/1.1 client can't read.
 func transport() *http.Transport {
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.ForceAttemptHTTP2 = false
-	t.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
-	t.DisableKeepAlives = true
-	return t
+	return &http.Transport{
+		Proxy:               http.ProxyFromEnvironment,
+		DialContext:         (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+		TLSHandshakeTimeout: 10 * time.Second,
+		TLSClientConfig:     &tls.Config{NextProtos: []string{"http/1.1"}},
+		TLSNextProto:        map[string]func(string, *tls.Conn) http.RoundTripper{},
+		DisableKeepAlives:   true,
+	}
 }
 
 // Series is one labelled series of [unix seconds, value] points.

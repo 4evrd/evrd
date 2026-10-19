@@ -46,3 +46,21 @@ func TestADroppedConnectionIsRetried(t *testing.T) {
 		t.Fatalf("%d calls", calls.Load())
 	}
 }
+
+// The metrics store usually sits behind a proxy that speaks HTTP/2 over TLS
+// (Traefik). The client must agree on a protocol it actually speaks.
+func TestHTTPSWithHTTP2OnOffer(t *testing.T) {
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"7"]}]}}`)
+	}))
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+	defer srv.Close()
+	c := New(srv.URL)
+	c.hc.Transport.(*http.Transport).TLSClientConfig.RootCAs = srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs
+	for i := 0; i < 3; i++ {
+		if v, err := c.Scalar(context.Background(), "up"); err != nil || v != 7 {
+			t.Fatalf("query %d: %v, %v", i, v, err)
+		}
+	}
+}
