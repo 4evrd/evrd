@@ -1,9 +1,11 @@
 package accounts
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/store"
 )
 
@@ -114,5 +116,88 @@ func TestCheckBindHost(t *testing.T) {
 	}
 	if err := s.CheckBindHost(store.User{Role: store.RoleAdmin}, "198.51.100.1"); err != nil {
 		t.Fatal("admins may use any address")
+	}
+}
+
+func TestNormalizeNetworkRejects(t *testing.T) {
+	ok := func() store.Network { return store.Network{Name: "x", Nick: "y", Host: "irc.example.org"} }
+	for _, tc := range []struct {
+		name string
+		edit func(*store.Network)
+		want string // substring of the message
+	}{
+		{"no name", func(n *store.Network) { n.Name = " " }, "needs a name"},
+		{"name with a colon", func(n *store.Network) { n.Name = "a:b" }, "needs a name"},
+		{"long name", func(n *store.Network) { n.Name = strings.Repeat("n", 33) }, "32 characters"},
+		{"no nick", func(n *store.Network) { n.Nick = "" }, "needs a nick"},
+		{"bad nick", func(n *store.Network) { n.Nick = "a@b" }, "nicks can't"},
+		{"bad ident", func(n *store.Network) { n.Username = "me@host" }, "ident"},
+		{"flood rate too high", func(n *store.Network) { n.FloodRate, n.FloodBurst = 101, 1 }, "flood rate"},
+		{"flood burst too high", func(n *store.Network) { n.FloodRate, n.FloodBurst = 1, 1001 }, "flood burst"},
+		{"negative join delay", func(n *store.Network) { n.JoinDelay = -1 }, "join delay"},
+		{"multi-line quit", func(n *store.Network) { n.QuitMsg = "bye\r\nPRIVMSG x :hi" }, "one line"},
+		{"bad hostname", func(n *store.Network) { n.Servers = []store.Server{{Host: "irc.example.org/path"}} }, "hostname"},
+		{"bad port", func(n *store.Network) { n.Servers = []store.Server{{Host: "h", Port: 70000}} }, "ports"},
+		{"multi-line server password", func(n *store.Network) { n.Servers = []store.Server{{Host: "h", Password: "a\nb"}} }, "one line"},
+		{"too many servers", func(n *store.Network) {
+			for range 21 {
+				n.Servers = append(n.Servers, store.Server{Host: "h"})
+			}
+		}, "20 servers"},
+		{"short fingerprint", func(n *store.Network) { n.Fingerprints = []string{"abcd"} }, "64 hex"},
+		{"channel without a prefix", func(n *store.Network) { n.Channels = []string{"general"} }, "channel name"},
+		{"channel with a comma", func(n *store.Network) { n.Channels = []string{"#a,#b"} }, "channel name"},
+		{"channel key with a comma", func(n *store.Network) {
+			n.Channels = []string{"#a"}
+			n.ChannelSettings = map[string]store.ChannelSettings{"#a": {Key: "a,b"}}
+		}, "channel keys"},
+	} {
+		n := ok()
+		tc.edit(&n)
+		err := NormalizeNetwork(&n)
+		var v *ValidationError
+		if !errors.As(err, &v) || !strings.Contains(v.Message, tc.want) {
+			t.Errorf("%s: got %v, want %q", tc.name, err, tc.want)
+		}
+	}
+
+	// Empty lists come back non-nil (they're JSON arrays), blank entries go.
+	n := ok()
+	n.Channels, n.Fingerprints = []string{" ", ""}, []string{" "}
+	if err := NormalizeNetwork(&n); err != nil || n.Channels == nil || len(n.Channels) != 0 || n.Fingerprints == nil || len(n.Fingerprints) != 0 {
+		t.Fatalf("blank entries: %v %#v %#v", err, n.Channels, n.Fingerprints)
+	}
+}
+
+func TestCharset(t *testing.T) {
+	for _, enc := range []string{"ISO-8859-1", "^windows-1252", "koi8-r", "utf-8"} {
+		if e, err := Charset(enc); err != nil || e == nil {
+			t.Errorf("%s: %v", enc, err)
+		}
+	}
+	if _, err := Charset("^klingon"); err == nil || !strings.Contains(err.Error(), `"klingon"`) {
+		t.Fatalf("unknown: %v", err)
+	}
+}
+
+func TestCheckNetworkName(t *testing.T) {
+	s, st := newService(t, config.Limits{})
+	alice, _ := s.Create(CreateInput{Username: "alice"})
+	bob, _ := s.Create(CreateInput{Username: "bob"})
+	libera, err := st.CreateNetwork(store.Network{UserID: alice.ID, Name: "Libera", Nick: "alice", Host: "irc.libera.chat"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CheckNetworkName(alice.ID, "libera", 0); err == nil || !strings.Contains(err.Error(), "Libera") {
+		t.Fatalf("a duplicate name, any case: %v", err)
+	}
+	if err := s.CheckNetworkName(alice.ID, "LIBERA", libera.ID); err != nil {
+		t.Fatalf("renaming the network itself: %v", err)
+	}
+	if err := s.CheckNetworkName(alice.ID, "oftc", 0); err != nil {
+		t.Fatalf("a new name: %v", err)
+	}
+	if err := s.CheckNetworkName(bob.ID, "libera", 0); err != nil {
+		t.Fatalf("names are per user: %v", err)
 	}
 }
