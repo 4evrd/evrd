@@ -1,4 +1,4 @@
-// Unit tests for the formatting helpers: node --test src/lib/
+// Unit tests for the formatting helpers: pnpm test:unit
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { nodeBadge, device, limit, ratio, chartMax } from './format.js'
