@@ -93,3 +93,28 @@ export function chartMax(values) {
   for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= m * 1.05) return k * p
   return 10 * p
 }
+
+// --- hourly charts (traffic, reconnects) ---------------------------------------
+
+// hourAt is the point under a pointer at frac (0–1) across a chart of n points.
+export const hourAt = (frac, n) => Math.max(0, Math.min(n - 1, Math.round(frac * (n - 1))))
+
+// hourSpan names the hour point i covers: it ends at start + i hours, and the
+// last one is the hour in progress.
+export const hourSpan = (start, i, n = 25) => (i === n - 1 ? `${clock(start + (i - 1) * 3600)}–now` : `${clock(start + (i - 1) * 3600)}–${clock(start + i * 3600)}`)
+
+// hourRows is each series' value at point i, the biggest first.
+export const hourRows = (series, i) => series.map((s) => ({ name: s.name, color: s.color, value: s.points[i] || 0 })).sort((a, b) => b.value - a.value)
+
+// lanes stacks labels that would overlap: each mark ({x, w} in px) takes
+// the first of `max` lanes whose last label ended before it (plus a gap);
+// a mark that fits none gets lane -1 (shown on hover only).
+export function lanes(marks, max = 3, gap = 6) {
+  const ends = []
+  return [...marks].sort((a, b) => a.x - b.x).map((m) => {
+    let lane = ends.findIndex((e) => e + gap <= m.x)
+    if (lane < 0 && ends.length < max) lane = ends.length
+    if (lane >= 0) ends[lane] = m.x + m.w
+    return { ...m, lane }
+  })
+}

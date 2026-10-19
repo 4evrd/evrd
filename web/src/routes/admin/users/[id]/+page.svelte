@@ -12,6 +12,7 @@
   import BouncerSettings from '$lib/components/BouncerSettings.svelte'
   import UserOverview from '$lib/components/UserOverview.svelte'
   import ConnLog from '$lib/components/ConnLog.svelte'
+  import Reconnects from '$lib/components/Reconnects.svelte'
   import { api } from '$lib/api.js'
   import { session, refreshMe } from '$lib/session.svelte.js'
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
@@ -22,6 +23,7 @@
   const isAdmin = $derived(session.me?.role === 'admin')
   let cur = $state(null) // /api/admin/users/{id}
   let ov = $state(null)  // /api/admin/users/{id}/overview
+  let rc = $state(null)  // /api/admin/users/{id}/reconnects
   let err = $state('')
   let ovErr = $state('')
   let lim = $state({ maxNetworks: '', maxClients: '', backlogLines: '' })
@@ -40,6 +42,7 @@
   }
   async function loadOverview() {
     try { ov = await api.admin.userOverview(id); ovErr = '' } catch (e) { ovErr = e.message }
+    try { rc = await api.admin.userReconnects(id) } catch { /* the overview shows the error */ }
   }
   onMount(async () => {
     if (!isAdmin) return
@@ -146,6 +149,11 @@
 
   {#if ovErr && !ov}<div class="callout bad" role="alert"><Icon name="alert" /><span>Couldn’t load {cur.username}’s live state: {ovErr}</span></div>{/if}
   <UserOverview {ov} usage={ov?.usage || { networks: nets.length }} limits={ov?.limits || cur.limits || {}} admin who={cur.username} />
+
+  <section class="card enter" id="reconnects" aria-labelledby="rc-h">
+    <div class="section-head"><div class="od-stack"><span class="caps">Reconnects</span><h2 id="rc-h">Link trouble, last 24h</h2></div></div>
+    <Reconnects data={rc} logHref={(n) => `#net-${n.id}`} />
+  </section>
 
   <section class="card enter" id="networks" aria-labelledby="nets-h">
     <div class="section-head">

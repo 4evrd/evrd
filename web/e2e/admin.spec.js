@@ -267,6 +267,7 @@ test('a user’s overview and metrics aren’t open to non-admins', async () => 
   const u = await freshUser('nadm')
   try {
     await expect(u.api.get(`/api/admin/users/${u.id}/overview`)).rejects.toThrow(/403/)
+    await expect(u.api.get(`/api/admin/users/${u.id}/reconnects`)).rejects.toThrow(/403/)
     await expect(u.api.get('/api/admin/metrics')).rejects.toThrow(/403/)
   } finally { await u.cleanup() }
 })
@@ -324,5 +325,15 @@ test('admins see why a user’s network can’t connect, and its connection log'
     await expect(log.locator('li.bad', { hasText: "Couldn't connect: connection refused" })).not.toHaveCount(0)
     await net.getByRole('button', { name: 'Connection log' }).click()
     await expect(log).toHaveCount(0)
+
+    // the user's reconnects, as they see them, linked to the network's card
+    const rc = page.locator('#reconnects').getByTestId('reconnects-net').filter({ hasText: 'Closed' })
+    await expect(async () => {
+      await page.reload()
+      await expect(rc).toContainText('connection refused', { timeout: 2000 })
+    }).toPass({ timeout: 20000 })
+    await expect(page.locator('#reconnects').getByTestId('reconnects-events')).toContainText("Closed: couldn't connect")
+    await rc.getByRole('link', { name: 'Connection log' }).click()
+    await expect(page).toHaveURL(new RegExp(`#net-${bad.id}$`))
   } finally { await u.cleanup() }
 })

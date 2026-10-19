@@ -29,6 +29,7 @@
   const chanLabel = { all: 'Joined channels', unread: 'Channels with unread lines', mention: 'Channels that mention you' }
 
   // traffic chart
+  let focus = $state(null) // a network hovered in the legend
   const series = $derived((ov?.traffic?.series || []).map((s) => {
     const i = nets.findIndex((n) => n.id === s.network)
     return { name: s.name, color: i === 0 ? 'var(--ice)' : netColor(Math.max(i, 0)), points: s.points }
@@ -129,7 +130,7 @@
   <section class="card" aria-labelledby="traffic-h">
     <div class="section-head">
       <div class="od-stack"><span class="caps">Message traffic</span><h2 id="traffic-h">Lines per hour, last 24h</h2></div>
-      <div class="legend">{#each series as s}<span><i style="--c:{s.color}"></i>{s.name}</span>{/each}</div>
+      <div class="legend">{#each series as s}<button type="button" class:dim={focus && focus !== s.name} onpointerenter={() => (focus = s.name)} onpointerleave={() => (focus = null)} onfocus={() => (focus = s.name)} onblur={() => (focus = null)}><i style="--c:{s.color}"></i>{s.name}</button>{/each}</div>
     </div>
     {#if !ov}
       <div class="skel" style="height:240px"></div>
@@ -138,7 +139,7 @@
     {:else if !series.length}
       <div class="chart-empty">No traffic recorded in the last 24 hours yet.</div>
     {:else}
-      <TrafficChart {series} start={ov.traffic.start} {markers} />
+      <TrafficChart {series} start={ov.traffic.start} {markers} {focus} />
     {/if}
   </section>
 
@@ -157,7 +158,7 @@
         <span class="ubar warn" role="img" aria-label="{h.backlogPct ?? 0}% of backlog used"><span style="transform:scaleX({(h.backlogPct || 0) / 100})"></span></span>
       </div>
       <div class="metric">
-        <div class="od-row"><span>Reconnects · 24h</span><span class="od-nowrap">{h.reconnects24h ?? '—'}</span></div>
+        <div class="od-row"><a class="metric-link" href={href('/reconnects', '#reconnects')} data-testid="reconnects-link">Reconnects · 24h<Icon name="chevron" class="i-sm" /></a><span class="od-nowrap">{h.reconnects24h ?? '—'}</span></div>
         <span class="ubar bad" role="img" aria-label="Reconnects in 24 hours"><span style="transform:scaleX({Math.min(1, (h.reconnects24h || 0) / 6)})"></span></span>
       </div>
       <div class="od-row" style="justify-content:space-between;font-size:var(--fs-sm)"><span>Offline · 24h</span><span class="count calm od-nowrap">{h.offlineMin24h != null ? h.offlineMin24h + ' min' : '—'}</span></div>
