@@ -28,6 +28,7 @@ import (
 	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/identfile"
 	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/listen"
 	"github.com/4evrd/evrd/internal/metricsq"
@@ -149,6 +150,14 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 			}
 		}
 		sb.Write = append(sb.Write, os.TempDir())
+		if cfg.IdentFile != "" {
+			in, ok := cfg.InChroot(cfg.IdentFile)
+			if cfg.Chroot != "" && !ok {
+				log.Error("ident_file must be inside the chroot", "path", cfg.IdentFile, "chroot", cfg.Chroot)
+				return 1
+			}
+			sb.Write = append(sb.Write, filepath.Dir(in)) // replaced by a rename
+		}
 		if linksSocket != "" {
 			in, ok := cfg.InChroot(linksSocket)
 			if cfg.Chroot != "" && !ok {
@@ -342,6 +351,13 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	go dir.Run(ctx)
 	srv.SetDirectory(dir)
+	// The oidentd file that gives users with a bind host their ident.
+	if cfg.IdentFile != "" {
+		path, _ := cfg.InChroot(cfg.IdentFile)
+		iw := identfile.New(path, st, log)
+		iw.Exclude = cfg.Outbound.Bind
+		go iw.Run(ctx)
+	}
 	irc.SetDirectory(dir)
 	if webRoot != "" {
 		srv.SetWebApp(webRoot)

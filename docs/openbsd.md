@@ -145,6 +145,36 @@ evrctl -config /etc/evrd/evrd.conf user list
 
 `evrctl` run as root switches to `_evrd` before touching the database.
 
+## Idents (oidentd)
+
+Networks ask the host's identd who owns each connection; with oidentd and
+nothing set up it answers `_evrd`, which some networks refuse (Libera:
+"Invalid username"). Give evrd an ident file and it answers for each user
+with a bind host of their own (`from <address> { reply "<ident>" }`, the
+networks' ident or the username), and hides the rest, so networks use the
+ident from USER (shown as `~ident`). It's rewritten within a minute of a bind
+host changing.
+
+```sh
+mkdir -p /var/evrd/ident && chown _evrd /var/evrd/ident
+usermod -d /var/evrd/ident _evrd         # oidentd reads ~_evrd/.oidentd.conf
+echo 'ident_file /var/evrd/ident/.oidentd.conf' >> /etc/evrd/evrd.conf
+cat >> /etc/oidentd.conf <<'CONF'
+user _evrd {
+	default {
+		allow spoof
+		allow spoof_all
+		allow hide
+	}
+}
+CONF
+pkill -HUP -x oidentd; rcctl restart evrd
+```
+
+The file must be inside the chroot (`/var/evrd`); oidentd reads it as root.
+Addresses more than one user binds, and the host's own default addresses,
+are left out (everyone without a bind host shares those).
+
 ## Upgrading
 
 Run the same command again. It keeps `evrd.conf` and the key (it asks; `-y`
