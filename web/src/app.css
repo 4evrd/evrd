@@ -303,7 +303,7 @@ button { cursor: pointer; }
 
 /* stat tiles */
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s4); }
-.tile { display: grid; gap: var(--s4); padding: var(--s5); border-radius: var(--r-card); background: var(--glass); border: 1px solid var(--line-soft); box-shadow: inset 0 1px 0 var(--hilite); color: var(--fg); }
+.tile { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); padding: var(--s5); border-radius: var(--r-card); background: var(--glass); border: 1px solid var(--line-soft); box-shadow: inset 0 1px 0 var(--hilite); color: var(--fg); }
 a.tile:hover { text-decoration: none; background: var(--glass-2); }
 .tile-top { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
 .tile-top .caps { display: flex; align-items: center; gap: var(--s2); }
@@ -393,6 +393,11 @@ a.tile:hover { text-decoration: none; background: var(--glass-2); }
 .ticks.heat i.on { background: var(--signal); }
 .ticks.heat i.on:nth-child(n+5) { background: var(--warn); }
 .ticks.heat i.on:nth-child(n+8) { background: var(--cyan); }
+/* A tile's ticks share its width: many networks thin them (and close the
+   gaps) instead of pushing the tile wider. */
+.tile .ticks { display: flex; width: 100%; min-width: 0; overflow: hidden; }
+.tile .ticks i { flex: 0 1 3px; min-width: 1px; }
+.tile .ticks.dense { gap: 1px; }
 
 /* usage bar */
 .ubar { display: block; height: 3px; border-radius: 3px; background: var(--line); overflow: hidden; }
