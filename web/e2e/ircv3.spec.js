@@ -75,7 +75,8 @@ test('typing indicators go through evrd to clients that asked for message-tags',
       }).toPass({ timeout: 20000 })
       typer.send(`PRIVMSG ${chan} :done typing`)
       await plain.waitFor(/PRIVMSG \S+ :done typing$/)
-      expect(plain.lines.some((l) => l.includes('TAGMSG') || l.startsWith('@'))).toBe(false)
+      // no tags and no TAGMSG for a client that didn't ask (005 may name TAGMSG in TARGMAX)
+      expect(plain.lines.some((l) => l.startsWith('@') || /^:\S+ TAGMSG /.test(l))).toBe(false)
     } finally { typer.close() }
   } finally { plain.close() }
 })
