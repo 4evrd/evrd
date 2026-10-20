@@ -14,7 +14,7 @@
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
   import { ago, device } from '$lib/format.js'
   import { check } from '$lib/validate.js'
-  import { t, languages, pick as pickLocale, setLocale, setPacks, personalPack, i18n } from '$lib/i18n.svelte.js'
+  import { t, languages, pick as pickLocale, setLocale, setPacks, personalPack, builtin, serverPack, i18n } from '$lib/i18n.svelte.js'
 
   const me = $derived(session.me)
   const TABS = [['profile', 'account.tabProfile'], ['bouncer', 'account.tabBouncer'], ['security', 'account.tabSecurity'], ['sessions', 'account.tabSessions'], ['danger', 'account.tabDelete']] // [id, message key]
@@ -66,6 +66,13 @@
   }
   async function loadOwn() {
     return { code: own.code, name: own.name, messages: await personalPack() }
+  }
+  // any language on offer, as you see it: built in, the server's, yours
+  let dlCode = $state(i18n.locale)
+  async function loadLanguage() {
+    const code = dlCode
+    const mine = own?.code === code ? await personalPack() : null
+    return { code, name: languages().find((l) => l.code === code)?.name || code, messages: { ...(await builtin(code)), ...(await serverPack(code)), ...mine } }
   }
 
   // sessions
@@ -150,6 +157,11 @@
               <PackDownload id="own-download" label={t('account.ownDownload')} ghost load={loadOwn} />
               <button class="btn btn-danger-ghost btn-sm" type="button" onclick={removeOwn}><Icon name="trash" />{t('account.ownRemove')}</button>
             {/if}
+          </div>
+          <div class="od-cluster" style="gap:8px" data-testid="download-language">
+            <span class="desc">{t('account.downloadLanguage')}</span>
+            <div style="min-width:180px"><Select id="dl-lang" bind:value={dlCode} options={languages().map((l) => ({ value: l.code, label: l.name, sub: l.code }))} testid="dl-lang" /></div>
+            <PackDownload id="dl-language" label={t('account.downloadLanguageButton')} ghost load={loadLanguage} />
           </div>
         </div>
       </div>

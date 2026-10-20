@@ -145,4 +145,6 @@ export default {
   'account.ownRemoveBody': 'The app goes back to the server’s text.',
   'account.ownSaved': 'Your translation is saved. Pick {name} under Language to use it.',
   'account.ownRemoved': 'Your translation is removed',
+  'account.downloadLanguage': 'Download a language to edit:',
+  'account.downloadLanguageButton': 'Download',
 }

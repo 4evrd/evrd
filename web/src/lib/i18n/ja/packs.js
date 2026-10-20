@@ -38,4 +38,11 @@ export default {
   'packs.err.xliff': 'XLIFF ファイルではありません。',
   'packs.err.yaml': 'YAML の {line} 行目を読み込めません。',
   'packs.err.yamlUnsupported': '{line} 行目は evrd が読み込めない YAML（リスト、アンカー、ブロックテキスト）を使っています。key: "text" の形式にしてください。',
+  'packs.modeLabel': 'このファイルの用途',
+  'packs.modeChange': '既存の言語を変更',
+  'packs.modeChangeHelp': 'ファイルの文言がその言語の文言を置き換えます。それ以外はそのままです。',
+  'packs.modeNew': '新しい言語を追加',
+  'packs.modeNewHelp': '言語メニューに追加されます。ファイルにない文言は英語で表示されます。',
+  'packs.language': '言語',
+  'packs.exists': '{name} はすでにあります。更新するには「既存の言語を変更」を選んでください。',
 }

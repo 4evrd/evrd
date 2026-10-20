@@ -38,4 +38,11 @@ export default {
   'packs.err.xliff': 'That isn’t an XLIFF file.',
   'packs.err.yaml': 'That YAML can’t be read at line {line}.',
   'packs.err.yamlUnsupported': 'Line {line} uses YAML evrd doesn’t read (lists, anchors, block text): use key: "text" maps.',
+  'packs.modeLabel': 'What this file does',
+  'packs.modeChange': 'Change an existing language',
+  'packs.modeChangeHelp': 'Its strings replace that language’s; the rest stay as they are.',
+  'packs.modeNew': 'Add a new language',
+  'packs.modeNewHelp': 'It joins the Language menu; strings it leaves out show in English.',
+  'packs.language': 'Language',
+  'packs.exists': '{name} already exists. Choose “Change an existing language” to update it.',
 }

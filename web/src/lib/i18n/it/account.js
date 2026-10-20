@@ -140,4 +140,6 @@ export default {
   'account.ownRemoveBody': 'L’app torna ai testi del server.',
   'account.ownSaved': 'La tua traduzione è salvata. Scegli {name} in Lingua per usarla.',
   'account.ownRemoved': 'La tua traduzione è stata rimossa',
+  'account.downloadLanguage': 'Scarica una lingua da modificare:',
+  'account.downloadLanguageButton': 'Scarica',
 }

@@ -38,4 +38,11 @@ export default {
   'packs.err.xliff': 'Bu bir XLIFF dosyası değil.',
   'packs.err.yaml': 'YAML {line}. satırda okunamıyor.',
   'packs.err.yamlUnsupported': '{line}. satır evrd’nin okumadığı YAML kullanıyor (listeler, çapalar, metin blokları): key: "metin" eşlemeleri kullan.',
+  'packs.modeLabel': 'Bu dosya ne yapar',
+  'packs.modeChange': 'Mevcut bir dili değiştir',
+  'packs.modeChangeHelp': 'Dosyadaki metinler o dilin metinlerinin yerine geçer; geri kalanı aynı kalır.',
+  'packs.modeNew': 'Yeni bir dil ekle',
+  'packs.modeNewHelp': 'Dil menüsüne eklenir; dosyada olmayan metinler İngilizce görünür.',
+  'packs.language': 'Dil',
+  'packs.exists': '{name} zaten var. Güncellemek için “Mevcut bir dili değiştir”i seç.',
 }

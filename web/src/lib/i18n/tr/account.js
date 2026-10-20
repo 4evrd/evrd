@@ -140,4 +140,6 @@ export default {
   'account.ownRemoveBody': 'Uygulama sunucunun metinlerine döner.',
   'account.ownSaved': 'Çevirin kaydedildi. Kullanmak için Dil altında {name} seç.',
   'account.ownRemoved': 'Çevirin kaldırıldı',
+  'account.downloadLanguage': 'Düzenlemek için bir dil indir:',
+  'account.downloadLanguageButton': 'İndir',
 }

@@ -38,4 +38,11 @@ export default {
   'packs.err.xliff': 'Itu bukan file XLIFF.',
   'packs.err.yaml': 'YAML itu tidak bisa dibaca di baris {line}.',
   'packs.err.yamlUnsupported': 'Baris {line} memakai YAML yang tidak dibaca evrd (list, anchor, teks blok): gunakan map key: "text".',
+  'packs.modeLabel': 'Fungsi file ini',
+  'packs.modeChange': 'Ubah bahasa yang sudah ada',
+  'packs.modeChangeHelp': 'Teksnya menggantikan teks bahasa itu; sisanya tetap.',
+  'packs.modeNew': 'Tambah bahasa baru',
+  'packs.modeNewHelp': 'Bahasa ini muncul di menu Bahasa; teks yang tidak ada tampil dalam bahasa Inggris.',
+  'packs.language': 'Bahasa',
+  'packs.exists': '{name} sudah ada. Pilih “Ubah bahasa yang sudah ada” untuk memperbaruinya.',
 }

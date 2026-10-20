@@ -144,4 +144,6 @@ export default {
   'account.ownRemoveBody': 'アプリはサーバーのテキストに戻ります。',
   'account.ownSaved': '翻訳を保存しました。使うには「言語」で {name} を選んでください。',
   'account.ownRemoved': '自分用の翻訳を削除しました',
+  'account.downloadLanguage': '編集する言語をダウンロード:',
+  'account.downloadLanguageButton': 'ダウンロード',
 }

@@ -38,4 +38,11 @@ export default {
   'packs.err.xliff': 'Non è un file XLIFF.',
   'packs.err.yaml': 'Il YAML non si legge alla riga {line}.',
   'packs.err.yamlUnsupported': 'La riga {line} usa del YAML che evrd non legge (liste, ancore, blocchi di testo): usa mappe key: "testo".',
+  'packs.modeLabel': 'Cosa fa questo file',
+  'packs.modeChange': 'Modifica una lingua esistente',
+  'packs.modeChangeHelp': 'Le sue stringhe sostituiscono quelle della lingua; il resto non cambia.',
+  'packs.modeNew': 'Aggiungi una nuova lingua',
+  'packs.modeNewHelp': 'Compare nel menu Lingua; le stringhe mancanti restano in inglese.',
+  'packs.language': 'Lingua',
+  'packs.exists': '{name} esiste già. Scegli “Modifica una lingua esistente” per aggiornarla.',
 }

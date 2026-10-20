@@ -144,4 +144,6 @@ export default {
   'account.ownRemoveBody': 'Aplikasi kembali memakai teks dari server.',
   'account.ownSaved': 'Terjemahan kamu tersimpan. Pilih {name} di Bahasa untuk memakainya.',
   'account.ownRemoved': 'Terjemahan kamu sudah dihapus',
+  'account.downloadLanguage': 'Unduh bahasa untuk diedit:',
+  'account.downloadLanguageButton': 'Unduh',
 }

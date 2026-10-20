@@ -15,33 +15,35 @@ async function signIn(page, u) {
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 }
 
-test('an admin adds German; a user picks it', async ({ page }) => {
-  const u = await freshUser('de')
+test('an admin adds Polish; a user picks it', async ({ page }) => {
+  const u = await freshUser('pl')
   const a = await session(ADMIN, ADMIN_PASS)
   try {
     await login(page, ADMIN, ADMIN_PASS)
     await page.goto('/admin/settings')
     const langs = page.getByTestId('languages')
     await expect(langs.getByTestId('lang-it')).toContainText('Built in')
-    await langs.getByTestId('lang-upload-file').setInputFiles(file('deutsch.json', {
-      code: 'de', name: 'Deutsch',
+    await langs.getByTestId('lang-upload-file').setInputFiles(file('polski.json', {
+      code: 'pl', name: 'Polski',
       messages: { 'account.heading': 'Kontoeinstellungen', 'account.saveProfile': 'Profil speichern', 'account.nope': 'x' },
     }))
     const dlg = page.getByRole('dialog', { name: 'Check the translation' })
-    await expect(dlg.getByLabel('Language code')).toHaveValue('de')
-    await expect(dlg.getByLabel('Language name')).toHaveValue('Deutsch')
+    // a language evrd doesn't have: added as a new one
+    await expect(dlg.getByTestId('lang-upload-mode-new')).toBeChecked()
+    await expect(dlg.getByLabel('Language code')).toHaveValue('pl')
+    await expect(dlg.getByLabel('Language name')).toHaveValue('Polski')
     await expect(dlg.getByTestId('pack-report')).toContainText('3 texts translated.')
     await expect(dlg.getByTestId('pack-report')).toContainText('1 key English doesn’t have, so the app won’t use it: account.nope')
     await expect(dlg.getByTestId('pack-report')).toContainText(/texts aren’t translated/)
     await dlg.getByRole('button', { name: 'Save translation' }).click()
-    await expect(page.getByText('Deutsch saved — everyone can use it now')).toBeVisible()
-    await expect(langs.getByTestId('lang-de')).toContainText(/Uploaded/)
+    await expect(page.getByText('Polski saved — everyone can use it now')).toBeVisible()
+    await expect(langs.getByTestId('lang-pl')).toContainText(/Uploaded/)
 
     // Anyone can pick it, and its text shows; the rest is English.
     await page.context().clearCookies()
     await login(page, u.name, u.password)
     await page.goto('/account')
-    await choose(page, page.getByLabel('Language', { exact: true }), 'Deutsch')
+    await choose(page, page.getByLabel('Language', { exact: true }), 'Polski')
     await page.getByRole('button', { name: 'Save profile' }).click()
     await expect(page.getByRole('heading', { name: 'Kontoeinstellungen' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Profil speichern' })).toBeVisible()
@@ -49,7 +51,7 @@ test('an admin adds German; a user picks it', async ({ page }) => {
     await page.reload()
     await expect(page.getByRole('heading', { name: 'Kontoeinstellungen' })).toBeVisible()
   } finally {
-    await a.del('/api/admin/languages/de').catch(() => {})
+    await a.del('/api/admin/languages/pl').catch(() => {})
     await a.dispose()
     await u.cleanup()
   }
@@ -76,8 +78,16 @@ test('your own translation changes one Italian string', async ({ page, browser }
     // a CSV (key, english, translation): the code comes from the file name
     await own.getByTestId('own-upload-file').setInputFiles(file('evrd-it.csv', 'key,english,translation,notes\r\naccount.heading,Account settings,Il mio account,\r\naccount.intro,"Your profile, sign-in…",,\r\n'))
     const dlg = page.getByRole('dialog', { name: 'Check the translation' })
-    await expect(dlg.getByLabel('Language code')).toHaveValue('it')
-    await expect(dlg.getByLabel('Language name')).toHaveValue('Italiano')
+    // a language evrd has: it changes that one, keeping its name
+    await expect(dlg.getByTestId('own-upload-mode-change')).toBeChecked()
+    await expect(dlg.getByTestId('own-upload-target')).toContainText('Italiano')
+    await expect(dlg.getByLabel('Language code')).toHaveCount(0)
+    // as a new language it would clash with Italiano
+    await dlg.getByTestId('own-upload-mode-new').check()
+    await dlg.getByLabel('Language code').fill('it')
+    await expect(dlg.getByTestId('own-upload-exists')).toContainText('Italiano already exists')
+    await expect(dlg.getByRole('button', { name: 'Save translation' })).toBeDisabled()
+    await dlg.getByTestId('own-upload-mode-change').check()
     await dlg.getByRole('button', { name: 'Save translation' }).click()
     await expect(page.getByText('Your translation is saved. Pick Italiano under Language to use it.')).toBeVisible()
     await expect(own.getByTestId('own-status')).toContainText('Italiano (it)')
@@ -127,4 +137,24 @@ test('text from a language pack is never HTML', async ({ page }) => {
     await expect(page.locator('#bold')).toHaveCount(0)
     expect(dialogs).toEqual([])
   } finally { await u.cleanup() }
+})
+
+test('anyone can download a language to edit, in any format', async ({ page }) => {
+  const u = await freshUser('dl')
+  try {
+    await login(page, u.name, u.password)
+    await page.goto('/account')
+    const box = page.getByTestId('download-language')
+    await choose(page, box.getByTestId('dl-lang').getByRole('combobox'), 'Italiano')
+    await box.getByRole('button', { name: 'Download' }).click()
+    const got = page.waitForEvent('download')
+    await page.getByRole('menuitem', { name: /JSON/ }).click()
+    const dl = await got
+    expect(dl.suggestedFilename()).toBe('evrd-it.json')
+    const pack = JSON.parse(await (await import('node:fs/promises')).readFile(await dl.path(), 'utf8'))
+    expect(pack.code).toBe('it')
+    expect(pack.messages['account.heading']).toBe('Impostazioni dell’account')
+  } finally {
+    await u.cleanup()
+  }
 })
