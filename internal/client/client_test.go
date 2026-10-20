@@ -247,8 +247,8 @@ func TestNoticesAndActionsAreRecorded(t *testing.T) {
 
 func TestCapReqIsAllOrNothing(t *testing.T) {
 	r := newRig(t)
-	ic := r.attach("alice/one:alice-password", "server-time", "sasl")
-	ic.expect("CAP * NAK :server-time sasl")
+	ic := r.attach("alice/one:alice-password", "server-time", "bogus-cap")
+	ic.expect("CAP * NAK :server-time bogus-cap")
 	ic.expect(" 001 ")
 	ic.send("CAP REQ :echo-message")
 	ic.expect("ACK :echo-message")

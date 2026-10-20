@@ -45,6 +45,10 @@ type session struct {
 	ubatch         map[string]bool // the network's open batches: passed to this client?
 	regLines       []string        // PASS/NICK/USER as sent, replayed when forwarding
 	internal       bool            // forwarded here by another node (already vetted)
+	saslMech       string          // the SASL mechanism under way ("" none)
+	saslBuf        string          // its payload so far
+	saslUser       store.User      // who SASL signed in
+	saslDevice     string
 
 	// Attached state. After registration, only the bridge goroutine touches
 	// these, so jumping networks needs no locking.
@@ -133,6 +137,8 @@ func (se *session) serve(ctx context.Context) {
 				se.user = m.Params[0]
 				se.regLines = append(se.regLines, line)
 			}
+		case "AUTHENTICATE":
+			se.authenticate(m)
 		case "QUIT":
 			return
 		}
@@ -152,6 +158,28 @@ func (se *session) serve(ctx context.Context) {
 	se.bridge(ctx)
 }
 
+// signIn checks a user's secret: the account password or one of their IRC
+// client passwords (the only option for accounts that sign in through SSO).
+// A refusal is logged and comes back as the numeric to answer PASS with and
+// why.
+func (se *session) signIn(username, network, password string) (u store.User, device, code, why string) {
+	u, device, err := se.srv.acc.IRCLogin(username, password)
+	result, reason := "invalid", "invalid"
+	switch {
+	case err == nil:
+		return u, device, "", ""
+	case errors.Is(err, accounts.ErrSuspended):
+		result, reason, code, why = "suspended", "suspended", "465", "This account is suspended"
+	case errors.Is(err, accounts.ErrNeedsClientPassword):
+		reason, code, why = "sso_needs_client_password", "464", "Invalid credentials — this account signs in with SSO, so use an IRC client password from "+se.srv.clientsPage()
+	default:
+		code, why = "464", "Invalid credentials"
+	}
+	telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result(result))
+	se.loginFailed(username, network, reason)
+	return store.User{}, "", code, why
+}
+
 // attach authenticates and binds the session to a network, then sends the
 // welcome burst, channel state, and backlog.
 func (se *session) attach() bool {
@@ -163,26 +191,13 @@ func (se *session) attach() bool {
 		return false
 	}
 	username, network, _ := strings.Cut(login, "/")
-
-	// The secret is the account password or one of the user's IRC client
-	// passwords (the only option for accounts that sign in through SSO).
-	u, device, err := se.srv.acc.IRCLogin(username, password)
-	switch {
-	case errors.Is(err, accounts.ErrSuspended):
-		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("suspended"))
-		se.loginFailed(username, network, "suspended")
-		se.numeric("465", ":This account is suspended")
-		return false
-	case errors.Is(err, accounts.ErrNeedsClientPassword):
-		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("invalid"))
-		se.loginFailed(username, network, "sso_needs_client_password")
-		se.numeric("464", ":Invalid credentials — this account signs in with SSO, so use an IRC client password from "+se.srv.clientsPage())
-		return false
-	case err != nil:
-		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("invalid"))
-		se.loginFailed(username, network, "invalid")
-		se.numeric("464", ":Invalid credentials")
-		return false
+	u, device := se.saslUser, se.saslDevice // SASL checked it already
+	if se.saslUser.ID == 0 {
+		var code, why string
+		if u, device, code, why = se.signIn(username, network, password); code != "" {
+			se.numeric(code, ":"+why)
+			return false
+		}
 	}
 	se.uid, se.acct = u.ID, u
 	if ip := se.clientIP(); ip != "" && !accounts.HostAllowed(u, ip) {
@@ -672,6 +687,8 @@ func (se *session) handleClient(m irc.Message) {
 		se.handleCap(m)
 	case "USER", "PASS":
 		se.numeric("462", ":You're already registered")
+	case "AUTHENTICATE":
+		se.numeric("907", ":You have already authenticated")
 	default:
 		se.passOn(m)
 	}

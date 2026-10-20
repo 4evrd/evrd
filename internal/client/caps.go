@@ -22,7 +22,7 @@ import (
 // FAIL, WARN and NOTE as notices.
 var ownCaps = []string{
 	"batch", "cap-notify", "draft/chathistory", "draft/event-playback", "echo-message",
-	"message-tags", "server-time", "standard-replies",
+	"message-tags", "sasl", "server-time", "standard-replies",
 }
 
 // linkCaps are the network's capabilities, offered while the link has them.
@@ -38,6 +38,7 @@ func (se *session) offer() map[string]string {
 	for _, c := range ownCaps {
 		out[c] = ""
 	}
+	out["sasl"] = "PLAIN"
 	if se.up != nil {
 		for _, c := range linkCaps {
 			if se.up.HasCap(c) {
