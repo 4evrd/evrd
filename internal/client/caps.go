@@ -21,7 +21,7 @@ import (
 // standard-replies is evrd's too: a client without it gets the network's
 // FAIL, WARN and NOTE as notices.
 var ownCaps = []string{
-	"batch", "cap-notify", "draft/chathistory", "draft/event-playback", "echo-message",
+	"batch", "cap-notify", "draft/chathistory", "draft/event-playback", "draft/read-marker", "echo-message",
 	"message-tags", "sasl", "server-time", "standard-replies",
 	"soju.im/bouncer-networks", "soju.im/bouncer-networks-notify",
 }

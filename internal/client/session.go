@@ -72,6 +72,7 @@ type session struct {
 
 	batches  int                          // BATCH references handed out
 	netsSent map[string]map[string]string // networks as last told (bouncer-networks-notify)
+	marks    map[string]time.Time         // read markers as last told (read-marker)
 }
 
 func newSession(srv *Server, conn net.Conn) *session {
@@ -281,6 +282,7 @@ func (se *session) attach() bool {
 	if !unbound {
 		se.joinChannels()
 		se.replayBacklog()
+		se.syncMarks()
 	}
 	if se.caps["soju.im/bouncer-networks-notify"] {
 		se.listNetworks()
@@ -360,6 +362,7 @@ func (se *session) joinChannels() {
 		// Make the client open the buffer, then ask the upstream for the real
 		// names/topic — the replies stream back over the raw feed.
 		se.send(se.selfJoin(ch))
+		se.joinedMark(ch)
 		se.up.SendRaw("NAMES " + ch)
 		se.up.SendRaw("TOPIC " + ch)
 	}
@@ -479,8 +482,10 @@ func (se *session) jump(n store.Network) error {
 	}
 	se.statusf("Jumped from %s to %s.", oldName, n.Name)
 	se.syncCaps()
+	se.marks = nil
 	se.joinChannels()
 	se.replayBacklog()
+	se.syncMarks()
 	return nil
 }
 
@@ -544,6 +549,7 @@ func (se *session) bridge(ctx context.Context) {
 			}
 			se.syncCaps()
 			se.notifyNetworks()
+			se.syncMarks()
 		case <-ctx.Done():
 			return
 		}
@@ -640,6 +646,7 @@ func (se *session) detach(chans []string) {
 func (se *session) attachChannel(ch string) {
 	se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Detached = false })
 	se.send(se.selfJoin(ch))
+	se.joinedMark(ch)
 	se.up.SendRaw("NAMES " + ch)
 	se.up.SendRaw("TOPIC " + ch)
 	if !se.caps["draft/chathistory"] {
@@ -655,6 +662,12 @@ func (se *session) handleClient(m irc.Message) {
 	switch m.Command {
 	case "BOUNCER":
 		se.bouncerCommand(m.Params)
+	case "MARKREAD":
+		if !se.caps["draft/read-marker"] {
+			se.passOn(m)
+			return
+		}
+		se.markRead(m.Params)
 	case "PING":
 		se.send(fmt.Sprintf(":%s PONG %s :%s", serverName, serverName, lastParam(m)))
 	case "QUIT":

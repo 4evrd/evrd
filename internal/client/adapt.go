@@ -61,10 +61,13 @@ func (se *session) relay(line upstream.Line) {
 			return // nothing left to say
 		}
 		se.send(tags + text)
-		return
+	} else {
+		for _, o := range out {
+			se.send(tags + o.String())
+		}
 	}
-	for _, o := range out {
-		se.send(tags + o.String())
+	if m.Command == "JOIN" && len(m.Params) > 0 && strings.EqualFold(nickFromPrefix(m.Prefix), se.unick) {
+		se.joinedMark(m.Params[0])
 	}
 }
 

@@ -318,6 +318,58 @@ func (b *Bouncer) MarkRead(networkID int64, buffer string) error {
 	return nil
 }
 
+// ReadMarkers is how far each of a network's buffers is read, by
+// lowercased name.
+func (b *Bouncer) ReadMarkers(networkID int64) (map[string]time.Time, error) {
+	return b.store.ReadMarkers(networkID)
+}
+
+// MarkReadAt moves a buffer's read marker forward to at — never back — and
+// returns where it is now (IRCv3 read-marker). The unread counts follow.
+func (b *Bouncer) MarkReadAt(networkID int64, buffer string, at time.Time) (time.Time, error) {
+	key := strings.ToLower(buffer)
+	markers, err := b.store.ReadMarkers(networkID)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if cur := markers[key]; !at.After(cur) {
+		return cur, nil
+	}
+	if err := b.store.SetReadMarker(networkID, key, at); err != nil {
+		return time.Time{}, err
+	}
+	me := ""
+	if c, ok := b.ConnFor(networkID); ok {
+		me = c.Nick()
+	} else if n, err := b.store.NetworkByID(networkID); err == nil {
+		me = n.Nick
+	}
+	msgs, _ := b.history.Recent(networkID, buffer, 500)
+	b.rmu.Lock()
+	if st := b.reads[networkID].buf(key); st != nil {
+		st.ReadAt, st.Unread, st.Mentions = at, 0, 0
+		for _, m := range msgs {
+			if !m.Time.After(at) || !isChat(m.Kind) || strings.EqualFold(m.Sender, me) {
+				continue
+			}
+			st.Unread++
+			if !isChannelName(buffer) || mentions(m.Text, me) {
+				st.Mentions++
+			}
+		}
+	}
+	b.rmu.Unlock()
+	return at, nil
+}
+
+// buf is a buffer's state, nil when there's none (nr may be nil).
+func (nr *netReads) buf(key string) *BufferState {
+	if nr == nil {
+		return nil
+	}
+	return nr.bufs[key]
+}
+
 func (b *Bouncer) dropReads(networkID int64) {
 	b.rmu.Lock()
 	delete(b.reads, networkID)
