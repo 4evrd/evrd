@@ -199,7 +199,14 @@ func (se *session) adapt(m irc.Message) (out []irc.Message, keep bool) {
 			text := m.Command + " " + strings.Join(p[:len(p)-1], " ") + ": " + p[len(p)-1]
 			return []irc.Message{{Prefix: orElse(m.Prefix, serverName), Command: "NOTICE", Params: []string{se.unick, text}}}, false
 		}
+	case "366": // RPL_ENDOFNAMES: me #chan :End
+		if len(p) >= 2 && !se.namesWanted(p[1], true) {
+			return nil, false
+		}
 	case "353": // RPL_NAMREPLY: me = #chan :names
+		if len(p) >= 4 && !se.namesWanted(p[2], false) {
+			return nil, false
+		}
 		if len(p) >= 4 && !(se.caps["multi-prefix"] && se.caps["userhost-in-names"]) {
 			m.Params[3] = se.names(p[3])
 			return []irc.Message{m}, false
@@ -211,6 +218,23 @@ func (se *session) adapt(m irc.Message) (out []irc.Message, keep bool) {
 		}
 	}
 	return nil, true
+}
+
+// namesWanted reports whether a NAMES reply for ch goes to this client: a
+// client with no-implicit-names gets only those it asked for (end marks
+// the reply's last line).
+func (se *session) namesWanted(ch string, end bool) bool {
+	if !se.caps["draft/no-implicit-names"] {
+		return true
+	}
+	key := strings.ToLower(ch)
+	if se.namesAsked[key] == 0 {
+		return false
+	}
+	if end {
+		se.namesAsked[key]--
+	}
+	return true
 }
 
 // isPrefix reports whether c is a nick prefix on this network.

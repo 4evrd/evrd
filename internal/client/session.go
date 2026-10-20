@@ -81,6 +81,9 @@ type session struct {
 	labelSent bool
 
 	mlines map[string]*multiline // the client's open draft/multiline batches
+
+	namesAsked map[string]int // NAMES the client asked for, by channel (no-implicit-names)
+	preAway    *string        // AWAY sent while registering (pre-away)
 }
 
 func newSession(srv *Server, conn net.Conn) *session {
@@ -150,6 +153,11 @@ func (se *session) serve(ctx context.Context) {
 			}
 		case "AUTHENTICATE":
 			se.authenticate(m)
+		case "AWAY": // draft/pre-away: kept for once attached
+			if se.caps["draft/pre-away"] {
+				away := lastParam(m)
+				se.preAway = &away
+			}
 		case "BOUNCER":
 			// BIND picks the network; it goes first when forwarded, so the
 			// owner has it before NICK and USER end registration
@@ -291,6 +299,11 @@ func (se *session) attach() bool {
 		se.joinChannels()
 		se.replayBacklog()
 		se.syncMarks()
+		// pre-away: "*" means present but not reading, which auto-away
+		// already sees to
+		if se.preAway != nil && *se.preAway != "*" {
+			se.up.SetAway(*se.preAway)
+		}
 	}
 	if se.caps["soju.im/bouncer-networks-notify"] {
 		se.listNetworks()
@@ -716,6 +729,16 @@ func (se *session) dispatch(m irc.Message) {
 		if se.caps["echo-message"] {
 			se.send(se.tags(id, "", tags) + fmt.Sprintf(":%s!%s@%s %s %s :%s", se.unick, se.unick, serverName, m.Command, target, text))
 		}
+	case "NAMES":
+		if se.caps["draft/no-implicit-names"] && len(m.Params) > 0 {
+			if se.namesAsked == nil {
+				se.namesAsked = map[string]int{}
+			}
+			for _, ch := range strings.Split(m.Params[0], ",") {
+				se.namesAsked[strings.ToLower(ch)]++
+			}
+		}
+		se.passOn(m)
 	case "BATCH":
 		if !se.clientBatch(m) {
 			se.passOn(m)
