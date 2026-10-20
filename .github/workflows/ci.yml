@@ -28,7 +28,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: wagoid/commitlint-github-action@v6
@@ -40,7 +40,7 @@ jobs:
     env:
       CGO_ENABLED: "0" # pure Go, like the image
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -75,7 +75,7 @@ jobs:
           go tool cover -html=coverage.out -o coverage.html
           echo "Go coverage ${total}% (floor ${FLOOR}%)"
           awk -v t="$total" -v f="$FLOOR" 'BEGIN { exit !(t+0 >= f+0) }' || { echo "::error::Go coverage ${total}% is below the ${FLOOR}% floor"; exit 1; }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage-go
@@ -97,7 +97,7 @@ jobs:
       actions: read # main's coverage artifact
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with:
           name: coverage-go
@@ -141,11 +141,11 @@ jobs:
   scylla:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Test against ScyllaDB
         run: COVER_OUT=scylla.cover dev/ci-scylla.sh
       # what these tests cover counts too (the coverage job merges it in)
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-scylla
           path: scylla.cover
@@ -157,8 +157,8 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6 # version from package.json "packageManager"
         with:
           package_json_file: web/package.json
       - uses: actions/setup-node@v4
@@ -173,7 +173,7 @@ jobs:
         run: |
           pnpm test:coverage 2>&1 | tee coverage.txt
           { echo "### Web unit test coverage"; echo; echo '```'; grep -E "^(ℹ|#) " coverage.txt | grep -E "file|---|\.js|all files" | sed -E 's/^(ℹ|#) //'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-web
           path: web/coverage.txt
@@ -190,8 +190,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
         id: buildx
       # Go's module and build caches for the image build, kept between runs:
       # without them every dependency compiles again.
@@ -221,7 +221,7 @@ jobs:
           outputs: type=docker,dest=${{ runner.temp }}/evrd-e2e.tar
           cache-from: type=gha,scope=evrd-e2e
           cache-to: type=gha,mode=max,scope=evrd-e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: evrd-e2e-image
           path: ${{ runner.temp }}/evrd-e2e.tar
@@ -239,8 +239,8 @@ jobs:
     env:
       COMPOSE: -f docker-compose.dev.yml -f docker-compose.e2e.yml
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: web/package.json
       - uses: actions/setup-node@v4
@@ -293,7 +293,7 @@ jobs:
       - name: Stack logs
         if: failure()
         run: docker compose $COMPOSE logs --tail 300
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-results-${{ matrix.shard }}
@@ -313,7 +313,7 @@ jobs:
       published: ${{ steps.release.outputs.new_release_published }}
       version: ${{ steps.release.outputs.new_release_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -335,7 +335,7 @@ jobs:
     permissions:
       contents: write # upload to the release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -351,7 +351,7 @@ jobs:
           restore-keys: |
             dist-go-${{ hashFiles('go.sum') }}-
             dist-go-
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: web/package.json
       - uses: actions/setup-node@v4
@@ -384,9 +384,9 @@ jobs:
           - image: evrd-web
             context: ./web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
         id: buildx
       - uses: actions/cache@v4
         if: matrix.image == 'evrd'
@@ -410,7 +410,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
