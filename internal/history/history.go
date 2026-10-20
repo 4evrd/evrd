@@ -33,6 +33,9 @@ type Message struct {
 	// Origin is which session sent it — transient, never stored — so the
 	// sender's other sessions can show it while the sender avoids a double.
 	Origin string
+	// Tags are the client-only tags it was sent with ("+draft/reply=…"),
+	// also transient: passed on live to clients that take message-tags.
+	Tags string
 }
 
 // Store is a history backend. Implementations are safe for concurrent use.

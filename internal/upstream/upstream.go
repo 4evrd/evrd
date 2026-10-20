@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/netip"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -124,8 +125,14 @@ type Conn struct {
 	w        io.Writer
 	nick     string
 	triedAlt bool
-	saved    []string        // channels to join on (re)connect, in order
-	channels map[string]bool // channels currently joined
+	// caps: what the network offers (CAP LS may take several lines), how
+	// many of evrd's requests are unanswered, and what it acknowledged
+	capsOffered map[string]bool
+	capsWaiting int
+	capsListing bool // a CAP LIST reply is coming in over several lines
+	caps        map[string]bool
+	saved       []string        // channels to join on (re)connect, in order
+	channels    map[string]bool // channels currently joined
 	// members is who's in each joined channel (lowercased channel ->
 	// lowercased nick), so a QUIT or NICK — which name no channel — is filed
 	// under every channel the user shared with that nick.
@@ -269,6 +276,8 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		userAttr:     strconv.FormatInt(n.UserID, 10),
 		netAttr:      strconv.FormatInt(n.ID, 10),
 		nick:         n.Nick,
+		capsOffered:  map[string]bool{},
+		caps:         map[string]bool{},
 		saved:        saved,
 		channels:     map[string]bool{},
 		members:      map[string]map[string]*Member{},
@@ -562,6 +571,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		c.nick = resumed.Nick
 	}
 	c.triedAlt = false
+	c.capsOffered, c.caps, c.capsWaiting = map[string]bool{}, map[string]bool{}, 0
 	c.channels = map[string]bool{}
 	c.members = map[string]map[string]*Member{}
 	c.topics = map[string]string{}
@@ -664,6 +674,8 @@ func (c *Conn) resume(r *links.Resumed) {
 	for _, l := range r.ISupport {
 		c.handle(irc.Parse(c.codec.decode([]byte(l))))
 	}
+	// the capabilities this connection acknowledged before the restart
+	c.send("CAP LIST")
 	for _, ch := range saved {
 		c.send("NAMES " + ch)
 		c.send("TOPIC " + ch)
@@ -1078,17 +1090,90 @@ func (c *Conn) parted(ch string, forget bool) {
 	}
 }
 
-// handleCap drives SASL negotiation. With a password and server SASL support we
-// authenticate via SASL PLAIN; otherwise we fall back to a server PASS. Either
-// way we finish with CAP END to complete registration.
+// wantCaps are the capabilities evrd asks a network for when it offers them
+// (sasl is asked for apart, when there's a password to log in with).
+var wantCaps = []string{"message-tags"}
+
+// HasCap reports whether the network acknowledged a capability on this
+// connection.
+func (c *Conn) HasCap(name string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.caps[name]
+}
+
+// handleCap negotiates capabilities: each one in wantCaps the network offers,
+// and sasl when there's a password. Each is asked for on its own, so a
+// refusal costs only that one. Once all are answered: SASL PLAIN if sasl was
+// acknowledged, else a server PASS as the fallback; CAP END follows to
+// complete registration. After registration, ACK, LIST (asked for when a
+// held link is resumed), NEW and DEL keep the acknowledged set current.
 func (c *Conn) handleCap(m irc.Message) {
 	if len(m.Params) < 2 {
 		return
 	}
 	sub := strings.ToUpper(m.Params[1])
-	caps := ""
-	if len(m.Params) > 2 {
+	caps, more := "", false
+	if len(m.Params) > 3 && m.Params[2] == "*" { // more lines follow
+		caps, more = m.Params[3], true
+	} else if len(m.Params) > 2 {
 		caps = m.Params[2]
+	}
+	names := func() []string {
+		var out []string
+		for _, f := range strings.Fields(caps) {
+			name, _, _ := strings.Cut(f, "=")
+			out = append(out, name)
+		}
+		return out
+	}
+	registered := c.Status() == StatusConnected
+	switch sub {
+	case "LIST":
+		c.mu.Lock()
+		if !c.capsListing {
+			c.caps, c.capsListing = map[string]bool{}, true
+		}
+		for _, n := range names() {
+			c.caps[n] = true
+		}
+		c.capsListing = more
+		c.mu.Unlock()
+		return
+	case "DEL":
+		c.mu.Lock()
+		for _, n := range names() {
+			delete(c.caps, n)
+		}
+		c.mu.Unlock()
+		return
+	case "NEW":
+		for _, n := range names() {
+			if slices.Contains(wantCaps, n) && !c.HasCap(n) {
+				c.send("CAP REQ :" + n)
+			}
+		}
+		return
+	case "ACK", "NAK":
+		c.mu.Lock()
+		if sub == "ACK" {
+			for _, n := range names() {
+				if name, off := strings.CutPrefix(n, "-"); off {
+					delete(c.caps, name)
+				} else {
+					c.caps[n] = true
+				}
+			}
+		}
+		waiting := c.capsWaiting > 0
+		if waiting {
+			c.capsWaiting--
+		}
+		done := waiting && c.capsWaiting == 0
+		c.mu.Unlock()
+		if registered || !done {
+			return
+		}
 	}
 	method := c.net.Auth()
 	sasl := c.net.Password != "" && (method == store.AuthAuto || method == store.AuthSASL)
@@ -1104,21 +1189,54 @@ func (c *Conn) handleCap(m irc.Message) {
 	}
 	switch sub {
 	case "LS":
-		if sasl && strings.Contains(caps, "sasl") {
-			c.send("CAP REQ :sasl")
-		} else {
-			noSASL("the server doesn't offer SASL")
+		if registered {
+			return
 		}
-	case "ACK":
-		if strings.Contains(caps, "sasl") {
+		c.mu.Lock()
+		for _, n := range names() {
+			c.capsOffered[n] = true
+		}
+		var req []string
+		if sasl && c.capsOffered["sasl"] {
+			req = append(req, "sasl")
+		}
+		for _, n := range wantCaps {
+			if c.capsOffered[n] {
+				req = append(req, n)
+			}
+		}
+		if !more {
+			c.capsWaiting = len(req)
+		}
+		c.mu.Unlock()
+		if more {
+			return
+		}
+		if len(req) == 0 {
+			noSASL("the server doesn't offer SASL")
+			return
+		}
+		for _, n := range req {
+			c.send("CAP REQ :" + n)
+		}
+	case "ACK", "NAK": // the last answer
+		switch {
+		case c.HasCap("sasl"):
 			c.note("evrd", false, "Logging in with SASL as "+orElse(c.net.SASLUser, orElse(c.net.Username, c.net.Nick)))
 			c.send("AUTHENTICATE PLAIN")
-		} else {
-			c.send("CAP END")
+		case sasl && c.offers("sasl"):
+			noSASL("the server refused the SASL capability")
+		default:
+			noSASL("the server doesn't offer SASL")
 		}
-	case "NAK":
-		noSASL("the server refused the SASL capability")
 	}
+}
+
+// offers reports whether the network offered a capability in CAP LS.
+func (c *Conn) offers(name string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.capsOffered[name]
 }
 
 // sendSASL responds to an AUTHENTICATE + challenge with a SASL PLAIN payload:
@@ -1189,7 +1307,14 @@ func (c *Conn) SendMessage(target, text string) { c.SendFrom("", "PRIVMSG", targ
 // action; other CTCPs (VERSION, PING, …) are sent but not recorded. It
 // returns the recorded line's ID (zero when nothing was recorded).
 func (c *Conn) SendFrom(origin, command, target, text string) history.ID {
-	c.sendUser(command + " " + target + " :" + text)
+	return c.SendTagged(origin, "", command, target, text)
+}
+
+// SendTagged is SendFrom with client-only tags ("+draft/reply=…;…"), sent
+// along when the network takes message-tags and passed on live to the
+// user's other clients.
+func (c *Conn) SendTagged(origin, tags, command, target, text string) history.ID {
+	c.sendUser(c.withTags(tags, command+" "+target+" :"+text))
 	kind := "message"
 	if command == "NOTICE" {
 		kind = "notice"
@@ -1211,9 +1336,29 @@ func (c *Conn) SendFrom(origin, command, target, text string) history.ID {
 		Time:      time.Now(),
 		Seq:       history.NextSeq(),
 		Origin:    origin,
+		Tags:      tags,
 	}
 	c.emit(m)
 	return m.ID()
+}
+
+// SendTagMsg sends a TAGMSG (typing, a reaction) with client-only tags when
+// the network takes message-tags, and passes it on live to the user's other
+// clients. It's never recorded: typing is gone in a moment.
+func (c *Conn) SendTagMsg(origin, tags, target string) {
+	if tags == "" || !c.HasCap("message-tags") {
+		return
+	}
+	c.sendUser("@" + tags + " TAGMSG " + target)
+	c.broadcastRaw(Line{Text: "@" + tags + " :" + c.Nick() + " TAGMSG " + target, Origin: origin})
+}
+
+// withTags puts client-only tags on a line for a network that takes them.
+func (c *Conn) withTags(tags, line string) string {
+	if tags == "" || !c.HasCap("message-tags") {
+		return line
+	}
+	return "@" + tags + " " + line
 }
 
 // SetAway marks the user away with msg ("" comes back), now and after any
@@ -1264,10 +1409,12 @@ func (c *Conn) Subscribe() (<-chan history.Message, func()) {
 }
 
 // Line is a raw server line, with the ID of what it recorded in history
-// (zero when it recorded nothing).
+// (zero when it recorded nothing). Origin is set on a line a session sent
+// itself (a TAGMSG) and is shown to the others.
 type Line struct {
-	Text string
-	ID   history.ID
+	Text   string
+	ID     history.ID
+	Origin string
 }
 
 // SubscribeRaw returns a channel of raw server lines (verbatim) and an

@@ -240,14 +240,11 @@ func TestLiveLinesCarryTheirMsgid(t *testing.T) {
 	if got.Tags["msgid"] == "" {
 		t.Fatalf("no msgid for the other session: %+v", got)
 	}
-	// a line the server sent with its own tags keeps them
-	ic.send("SIMULATE @account=bob :bob!u@h PRIVMSG #one :tagged")
-	if l := ic.expect("PRIVMSG #one :tagged"); !strings.Contains(l, ";account=bob :bob!u@h") || !strings.Contains(l, "msgid=") {
+	// the server's own tags don't pass (the client didn't ask for them)
+	ic.send("SIMULATE @account=bob;msgid=theirs :bob!u@h PRIVMSG #one :tagged")
+	if l := ic.expect("PRIVMSG #one :tagged"); strings.Contains(l, "account=") || strings.Contains(l, "theirs") || !strings.Contains(l, "msgid=") {
 		t.Fatalf("server tags: %q", l)
 	}
-	// typing notifications go nowhere
-	ic.send("@+typing=active TAGMSG #one")
-	ic.status("version", "evrd ")
 }
 
 func TestChathistorySubcommands(t *testing.T) {

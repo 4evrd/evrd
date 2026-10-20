@@ -62,6 +62,13 @@ func (l *Log) Has(s string) bool {
 // StartLogged is Start, recording every line received in log (if not nil).
 func StartLogged(t testing.TB, log *Log) string {
 	t.Helper()
+	return StartCaps(t, log, "")
+}
+
+// StartCaps is StartLogged with capabilities to offer in CAP LS: it ACKs
+// any of them requested and lists the acknowledged ones on CAP LIST.
+func StartCaps(t testing.TB, log *Log, caps string) string {
+	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -81,6 +88,7 @@ func StartLogged(t testing.TB, log *Log) string {
 			go func(c net.Conn) {
 				defer c.Close()
 				nick := ""
+				acked := []string{}
 				sc := bufio.NewScanner(c)
 				out := func(f string, a ...any) { fmt.Fprintf(c, f+"\r\n", a...) }
 				for sc.Scan() {
@@ -95,8 +103,19 @@ func StartLogged(t testing.TB, log *Log) string {
 					}
 					switch f[0] {
 					case "CAP":
-						if len(f) > 1 && f[1] == "LS" {
-							out(":fake CAP * LS :")
+						switch {
+						case len(f) > 1 && f[1] == "LS":
+							out(":fake CAP * LS :%s", caps)
+						case len(f) > 2 && f[1] == "REQ":
+							req := strings.TrimPrefix(f[2], ":")
+							if strings.Contains(" "+caps+" ", " "+req+" ") {
+								acked = append(acked, req)
+								out(":fake CAP %s ACK :%s", orStar(nick), req)
+							} else {
+								out(":fake CAP %s NAK :%s", orStar(nick), req)
+							}
+						case len(f) > 1 && f[1] == "LIST":
+							out(":fake CAP %s LIST :%s", orStar(nick), strings.Join(acked, " "))
 						}
 					case "NICK":
 						if nick == "" {
@@ -128,4 +147,11 @@ func StartLogged(t testing.TB, log *Log) string {
 		}
 	}()
 	return ln.Addr().String()
+}
+
+func orStar(nick string) string {
+	if nick == "" {
+		return "*"
+	}
+	return nick
 }

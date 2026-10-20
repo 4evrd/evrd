@@ -563,33 +563,75 @@ func (se *session) relay(line upstream.Line) {
 			se.unick = m.Params[0]
 		}
 	}
+	if m.Command == "TAGMSG" && !se.caps["message-tags"] {
+		return // typing and the like: only for clients that take tags
+	}
+	if line.Origin == se.id && !se.caps["echo-message"] {
+		return // this session's own TAGMSG
+	}
 	if ch := lineChannel(m); ch != "" && se.up.ChannelSettings(ch).Detached {
 		return // detached: kept and logged, not shown
 	}
-	se.send(se.tagged(line))
+	text, tags := se.tagged(line)
+	if m.Command == "TAGMSG" && tags == "" {
+		return // nothing left to say
+	}
+	se.send(tags + text)
 }
 
-// tagged is a server line as sent, with the time and msgid of what it
-// recorded for a client that takes them, so it matches its history.
-func (se *session) tagged(line upstream.Line) string {
-	if line.ID.IsZero() {
-		return line.Text
+// tagged splits a server line into the line and the tags this client gets:
+// the time and msgid of what it recorded, so it matches its history, and the
+// client-only tags (+typing, +draft/reply…) for a client with message-tags.
+// The server's own tags (its msgid, account…) never pass.
+func (se *session) tagged(line upstream.Line) (text, tags string) {
+	text = line.Text
+	var own string
+	if strings.HasPrefix(text, "@") {
+		own, text, _ = strings.Cut(text[1:], " ")
 	}
-	tags := se.tags(line.ID, "")
-	switch {
-	case tags == "":
-		return line.Text
-	case strings.HasPrefix(line.Text, "@"): // the server's own tags
-		return strings.TrimSuffix(tags, " ") + ";" + line.Text[1:]
-	}
-	return tags + line.Text
+	return text, se.tags(line.ID, "", clientTags(irc.Parse("@"+own+" X").Tags))
 }
+
+// clientTags are the client-only tags (+…) among tags, as "k=v;…" in a fixed
+// order. Anything else a client sends (msgid, time, account…) is dropped:
+// clients don't get to set server tags.
+func clientTags(tags map[string]string) string {
+	var out []string
+	for k, v := range tags {
+		if !strings.HasPrefix(k, "+") || len(k) < 2 {
+			continue
+		}
+		if v != "" {
+			k += "=" + v
+		}
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	s := strings.Join(out, ";")
+	if len(s) > maxClientTags {
+		return "" // over the spec's limit: drop them rather than cut one
+	}
+	return s
+}
+
+// clientTags are the client-only tags on a line this client sent, if it
+// negotiated message-tags.
+func (se *session) clientTags(m irc.Message) string {
+	if !se.caps["message-tags"] {
+		return ""
+	}
+	return clientTags(m.Tags)
+}
+
+// maxClientTags is the most bytes of client-only tags a line may carry.
+const maxClientTags = 4094
 
 // tags are the message tags a line about id gets: its time and msgid for a
-// client that takes them, and its batch. "" or "@…;… ".
-func (se *session) tags(id history.ID, batch string) string {
+// client that takes them, its batch, and client-only tags (for a client
+// with message-tags). "" or "@…;… ".
+func (se *session) tags(id history.ID, batch, client string) string {
 	var t []string
-	if se.caps["server-time"] {
+	if se.caps["server-time"] && !id.IsZero() {
 		t = append(t, "time="+id.Time().UTC().Format(timeFormat))
 	}
 	if batch != "" {
@@ -597,6 +639,9 @@ func (se *session) tags(id history.ID, batch string) string {
 	}
 	if se.caps["message-tags"] && id.Seq != 0 {
 		t = append(t, "msgid="+id.String())
+	}
+	if se.caps["message-tags"] && client != "" {
+		t = append(t, client)
 	}
 	if len(t) == 0 {
 		return ""
@@ -667,11 +712,12 @@ func (se *session) handleClient(m irc.Message) {
 			}
 			return
 		}
-		id := se.up.SendFrom(se.id, m.Command, target, text)
+		tags := se.clientTags(m)
+		id := se.up.SendTagged(se.id, tags, m.Command, target, text)
 		// The server won't echo our own line back over the raw feed, so
 		// honor echo-message ourselves; plain clients display it locally.
 		if se.caps["echo-message"] {
-			se.send(se.tagged(upstream.Line{ID: id, Text: fmt.Sprintf(":%s!%s@%s %s %s :%s", se.unick, se.unick, serverName, m.Command, target, text)}))
+			se.send(se.tags(id, "", tags) + fmt.Sprintf(":%s!%s@%s %s %s :%s", se.unick, se.unick, serverName, m.Command, target, text))
 		}
 	case "CHATHISTORY":
 		if !se.caps["draft/chathistory"] {
@@ -680,8 +726,11 @@ func (se *session) handleClient(m irc.Message) {
 		}
 		se.chathistory(m.Params)
 	case "TAGMSG":
-		// typing notifications and the like: the upstream link carries no
-		// tags, so there's nothing to pass on
+		// typing notifications and the like: on to the network if it takes
+		// tags (else dropped), and to the user's other clients
+		if len(m.Params) > 0 {
+			se.up.SendTagMsg(se.id, se.clientTags(m), m.Params[0])
+		}
 	case "NICK":
 		// The server's NICK reply comes back over the raw feed and updates
 		// both the upstream's and this session's nick.
@@ -758,7 +807,11 @@ func (se *session) formatAs(m history.Message, playback bool) string {
 // KICK, …): the batch tells it they're history.
 func (se *session) formatIn(m history.Message, playback bool, batch string) string {
 	var b strings.Builder
-	b.WriteString(se.tags(m.ID(), batch))
+	client := ""
+	if !playback {
+		client = m.Tags // sent live with the line
+	}
+	b.WriteString(se.tags(m.ID(), batch, client))
 	stamp := func(text string) string { return text }
 	if playback && !se.caps["server-time"] && (se.acct.PrependTimestamp || se.acct.AppendTimestamp) {
 		ts := se.timestamp(m.Time)

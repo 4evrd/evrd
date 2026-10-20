@@ -42,6 +42,18 @@ always did. What a client gets depends on what it asks for:
 
 `echo-message` echoes your own lines, with their `@msgid` too.
 
+**Typing indicators and client tags.** evrd asks the network for
+`message-tags` when it offers it. Then client-only tags (`+typing`,
+`+draft/reply`, `+draft/react`…) pass both ways for clients with
+`message-tags`: `TAGMSG` lines (typing notifications, reactions) and the
+`+` tags on messages and notices. Your typing also shows on your other
+attached clients, as with soju; `echo-message` sends a client's own back.
+`TAGMSG`s are never saved, and the network's other tags (its `msgid`,
+`account`…) aren't passed on. A client can't send anything but `+` tags.
+On a network without `message-tags`, typing goes nowhere and messages go
+without their tags. A link the connection holder kept through a restart asks
+the network for its caps again (`CAP LIST`).
+
 **Scrollback (`draft/chathistory`).** Clients page through history with
 `CHATHISTORY LATEST|BEFORE|AFTER|AROUND|BETWEEN <buffer> …` (by `msgid=` or
 `timestamp=`) and find the buffers with news since they were last here with
