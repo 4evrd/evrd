@@ -11,6 +11,7 @@ import (
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/irc"
 	"github.com/4evrd/evrd/internal/modules"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
@@ -438,7 +439,10 @@ func isChannelName(s string) bool { return s != "" && strings.ContainsRune("#&+!
 //	{raw}                        a raw IRC line (/join, /nick, /topic, /quote …)
 //	{status}                     a *status command; replies come back as
 //	                             messages from *status (not saved)
+//	{target, typing}             the user is typing: active, paused or done
+//	                             (sent on when the network takes message-tags)
 //
+// Others' typing comes back as {type:"typing", target, nick, state}.
 // The session cookie authenticates it; the upgrader refuses other sites'
 // pages.
 func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
@@ -466,6 +470,8 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	sub, unsub := conn.Subscribe()
 	defer unsub()
+	raw, unsubRaw := conn.SubscribeRaw()
+	defer unsubRaw()
 	// Tell the page it's subscribed: nothing sent from now on is missed.
 	if err := ws.WriteJSON(map[string]string{"type": "ready"}); err != nil {
 		return
@@ -477,9 +483,15 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer close(done)
 		for {
-			var in struct{ Target, Text, Kind, Raw, Status string }
+			var in struct{ Target, Text, Kind, Raw, Status, Typing string }
 			if err := ws.ReadJSON(&in); err != nil {
 				return
+			}
+			if in.Typing != "" {
+				if typingStates[in.Typing] && in.Target != "" && !strings.ContainsAny(in.Target, " \r\n") {
+					conn.SendTagMsg("web", "+typing="+in.Typing, in.Target)
+				}
+				continue
 			}
 			if in.Status != "" {
 				s.webStatus(r, n, in.Status, replies)
@@ -514,6 +526,15 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 			if err := ws.WriteJSON(messageDTO(m)); err != nil {
 				return
 			}
+		case l, ok := <-raw:
+			if !ok {
+				return
+			}
+			if t, ok := typingOf(l.Text, conn.Nick()); ok {
+				if err := ws.WriteJSON(t); err != nil {
+					return
+				}
+			}
 		case m := <-replies:
 			if err := ws.WriteJSON(messageDTO(m)); err != nil {
 				return
@@ -522,6 +543,24 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// typingStates are the +typing values (IRCv3 typing client tag).
+var typingStates = map[string]bool{"active": true, "paused": true, "done": true}
+
+// typingOf turns someone else's typing TAGMSG into the web chat's frame.
+// (Their message ends it too; the page clears it when the message comes.)
+func typingOf(line, me string) (map[string]string, bool) {
+	if !strings.HasPrefix(line, "@") {
+		return nil, false
+	}
+	m := irc.Parse(line)
+	state := m.Tags["+typing"]
+	nick, _, _ := strings.Cut(m.Prefix, "!")
+	if m.Command != "TAGMSG" || !typingStates[state] || len(m.Params) == 0 || nick == "" || strings.EqualFold(nick, me) {
+		return nil, false
+	}
+	return map[string]string{"type": "typing", "target": m.Params[0], "nick": nick, "state": state}, true
 }
 
 // webStatus runs a *status command typed in the web chat. The command sees

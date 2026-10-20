@@ -72,14 +72,16 @@ export const api = {
   // openStream connects a network's live message WebSocket (same origin, so
   // the session cookie authenticates it). onMessage gets each message.
   // onReady runs once the server confirms the subscription ({type:
-  // "ready"}); only then is nothing missed.
-  openStream(id, onMessage, onClose, onReady) {
+  // "ready"}); only then is nothing missed. onTyping gets others' typing
+  // ({target, nick, state: active|paused|done}).
+  openStream(id, onMessage, onClose, onReady, onTyping) {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(`${proto}//${location.host}/api/networks/${id}/stream`)
     ws.onmessage = (e) => {
       let m
       try { m = JSON.parse(e.data) } catch { return /* ignore malformed frames */ }
       if (m.type === 'ready') { onReady?.(); return }
+      if (m.type === 'typing') { onTyping?.(m); return }
       if (m.type) return // other control frames
       onMessage(m)
     }
@@ -92,6 +94,8 @@ export const api = {
       raw: (line) => out({ raw: line }),
       // a *status command; replies arrive as messages from *status
       status: (command) => out({ status: command }),
+      // the user's typing in target: active, paused or done
+      typing: (target, state) => out({ target, typing: state }),
       close: () => { ws.onclose = null; ws.close() },
     }
   },

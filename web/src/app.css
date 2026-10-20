@@ -717,6 +717,7 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
 .day-sep.backlog { color: var(--signal); }
 .day-sep.backlog::before, .day-sep.backlog::after { background: oklch(70% 0.16 45 / 0.4); }
 .composer { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s5) var(--s4); }
+.typing { min-height: 1.5em; margin: 0; padding: 0 var(--s5); font-size: var(--fs-xs); color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
 .composer .input { min-height: 48px; font-family: var(--font-mono); }
 .member-group { display: grid; gap: 2px; }
 .member { display: flex; align-items: center; gap: var(--s2); min-height: 32px; padding: 0 var(--s2); font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--fg); border-radius: 8px; }
@@ -820,6 +821,7 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
   .msg time { grid-row: 1; }
   .log { padding: var(--s3); }
   .composer { padding: var(--s3); }
+  .typing { padding: 0 var(--s3); }
   .toasts { right: 16px; bottom: 16px; }
   .net-grid { grid-template-columns: minmax(0, 1fr); }
   .search .kbd { display: none; }

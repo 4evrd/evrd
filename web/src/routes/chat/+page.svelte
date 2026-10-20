@@ -72,6 +72,7 @@
   }
 
   async function select(name, { pushUrl = true } = {}) {
+    if (!same(name, buf)) typingDone()
     buf = name
     showPane = false
     const b = bufs.find((x) => same(x.name, name))
@@ -103,8 +104,53 @@
     scrollTo(false)
   }
 
+  // Who's typing where: { target(lowercase): { nick: expiry ms } }. IRCv3
+  // typing: active lasts 6 s unless renewed; done, or their message, ends it.
+  let typers = $state({})
+  let now = $state(Date.now())
+  const TYPING_FOR = 6000
+  function onTyping(f) {
+    const k = f.target.toLowerCase()
+    const cur = { ...(typers[k] || {}) }
+    if (f.state === 'active') cur[f.nick] = Date.now() + TYPING_FOR
+    else delete cur[f.nick] // done, or paused: not typing now
+    typers = { ...typers, [k]: cur }
+    now = Date.now()
+  }
+  function stopTyping(target, who) {
+    const k = (target || '').toLowerCase()
+    if (!typers[k]?.[who]) return
+    const cur = { ...typers[k] }
+    delete cur[who]
+    typers = { ...typers, [k]: cur }
+  }
+  const typingHere = $derived(Object.entries(typers[(buf || '').toLowerCase()] || {}).filter(([, until]) => until > now).map(([n]) => n))
+  const typingText = $derived(typingHere.length === 0 ? '' : typingHere.length === 1 ? t('chat.typingOne', { nick: typingHere[0] }) : typingHere.length === 2 ? t('chat.typingTwo', { a: typingHere[0], b: typingHere[1] }) : t('chat.typingMany'))
+  // expire typers without a word from them
+  $effect(() => {
+    if (!typingHere.length) return
+    const id = setInterval(() => (now = Date.now()), 1000)
+    return () => clearInterval(id)
+  })
+
+  // The user's own typing: active at most every 3 s while writing a message
+  // (not a /command), done when the box is cleared or they leave the buffer.
+  let typedTo = '' // the buffer we last said "active" to
+  let typedAt = 0
+  function typed() {
+    const msg = text.trim() !== '' && !text.startsWith('/') && buf && buf !== '*status'
+    if (msg) {
+      if (typedTo !== buf || Date.now() - typedAt > 3000) { stream?.typing(buf, 'active'); typedTo = buf; typedAt = Date.now() }
+    } else if (typedTo) typingDone()
+  }
+  function typingDone() {
+    if (typedTo) stream?.typing(typedTo, 'done')
+    typedTo = ''; typedAt = 0
+  }
+
   function onMsg(m) {
     const me = same(m.sender, nick)
+    if (m.sender) stopTyping(m.target, m.sender)
     if (m.kind === 'nick' && me) nick = m.extra
     if (['join', 'part', 'kick'].includes(m.kind)) { loadBuffers(); if (same(m.target, buf)) loadChannel() }
     if (m.kind === 'part' && me) {
@@ -128,10 +174,11 @@
     stream?.close()
     const id = netId
     live = false
+    typers = {}
     stream = api.openStream(id, onMsg, () => {
       live = false
       if (!closed && id === netId) setTimeout(() => !closed && id === netId && openStream(), 3000)
-    }, () => { if (id === netId) live = true })
+    }, () => { if (id === netId) live = true }, onTyping)
   }
 
   // want: a buffer to open instead of the first unread one (opening a buffer
@@ -173,6 +220,7 @@
     if (cmd.say !== undefined) {
       if (!buf) { toast(t('chat.pickChannelFirst'), 'bad'); return }
       if (!stream?.send(buf, cmd.say)) return fail()
+      typedTo = ''; typedAt = 0 // the message ends the typing
     }
     if (cmd.raw && !stream?.raw(cmd.raw)) return fail()
     if (cmd.status !== undefined) {
@@ -339,9 +387,10 @@
           <p class="desc">{buf ? t('chat.noMessages') : t('chat.pickChannel')}</p>
         {/each}
       </div>
+      <p class="typing" aria-live="polite" data-testid="typing">{typingText}</p>
       <form class="composer" onsubmit={send}>
         <label class="sr-only" for="say">{t('chat.message')}</label>
-        <input class="input od-fill" id="say" autocomplete="off" placeholder={buf ? t('chat.messagePlaceholder', { buffer: buf }) : '/join #channel'} bind:value={text} bind:this={inputEl} aria-label={t('chat.message')} />
+        <input class="input od-fill" id="say" autocomplete="off" placeholder={buf ? t('chat.messagePlaceholder', { buffer: buf }) : '/join #channel'} bind:value={text} bind:this={inputEl} aria-label={t('chat.message')} oninput={typed} />
         <button class="btn btn-primary" type="submit" aria-label={t('chat.send')} style="min-height:48px;min-width:48px;padding:0 14px" disabled={!text.trim()}><Icon name="send" /><span class="hide-sm">{t('chat.send')}</span></button>
       </form>
     </section>
