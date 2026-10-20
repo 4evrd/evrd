@@ -49,7 +49,7 @@ type session struct {
 	net      store.Network
 	up       *upstream.Conn
 	unick    string
-	raw      <-chan string
+	raw      <-chan upstream.Line
 	msgs     <-chan history.Message
 	unsubRaw func()
 	unsubMsg func()
@@ -60,10 +60,32 @@ type session struct {
 	// web is set for a *status command from the web chat: replies go to it
 	// instead of an IRC connection, and IRC-only commands say so.
 	web func(string)
+
+	batches int // BATCH references handed out
 }
 
-// supportedCaps are the IRCv3 capabilities a client may request.
-var supportedCaps = map[string]bool{"echo-message": true, "server-time": true}
+// supportedCaps are the IRCv3 capabilities a client may request. None takes
+// a value in CAP LS 302, and cap-notify is accepted though the list never
+// changes.
+var supportedCaps = map[string]bool{
+	"batch":                true,
+	"cap-notify":           true,
+	"draft/chathistory":    true,
+	"draft/event-playback": true,
+	"echo-message":         true,
+	"message-tags":         true,
+	"server-time":          true,
+}
+
+// capLS is the CAP LS reply's list.
+func capLS() string {
+	var caps []string
+	for c := range supportedCaps {
+		caps = append(caps, c)
+	}
+	sort.Strings(caps)
+	return strings.Join(caps, " ")
+}
 
 func newSession(srv *Server, conn net.Conn) *session {
 	return &session{
@@ -159,7 +181,7 @@ func (se *session) handleCap(m irc.Message) {
 		if se.up == nil {
 			se.capNegotiating = true
 		}
-		se.send(fmt.Sprintf(":%s CAP %s LS :echo-message server-time", serverName, nick))
+		se.send(fmt.Sprintf(":%s CAP %s LS :%s", serverName, nick, capLS()))
 	case "LIST":
 		var on []string
 		for c := range se.caps {
@@ -318,6 +340,9 @@ func (se *session) welcome() {
 	se.send(fmt.Sprintf(":%s 002 %s :Your host is %s", serverName, n, serverName))
 	se.send(fmt.Sprintf(":%s 003 %s :evrd bouncer", serverName, n))
 	se.send(fmt.Sprintf(":%s 004 %s %s evrd o o", serverName, n, serverName))
+	if se.caps["draft/chathistory"] {
+		se.send(fmt.Sprintf(":%s 005 %s CHATHISTORY=%d MSGREFTYPES=msgid,timestamp :are supported by this server", serverName, n, chathistoryMax))
+	}
 	se.send(fmt.Sprintf(":%s 375 %s :- %s message of the day -", serverName, n, serverName))
 	se.send(fmt.Sprintf(":%s 372 %s :- network %s (%s:%d)", serverName, n, se.net.Name, se.net.Host, se.net.Port))
 	se.send(fmt.Sprintf(":%s 372 %s :- /msg *status help for bouncer commands", serverName, n))
@@ -346,10 +371,11 @@ func (se *session) joinChannels() {
 
 // replayBacklog plays back each attached channel and each private buffer:
 // the last PlaybackLines lines, or — when the user auto-clears that kind of
-// buffer — only what arrived since they were last here, ZNC-style.
+// buffer — only what arrived since they were last here, ZNC-style. A client
+// with draft/chathistory gets none: it asks for what it wants.
 func (se *session) replayBacklog() {
 	n := se.acct.PlaybackLines
-	if n <= 0 {
+	if n <= 0 || se.caps["draft/chathistory"] {
 		return
 	}
 	var since time.Time
@@ -385,15 +411,44 @@ func (se *session) playback(target string, n int) int {
 // playbackSince sends the last n lines of a buffer newer than since.
 func (se *session) playbackSince(target string, n int, since time.Time) int {
 	msgs, _ := se.srv.b.History().Recent(se.net.ID, target, n)
-	sent := 0
+	var newer []history.Message
 	for _, m := range msgs {
-		if !m.Time.After(since) {
-			continue
+		if m.Time.After(since) {
+			newer = append(newer, m)
 		}
-		se.send(se.format(m))
-		sent++
 	}
-	return sent
+	if len(newer) > 0 {
+		se.sendHistory(target, newer)
+	}
+	return len(newer)
+}
+
+// sendHistory sends a buffer's lines as playback: in a chathistory batch for
+// a client that takes batches, else one by one.
+func (se *session) sendHistory(target string, msgs []history.Message) {
+	batch := se.openBatch("chathistory", target)
+	for _, m := range msgs {
+		se.send(se.formatIn(m, true, batch))
+	}
+	se.closeBatch(batch)
+}
+
+// openBatch starts a batch and returns its reference, or "" for a client
+// without batches.
+func (se *session) openBatch(kind string, params ...string) string {
+	if !se.caps["batch"] {
+		return ""
+	}
+	se.batches++
+	ref := strconv.Itoa(se.batches)
+	se.send(strings.Join(append([]string{":" + serverName, "BATCH", "+" + ref, kind}, params...), " "))
+	return ref
+}
+
+func (se *session) closeBatch(ref string) {
+	if ref != "" {
+		se.send(fmt.Sprintf(":%s BATCH -%s", serverName, ref))
+	}
 }
 
 func isChannelName(s string) bool { return s != "" && strings.ContainsRune("#&+!", rune(s[0])) }
@@ -488,8 +543,8 @@ func (se *session) bridge(ctx context.Context) {
 
 // relay forwards one raw upstream line, keeping the session's view of its
 // nick in step and hiding what only makes sense to the bouncer.
-func (se *session) relay(line string) {
-	m := irc.Parse(line)
+func (se *session) relay(line upstream.Line) {
+	m := irc.Parse(line.Text)
 	switch m.Command {
 	case "PING", "PONG", "CAP", "AUTHENTICATE":
 		return
@@ -511,8 +566,46 @@ func (se *session) relay(line string) {
 	if ch := lineChannel(m); ch != "" && se.up.ChannelSettings(ch).Detached {
 		return // detached: kept and logged, not shown
 	}
-	se.send(line)
+	se.send(se.tagged(line))
 }
+
+// tagged is a server line as sent, with the time and msgid of what it
+// recorded for a client that takes them, so it matches its history.
+func (se *session) tagged(line upstream.Line) string {
+	if line.ID.IsZero() {
+		return line.Text
+	}
+	tags := se.tags(line.ID, "")
+	switch {
+	case tags == "":
+		return line.Text
+	case strings.HasPrefix(line.Text, "@"): // the server's own tags
+		return strings.TrimSuffix(tags, " ") + ";" + line.Text[1:]
+	}
+	return tags + line.Text
+}
+
+// tags are the message tags a line about id gets: its time and msgid for a
+// client that takes them, and its batch. "" or "@…;… ".
+func (se *session) tags(id history.ID, batch string) string {
+	var t []string
+	if se.caps["server-time"] {
+		t = append(t, "time="+id.Time().UTC().Format(timeFormat))
+	}
+	if batch != "" {
+		t = append(t, "batch="+batch)
+	}
+	if se.caps["message-tags"] && id.Seq != 0 {
+		t = append(t, "msgid="+id.String())
+	}
+	if len(t) == 0 {
+		return ""
+	}
+	return "@" + strings.Join(t, ";") + " "
+}
+
+// timeFormat is server-time's.
+const timeFormat = "2006-01-02T15:04:05.000Z"
 
 // lineChannel is the channel a server line is about, if any.
 func lineChannel(m irc.Message) string {
@@ -546,7 +639,9 @@ func (se *session) attachChannel(ch string) {
 	se.send(fmt.Sprintf(":%s!%s@%s JOIN %s", se.unick, se.unick, serverName, ch))
 	se.up.SendRaw("NAMES " + ch)
 	se.up.SendRaw("TOPIC " + ch)
-	se.playback(ch, max(se.acct.PlaybackLines, 1))
+	if !se.caps["draft/chathistory"] {
+		se.playback(ch, max(se.acct.PlaybackLines, 1))
+	}
 }
 
 func (se *session) handleClient(m irc.Message) {
@@ -572,12 +667,21 @@ func (se *session) handleClient(m irc.Message) {
 			}
 			return
 		}
-		se.up.SendFrom(se.id, m.Command, target, text)
+		id := se.up.SendFrom(se.id, m.Command, target, text)
 		// The server won't echo our own line back over the raw feed, so
 		// honor echo-message ourselves; plain clients display it locally.
 		if se.caps["echo-message"] {
-			se.send(fmt.Sprintf(":%s!%s@%s %s %s :%s", se.unick, se.unick, serverName, m.Command, target, text))
+			se.send(se.tagged(upstream.Line{ID: id, Text: fmt.Sprintf(":%s!%s@%s %s %s :%s", se.unick, se.unick, serverName, m.Command, target, text)}))
 		}
+	case "CHATHISTORY":
+		if !se.caps["draft/chathistory"] {
+			se.passOn(m) // as before: the server's business
+			return
+		}
+		se.chathistory(m.Params)
+	case "TAGMSG":
+		// typing notifications and the like: the upstream link carries no
+		// tags, so there's nothing to pass on
 	case "NICK":
 		// The server's NICK reply comes back over the raw feed and updates
 		// both the upstream's and this session's nick.
@@ -621,15 +725,20 @@ func (se *session) handleClient(m irc.Message) {
 	case "USER", "PASS":
 		se.numeric("462", ":You're already registered")
 	default:
-		// Everything else (JOIN, PART, MODE, WHO, NAMES, TOPIC, LIST, …) goes
-		// straight to the upstream; replies come back over the raw feed. The
-		// upstream saves joins and parts to the network's channel list.
-		// A module (alias) may take the line instead.
-		if se.up.ClientLine(m.String()) {
-			return
-		}
-		se.up.SendRaw(m.String())
+		se.passOn(m)
 	}
+}
+
+// passOn sends a client's line to the upstream. Everything handleClient
+// doesn't take (JOIN, PART, MODE, WHO, NAMES, TOPIC, LIST, …) goes straight
+// there; replies come back over the raw feed. The upstream saves joins and
+// parts to the network's channel list. A module (alias) may take the line
+// instead.
+func (se *session) passOn(m irc.Message) {
+	if se.up.ClientLine(m.String()) {
+		return
+	}
+	se.up.SendRaw(m.String())
 }
 
 // format renders a stored message as an IRC line for replay, tagged with
@@ -641,10 +750,15 @@ func (se *session) format(m history.Message) string { return se.formatAs(m, true
 // formatAs renders m; playback lines (not live ones) carry the user's
 // timestamp for clients without server-time.
 func (se *session) formatAs(m history.Message, playback bool) string {
+	return se.formatIn(m, playback, "")
+}
+
+// formatIn is formatAs inside a batch ("" for none). There, a client with
+// draft/event-playback gets channel events as the lines they were (JOIN,
+// KICK, …): the batch tells it they're history.
+func (se *session) formatIn(m history.Message, playback bool, batch string) string {
 	var b strings.Builder
-	if se.caps["server-time"] {
-		b.WriteString("@time=" + m.Time.UTC().Format("2006-01-02T15:04:05.000Z") + " ")
-	}
+	b.WriteString(se.tags(m.ID(), batch))
 	stamp := func(text string) string { return text }
 	if playback && !se.caps["server-time"] && (se.acct.PrependTimestamp || se.acct.AppendTimestamp) {
 		ts := se.timestamp(m.Time)
@@ -658,13 +772,18 @@ func (se *session) formatAs(m history.Message, playback bool) string {
 			return text
 		}
 	}
-	if !isChat(m.Kind) {
-		b.WriteString(fmt.Sprintf(":*buffextras!buffextras@%s PRIVMSG %s :%s", serverName, m.Target, stamp(describe(m))))
-		return b.String()
-	}
 	sender := m.Sender
 	if sender == "" {
 		sender = "*"
+	}
+	prefix := sender + "!" + sender + "@" + se.net.Name
+	if !isChat(m.Kind) {
+		if ev, ok := eventLine(m, prefix); ok && batch != "" && se.caps["draft/event-playback"] {
+			b.WriteString(ev)
+		} else {
+			b.WriteString(fmt.Sprintf(":*buffextras!buffextras@%s PRIVMSG %s :%s", serverName, m.Target, stamp(describe(m))))
+		}
+		return b.String()
 	}
 	text := stamp(m.Text)
 	cmd := "PRIVMSG"
@@ -674,8 +793,36 @@ func (se *session) formatAs(m history.Message, playback bool) string {
 	case "action":
 		text = "\x01ACTION " + text + "\x01"
 	}
-	b.WriteString(fmt.Sprintf(":%s!%s@%s %s %s :%s", sender, sender, se.net.Name, cmd, m.Target, text))
+	b.WriteString(fmt.Sprintf(":%s %s %s :%s", prefix, cmd, m.Target, text))
 	return b.String()
+}
+
+// eventLine is a stored channel event as the line the server sent. Only the
+// nick was kept, so the prefix is made up like a replayed message's.
+func eventLine(m history.Message, prefix string) (string, bool) {
+	l := irc.Message{Prefix: prefix, Command: strings.ToUpper(m.Kind)}
+	switch m.Kind {
+	case "join":
+		l.Params = []string{m.Target}
+	case "part":
+		l.Params = []string{m.Target}
+		if m.Text != "" {
+			l.Params = append(l.Params, m.Text)
+		}
+	case "quit":
+		l.Params = []string{m.Text}
+	case "kick":
+		l.Params = []string{m.Target, m.Extra, m.Text}
+	case "nick":
+		l.Params = []string{m.Extra}
+	case "topic":
+		l.Params = []string{m.Target, m.Text}
+	case "mode":
+		l.Params = append([]string{m.Target}, strings.Fields(m.Text)...)
+	default:
+		return "", false
+	}
+	return l.String(), true
 }
 
 // isChat reports whether a stored kind is something someone said.

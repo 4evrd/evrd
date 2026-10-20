@@ -208,7 +208,7 @@ func TestCTCPRepliesAndQuitMessage(t *testing.T) {
 	}
 	// handled requests aren't passed on to clients
 	for len(raw) > 0 {
-		if l := <-raw; strings.Contains(l, "\x01") {
+		if l := <-raw; strings.Contains(l.Text, "\x01") {
 			t.Fatalf("CTCP leaked to clients: %q", l)
 		}
 	}

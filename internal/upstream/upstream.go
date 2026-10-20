@@ -141,7 +141,12 @@ type Conn struct {
 	lagSent     time.Time
 	splits      splitTracker
 	subs        map[chan history.Message]struct{}
-	rawSubs     map[chan string]struct{}
+	rawSubs     map[chan Line]struct{}
+	// line is the ID of the server line being handled, shared by all it
+	// records (a QUIT is filed under each channel); recorded says it
+	// recorded something. Only the reading goroutine uses them.
+	line     history.ID
+	recorded bool
 	// pending holds lines users send before registration completes (a client
 	// attaching while the upstream is still connecting); 001 flushes them.
 	pending []string
@@ -272,7 +277,7 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		prefixChars:  "@+",
 		health:       Health{Status: StatusDisconnected, Lag: -1},
 		subs:         map[chan history.Message]struct{}{},
-		rawSubs:      map[chan string]struct{}{},
+		rawSubs:      map[chan Line]struct{}{},
 	}
 	if c.pingEvery <= 0 {
 		c.pingEvery = DefaultPingInterval
@@ -608,9 +613,15 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		if m.Command == "PRIVMSG" && len(m.Params) == 2 && c.ctcp(m.Prefix, m.Params[0], m.Params[1]) {
 			continue // answered (or blocked) here
 		}
+		c.line, c.recorded = history.ID{Nanos: time.Now().UnixNano(), Seq: history.NextSeq()}, false
 		c.handle(m)
 		c.modsLine(m)
-		c.broadcastRaw(line) // full-fidelity feed for attached IRC clients
+		out := Line{Text: line}
+		if c.recorded {
+			out.ID = c.line
+		}
+		c.line = history.ID{}
+		c.broadcastRaw(out) // full-fidelity feed for attached IRC clients
 	}
 
 	c.mu.Lock()
@@ -913,10 +924,22 @@ func (c *Conn) handle(m irc.Message) {
 // event records a channel event (join, part, quit, …) like a message.
 func (c *Conn) event(kind, channel, who, text, extra string) {
 	telemetry.IRCMessages.Add(context.Background(), 1, telemetry.Attrs("direction", "in", "kind", "event"))
-	c.emit(history.Message{
+	c.emit(c.stamp(history.Message{
 		NetworkID: c.net.ID, Target: channel, Sender: who,
-		Kind: kind, Text: text, Extra: extra, Time: time.Now(),
-	})
+		Kind: kind, Text: text, Extra: extra,
+	}))
+}
+
+// stamp gives m the time and ID of the server line being handled, so
+// clients can match the live line to its history.
+func (c *Conn) stamp(m history.Message) history.Message {
+	if c.line.IsZero() {
+		m.Time, m.Seq = time.Now(), history.NextSeq()
+		return m
+	}
+	m.Time, m.Seq = c.line.Time(), c.line.Seq
+	c.recorded = true
+	return m
 }
 
 // note adds to the connection log. The network's password never shows,
@@ -1140,14 +1163,13 @@ func (c *Conn) handleMessage(m irc.Message) {
 		target = sender
 	}
 
-	c.emit(history.Message{
+	c.emit(c.stamp(history.Message{
 		NetworkID: c.net.ID,
 		Target:    target,
 		Sender:    sender,
 		Kind:      kind,
 		Text:      text,
-		Time:      time.Now(),
-	})
+	}))
 }
 
 // count records a relayed line, both server-wide and per user and network.
@@ -1164,8 +1186,9 @@ func (c *Conn) SendMessage(target, text string) { c.SendFrom("", "PRIVMSG", targ
 // SendFrom sends a PRIVMSG or NOTICE and records it like an incoming message,
 // tagged with the originating session id so other sessions can show it live
 // while the originator avoids a double. A CTCP ACTION is recorded as an
-// action; other CTCPs (VERSION, PING, …) are sent but not recorded.
-func (c *Conn) SendFrom(origin, command, target, text string) {
+// action; other CTCPs (VERSION, PING, …) are sent but not recorded. It
+// returns the recorded line's ID (zero when nothing was recorded).
+func (c *Conn) SendFrom(origin, command, target, text string) history.ID {
 	c.sendUser(command + " " + target + " :" + text)
 	kind := "message"
 	if command == "NOTICE" {
@@ -1173,21 +1196,24 @@ func (c *Conn) SendFrom(origin, command, target, text string) {
 	}
 	if strings.HasPrefix(text, "\x01") {
 		if !strings.HasPrefix(text, "\x01ACTION ") {
-			return
+			return history.ID{}
 		}
 		text = strings.TrimSuffix(strings.TrimPrefix(text, "\x01ACTION "), "\x01")
 		kind = "action"
 	}
 	c.count("out", kind)
-	c.emit(history.Message{
+	m := history.Message{
 		NetworkID: c.net.ID,
 		Target:    target,
 		Sender:    c.Nick(),
 		Kind:      kind,
 		Text:      text,
 		Time:      time.Now(),
+		Seq:       history.NextSeq(),
 		Origin:    origin,
-	})
+	}
+	c.emit(m)
+	return m.ID()
 }
 
 // SetAway marks the user away with msg ("" comes back), now and after any
@@ -1237,10 +1263,17 @@ func (c *Conn) Subscribe() (<-chan history.Message, func()) {
 	}
 }
 
+// Line is a raw server line, with the ID of what it recorded in history
+// (zero when it recorded nothing).
+type Line struct {
+	Text string
+	ID   history.ID
+}
+
 // SubscribeRaw returns a channel of raw server lines (verbatim) and an
 // unsubscribe function. Used by attached IRC clients for a full-fidelity feed.
-func (c *Conn) SubscribeRaw() (<-chan string, func()) {
-	ch := make(chan string, 256)
+func (c *Conn) SubscribeRaw() (<-chan Line, func()) {
+	ch := make(chan Line, 256)
 	c.mu.Lock()
 	c.rawSubs[ch] = struct{}{}
 	c.mu.Unlock()
@@ -1254,7 +1287,7 @@ func (c *Conn) SubscribeRaw() (<-chan string, func()) {
 	}
 }
 
-func (c *Conn) broadcastRaw(line string) {
+func (c *Conn) broadcastRaw(line Line) {
 	c.mu.Lock()
 	for ch := range c.rawSubs {
 		select {

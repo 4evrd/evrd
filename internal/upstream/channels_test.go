@@ -143,6 +143,10 @@ func TestChannelMembersFollowTheServer(t *testing.T) {
 	if len(quits) != 1 || quits[0].Text != "Quit: bye" || len(msgs.find("quit", "#other")) != 1 {
 		t.Fatalf("quits: %+v", msgs.all())
 	}
+	// one line, one ID, in every buffer it's filed under
+	if other := msgs.find("quit", "#other")[0]; other.ID() != quits[0].ID() || quits[0].Seq == 0 {
+		t.Fatalf("quit IDs: %v %v", quits[0].ID(), other.ID())
+	}
 	if strings.Contains(memberList(c, "#chat"), "dave") || strings.Contains(memberList(c, "#other"), "dave") {
 		t.Fatal("dave still listed after quitting")
 	}
@@ -282,8 +286,16 @@ func TestMessagesAreFiledAndBroadcast(t *testing.T) {
 	}
 	sawRaw := false
 	for len(raw) > 0 {
-		if l := <-raw; l == ":bob!b@h PRIVMSG #chan :hi all" {
+		if l := <-raw; l.Text == ":bob!b@h PRIVMSG #chan :hi all" {
 			sawRaw = true
+			// with the ID it was recorded under
+			if l.ID.IsZero() || l.ID != got[0].ID() {
+				t.Errorf("raw line's ID %v, recorded %v", l.ID, got[0].ID())
+			}
+		} else if l.Text == ":bob!b@h PRIVMSG me" {
+			if !l.ID.IsZero() {
+				t.Errorf("a line that recorded nothing has an ID: %v", l.ID)
+			}
 		}
 	}
 	if !sawRaw {
@@ -307,9 +319,11 @@ func TestSendFromRecordsWhatItSends(t *testing.T) {
 	var msgs msgRec
 	s, c := connected(t, store.Network{ID: 5, Nick: "me"}, Options{Persist: msgs.add})
 	c.SendMessage("#c", "hello")
-	c.SendFrom("sess1", "NOTICE", "bob", "psst")
+	notice := c.SendFrom("sess1", "NOTICE", "bob", "psst")
 	c.SendFrom("sess1", "PRIVMSG", "#c", "\x01ACTION dances\x01")
-	c.SendFrom("sess1", "PRIVMSG", "bob", "\x01VERSION\x01")
+	if id := c.SendFrom("sess1", "PRIVMSG", "bob", "\x01VERSION\x01"); !id.IsZero() {
+		t.Errorf("an unrecorded CTCP has an ID: %v", id)
+	}
 	eventually(t, "all sent", func() bool { return s.has("PRIVMSG bob :\x01VERSION\x01") })
 	for _, l := range []string{"PRIVMSG #c :hello", "NOTICE bob :psst", "PRIVMSG #c :\x01ACTION dances\x01"} {
 		if !s.has(l) {
@@ -324,6 +338,9 @@ func TestSendFromRecordsWhatItSends(t *testing.T) {
 		got[1].Kind != "notice" || got[1].Origin != "sess1" ||
 		got[2].Kind != "action" || got[2].Text != "dances" {
 		t.Fatalf("recorded: %+v", got)
+	}
+	if got[1].ID() != notice || notice.Seq == 0 {
+		t.Fatalf("SendFrom returned %v, recorded %v", notice, got[1].ID())
 	}
 	if c.NetworkID() != 5 {
 		t.Fatal("NetworkID")
