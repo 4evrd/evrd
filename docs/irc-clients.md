@@ -76,9 +76,8 @@ capabilities too, which the client can ask for before `CAP END`. When the
 network isn't known by then (SASL comes after `CAP LS`), they follow as
 `CAP NEW` once the client is attached. `CAP NEW` and `CAP DEL` also come when
 the link gains or loses one or the client jumps networks (`cap-notify`,
-implied by `CAP LS 302`). A `CAP REQ` that asks for some of the network's
-capabilities it can't have yet gets the others ACKed and those NAKed;
-anything else unknown NAKs the whole request, as the spec says. Lines a
+implied by `CAP LS 302`). A `CAP REQ` is ACKed or NAKed whole, as the spec
+says: one that asks for a capability that isn't offered (yet) is NAKed. Lines a
 capability brings reach the clients that asked for it; the others get them
 translated, or not at all.
 

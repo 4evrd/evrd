@@ -78,13 +78,9 @@ func TestCapLSWaitsThenAnswers(t *testing.T) {
 	if waited := time.Since(start); waited < 150*time.Millisecond || strings.Contains(l, "away-notify") {
 		t.Fatalf("after %v: %q", waited, l)
 	}
-	// the network's can't be had yet: the rest is still ACKed
+	// the network's can't be had yet: all or nothing, as the spec has it
 	ic.send("CAP REQ :away-notify cap-notify")
-	ic.expect("CAP * ACK :cap-notify")
-	ic.expect("CAP * NAK :away-notify")
-	// something unknown: all or nothing, as the spec has it
-	ic.send("CAP REQ :bogus server-time")
-	ic.expect("CAP * NAK :bogus server-time")
+	ic.expect("CAP * NAK :away-notify cap-notify")
 	// SASL names the network: then they can
 	ic.send("CAP REQ :sasl")
 	ic.send("AUTHENTICATE PLAIN")

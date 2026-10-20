@@ -190,35 +190,20 @@ func (se *session) handleCap(m irc.Message) {
 		req := strings.Fields(m.Params[1])
 		offer := se.offer()
 		batch := se.caps["batch"] || slices.Contains(req, "batch")
-		var ok, bad []string
-		hard := false
 		for _, c := range req {
-			name := strings.TrimPrefix(c, "-")
-			if _, offered := offer[name]; !offered || !requestable(c) || needsBatch[c] && !batch {
-				bad = append(bad, c)
-				hard = hard || !slices.Contains(linkCaps, name)
-				continue
+			if _, ok := offer[strings.TrimPrefix(c, "-")]; !ok || !requestable(c) || needsBatch[c] && !batch {
+				se.send(fmt.Sprintf(":%s CAP %s NAK :%s", serverName, nick, m.Params[1]))
+				return
 			}
-			ok = append(ok, c)
 		}
-		if hard || len(ok) == 0 {
-			// all or nothing, as the spec has it
-			se.send(fmt.Sprintf(":%s CAP %s NAK :%s", serverName, nick, m.Params[1]))
-			return
-		}
-		// Only the network's capabilities missing (the network isn't known,
-		// or doesn't have them): the rest needn't fail with them.
-		for _, c := range ok {
+		for _, c := range req {
 			if name, off := strings.CutPrefix(c, "-"); off {
 				delete(se.caps, name)
 			} else {
 				se.caps[c] = true
 			}
 		}
-		se.send(fmt.Sprintf(":%s CAP %s ACK :%s", serverName, nick, strings.Join(ok, " ")))
-		if len(bad) > 0 {
-			se.send(fmt.Sprintf(":%s CAP %s NAK :%s", serverName, nick, strings.Join(bad, " ")))
-		}
+		se.send(fmt.Sprintf(":%s CAP %s ACK :%s", serverName, nick, m.Params[1]))
 	case "END":
 		se.capNegotiating = false
 	}
