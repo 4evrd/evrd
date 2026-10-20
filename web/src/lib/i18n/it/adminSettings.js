@@ -74,4 +74,21 @@ export default {
   'adminSettings.saveChanges': 'Salva modifiche',
   'adminSettings.saved': 'Salvato: applicato su ogni nodo',
   'adminSettings.savedRestart': { one: 'Salvato. {labels} avrà effetto dopo un riavvio.', other: 'Salvato. {labels} avranno effetto dopo un riavvio.' },
+
+  // languages
+  'adminSettings.languages': 'Lingue',
+  'adminSettings.languagesHelp': 'Aggiungi una lingua, o cambia i testi di una inclusa, per tutti. Gli utenti possono caricarci sopra una traduzione loro.',
+  'adminSettings.langUpload': 'Carica una traduzione',
+  'adminSettings.langBuiltIn': 'Inclusa',
+  'adminSettings.langBuiltInChanged': 'Inclusa · modificata {time}',
+  'adminSettings.langUploaded': 'Caricata {time}',
+  'adminSettings.langDownload': 'Scarica {name}',
+  'adminSettings.langReplace': 'Sostituisci',
+  'adminSettings.langChange': 'Modifica',
+  'adminSettings.langDeleteAria': 'Elimina {name}',
+  'adminSettings.langDeleteTitle': 'Eliminare {name}?',
+  'adminSettings.langDeleteBody': 'Chi la usa torna all’inglese (o alla lingua del browser).',
+  'adminSettings.langDeleteBuiltIn': 'Tornano i testi inclusi, per tutti.',
+  'adminSettings.langSaved': '{name} salvata: ora tutti possono usarla',
+  'adminSettings.langDeleted': '{name} eliminata',
 }

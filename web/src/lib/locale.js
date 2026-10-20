@@ -10,13 +10,14 @@ export const LANGUAGES = [
 ]
 
 // pick is the language to use: the account's choice, else the first of the
-// browser's languages the app has, else English.
-export function pick(chosen, browser = globalThis.navigator?.languages || []) {
-  const have = (c) => LANGUAGES.some((l) => l.code === c)
-  if (chosen && have(chosen)) return chosen
+// browser's languages the app has, else English. codes are the languages
+// on offer (the built-in ones, plus any language packs').
+export function pick(chosen, browser = globalThis.navigator?.languages || [], codes = LANGUAGES.map((l) => l.code)) {
+  const have = (c) => codes.find((x) => x.toLowerCase() === c.toLowerCase())
+  if (chosen && have(chosen)) return have(chosen)
   for (const b of browser) {
-    const c = String(b).toLowerCase().split('-')[0]
-    if (have(c)) return c
+    const c = have(String(b)) || have(String(b).split('-')[0])
+    if (c) return c
   }
   return 'en'
 }

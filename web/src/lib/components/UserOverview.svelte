@@ -118,7 +118,7 @@
       {#snippet item(c, dim)}
         <svelte:element this={admin ? 'div' : 'a'} class="chan-node" class:dim href={admin ? undefined : `/chat?net=${c.source}&buf=${encodeURIComponent(c.name)}`} style="--net:{c.net.color}">
           <span class="hash"><Icon name="hash" class="i-sm" /></span>
-          <span class="od-field"><span class="od-truncate">{c.name}</span><span class="sub"><span class="od-nowrap">{c.net.name}{c.members != null ? ' · ' + t('overview.users', { count: c.members, n: c.members.toLocaleString(i18n.locale) }) : ''}</span><Ticks level={c.rate} tone="heat" /></span></span>
+          <span class="od-field"><span class="od-truncate">{c.name}</span><span class="sub"><span class="od-nowrap">{c.net.name}{c.members != null ? ' · ' + t('overview.users', { count: c.members, n: c.members.toLocaleString(i18n.intl) }) : ''}</span><Ticks level={c.rate} tone="heat" /></span></span>
           {#if c.mentions}<span class="count mention" aria-label={t('overview.mentionsAria', { count: c.mentions })}>{c.mentions}</span>
           {:else if c.unread}<span class="count" class:hot={c.unread > 30} aria-label={t('overview.unreadAria', { count: c.unread })}>{c.unread}</span>
           {:else}<span class="count calm" aria-label={t('overview.allRead')}>0</span>{/if}

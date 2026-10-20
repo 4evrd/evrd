@@ -74,4 +74,21 @@ export default {
   'adminSettings.saveChanges': 'Save changes',
   'adminSettings.saved': 'Saved — applied on every node',
   'adminSettings.savedRestart': { one: 'Saved. {labels} takes effect after a restart.', other: 'Saved. {labels} take effect after a restart.' },
+
+  // languages
+  'adminSettings.languages': 'Languages',
+  'adminSettings.languagesHelp': 'Add a language, or change a built-in one’s text, for everyone. Users can upload their own translation on top.',
+  'adminSettings.langUpload': 'Upload a translation',
+  'adminSettings.langBuiltIn': 'Built in',
+  'adminSettings.langBuiltInChanged': 'Built in · changed {time}',
+  'adminSettings.langUploaded': 'Uploaded {time}',
+  'adminSettings.langDownload': 'Download {name}',
+  'adminSettings.langReplace': 'Replace',
+  'adminSettings.langChange': 'Change',
+  'adminSettings.langDeleteAria': 'Delete {name}',
+  'adminSettings.langDeleteTitle': 'Delete {name}?',
+  'adminSettings.langDeleteBody': 'People who use it go back to English (or their browser’s language).',
+  'adminSettings.langDeleteBuiltIn': 'Its built-in text comes back for everyone.',
+  'adminSettings.langSaved': '{name} saved — everyone can use it now',
+  'adminSettings.langDeleted': '{name} deleted',
 }

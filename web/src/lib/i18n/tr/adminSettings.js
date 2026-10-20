@@ -74,4 +74,21 @@ export default {
   'adminSettings.saveChanges': 'Değişiklikleri kaydet',
   'adminSettings.saved': 'Kaydedildi, her düğümde uygulandı',
   'adminSettings.savedRestart': { one: 'Kaydedildi. {labels} yeniden başlatınca geçerli olur.', other: 'Kaydedildi. {labels} yeniden başlatınca geçerli olur.' },
+
+  // languages
+  'adminSettings.languages': 'Diller',
+  'adminSettings.languagesHelp': 'Herkes için bir dil ekle ya da yerleşik bir dilin metinlerini değiştir. Kullanıcılar bunun üstüne kendi çevirilerini yükleyebilir.',
+  'adminSettings.langUpload': 'Çeviri yükle',
+  'adminSettings.langBuiltIn': 'Yerleşik',
+  'adminSettings.langBuiltInChanged': 'Yerleşik · {time} değiştirildi',
+  'adminSettings.langUploaded': '{time} yüklendi',
+  'adminSettings.langDownload': '{name} indir',
+  'adminSettings.langReplace': 'Değiştir',
+  'adminSettings.langChange': 'Düzenle',
+  'adminSettings.langDeleteAria': '{name} sil',
+  'adminSettings.langDeleteTitle': '{name} silinsin mi?',
+  'adminSettings.langDeleteBody': 'Onu kullananlar İngilizceye (ya da tarayıcılarının diline) döner.',
+  'adminSettings.langDeleteBuiltIn': 'Yerleşik metinler herkes için geri gelir.',
+  'adminSettings.langSaved': '{name} kaydedildi: artık herkes kullanabilir',
+  'adminSettings.langDeleted': '{name} silindi',
 }

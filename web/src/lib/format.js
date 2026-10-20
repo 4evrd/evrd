@@ -2,7 +2,7 @@ import en from './i18n/en/format.js'
 
 // format.js stays plain JS so Node tests can use it: the root layout hands it
 // the app's t() and i18n state (useI18n); until then it speaks English.
-let i18n = { locale: 'en' }
+let i18n = { locale: 'en', intl: 'en' }
 let t = (key, vars = {}) => {
   let m = en[key]
   if (typeof m === 'object') m = m[new Intl.PluralRules('en').select(Number(vars.count ?? 0))] ?? m.other
@@ -20,7 +20,7 @@ export function date(unix) {
   if (!unix) return '—'
   const d = new Date(unix * 1000)
   const sameYear = d.getFullYear() === new Date().getFullYear()
-  return d.toLocaleDateString(i18n.locale, sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString(i18n.intl, sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 // unix seconds -> "just now" / "12 minutes ago" / "3 weeks ago"
@@ -56,7 +56,7 @@ export function kfmt(n) {
   if (n == null) return '—'
   if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M'
   if (n >= 1e4) return (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k'
-  return n.toLocaleString(i18n.locale)
+  return n.toLocaleString(i18n.intl)
 }
 
 // A limit for display: 0 is unlimited.

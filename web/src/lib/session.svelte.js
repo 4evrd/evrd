@@ -1,12 +1,13 @@
 // Who is signed in, how the server is set up, and the counts the shell shows
 // (networks, mentions) — shared by every screen. Loaded once by the layout.
 import { api, Unauthorized } from './api.js'
-import { setLocale, pick } from './i18n.svelte.js'
+import { setLocale, setPacks, pick } from './i18n.svelte.js'
 
 export const session = $state({
   phase: 'loading', // loading | signedOut | error | ready
   error: '',
   config: null, // { passwordLogin, sso, ssoLabel, ircHost, ircPorts, version }
+  // (the server's language packs load with it: i18n.packs)
   me: null,
   nets: [], // the user's networks (refreshed by pages that load them)
 })
@@ -14,8 +15,11 @@ export const session = $state({
 export async function load() {
   session.error = ''
   try {
-    session.config = await api.config()
+    const [config, packs] = await Promise.all([api.config(), api.languages().catch(() => [])])
+    session.config = config
+    setPacks({ server: packs })
     session.me = await api.me()
+    setPacks({ personal: session.me.languagePack })
     await setLocale(pick(session.me.language))
     session.phase = 'ready'
     refreshNets()

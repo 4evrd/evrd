@@ -231,7 +231,7 @@
       if (key !== day) {
         day = key
         const today = new Date().toDateString(), yest = new Date(Date.now() - 86400000).toDateString()
-        out.push({ sep: key === today ? t('chat.today') : key === yest ? t('chat.yesterday') : d.toLocaleDateString(i18n.locale, { weekday: 'long', day: 'numeric', month: 'short' }) })
+        out.push({ sep: key === today ? t('chat.today') : key === yest ? t('chat.yesterday') : d.toLocaleDateString(i18n.intl, { weekday: 'long', day: 'numeric', month: 'short' }) })
       }
       if (!marked && i === start && after) {
         marked = true

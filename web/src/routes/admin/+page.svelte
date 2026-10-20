@@ -158,7 +158,7 @@
           <div class="kv-list">
             <div class="kv"><div class="od-field"><span class="k">{t('admin.networksPerUser')}</span><span class="v">{limit(ov.defaults.maxNetworks)}</span></div></div>
             <div class="kv"><div class="od-field"><span class="k">{t('admin.clientsPerUser')}</span><span class="v">{limit(ov.defaults.maxClients)}</span></div></div>
-            <div class="kv"><div class="od-field"><span class="k">{t('admin.backlogPerChannel')}</span><span class="v">{ov.defaults.backlogLines ? t('admin.nLines', { lines: ov.defaults.backlogLines.toLocaleString(i18n.locale) }) : t('admin.unlimited')}</span></div></div>
+            <div class="kv"><div class="od-field"><span class="k">{t('admin.backlogPerChannel')}</span><span class="v">{ov.defaults.backlogLines ? t('admin.nLines', { lines: ov.defaults.backlogLines.toLocaleString(i18n.intl) }) : t('admin.unlimited')}</span></div></div>
           </div>
           <p class="desc" style="margin-top:var(--s3);font-size:var(--fs-xs)">{t('admin.defaultsHelp')}</p>
         </section>
@@ -197,7 +197,7 @@
           <div class="kv"><div class="od-field"><span class="k">{t('admin.chatHistory')}</span><span class="v">{kindName[ov.storage.history.kind] || ov.storage.history.kind}{ov.storage.history.addr ? ' · ' + ov.storage.history.addr : ''}</span></div><span class="chip {ov.storage.history.up ? 'ok' : 'bad'}">{ov.storage.history.up ? t('admin.up') : t('admin.down')}</span></div>
           {#if ov.storage.history.queue != null}
             {@const [tone, word] = queueLevel(ov.storage.history.queue)}
-            <div class="kv"><div class="od-field"><span class="k">{t('admin.writeQueue')}</span><span class="v">{t('admin.nPending', { count: ov.storage.history.queue.toLocaleString(i18n.locale) })}</span></div><span class="chip {tone}">{word}</span></div>
+            <div class="kv"><div class="od-field"><span class="k">{t('admin.writeQueue')}</span><span class="v">{t('admin.nPending', { count: ov.storage.history.queue.toLocaleString(i18n.intl) })}</span></div><span class="chip {tone}">{word}</span></div>
           {/if}
         </div>
       </section>

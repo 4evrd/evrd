@@ -29,6 +29,9 @@ const q = (o) => new URLSearchParams(o).toString()
 
 export const api = {
   config: () => req('GET', '/api/config'),
+  // language packs (public: the sign-in page uses them)
+  languages: () => req('GET', '/api/languages'),
+  language: (code) => req('GET', `/api/languages/${encodeURIComponent(code)}`),
   passwordLogin: (username, password) => req('POST', '/auth/password', { username, password }),
   logout: () => req('POST', '/auth/logout'),
 
@@ -42,6 +45,9 @@ export const api = {
   clientPasswords: () => req('GET', '/api/me/client-passwords'),
   createClientPassword: (name) => req('POST', '/api/me/client-passwords', { name }),
   deleteClientPassword: (id) => req('DELETE', `/api/me/client-passwords/${id}`),
+  myLanguagePack: () => req('GET', '/api/me/language-pack'),
+  putMyLanguagePack: (pack) => req('PUT', '/api/me/language-pack', pack),
+  deleteMyLanguagePack: () => req('DELETE', '/api/me/language-pack'),
   clients: () => req('GET', '/api/me/clients'),
   events: (limit = 50) => req('GET', `/api/me/events?limit=${limit}`),
   overview: () => req('GET', '/api/overview'),
@@ -95,6 +101,8 @@ export const api = {
     settings: () => req('GET', '/api/admin/settings'),
     saveSettings: (set, reset) => req('PATCH', '/api/admin/settings', { set, reset }),
     refreshDirectory: () => req('POST', '/api/admin/directory/refresh'),
+    putLanguage: (pack) => req('PUT', `/api/admin/languages/${encodeURIComponent(pack.code)}`, pack),
+    deleteLanguage: (code) => req('DELETE', `/api/admin/languages/${encodeURIComponent(code)}`),
     users: () => req('GET', '/api/admin/users'),
     createUser: (u) => req('POST', '/api/admin/users', u),
     user: (id) => req('GET', `/api/admin/users/${id}`),

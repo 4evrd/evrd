@@ -131,4 +131,18 @@ export default {
   'account.bouncer.add': 'Add',
   'account.bouncer.save': 'Save bouncer settings',
   'account.bouncer.saved': 'Bouncer settings saved',
+
+  // your own translation
+  'account.ownTranslation': 'Your own translation',
+  'account.ownTranslationHelp': 'Upload a translation just for you: a new language, or your changes to one. It goes on top of the server’s.',
+  'account.ownNone': 'You haven’t uploaded one.',
+  'account.ownCurrent': '{name} ({code}) · uploaded {time}',
+  'account.ownUpload': 'Upload a translation',
+  'account.ownReplace': 'Replace',
+  'account.ownDownload': 'Download yours',
+  'account.ownRemove': 'Remove',
+  'account.ownRemoveTitle': 'Remove your translation?',
+  'account.ownRemoveBody': 'The app goes back to the server’s text.',
+  'account.ownSaved': 'Your translation is saved. Pick {name} under Language to use it.',
+  'account.ownRemoved': 'Your translation is removed',
 }

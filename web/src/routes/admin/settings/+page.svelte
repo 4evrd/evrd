@@ -12,7 +12,10 @@
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
   import { ago } from '$lib/format.js'
   import Msg from '$lib/components/Msg.svelte'
-  import { t } from '$lib/i18n.svelte.js'
+  import PackUpload from '$lib/components/PackUpload.svelte'
+  import PackDownload from '$lib/components/PackDownload.svelte'
+  import { t, i18n, LANGUAGES, builtin, serverPack, setPacks, setLocale, pick } from '$lib/i18n.svelte.js'
+  import { languageList, layered } from '$lib/langpack.js'
 
   const isAdmin = $derived(session.me?.role === 'admin')
   let data = $state(null)
@@ -87,6 +90,28 @@
     try { data = await api.admin.saveSettings({}, [f.key]); const { [f.key]: _, ...rest } = draft; draft = rest; toast(t('adminSettings.resetDone', { label: f.label })) } catch (x) { toast(x.message, 'bad') }
   }
   function discard() { draft = {}; errs = {} }
+
+  // Languages: the built-in ones and the server's packs. A pack adds a
+  // language or changes a built-in one's strings, for everyone.
+  const langs = $derived(languageList(LANGUAGES, i18n.packs).map((l) => ({ ...l, builtin: LANGUAGES.some((b) => b.code === l.code), pack: i18n.packs.find((p) => p.code === l.code) })))
+  // current is a language's strings as they are now: built in, then the pack.
+  async function current(l) {
+    const own = l.code === 'en' ? {} : await builtin(l.code)
+    return { code: l.code, name: l.name, messages: layered(own, await serverPack(l.code)) }
+  }
+  async function packsChanged() {
+    setPacks({ server: await api.languages() })
+    await setLocale(pick(session.me.language))
+  }
+  async function saveLanguage(pack) {
+    await api.admin.putLanguage(pack)
+    await packsChanged()
+    toast(t('adminSettings.langSaved', { name: pack.name }))
+  }
+  async function deleteLanguage(l) {
+    if (!(await confirmDialog({ title: t('adminSettings.langDeleteTitle', { name: l.name }), body: l.builtin ? t('adminSettings.langDeleteBuiltIn') : t('adminSettings.langDeleteBody'), action: t('common.delete') }))) return
+    try { await api.admin.deleteLanguage(l.code); await packsChanged(); toast(t('adminSettings.langDeleted', { name: l.name })) } catch (x) { toast(x.message, 'bad') }
+  }
 
   // The network directory: fetch it again now.
   let checking = $state(false)
@@ -217,6 +242,31 @@
         </section>
       {/each}
 
+      <section class="card" aria-labelledby="lang-h" data-testid="languages">
+        <div class="section-head lang-head">
+          <div class="od-stack" style="--od-gap:4px"><h2 id="lang-h" class="group-h" style="margin:0">{t('adminSettings.languages')}</h2><p class="desc">{t('adminSettings.languagesHelp')} <a href="https://github.com/4evrd/evrd/blob/main/docs/translations.md" target="_blank" rel="noreferrer">{t('packs.guide')}</a></p></div>
+          <div class="od-cluster" style="gap:8px">
+            <PackDownload id="lang-template" label={t('packs.template')} />
+            <PackUpload id="lang-upload" label={t('adminSettings.langUpload')} save={saveLanguage} primary />
+          </div>
+        </div>
+        <div class="rows">
+          {#each langs as l (l.code)}
+            <div class="row lang-row" data-testid="lang-{l.code}">
+              <span class="od-field">
+                <span class="name">{l.name} <span class="code key">{l.code}</span></span>
+                <span class="sub">{l.builtin ? (l.pack ? t('adminSettings.langBuiltInChanged', { time: ago(l.pack.updatedAt) }) : t('adminSettings.langBuiltIn')) : t('adminSettings.langUploaded', { time: ago(l.pack.updatedAt) })}</span>
+              </span>
+              <div class="od-cluster" style="gap:8px">
+                <PackDownload id="lang-dl-{l.code}" label={t('packs.download')} aria={t('adminSettings.langDownload', { name: l.name })} ghost load={() => current(l)} />
+                <PackUpload id="lang-up-{l.code}" label={l.pack ? t('adminSettings.langReplace') : t('adminSettings.langChange')} code={l.code} save={saveLanguage} />
+                {#if l.pack}<button class="btn btn-danger-ghost btn-sm" type="button" aria-label={t('adminSettings.langDeleteAria', { name: l.name })} onclick={() => deleteLanguage(l)}><Icon name="trash" />{t('common.delete')}</button>{/if}
+              </div>
+            </div>
+          {/each}
+        </div>
+      </section>
+
       <section class="card" aria-labelledby="boot-h">
         <h2 id="boot-h" class="group-h">{t('adminSettings.startup')}</h2>
         <p class="desc" style="margin-bottom:var(--s3)">{t('adminSettings.startupHelp')}</p>
@@ -269,6 +319,9 @@
   .certs, .dir-status { margin-bottom: var(--s4); }
   .control :global(.dd) { flex: 1; min-width: 0; }
   .chip.src-env { color: var(--warn); }
+  .lang-head { margin-bottom: var(--s4); align-items: flex-start; gap: var(--s4); flex-wrap: wrap; }
+  .lang-row { --cols: minmax(0, 1fr) auto; }
+  @media (max-width: 799px) { .lang-row { --cols: minmax(0, 1fr); } }
   .save-bar { position: sticky; bottom: var(--s4); z-index: 5; display: flex; align-items: center; gap: var(--s2); margin-top: var(--s5); padding: var(--s3) var(--s4); border-radius: var(--r-card); background: var(--bg-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
   @media (max-width: 799px) { .setting { grid-template-columns: minmax(0, 1fr); gap: var(--s2); } .control { justify-content: flex-start; } }
 </style>

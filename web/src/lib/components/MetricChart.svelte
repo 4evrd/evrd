@@ -29,7 +29,7 @@
   const fmt = (v) => (v == null ? '—' : (Math.abs(v) >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'k' : String(Math.round(v * 10) / 10)) + (unit ? ' ' + unit : ''))
   const label = (i) => {
     const d = new Date((start + i * step) * 1000)
-    return step >= 3600 ? d.toLocaleDateString(i18n.locale, { weekday: 'short' }) + ' ' + d.toTimeString().slice(0, 5) : d.toTimeString().slice(0, 5)
+    return step >= 3600 ? d.toLocaleDateString(i18n.intl, { weekday: 'short' }) + ' ' + d.toTimeString().slice(0, 5) : d.toTimeString().slice(0, 5)
   }
   const ticks = $derived([0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * (n - 1))))
 

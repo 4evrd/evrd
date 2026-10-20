@@ -7,12 +7,14 @@
   import ChangePassword from '$lib/components/ChangePassword.svelte'
   import BouncerSettings from '$lib/components/BouncerSettings.svelte'
   import Msg from '$lib/components/Msg.svelte'
+  import PackUpload from '$lib/components/PackUpload.svelte'
+  import PackDownload from '$lib/components/PackDownload.svelte'
   import { api } from '$lib/api.js'
   import { session, refreshMe } from '$lib/session.svelte.js'
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
   import { ago, device } from '$lib/format.js'
   import { check } from '$lib/validate.js'
-  import { t, LANGUAGES, pick as pickLocale, setLocale } from '$lib/i18n.svelte.js'
+  import { t, languages, pick as pickLocale, setLocale, setPacks, personalPack, i18n } from '$lib/i18n.svelte.js'
 
   const me = $derived(session.me)
   const TABS = [['profile', 'account.tabProfile'], ['bouncer', 'account.tabBouncer'], ['security', 'account.tabSecurity'], ['sessions', 'account.tabSessions'], ['danger', 'account.tabDelete']] // [id, message key]
@@ -30,7 +32,7 @@
   let real = $state(session.me.defaultRealname)
   let away = $state(session.me.autoAway)
   let lang = $state(session.me.language || '')
-  const langOptions = $derived([{ value: '', label: t('account.languageBrowser', { language: LANGUAGES.find((l) => l.code === pickLocale(''))?.name }) }, ...LANGUAGES.map((l) => ({ value: l.code, label: l.name }))])
+  const langOptions = $derived([{ value: '', label: t('account.languageBrowser', { language: languages().find((l) => l.code === pickLocale(''))?.name }) }, ...languages().map((l) => ({ value: l.code, label: l.name }))])
   let perr = $state({})
   let saving = $state(false)
   async function saveProfile(e) {
@@ -45,6 +47,25 @@
       await setLocale(pickLocale(session.me.language))
       toast(t('account.profileSaved'))
     } catch (err) { toast(err.message, 'bad') } finally { saving = false }
+  }
+
+  // the user's own translation, on top of the server's
+  const own = $derived(i18n.personal)
+  async function ownChanged(pack) {
+    session.me = { ...session.me, languagePack: pack }
+    setPacks({ personal: pack })
+    await setLocale(pickLocale(session.me.language))
+  }
+  async function saveOwn(pack) {
+    await ownChanged(await api.putMyLanguagePack(pack))
+    toast(t('account.ownSaved', { name: pack.name }))
+  }
+  async function removeOwn() {
+    if (!(await confirmDialog({ title: t('account.ownRemoveTitle'), body: t('account.ownRemoveBody'), action: t('account.ownRemove') }))) return
+    try { await api.deleteMyLanguagePack(); await ownChanged(null); toast(t('account.ownRemoved')) } catch (e) { toast(e.message, 'bad') }
+  }
+  async function loadOwn() {
+    return { code: own.code, name: own.name, messages: await personalPack() }
   }
 
   // sessions
@@ -116,6 +137,21 @@
         </div>
         <div class="form-foot"><button class="btn btn-primary" type="submit" disabled={saving}>{#if saving}<span class="spinner" aria-hidden="true"></span>{t('account.saving')}{:else}<Icon name="check" />{t('account.saveProfile')}{/if}</button></div>
       </form>
+      <hr class="divider" />
+      <div class="panel-grid" data-testid="own-translation">
+        <div class="od-stack"><h2>{t('account.ownTranslation')}</h2><p class="desc">{t('account.ownTranslationHelp')} <a href="https://github.com/4evrd/evrd/blob/main/docs/translations.md" target="_blank" rel="noreferrer">{t('packs.guide')}</a></p></div>
+        <div class="od-stack" style="--od-gap:12px;align-items:flex-start">
+          <p class="desc" data-testid="own-status">{own ? t('account.ownCurrent', { name: own.name, code: own.code, time: ago(own.updatedAt) }) : t('account.ownNone')}</p>
+          <div class="od-cluster" style="gap:8px">
+            <PackUpload id="own-upload" label={own ? t('account.ownReplace') : t('account.ownUpload')} code={own?.code || i18n.locale} save={saveOwn} />
+            <PackDownload id="own-template" label={t('packs.template')} ghost />
+            {#if own}
+              <PackDownload id="own-download" label={t('account.ownDownload')} ghost load={loadOwn} />
+              <button class="btn btn-danger-ghost btn-sm" type="button" onclick={removeOwn}><Icon name="trash" />{t('account.ownRemove')}</button>
+            {/if}
+          </div>
+        </div>
+      </div>
     </div>
   {:else if tab === 'bouncer'}
     <div role="tabpanel" id="bouncer" aria-labelledby="t-bouncer" class="card">

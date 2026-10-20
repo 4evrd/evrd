@@ -126,4 +126,18 @@ export default {
   'account.bouncer.add': 'Ekle',
   'account.bouncer.save': 'Bouncer ayarlarını kaydet',
   'account.bouncer.saved': 'Bouncer ayarları kaydedildi',
+
+  // your own translation
+  'account.ownTranslation': 'Kendi çevirin',
+  'account.ownTranslationHelp': 'Yalnızca kendin için bir çeviri yükle: yeni bir dil ya da bir dile yaptığın değişiklikler. Sunucununkinin üstüne uygulanır.',
+  'account.ownNone': 'Henüz bir çeviri yüklemedin.',
+  'account.ownCurrent': '{name} ({code}) · {time} yüklendi',
+  'account.ownUpload': 'Çeviri yükle',
+  'account.ownReplace': 'Değiştir',
+  'account.ownDownload': 'Seninkini indir',
+  'account.ownRemove': 'Kaldır',
+  'account.ownRemoveTitle': 'Çevirin kaldırılsın mı?',
+  'account.ownRemoveBody': 'Uygulama sunucunun metinlerine döner.',
+  'account.ownSaved': 'Çevirin kaydedildi. Kullanmak için Dil altında {name} seç.',
+  'account.ownRemoved': 'Çevirin kaldırıldı',
 }
