@@ -279,7 +279,7 @@ func TestCTCPStockAnswers(t *testing.T) {
 	}
 	passed := map[string]bool{}
 	for len(raw) > 0 {
-		if m := irc.Parse(<-raw); m.Command == "PRIVMSG" {
+		if m := irc.Parse((<-raw).Text); m.Command == "PRIVMSG" {
 			passed[m.Params[1]] = true
 		}
 	}

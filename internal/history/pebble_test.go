@@ -172,6 +172,9 @@ func TestRecentSkipsCorruptRecords(t *testing.T) {
 	if got, _ := s.Recent(1, "#a", 2); texts(got) != "1 2 " {
 		t.Fatalf("limited: %q", texts(got))
 	}
+	if got, _ := s.Range(1, "#a", Query{Limit: 10}); texts(got) != "0 1 2 " {
+		t.Fatalf("range: %q", texts(got))
+	}
 }
 
 func TestAddFillsTimeAndKeepsFirstSpelling(t *testing.T) {
@@ -300,6 +303,8 @@ func TestPebbleEveryCallAfterClose(t *testing.T) {
 	checks["DeleteNetwork"] = s.DeleteNetwork(1)
 	_, checks["Networks"] = s.Networks()
 	_, checks["Count"] = s.Count(1, "#a", 1)
+	_, checks["Range"] = s.Range(1, "#a", Query{Limit: 1})
+	_, checks["Targets"] = Targets(s, 1, ID{}, ID{}, 1, false)
 	checks["Ping"] = s.Ping()
 	for name, err := range checks {
 		if !errors.Is(err, ErrClosed) {

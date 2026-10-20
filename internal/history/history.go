@@ -27,9 +27,15 @@ type Message struct {
 	Text  string
 	Extra string
 	Time  time.Time
+	// Seq orders lines of the same instant; with Time it makes the line's
+	// ID. Add numbers a line that has none.
+	Seq uint32
 	// Origin is which session sent it — transient, never stored — so the
 	// sender's other sessions can show it while the sender avoids a double.
 	Origin string
+	// Tags are the client-only tags it was sent with ("+draft/reply=…"),
+	// also transient: passed on live to clients that take message-tags.
+	Tags string
 }
 
 // Store is a history backend. Implementations are safe for concurrent use.
@@ -49,6 +55,8 @@ type Store interface {
 	// Networks lists the network IDs that have history, so history of
 	// networks deleted elsewhere can be found and dropped.
 	Networks() ([]int64, error)
+	// Range returns a slice of a buffer (see Query), oldest first.
+	Range(networkID int64, target string, q Query) ([]Message, error)
 	// Count counts a buffer's lines, stopping at max.
 	Count(networkID int64, target string, max int) (int, error)
 	// Ping checks the store is reachable.

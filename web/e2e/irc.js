@@ -2,13 +2,18 @@ import net from 'node:net'
 
 // A raw IRC client for tests: attaches to evrd's IRC listener the way irssi or
 // HexChat would (PASS user/network:password), records every line and lets a
-// test wait for one.
+// test wait for one. caps, if any, are requested (CAP LS 302) before signing in.
 export class IRC {
-  static connect({ user, network, password, nick, version = 'e2e-client 1.0', host = process.env.E2E_IRC_HOST || 'localhost', port = +(process.env.E2E_IRC_PORT || 6667) }) {
+  static connect({ user, network, password, nick, caps, version = 'e2e-client 1.0', host = process.env.E2E_IRC_HOST || 'localhost', port = +(process.env.E2E_IRC_PORT || 6667) }) {
     const c = new IRC()
     c.version = version
     return new Promise((resolve, reject) => {
       c.sock = net.connect(port, host, () => {
+        if (caps?.length) {
+          c.send('CAP LS 302')
+          c.send(`CAP REQ :${caps.join(' ')}`)
+          c.send('CAP END')
+        }
         c.send(`PASS ${user}${network ? '/' + network : ''}:${password}`)
         c.send(`NICK ${nick || user}`)
         c.send(`USER ${user} 0 * :${user}`)

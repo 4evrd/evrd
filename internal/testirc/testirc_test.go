@@ -39,6 +39,21 @@ func (c *client) expect(want string) {
 	}
 }
 
+func TestServerNegotiatesCaps(t *testing.T) {
+	c := dial(t, StartCaps(t, nil, "message-tags away-notify"))
+	c.send("CAP LS 302")
+	c.expect(":fake CAP * LS :message-tags away-notify")
+	c.send("CAP REQ :message-tags")
+	c.expect(":fake CAP * ACK :message-tags")
+	c.send("CAP REQ :sasl")
+	c.expect(":fake CAP * NAK :sasl")
+	c.send("NICK alice")
+	c.send("USER alice 0 * :Alice")
+	c.expect(":fake 001 alice :welcome")
+	c.send("CAP LIST")
+	c.expect(":fake CAP alice LIST :message-tags")
+}
+
 func TestServerRegistersAndConfirms(t *testing.T) {
 	var log Log
 	addr := StartLogged(t, &log)

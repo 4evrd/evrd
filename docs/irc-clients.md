@@ -16,12 +16,71 @@ On connect you get the welcome burst, your channels (with names/topic), backlog
 replay, and live traffic. `/join` and `/part` update the network's saved
 channel list, `/nick` changes your nick upstream, and your own notices and
 `/me` actions are saved and shown on your other clients like messages. evrd
-offers the `echo-message` and `server-time` capabilities.
+offers the IRCv3 capabilities below.
 
 Channel events — joins, parts, quits, kicks, nick changes, topics and modes —
 are saved with the messages. On replay they come from `*buffextras` as plain
 text (`bob is now known as robert`), like ZNC's buffextras module, so they
-never confuse a client's nick list.
+never confuse a client's nick list. A client that asks for
+`draft/event-playback` gets them as the real lines instead (see below).
+
+## IRCv3
+
+evrd offers these capabilities (`CAP LS 302`): `batch`, `cap-notify`,
+`draft/chathistory`, `draft/event-playback`, `echo-message`, `message-tags`
+and `server-time`. A client that asks for none of them sees exactly what it
+always did. What a client gets depends on what it asks for:
+
+| client asks for | on attach | live lines |
+|---|---|---|
+| nothing | backlog as plain lines, timestamps in the text, events from `*buffextras` | as the server sent them |
+| `server-time` | backlog tagged `@time` | your own lines and saved ones tagged `@time` |
+| `batch` (+ `server-time`) | each buffer's backlog in a `BATCH +ref chathistory <buffer>` | |
+| … + `draft/event-playback` | events in the batch as `JOIN`, `PART`, `QUIT`, `KICK`, `NICK`, `TOPIC`, `MODE` | |
+| `message-tags` | every replayed line tagged `@msgid` | every saved line tagged `@msgid` — the same id it has in history, so a client can drop a line it fetched twice |
+| `draft/chathistory` | **no backlog**: channels are joined (with names and topic) and the client fetches history itself | |
+
+`echo-message` echoes your own lines, with their `@msgid` too.
+
+**Typing indicators and client tags.** evrd asks the network for
+`message-tags` when it offers it. Then client-only tags (`+typing`,
+`+draft/reply`, `+draft/react`…) pass both ways for clients with
+`message-tags`: `TAGMSG` lines (typing notifications, reactions) and the
+`+` tags on messages and notices. Your typing also shows on your other
+attached clients, as with soju; `echo-message` sends a client's own back.
+`TAGMSG`s are never saved, and the network's other tags (its `msgid`,
+`account`…) aren't passed on. A client can't send anything but `+` tags.
+On a network without `message-tags`, typing goes nowhere and messages go
+without their tags. A link the connection holder kept through a restart asks
+the network for its caps again (`CAP LIST`).
+
+**Scrollback (`draft/chathistory`).** Clients page through history with
+`CHATHISTORY LATEST|BEFORE|AFTER|AROUND|BETWEEN <buffer> …` (by `msgid=` or
+`timestamp=`) and find the buffers with news since they were last here with
+`CHATHISTORY TARGETS`; replies come in a `chathistory` (or
+`draft/chathistory-targets`) batch, and mistakes as `FAIL CHATHISTORY …`
+standard replies. A client sees the network it's attached to and nothing
+else. Without `draft/event-playback`, only messages, notices and actions come
+back, and events don't count against the limit. A `timestamp=` stands for its
+whole millisecond (the precision of `@time`); `msgid=` is exact, so evrd lists
+it first.
+
+Clients that negotiate chathistory are sent this ISUPPORT (`005`) line:
+
+```
+CHATHISTORY=1000 MSGREFTYPES=msgid,timestamp
+```
+
+— at most 1000 lines per request (more is capped, not refused).
+
+The replayed and fetched events carry the nick only — evrd doesn't keep
+`user@host` — so their prefix is `nick!nick@<network>`, like replayed
+messages. `labeled-response` isn't offered: replies to most commands come
+from the network, which evrd doesn't ask to label them.
+
+Clients that use chathistory, as they do with soju: Goguma, gamja, Halloy and
+Senpai. Recent WeeChat takes the batched backlog with `server-time`; irssi,
+HexChat and mIRC take the backlog as before.
 
 The web chat understands `/join`, `/part`, `/msg`, `/query`, `/me`, `/notice`,
 `/nick`, `/topic`, `/mode`, `/kick`, `/close`, `/quote` and `/help`, and runs

@@ -192,7 +192,7 @@ func TestRegistrationEdges(t *testing.T) {
 	for _, l := range []string{"PASS alice/one:alice-password", "NICK alice", "USER alice 0 * :alice"} {
 		ic.send(l)
 	}
-	ic.expect("CAP * LS :echo-message server-time")
+	ic.expect("CAP * LS :batch cap-notify draft/chathistory draft/event-playback echo-message message-tags server-time")
 	ic.send("CAP REQ :server-time")
 	ic.expect("ACK :server-time")
 	ic.send("CAP REQ :-server-time")

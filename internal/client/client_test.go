@@ -32,7 +32,8 @@ type rig struct {
 	srv  *Server
 	ctx  context.Context
 	user store.User
-	logs *syncBuffer // evrd's log
+	logs *syncBuffer  // evrd's log
+	irc  *testirc.Log // what the fake network received
 }
 
 // syncBuffer is a bytes.Buffer safe to write from the server's goroutines.
@@ -66,7 +67,10 @@ func scratchDir(t *testing.T) string {
 	return dir
 }
 
-func newRig(t *testing.T) *rig {
+func newRig(t *testing.T) *rig { return newRigCaps(t, "") }
+
+// newRigCaps is newRig with a network that offers caps.
+func newRigCaps(t *testing.T, caps string) *rig {
 	t.Helper()
 	data := scratchDir(t) // registered first, so removed last
 	st, err := store.Open("sqlite:" + filepath.Join(data, "evrd.db"))
@@ -97,7 +101,8 @@ func newRig(t *testing.T) *rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	host, port, _ := net.SplitHostPort(testirc.Start(t))
+	ircLog := &testirc.Log{}
+	host, port, _ := net.SplitHostPort(testirc.StartCaps(t, ircLog, caps))
 	var p int
 	fmt.Sscan(port, &p)
 	for _, name := range []string{"one", "two"} {
@@ -110,7 +115,7 @@ func newRig(t *testing.T) *rig {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	return &rig{t: t, st: st, hist: hist, addr: addr, b: b, acc: acc, srv: srv, ctx: ctx, user: u, logs: logs}
+	return &rig{t: t, st: st, hist: hist, addr: addr, b: b, acc: acc, srv: srv, ctx: ctx, user: u, logs: logs, irc: ircLog}
 }
 
 type ircClient struct {

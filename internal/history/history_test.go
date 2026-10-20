@@ -121,7 +121,7 @@ func TestRecentSpansMonths(t *testing.T) {
 
 func TestRoundTripsEveryField(t *testing.T) {
 	each(t, func(t *testing.T, s Store, _ func() Store) {
-		m := Message{NetworkID: 7, Target: "#x", Sender: "ann", Kind: "kick", Text: "bye ünïcode", Extra: "bob", Time: time.Unix(0, 1792284500123456789)}
+		m := Message{NetworkID: 7, Target: "#x", Sender: "ann", Kind: "kick", Text: "bye ünïcode", Extra: "bob", Time: time.Unix(0, 1792284500123456789), Seq: 42}
 		s.Add(m)
 		settle(s)
 		got, _ := s.Recent(7, "#x", 1)
