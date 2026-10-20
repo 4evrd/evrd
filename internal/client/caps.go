@@ -41,6 +41,9 @@ func (se *session) offer() map[string]string {
 		out[c] = ""
 	}
 	out["sasl"] = "PLAIN"
+	if v := se.srv.stsValue(se.secure()); v != "" {
+		out["sts"] = v
+	}
 	if se.up != nil {
 		for _, c := range linkCaps {
 			if se.up.HasCap(c) {

@@ -357,6 +357,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 	srv.SetSettings(sm)
 	irc.SetTLSConfig(certMgr.IRCConfig())
 	irc.SetPublicURL(cfg.PublicURL)
+	irc.SetSTS(cfg.IRCSTS, cfg.IRCHost)
 	srv.SetCerts(certMgr)
 	// The network directory users pick from when adding a network: fetched
 	// now and twice a day, the last good copy kept in the database.
@@ -400,6 +401,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 			log.Warn("tls", "err", err)
 		}
 		srv.SetConfig(&live)
+		irc.SetSTS(live.IRCSTS, live.IRCHost)
 		dir.SetSource(live.NetworkDirectory)
 		if live.Metrics.QueryURL != metricsURL {
 			metricsURL = live.Metrics.QueryURL
