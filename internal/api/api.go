@@ -2,10 +2,10 @@
 // sign-in, the signed-in user's own account, their networks and message
 // history, a live per-network message stream, and user administration.
 //
-// Every route except /api/config and the sign-in endpoints needs a session
-// cookie (see internal/auth); /api/admin/* also needs the admin role. A user's
-// own resources are always looked up through the session, never a request
-// field, so one user can't reach another's.
+// Every route except /api/config, /api/languages and the sign-in endpoints
+// needs a session cookie (see internal/auth); /api/admin/* also needs the
+// admin role. A user's own resources are always looked up through the
+// session, never a request field, so one user can't reach another's.
 //
 // In a cluster, a request about a user is served by the node that owns that
 // user (see cluster.go): any other node forwards it there.
@@ -124,6 +124,8 @@ func (s *Server) Handler() http.Handler {
 
 	// sign-in
 	mux.HandleFunc("GET /api/config", s.handleConfig)
+	mux.HandleFunc("GET /api/languages", s.handleLanguages)
+	mux.HandleFunc("GET /api/languages/{code}", s.handleLanguage)
 	mux.HandleFunc("POST /auth/password", s.auth.PasswordLogin)
 	mux.HandleFunc("GET /auth/login", s.auth.OIDCLogin)
 	mux.HandleFunc("GET /auth/callback", s.auth.Callback)
@@ -160,6 +162,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/me/client-passwords", user(s.handleListClientPasswords))
 	mux.HandleFunc("POST /api/me/client-passwords", user(s.handleCreateClientPassword))
 	mux.HandleFunc("DELETE /api/me/client-passwords/{id}", user(s.handleDeleteClientPassword))
+	mux.HandleFunc("GET /api/me/language-pack", user(s.handleMyLanguagePack))
+	mux.HandleFunc("PUT /api/me/language-pack", user(s.handlePutMyLanguagePack))
+	mux.HandleFunc("DELETE /api/me/language-pack", user(s.handleDeleteMyLanguagePack))
 
 	// networks
 	mux.HandleFunc("GET /api/networks", user(s.handleListNetworks))
@@ -189,6 +194,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/settings", adminAny(s.handleGetSettings))
 	mux.HandleFunc("PATCH /api/admin/settings", adminAny(s.handleSaveSettings))
 	mux.HandleFunc("POST /api/admin/directory/refresh", adminAny(s.handleRefreshDirectory))
+	mux.HandleFunc("PUT /api/admin/languages/{code}", adminAny(s.handlePutLanguage))
+	mux.HandleFunc("DELETE /api/admin/languages/{code}", adminAny(s.handleDeleteLanguage))
 	mux.HandleFunc("GET /api/admin/users", adminAny(s.handleAdminListUsers))
 	mux.HandleFunc("POST /api/admin/users", adminAny(s.handleAdminCreateUser))
 	mux.HandleFunc("GET /api/admin/users/{id}", admin(s.handleAdminGetUser))

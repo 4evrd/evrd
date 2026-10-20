@@ -35,7 +35,7 @@ func Open(dsn string) (Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}); err != nil {
 		return nil, err
 	}
 	return &gormStore{db: db}, nil
@@ -102,7 +102,7 @@ func (s *gormStore) DeleteUser(id int64) error {
 				return err
 			}
 		}
-		for _, m := range []any{&Network{}, &Session{}, &ClientPassword{}, &UserEvent{}} {
+		for _, m := range []any{&Network{}, &Session{}, &ClientPassword{}, &UserEvent{}, &UserLanguagePack{}} {
 			if err := tx.Where("user_id = ?", id).Delete(m).Error; err != nil {
 				return err
 			}
@@ -477,4 +477,47 @@ func (s *gormStore) PutCached(key, data string) error {
 func (s *gormStore) NodeConfs() ([]NodeConf, error) {
 	var out []NodeConf
 	return out, s.db.Order("node_id").Find(&out).Error
+}
+
+// --- language packs --------------------------------------------------------
+
+func (s *gormStore) LanguagePacks() ([]LanguagePack, error) {
+	var out []LanguagePack
+	return out, s.db.Omit("messages").Order("code").Find(&out).Error
+}
+
+func (s *gormStore) LanguagePack(code string) (LanguagePack, error) {
+	var p LanguagePack
+	return p, notFound(s.db.First(&p, "code = ?", code).Error)
+}
+
+func (s *gormStore) PutLanguagePack(p LanguagePack) error {
+	p.UpdatedAt = time.Now()
+	return s.db.Save(&p).Error
+}
+
+func (s *gormStore) DeleteLanguagePack(code string) error {
+	res := s.db.Delete(&LanguagePack{}, "code = ?", code)
+	if res.Error == nil && res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return res.Error
+}
+
+func (s *gormStore) UserLanguagePack(userID int64) (UserLanguagePack, error) {
+	var p UserLanguagePack
+	return p, notFound(s.db.First(&p, "user_id = ?", userID).Error)
+}
+
+func (s *gormStore) PutUserLanguagePack(p UserLanguagePack) error {
+	p.UpdatedAt = time.Now()
+	return s.db.Save(&p).Error
+}
+
+func (s *gormStore) DeleteUserLanguagePack(userID int64) error {
+	res := s.db.Delete(&UserLanguagePack{}, "user_id = ?", userID)
+	if res.Error == nil && res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return res.Error
 }

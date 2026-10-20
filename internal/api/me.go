@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -11,8 +10,8 @@ import (
 	"github.com/4evrd/evrd/internal/store"
 )
 
-// Languages are the web app's languages (web/src/lib/i18n): what an account's
-// language may be set to.
+// Languages are the web app's built-in languages (web/src/lib/i18n). An
+// account's language may also be a server language pack's, or its own pack's.
 var Languages = []string{"en", "it", "es", "tr"}
 
 // userDTO is what a user sees about their own account (and what an admin
@@ -30,6 +29,8 @@ func (s *Server) userDTO(u store.User) map[string]any {
 		"usage":       map[string]any{"networks": nets, "clients": s.b.Clients(u.ID), "attached": s.b.Attached(u.ID)},
 		"otherAdmins": s.otherAdmins(u),
 		"settings":    settingsDTO(u),
+		// languagePack is the user's own translation (code, name), or nil
+		"languagePack": s.myPackDTO(u.ID),
 	}
 }
 
@@ -107,7 +108,7 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Language != nil {
 		l := strings.TrimSpace(*in.Language)
-		if l != "" && !slices.Contains(Languages, l) {
+		if l != "" && !s.languageAllowed(u, l) {
 			writeErr(w, http.StatusUnprocessableEntity, "that language isn't one the web app has")
 			return
 		}
