@@ -23,6 +23,7 @@ import (
 var ownCaps = []string{
 	"batch", "cap-notify", "draft/chathistory", "draft/event-playback", "echo-message",
 	"message-tags", "sasl", "server-time", "standard-replies",
+	"soju.im/bouncer-networks", "soju.im/bouncer-networks-notify",
 }
 
 // linkCaps are the network's capabilities, offered while the link has them.
@@ -180,6 +181,13 @@ func (se *session) isupport() []string {
 	var toks []string
 	if se.caps["draft/chathistory"] {
 		toks = append(toks, fmt.Sprintf("CHATHISTORY=%d", chathistoryMax), "MSGREFTYPES=msgid,timestamp")
+	}
+	if se.caps["soju.im/bouncer-networks"] {
+		if se.up != nil {
+			toks = append(toks, fmt.Sprintf("BOUNCER_NETID=%d", se.net.ID))
+		} else {
+			toks = append(toks, "BOUNCER_NETID")
+		}
 	}
 	if se.up != nil {
 		toks = append(toks, se.up.ISupport()...)

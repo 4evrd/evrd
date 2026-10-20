@@ -49,6 +49,7 @@ type session struct {
 	saslBuf        string          // its payload so far
 	saslUser       store.User      // who SASL signed in
 	saslDevice     string
+	bindID         string // BOUNCER BIND's network
 
 	// Attached state. After registration, only the bridge goroutine touches
 	// these, so jumping networks needs no locking.
@@ -69,7 +70,8 @@ type session struct {
 	// instead of an IRC connection, and IRC-only commands say so.
 	web func(string)
 
-	batches int // BATCH references handed out
+	batches  int                          // BATCH references handed out
+	netsSent map[string]map[string]string // networks as last told (bouncer-networks-notify)
 }
 
 func newSession(srv *Server, conn net.Conn) *session {
@@ -139,6 +141,15 @@ func (se *session) serve(ctx context.Context) {
 			}
 		case "AUTHENTICATE":
 			se.authenticate(m)
+		case "BOUNCER":
+			// BIND picks the network; it goes first when forwarded, so the
+			// owner has it before NICK and USER end registration
+			if len(m.Params) > 1 && strings.EqualFold(m.Params[0], "BIND") {
+				se.bindID = m.Params[1]
+				se.regLines = append([]string{line}, se.regLines...)
+			} else {
+				se.bouncerFail("ACCOUNT_REQUIRED", strings.Join(append(m.Params, "*")[:1], ""), "Sign in first")
+			}
 		case "QUIT":
 			return
 		}
@@ -212,22 +223,40 @@ func (se *session) attach() bool {
 	}
 
 	nets, _ := se.srv.b.Store().ListNetworks(u.ID)
-	if len(nets) == 0 {
+	// A bouncer-networks client that names no network gets a bouncer
+	// connection, bound to none.
+	unbound := network == "" && se.bindID == "" && se.caps["soju.im/bouncer-networks"]
+	var chosen store.Network
+	switch {
+	case unbound:
+	case se.bindID != "":
+		n, ok := findNetworkID(nets, se.bindID)
+		if !ok {
+			se.bouncerFail("INVALID_NETID", "BIND", se.bindID, "Unknown network ID")
+			se.numeric("464", ":Unknown network "+se.bindID)
+			return false
+		}
+		chosen = n
+	case len(nets) == 0:
 		se.numeric("464", ":No networks configured — add one in the web app first")
 		return false
-	}
-	chosen := nets[0]
-	if network != "" {
+	case network != "":
 		n, ok := findNetwork(nets, network)
 		if !ok {
 			se.numeric("464", ":Unknown network "+network)
 			return false
 		}
 		chosen = n
+	default:
+		chosen = nets[0]
+	}
+	var bound []string
+	if !unbound {
+		bound = []string{chosen.Name}
 	}
 
 	att, err := se.srv.b.AttachClient(u.ID, se.srv.acc.LimitsFor(u).MaxClients,
-		bouncer.ClientInfo{Device: device, Networks: []string{chosen.Name}, IP: se.clientIP()},
+		bouncer.ClientInfo{Device: device, Networks: bound, IP: se.clientIP()},
 		func() { se.conn.Close() })
 	if errors.Is(err, bouncer.ErrTooManyClients) {
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("too_many_clients"))
@@ -237,17 +266,25 @@ func (se *session) attach() bool {
 	se.att = att
 	se.release = att.Release
 
-	if err := se.bind(chosen); err != nil {
-		se.release()
-		se.numeric("464", ":Network unavailable: "+err.Error())
-		return false
+	se.unick = orElse(se.nick, u.Username)
+	if !unbound {
+		if err := se.bind(chosen); err != nil {
+			se.release()
+			se.numeric("464", ":Network unavailable: "+err.Error())
+			return false
+		}
+		se.unick = orElse(se.up.Nick(), chosen.Nick)
 	}
-	se.unick = orElse(se.up.Nick(), chosen.Nick)
 	telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("ok"))
 	se.welcome()
 	se.syncCaps()
-	se.joinChannels()
-	se.replayBacklog()
+	if !unbound {
+		se.joinChannels()
+		se.replayBacklog()
+	}
+	if se.caps["soju.im/bouncer-networks-notify"] {
+		se.listNetworks()
+	}
 	// Ask the client what it is (shown on the clients page and in the
 	// activity feed); the reply arrives as a NOTICE to *status.
 	se.send(fmt.Sprintf(":%s!status@%s PRIVMSG %s :\x01VERSION\x01", statusNick, serverName, se.unick))
@@ -291,13 +328,19 @@ func (se *session) unsubscribe() {
 
 func (se *session) welcome() {
 	n := se.unick
-	se.send(fmt.Sprintf(":%s 001 %s :Welcome to evrd — attached to %s", serverName, n, se.net.Name))
+	if se.up == nil {
+		se.send(fmt.Sprintf(":%s 001 %s :Welcome to evrd — a bouncer connection, on no network", serverName, n))
+	} else {
+		se.send(fmt.Sprintf(":%s 001 %s :Welcome to evrd — attached to %s", serverName, n, se.net.Name))
+	}
 	se.send(fmt.Sprintf(":%s 002 %s :Your host is %s", serverName, n, serverName))
 	se.send(fmt.Sprintf(":%s 003 %s :evrd bouncer", serverName, n))
 	se.send(fmt.Sprintf(":%s 004 %s %s evrd o o", serverName, n, serverName))
 	se.sendISupport()
 	se.send(fmt.Sprintf(":%s 375 %s :- %s message of the day -", serverName, n, serverName))
-	se.send(fmt.Sprintf(":%s 372 %s :- network %s (%s:%d)", serverName, n, se.net.Name, se.net.Host, se.net.Port))
+	if se.up != nil {
+		se.send(fmt.Sprintf(":%s 372 %s :- network %s (%s:%d)", serverName, n, se.net.Name, se.net.Host, se.net.Port))
+	}
 	se.send(fmt.Sprintf(":%s 372 %s :- /msg *status help for bouncer commands", serverName, n))
 	se.send(fmt.Sprintf(":%s 376 %s :End of /MOTD command.", serverName, n))
 
@@ -500,6 +543,7 @@ func (se *session) bridge(ctx context.Context) {
 				se.msgs, se.unsubMsg = conn.Subscribe()
 			}
 			se.syncCaps()
+			se.notifyNetworks()
 		case <-ctx.Done():
 			return
 		}
@@ -604,7 +648,13 @@ func (se *session) attachChannel(ch string) {
 }
 
 func (se *session) handleClient(m irc.Message) {
+	if se.up == nil && !unboundOK[m.Command] {
+		se.send(fmt.Sprintf(":%s NOTICE %s :This is a bouncer connection, on no network: pick one with BOUNCER BIND", serverName, se.unick))
+		return
+	}
 	switch m.Command {
+	case "BOUNCER":
+		se.bouncerCommand(m.Params)
 	case "PING":
 		se.send(fmt.Sprintf(":%s PONG %s :%s", serverName, serverName, lastParam(m)))
 	case "QUIT":
@@ -693,6 +743,9 @@ func (se *session) handleClient(m irc.Message) {
 		se.passOn(m)
 	}
 }
+
+// unboundOK are the commands a bouncer connection (on no network) takes.
+var unboundOK = map[string]bool{"PING": true, "QUIT": true, "CAP": true, "BOUNCER": true, "USER": true, "PASS": true, "AUTHENTICATE": true}
 
 // passOn sends a client's line to the upstream. Everything handleClient
 // doesn't take (JOIN, PART, MODE, WHO, NAMES, TOPIC, LIST, …) goes straight
@@ -869,6 +922,15 @@ func clientName(version string) string {
 func nickFromPrefix(prefix string) string {
 	nick, _, _ := strings.Cut(prefix, "!")
 	return nick
+}
+
+func findNetworkID(nets []store.Network, id string) (store.Network, bool) {
+	for _, n := range nets {
+		if strconv.FormatInt(n.ID, 10) == id {
+			return n, true
+		}
+	}
+	return store.Network{}, false
 }
 
 func findNetwork(nets []store.Network, name string) (store.Network, bool) {
