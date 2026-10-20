@@ -129,6 +129,8 @@ func TestPassThroughAndTranslation(t *testing.T) {
 	full.expect(":bob!u@h REDACT #one " + ours + " typo")
 	full.send("@+draft/reply=" + ours + " PRIVMSG #one :answer")
 	eventually(t, "reply sent with the network's msgid", func() bool { return r.irc.Has("@+draft/reply=up1 PRIVMSG #one :answer") })
+	full.send("REDACT #one " + ours + " :my bad")
+	eventually(t, "redaction sent with the network's msgid", func() bool { return r.irc.Has("REDACT #one up1 :my bad") })
 	if seen := plain.until("PRIVMSG #one :lol"); anyHas(seen, "REDACT") {
 		t.Fatalf("REDACT for a client without it: %q", seen)
 	}

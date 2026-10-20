@@ -729,6 +729,13 @@ func (se *session) dispatch(m irc.Message) {
 		if se.caps["echo-message"] {
 			se.send(se.tags(id, "", tags) + fmt.Sprintf(":%s!%s@%s %s %s :%s", se.unick, se.unick, serverName, m.Command, target, text))
 		}
+	case "REDACT": // REDACT <target> <msgid> [reason]: the network's msgid
+		if len(m.Params) >= 2 {
+			if theirs, ok := se.up.NetworkMsgID(m.Params[1]); ok {
+				m.Params[1] = theirs
+			}
+		}
+		se.passOn(m)
 	case "NAMES":
 		if se.caps["draft/no-implicit-names"] && len(m.Params) > 0 {
 			if se.namesAsked == nil {
