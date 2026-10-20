@@ -34,7 +34,7 @@ an existing translation rather than start over.
 |---|---|---|
 | JSON | `.json` | evrd's own: `{"code": "de", "name": "Deutsch", "messages": {…}}`. A flat `{"key": "text"}` object or nested (i18next-style) objects work too. |
 | CSV | `.csv` | Columns `key,english,translation` and an optional `notes`. Opens in any spreadsheet. |
-| gettext PO | `.po` (template `.pot`) | For Poedit and other PO editors. `msgctxt` is the key, `msgid` the English, `msgstr` the translation. |
+| gettext PO | `.po` (template `.po` or `.pot`) | For Poedit and other PO editors. `msgctxt` is the key, `msgid` the English, `msgstr` the translation. |
 | XLIFF 1.2 / 2.0 | `.xlf`, `.xliff` | For CAT tools. The unit's `id` is the key, `source` the English, `target` the translation. |
 | YAML | `.yaml`, `.yml` | A flat or nested map of `key: "text"`. Only maps of text: no lists, anchors or block (`|`, `>`) text. |
 
@@ -84,10 +84,14 @@ a form for each of the language's plural categories, as in
 
 ## With Poedit
 
-1. Download the template as **gettext PO** (`evrd-template.pot`).
-2. In Poedit, *File → New from POT/PO File…*, pick the template and your
-   language. Poedit fills in `Language` and `Plural-Forms`.
-3. Translate, save, and upload the `.po` file.
+1. Download the template as **PO (Poedit)** (`evrd-template.po`) and open it
+   in Poedit. Set your language (*Translation → Properties*, or when Poedit
+   asks); Poedit fills in `Plural-Forms` from it.
+2. Translate, save, and upload the `.po` file.
+
+Teams that keep one template and a `.po` per language can download the
+**POT (gettext template)** instead (`evrd-template.pot`) and use *File → New
+from POT/PO File…*.
 
 Entries marked **fuzzy** (*Needs work*) are skipped, so check them before
 uploading. Obsolete (`#~`) entries are ignored. The language comes from the
