@@ -114,7 +114,9 @@ test("the network's capabilities are offered while registering and pass through"
   // asked for at registration, as clients do: evrd's CAP LS waits for PASS
   // to know the network, and offers its capabilities
   irc = await IRC.connect({ user: me.name, network: 'Dev', password: me.password, caps: ['batch', 'message-tags', 'server-time', 'extended-join', 'away-notify', 'labeled-response'] })
-  const offer = await irc.waitFor(/ CAP \S+ LS :/)
+  // CAP LS 302 may span lines ("LS * :…" until the last, "LS :…")
+  await irc.waitFor(/ CAP \S+ LS :/)
+  const offer = irc.lines.filter((l) => / CAP \S+ LS (\* )?:/.test(l)).join(' ')
   for (const c of ['extended-join', 'away-notify', 'multi-prefix', 'labeled-response']) expect(offer).toContain(c)
   await irc.waitFor(/ CAP \S+ ACK :batch message-tags server-time extended-join away-notify labeled-response$/)
   await joined(irc)
