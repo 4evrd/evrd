@@ -68,13 +68,21 @@ func TestBouncerConnection(t *testing.T) {
 	ic.send("BOUNCER ADDNETWORK host=irc.example.org;name=three;tls=0;realname=Al\\sIce")
 	added := irc.Parse(ic.expect("BOUNCER ADDNETWORK "))
 	three := added.Params[1]
-	ic.expect("BOUNCER NETWORK " + three + " host=irc.example.org;name=three;nickname=alice;port=6667;realname=Al\\sIce;")
+	// (it may already say it can't connect)
+	if l := ic.expect("BOUNCER NETWORK " + three + " "); !strings.Contains(l, "host=irc.example.org;name=three;nickname=alice;port=6667;realname=Al\\sIce;") {
+		t.Fatalf("new network: %q", l)
+	}
 	if n := r.network("three"); n.Port != 6667 || n.TLS || n.Realname != "Al Ice" {
 		t.Fatalf("added %+v", n)
 	}
 	ic.send("BOUNCER CHANGENETWORK " + three + " nickname=al;pass=sekrit")
 	ic.expect("BOUNCER CHANGENETWORK " + three)
-	ic.expect("BOUNCER NETWORK " + three + " nickname=al")
+	for {
+		attrs := parseAttrs(irc.Parse(ic.expect("BOUNCER NETWORK " + three + " ")).Params[2])
+		if attrs["nickname"] == "al" {
+			break
+		}
+	}
 	if n := r.network("three"); n.Nick != "al" || n.ServerList()[0].Password != "sekrit" {
 		t.Fatalf("changed %+v", n)
 	}
