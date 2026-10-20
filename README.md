@@ -18,6 +18,7 @@
   <a href="docs/services.md">Services login</a> ·
   <a href="docs/openbsd.md">OpenBSD</a> ·
   <a href="docs/clustering.md">Clustering</a> ·
+  <a href="docs/translations.md">Translations</a> ·
   <a href="docs/development.md">Development</a>
 </p>
 
