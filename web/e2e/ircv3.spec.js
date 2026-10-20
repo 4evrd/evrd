@@ -57,3 +57,52 @@ test('CHATHISTORY fetches what was said, with the live msgids', async () => {
   irc.send('CHATHISTORY NOPE x * 1')
   await irc.waitFor(/FAIL CHATHISTORY INVALID_PARAMS NOPE :Unknown command/)
 })
+
+test('typing indicators go through evrd to clients that asked for message-tags', async () => {
+  irc = await IRC.connect({ user: me.name, network: 'Dev', password: me.password, caps: ['message-tags'] })
+  await irc.waitFor(new RegExp(` 366 \\S+ ${chan.replace('#', '\\#')} `, 'i'))
+  const plain = await IRC.connect({ user: me.name, network: 'Dev', password: me.password })
+  try {
+    await plain.waitFor(new RegExp(` 366 \\S+ ${chan.replace('#', '\\#')} `, 'i'))
+    // the other user's client types: evrd passes it to the network, which
+    // passes it back to this user's evrd, which passes it on
+    const typer = await IRC.connect({ user: them.name, network: 'Dev', password: them.password, caps: ['message-tags'] })
+    try {
+      await typer.waitFor(new RegExp(` 366 \\S+ ${chan.replace('#', '\\#')} `, 'i'))
+      await expect(async () => {
+        typer.send(`@+typing=active TAGMSG ${chan}`)
+        await irc.next(new RegExp(`^@\\+typing=active :${them.name}!\\S+ TAGMSG ${chan.replace('#', '\\#')}$`, 'i'), 2000)
+      }).toPass({ timeout: 20000 })
+      typer.send(`PRIVMSG ${chan} :done typing`)
+      await plain.waitFor(/PRIVMSG \S+ :done typing$/)
+      expect(plain.lines.some((l) => l.includes('TAGMSG') || l.startsWith('@'))).toBe(false)
+    } finally { typer.close() }
+  } finally { plain.close() }
+})
+
+test('backlog comes as a history batch with real events, *buffextras for plain clients', async () => {
+  // while this user's IRC clients are away: a line, then the other user leaves
+  peer.send(`PRIVMSG ${chan} :while you were out`)
+  peer.send(`PART ${chan} :off for lunch`)
+  const left = new RegExp(`PART ${chan.replace('#', '\\#')}`, 'i')
+
+  await expect(async () => {
+    irc?.close()
+    irc = await IRC.connect({ user: me.name, network: 'Dev', password: me.password, caps: ['batch', 'server-time', 'message-tags', 'draft/event-playback'] })
+    const ref = (await irc.waitFor(new RegExp(` BATCH \\+(\\S+) chathistory ${chan.replace('#', '\\#')}$`, 'i'), 5000)).match(/BATCH \+(\S+)/)[1]
+    await irc.waitFor(new RegExp(`^:\\S+ BATCH -${ref}$`), 5000)
+    const inBatch = irc.lines.filter((l) => l.includes(`batch=${ref}`))
+    expect(inBatch.some((l) => /PRIVMSG \S+ :while you were out$/.test(l))).toBe(true)
+    expect(inBatch.some((l) => left.test(l) && l.includes(`:${them.name}!`))).toBe(true)
+    expect(irc.lines.some((l) => l.includes('*buffextras'))).toBe(false)
+  }).toPass({ timeout: 20000 })
+
+  // a client without the caps: the same events, as *buffextras lines
+  const plain = await IRC.connect({ user: me.name, network: 'Dev', password: me.password })
+  try {
+    // (no server-time: evrd puts the time in front)
+    await plain.waitFor(/PRIVMSG \S+ :\[[\d:]+\] while you were out$/)
+    await plain.waitFor(/^:\*buffextras!\S+ PRIVMSG \S+ :\[[\d:]+\] them\S* left \(off for lunch\)$/)
+    expect(plain.lines.some((l) => l.includes('BATCH'))).toBe(false)
+  } finally { plain.close() }
+})
