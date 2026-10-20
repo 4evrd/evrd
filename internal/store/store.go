@@ -61,6 +61,9 @@ type User struct {
 	// AutoAway marks the user away on every network while no client (IRC or
 	// web) is attached.
 	AutoAway bool `gorm:"not null;default:false"`
+	// Language is the web app's language (a code from the app's list); ""
+	// follows the browser.
+	Language string `gorm:"not null;default:''"`
 
 	// Playback to IRC clients: how many lines per channel and query, and
 	// whether a buffer, once played back, starts empty next time (only lines
@@ -318,6 +321,27 @@ type CacheEntry struct {
 	UpdatedAt time.Time
 }
 
+// LanguagePack is a translation of the web app an admin uploaded: a new
+// language, or strings that replace a built-in one's. Shared by every node.
+type LanguagePack struct {
+	Code string `gorm:"primaryKey;size:16"`
+	Name string
+	// Messages is the JSON object of "area.key": text (or plural forms).
+	Messages  string
+	UpdatedAt time.Time
+	UpdatedBy string
+}
+
+// UserLanguagePack is a user's own translation, applied only for them on
+// top of the server's.
+type UserLanguagePack struct {
+	UserID    int64  `gorm:"primaryKey;autoIncrement:false"`
+	Code      string `gorm:"size:16;not null"`
+	Name      string
+	Messages  string
+	UpdatedAt time.Time
+}
+
 // NodeConf is a node's last attempt to write the settings into its config
 // file (settings_write_conf).
 type NodeConf struct {
@@ -364,7 +388,7 @@ type Store interface {
 	ListUsers() ([]User, error)
 	UpdateUser(u User) error
 	// DeleteUser removes the user and everything they own: networks, their
-	// history, sessions and client passwords.
+	// history, sessions, client passwords and their language pack.
 	DeleteUser(id int64) error
 	// CountAdmins counts admins who are not suspended.
 	CountAdmins() (int64, error)
@@ -460,6 +484,17 @@ type Store interface {
 	LeaseOwner(userID int64, now time.Time) (Node, UserLease, bool, error)
 	// DeleteOrphanLeases drops leases of users that no longer exist.
 	DeleteOrphanLeases() error
+
+	// Translations of the web app (see LanguagePack). LanguagePacks leaves
+	// out the messages; LanguagePack and UserLanguagePack return ErrNotFound
+	// when there's none.
+	LanguagePacks() ([]LanguagePack, error)
+	LanguagePack(code string) (LanguagePack, error)
+	PutLanguagePack(p LanguagePack) error
+	DeleteLanguagePack(code string) error
+	UserLanguagePack(userID int64) (UserLanguagePack, error)
+	PutUserLanguagePack(p UserLanguagePack) error
+	DeleteUserLanguagePack(userID int64) error
 
 	// MigrateLegacyMessages hands every row of the old messages table to fn,
 	// in order, then drops the table. A no-op once the table is gone.

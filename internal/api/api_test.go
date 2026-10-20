@@ -137,6 +137,8 @@ func TestEveryPrivateRouteNeedsASession(t *testing.T) {
 		"GET /api/admin/overview", "GET /api/admin/users", "POST /api/admin/users",
 		"GET /api/admin/users/1", "PATCH /api/admin/users/1", "DELETE /api/admin/users/1",
 		"POST /api/admin/users/1/password", "POST /api/admin/users/1/sessions/revoke",
+		"GET /api/me/language-pack", "PUT /api/me/language-pack", "DELETE /api/me/language-pack",
+		"PUT /api/admin/languages/de", "DELETE /api/admin/languages/de",
 	} {
 		method, path, _ := strings.Cut(rt, " ")
 		if code, _ := c.do(method, path, map[string]any{}); code != http.StatusUnauthorized {
@@ -150,7 +152,7 @@ func TestAdminRoutesRefuseUsers(t *testing.T) {
 	e.user("root", store.RoleAdmin)
 	e.user("alice", store.RoleUser)
 	c := e.login("alice")
-	for _, rt := range []string{"GET /api/admin/overview", "GET /api/admin/users", "POST /api/admin/users", "PATCH /api/admin/users/1", "DELETE /api/admin/users/1"} {
+	for _, rt := range []string{"GET /api/admin/overview", "GET /api/admin/users", "POST /api/admin/users", "PATCH /api/admin/users/1", "DELETE /api/admin/users/1", "PUT /api/admin/languages/de", "DELETE /api/admin/languages/de"} {
 		method, path, _ := strings.Cut(rt, " ")
 		if code, _ := c.do(method, path, map[string]any{}); code != http.StatusForbidden {
 			t.Errorf("%s as a user: got %d, want 403", rt, code)

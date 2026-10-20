@@ -1,6 +1,12 @@
 // The network directory (GET /api/directory): public IRC networks a user
 // picks from when adding one, instead of typing server details.
 
+import en from './i18n/en/networks.js'
+
+// Text is in i18n/<lang>/networks.js; functions that return text take t,
+// English by default so plain Node needs no Svelte.
+const english = (key, vars = {}) => en[key].replace(/\{(\w+)\}/g, (all, n) => (n in vars ? String(vars[n]) : all))
+
 const hay = (n) => [n.id, n.name, n.description, n.region, ...(n.tags || [])].filter(Boolean).join(' ').toLowerCase()
 
 // searchNetworks keeps the networks whose id, name, description, tags or
@@ -35,8 +41,8 @@ export function fromDirectory(n) {
 
 // loginHint says how to sign in to the network's services, when the
 // directory knows.
-export function loginHint(n) {
-  if (n.sasl) return 'Supports SASL: put your account below to log in while connecting.'
-  if (n.services && n.services !== 'none') return `Services: ${n.services}.`
+export function loginHint(n, t = english) {
+  if (n.sasl) return t('networks.dir.loginSasl')
+  if (n.services && n.services !== 'none') return t('networks.dir.loginServices', { services: n.services })
   return ''
 }

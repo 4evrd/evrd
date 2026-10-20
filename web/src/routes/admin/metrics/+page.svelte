@@ -7,9 +7,11 @@
   import { api } from '$lib/api.js'
   import { session } from '$lib/session.svelte.js'
   import { kfmt } from '$lib/format.js'
+  import Msg from '$lib/components/Msg.svelte'
+  import { t } from '$lib/i18n.svelte.js'
 
   const isAdmin = $derived(session.me?.role === 'admin')
-  const RANGES = [['6h', '6 hours'], ['24h', '24 hours'], ['7d', '7 days']]
+  const RANGES = $derived([['6h', t('admin.metrics.range6h')], ['24h', t('admin.metrics.range24h')], ['7d', t('admin.metrics.range7d')]])
   let range = $state('24h')
   let m = $state(null)
   let err = $state('')
@@ -24,32 +26,32 @@
   onMount(() => { if (!isAdmin) return; load(); timer = setInterval(load, 60000) })
   onDestroy(() => clearInterval(timer))
 
-  const per = $derived(m ? (m.step >= 3600 ? 'per hour' : `per ${m.step / 60} min`) : '')
+  const per = $derived(m ? (m.step >= 3600 ? t('admin.metrics.perHour') : t('admin.metrics.perMin', { min: m.step / 60 })) : '')
   const total = (p) => p.series.reduce((a, s) => a + s.points.reduce((x, v) => x + (v || 0), 0), 0)
   const empty = (p) => !p.series.length || p.series.every((s) => s.points.every((v) => v == null))
 </script>
 
-<svelte:head><title>Metrics · evrd admin</title></svelte:head>
+<svelte:head><title>{t('admin.metrics.pageTitle')}</title></svelte:head>
 
 {#if !isAdmin}
-  <div class="callout bad" role="alert"><Icon name="lock" /><span><b>Admins only.</b> Your account doesn’t have access to metrics.</span></div>
+  <div class="callout bad" role="alert"><Icon name="lock" /><span><b>{t('admin.adminsOnly')}</b> {t('admin.metrics.noAccess')}</span></div>
 {:else}
   <div class="page-head enter">
     <div class="titles">
-      <h1>Metrics</h1>
-      <p>Everything evrd reports, across every account and node, read back from the metrics store.</p>
+      <h1>{t('admin.metrics.heading')}</h1>
+      <p>{t('admin.metrics.intro')}</p>
     </div>
-    <div class="tabs status-tabs" role="tablist" aria-label="Range">
+    <div class="tabs status-tabs" role="tablist" aria-label={t('admin.metrics.range')}>
       {#each RANGES as [k, l]}<button class="tab" role="tab" aria-selected={range === k} onclick={() => pick(k)}>{l}</button>{/each}
     </div>
   </div>
 
   {#if err && !m}
-    <div class="callout bad" role="alert"><Icon name="alert" /><span>Couldn’t load metrics: {err}</span></div>
+    <div class="callout bad" role="alert"><Icon name="alert" /><span>{t('admin.metrics.loadFailed', { error: err })}</span></div>
   {:else if m && !m.available}
-    <div class="empty"><span class="ic"><Icon name="chart" /></span><h3>No metrics store</h3><p>Set <span class="code">otel_endpoint</span> and <span class="code">metrics_url</span> (Admin → Settings → Metrics) to see charts here. {m.error}</p></div>
+    <div class="empty"><span class="ic"><Icon name="chart" /></span><h3>{t('admin.metrics.noStore')}</h3><p><Msg key="admin.metrics.noStoreHelp">{#snippet otel()}<span class="code">otel_endpoint</span>{/snippet}{#snippet url()}<span class="code">metrics_url</span>{/snippet}</Msg> {m.error}</p></div>
   {:else}
-    {#if m?.error}<div class="callout warn" role="status"><Icon name="alert" /><span>Some charts couldn’t load: {m.error}</span></div>{/if}
+    {#if m?.error}<div class="callout warn" role="status"><Icon name="alert" /><span>{t('admin.metrics.someFailed', { error: m.error })}</span></div>{/if}
     <div class="metric-grid enter" aria-busy={loading}>
       {#if !m}
         {#each Array(6) as _}<div class="card"><div class="skel" style="height:200px"></div></div>{/each}
@@ -57,11 +59,11 @@
         {#each m.panels as p (p.id)}
           <section class="card metric-card" aria-labelledby="mh-{p.id}" data-testid="metric-{p.id}">
             <div class="section-head" style="margin-bottom:var(--s3)">
-              <div class="od-stack"><span class="caps">{p.counter ? per : 'latest per step'}</span><h2 id="mh-{p.id}">{p.title}</h2></div>
-              {#if p.counter && !empty(p)}<span class="chip">{kfmt(Math.round(total(p)))} in {RANGES.find((r) => r[0] === m.range)?.[1]}</span>{/if}
+              <div class="od-stack"><span class="caps">{p.counter ? per : t('admin.metrics.latestPerStep')}</span><h2 id="mh-{p.id}">{p.title}</h2></div>
+              {#if p.counter && !empty(p)}<span class="chip">{t('admin.metrics.totalIn', { total: kfmt(Math.round(total(p))), range: RANGES.find((r) => r[0] === m.range)?.[1] })}</span>{/if}
             </div>
             {#if empty(p)}
-              <div class="chart-empty">Nothing recorded {RANGES.find((r) => r[0] === m.range)?.[1] === '7 days' ? 'this week' : 'in this range'}.</div>
+              <div class="chart-empty">{m.range === '7d' ? t('admin.metrics.nothingThisWeek') : t('admin.metrics.nothingInRange')}</div>
             {:else}
               <MetricChart series={p.series} start={m.start} step={m.step} unit={p.unit} />
             {/if}
@@ -70,7 +72,7 @@
         {/each}
         <section class="card metric-card" aria-labelledby="mh-busy">
           <div class="section-head" style="margin-bottom:var(--s3)">
-            <div class="od-stack"><span class="caps">Chat lines</span><h2 id="mh-busy">Busiest networks</h2></div>
+            <div class="od-stack"><span class="caps">{t('admin.metrics.chatLines')}</span><h2 id="mh-busy">{t('admin.metrics.busiest')}</h2></div>
           </div>
           <div class="rows">
             {#each m.busiest as b, i}
@@ -80,7 +82,7 @@
                 <span class="mono">{kfmt(b.lines)}</span>
               </a>
             {:else}
-              <p class="desc" style="font-size:var(--fs-sm)">No chat lines in this range.</p>
+              <p class="desc" style="font-size:var(--fs-sm)">{t('admin.metrics.noLines')}</p>
             {/each}
           </div>
         </section>

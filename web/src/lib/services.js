@@ -1,25 +1,31 @@
 // Logging in to a network's services (docs/services.md): the methods, and
-// presets that fill in what well-known networks need.
+// presets that fill in what well-known networks need. Text is message keys
+// (i18n/<lang>/services.js): labels are keys for t(), and the functions that
+// return text take t, English by default so plain Node needs no Svelte.
+
+import en from './i18n/en/services.js'
+
+const english = (key, vars = {}) => en[key].replace(/\{(\w+)\}/g, (all, n) => (n in vars ? String(vars[n]) : all))
 
 export const METHODS = [
-  ['auto', 'Automatic — SASL, else NickServ'],
-  ['sasl', 'SASL only'],
-  ['nickserv', 'IDENTIFY to NickServ'],
-  ['command', 'A command of my own'],
-  ['none', 'Don’t log in'],
+  ['auto', 'services.method.auto'],
+  ['sasl', 'services.method.sasl'],
+  ['nickserv', 'services.method.nickserv'],
+  ['command', 'services.method.command'],
+  ['none', 'services.method.none'],
 ]
 
 const blank = { servicesNick: '', identifyArgs: '', identifyOn: '', ghost: '', authCommand: '' }
 
-// Each preset sets these fields; quakenet also switches the q module on.
+// Each preset sets these fields (label is a message key); quakenet also switches the q module on.
 export const PRESETS = [
-  { key: 'auto', label: 'Automatic (SASL, then NickServ)', set: { authMethod: 'auto', ...blank } },
-  { key: 'sasl', label: 'SASL only (Libera.Chat, ergo…)', set: { authMethod: 'sasl', ...blank } },
-  { key: 'atheme', label: 'NickServ — Atheme or Anope', set: { authMethod: 'nickserv', ...blank, identifyArgs: 'account', ghost: 'regain' } },
-  { key: 'dalnet', label: 'DALnet', set: { authMethod: 'nickserv', ...blank, servicesNick: 'NickServ@services.dal.net', identifyArgs: 'password', ghost: 'ghost' } },
-  { key: 'undernet', label: 'Undernet (X)', set: { authMethod: 'command', ...blank, authCommand: 'PRIVMSG X@channels.undernet.org :LOGIN %account% %password%' } },
-  { key: 'quakenet', label: 'QuakeNet (Q, with the q module)', set: { authMethod: 'none', ...blank }, module: 'q' },
-  { key: 'custom', label: 'Custom', set: {} },
+  { key: 'auto', label: 'services.preset.auto', set: { authMethod: 'auto', ...blank } },
+  { key: 'sasl', label: 'services.preset.sasl', set: { authMethod: 'sasl', ...blank } },
+  { key: 'atheme', label: 'services.preset.atheme', set: { authMethod: 'nickserv', ...blank, identifyArgs: 'account', ghost: 'regain' } },
+  { key: 'dalnet', label: 'services.preset.dalnet', set: { authMethod: 'nickserv', ...blank, servicesNick: 'NickServ@services.dal.net', identifyArgs: 'password', ghost: 'ghost' } },
+  { key: 'undernet', label: 'services.preset.undernet', set: { authMethod: 'command', ...blank, authCommand: 'PRIVMSG X@channels.undernet.org :LOGIN %account% %password%' } },
+  { key: 'quakenet', label: 'services.preset.quakenet', set: { authMethod: 'none', ...blank }, module: 'q' },
+  { key: 'custom', label: 'services.preset.custom', set: {} },
 ]
 
 // presetOf names the preset a form matches, else custom.
@@ -48,16 +54,16 @@ export function applyPreset(f, key) {
 export const usesPassword = (f) => f.authMethod !== 'none' || !!f.modules?.q?.enabled
 
 // checkAuth validates the login fields: { field: message } for what's wrong.
-export function checkAuth(f) {
+export function checkAuth(f, t = english) {
   const e = {}
-  if (/[\s,:!]/.test(f.servicesNick || '')) e.servicesNick = 'One word, like NickServ or NickServ@services.dal.net.'
-  if (f.authMethod === 'command' && !(f.authCommand || '').trim()) e.authCommand = 'Enter the command that logs you in.'
-  const t = String(f.authTimeout ?? '').trim()
-  if (t !== '' && !(Number.isInteger(+t) && +t >= 0 && +t <= 300)) e.authTimeout = 'Seconds, 0–300 (0 = 15).'
+  if (/[\s,:!]/.test(f.servicesNick || '')) e.servicesNick = t('services.badServicesNick')
+  if (f.authMethod === 'command' && !(f.authCommand || '').trim()) e.authCommand = t('services.badAuthCommand')
+  const secs = String(f.authTimeout ?? '').trim()
+  if (secs !== '' && !(Number.isInteger(+secs) && +secs >= 0 && +secs <= 300)) e.authTimeout = t('services.badAuthTimeout')
   return e
 }
 
 // authLabel says how this connection's login went.
-export function authLabel(auth) {
-  return { pending: 'Waiting for services…', identified: 'Logged in', failed: 'Login refused', unconfirmed: 'Services didn’t answer' }[auth] || ''
+export function authLabel(auth, t = english) {
+  return ['pending', 'identified', 'failed', 'unconfirmed'].includes(auth) ? t(`services.auth.${auth}`) : ''
 }

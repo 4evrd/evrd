@@ -3,7 +3,9 @@
   // in the add-network form. Shows nothing when the server has no directory.
   import Icon from './Icon.svelte'
   import { api } from '$lib/api.js'
+  import Msg from './Msg.svelte'
   import { searchNetworks, connectServers, serverLabel } from '$lib/directory.js'
+  import { t } from '$lib/i18n.svelte.js'
 
   let { picked = null, onpick, onmanual } = $props()
 
@@ -24,16 +26,16 @@
   <section class="card" id="directory" aria-labelledby="directory-h" data-testid="directory">
     <div class="section-head">
       <div class="od-stack" style="--od-gap:6px">
-        <h2 id="directory-h">Pick a network</h2>
-        <p class="desc">Choose a public network to fill in its servers and channels — you only add your nickname. Not listed? Type its details below.</p>
+        <h2 id="directory-h">{t('networks.dir.title')}</h2>
+        <p class="desc">{t('networks.dir.intro')}</p>
       </div>
-      <button class="btn btn-ghost btn-sm" type="button" onclick={onmanual}><Icon name="pencil" />Enter details manually</button>
+      <button class="btn btn-ghost btn-sm" type="button" onclick={onmanual}><Icon name="pencil" />{t('networks.dir.manual')}</button>
     </div>
     <label class="search dir-search">
-      <Icon name="search" /><span class="sr-only">Search networks</span>
-      <input id="dir-search" type="search" placeholder="Search {nets.length} networks: name, topic, region…" autocomplete="off" spellcheck="false" bind:value={q} onkeydown={key} />
+      <Icon name="search" /><span class="sr-only">{t('networks.search')}</span>
+      <input id="dir-search" type="search" placeholder={t('networks.dir.search', { count: nets.length })} autocomplete="off" spellcheck="false" bind:value={q} onkeydown={key} />
     </label>
-    <div class="dir-list" role="list" aria-label="Networks">
+    <div class="dir-list" role="list" aria-label={t('networks.dir.list')}>
       {#each shown as n (n.id)}
         <div role="listitem">
           <button class="dir-item" type="button" aria-pressed={picked === n.id} data-testid="directory-network" onclick={() => onpick(n)}>
@@ -43,12 +45,12 @@
             </span>
             <span class="meta mono">{serverLabel(connectServers(n)[0])}</span>
             {#if n.region || n.tags?.length}
-              <span class="tags">{#each [n.region, ...(n.tags || [])].filter(Boolean) as t}<span class="chip">{t}</span>{/each}</span>
+              <span class="tags">{#each [n.region, ...(n.tags || [])].filter(Boolean) as tag}<span class="chip">{tag}</span>{/each}</span>
             {/if}
           </button>
         </div>
       {:else}
-        <p class="desc">No network matches “{q}”. <button class="link" type="button" onclick={onmanual}>Enter its details manually</button>.</p>
+        <p class="desc"><Msg key="networks.dir.noMatch" vars={{ query: q }}>{#snippet manual()}<button class="link" type="button" onclick={onmanual}>{t('networks.dir.manualLink')}</button>{/snippet}</Msg></p>
       {/each}
     </div>
   </section>

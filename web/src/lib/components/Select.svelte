@@ -11,8 +11,9 @@
   import { tick } from 'svelte'
   import Icon from '$lib/components/Icon.svelte'
   import { step, edge, typeahead, indexOf } from '$lib/select.js'
+  import { t } from '$lib/i18n.svelte.js'
 
-  let { id, value = $bindable(), options = [], disabled = false, placeholder = 'Choose…', mono = false, strong = false, onchange = null, option = null, testid = null } = $props()
+  let { id, value = $bindable(), options = [], disabled = false, placeholder = '', mono = false, strong = false, onchange = null, option = null, testid = null } = $props()
 
   let open = $state(false)
   let active = $state(-1) // the highlighted option while open
@@ -85,7 +86,7 @@
     <span class="dd-value">
       {#if cur >= 0}
         {#if option}{@render option(options[cur], true)}{:else}<span class="od-truncate">{options[cur].label}</span>{/if}
-      {:else}<span class="faint od-truncate">{placeholder}</span>{/if}
+      {:else}<span class="faint od-truncate">{placeholder || t('ui.choose')}</span>{/if}
     </span>
     <Icon name="chevronDown" class="i-sm dd-chev" />
   </button>

@@ -1,0 +1,71 @@
+# Italian translation of evrd.
+# Copyright (C) 2026 evrd contributors
+# Maria Rossi <maria@example.org>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: evrd\n"
+"POT-Creation-Date: 2026-10-01 12:00+0200\n"
+"PO-Revision-Date: 2026-10-18 21:14+0200\n"
+"Last-Translator: Maria Rossi <maria@example.org>\n"
+"Language-Team: Italian <it@example.org>\n"
+"Language: it\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Poedit 3.4.2\n"
+"X-Poedit-SourceCharset: UTF-8\n"
+
+# Translator's own note.
+#. account
+#: src/routes/account/+page.svelte:110
+msgctxt "account.language"
+msgid "Language"
+msgstr "Lingua dell’app"
+
+#. account
+#. Keep {language} as it is.
+#, c-format
+msgctxt "account.languageBrowser"
+msgid "Browser language ({language})"
+msgstr ""
+"Lingua del "
+"browser ({language})"
+
+#. account
+#, fuzzy
+#| msgid "Save"
+msgctxt "account.saveProfile"
+msgid "Save profile"
+msgstr "Salva"
+
+#. account
+msgctxt "account.heading"
+msgid "Account settings"
+msgstr ""
+
+#. format
+#. Keep {count} as they are.
+msgctxt "format.minutesAgo"
+msgid "{count} minute ago"
+msgid_plural "{count} minutes ago"
+msgstr[0] "{count} minuto fa"
+msgstr[1] "{count} minuti fa"
+
+#. shell
+msgctxt "shell.fixThings"
+msgid "Fix {count} thing before saving:"
+msgid_plural "Fix {count} things before saving:"
+msgstr[0] "Correggi {count} cosa:"
+msgstr[1] ""
+
+msgctxt "test.escapes"
+msgid "Line one\nTab\there \"quoted\" back\\slash"
+msgstr ""
+"Riga uno\n"
+"Tab\tqui \"citato\" barra\\inversa"
+
+#~ msgctxt "account.old"
+#~ msgid "Old string"
+#~ msgstr "Vecchia stringa"

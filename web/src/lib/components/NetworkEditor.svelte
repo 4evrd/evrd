@@ -13,6 +13,7 @@
   import Copy from './Copy.svelte'
   import ConnLog from './ConnLog.svelte'
   import DirectoryPicker from './DirectoryPicker.svelte'
+  import Msg from './Msg.svelte'
   import { api } from '$lib/api.js'
   import { wait } from '$lib/format.js'
   import { fromDirectory, loginHint } from '$lib/directory.js'
@@ -20,13 +21,14 @@
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
   import { check, splitChannels } from '$lib/validate.js'
   import { METHODS, PRESETS, presetOf, applyPreset, usesPassword, checkAuth, authLabel } from '$lib/services.js'
+  import { t } from '$lib/i18n.svelte.js'
 
   let { id = null } = $props()
   const me = $derived(session.me)
   const settings = $derived(me.settings || {})
 
   const ENCODINGS = ['ISO-8859-1', 'ISO-8859-15', 'windows-1252', 'ISO-8859-2', 'windows-1250', 'windows-1251', 'KOI8-R', 'ISO-8859-7', 'ISO-8859-9', 'Shift_JIS', 'EUC-JP', 'ISO-2022-JP', 'GBK', 'Big5', 'EUC-KR']
-  const SECTIONS = [['servers', 'Servers'], ['identity', 'Identity'], ['sasl', 'Authentication'], ['tls', 'Certificates'], ['channels', 'Channels'], ['modules', 'Modules'], ['advanced', 'Advanced']]
+  const SECTIONS = ['servers', 'identity', 'sasl', 'tls', 'channels', 'modules', 'advanced']
 
   // Modules: what evrd offers (and an admin hasn't switched off server-wide)
   let available = $state([])
@@ -49,7 +51,7 @@
   const state = $derived(live || net)
   async function copyLog() {
     const text = (log || []).map((e) => `${new Date(e.at).toISOString()} ${e.from}${e.bad ? ' !' : ''} ${e.text}`).join('\n')
-    try { await navigator.clipboard.writeText(text); toast('Copied the connection log') } catch { toast('Couldn’t copy', 'bad') }
+    try { await navigator.clipboard.writeText(text); toast(t('networks.logCopied')) } catch { toast(t('networks.copyFailed'), 'bad') }
   }
 
   let net = $state(null)          // as loaded (null while adding)
@@ -97,7 +99,7 @@
     logTimer = setInterval(poll, 5000)
     try { const b = await api.bindHosts(); binds = { ...b, hosts: b.hosts || [] } } catch { /* no bind hosts */ }
     if (id == null) { f = blank(); return }
-    try { net = await api.network(id); f = fromNet(net) } catch (e) { loadErr = e.status === 404 ? 'That network doesn’t exist (or isn’t yours).' : e.message }
+    try { net = await api.network(id); f = fromNet(net) } catch (e) { loadErr = e.status === 404 ? t('networks.notFound') : e.message }
   })
 
   // ---- the network directory (adding only): picking one fills in its
@@ -127,7 +129,7 @@
   function addChannels() {
     const names = splitChannels(newChan)
     const bad = names.find((c) => !/^[#&+!][^\s,]{1,49}$/.test(c))
-    if (bad) { errs.newChan = `“${bad}” isn’t a channel — channels start with #.`; return }
+    if (bad) { errs.newChan = t('networks.badChannel', { channel: bad }); return }
     errs.newChan = ''
     for (const c of names) if (!f.channels.some((x) => x.name.toLowerCase() === c.toLowerCase())) f.channels.push({ name: c, key: '', detached: false, disabled: false })
     newChan = ''
@@ -138,14 +140,14 @@
   const colon = (h) => h.toUpperCase().match(/.{1,2}/g)?.join(':') || ''
   function addFp(v = newFp) {
     const fp = normFp(v)
-    if (!/^[0-9a-f]{64}$/.test(fp)) { errs.newFp = 'A SHA-256 fingerprint is 64 hex digits (colons are fine).'; return }
+    if (!/^[0-9a-f]{64}$/.test(fp)) { errs.newFp = t('networks.badFingerprint'); return }
     errs.newFp = ''
     if (!f.fingerprints.includes(fp)) f.fingerprints = [...f.fingerprints, fp]
     newFp = ''
   }
   async function trustSeen() {
     addFp(net.untrustedFingerprint)
-    await save(null, 'Trusted that certificate')
+    await save(null, t('networks.trustedCert'))
   }
 
   // ---- validation + save
@@ -156,16 +158,16 @@
       e[`sv-host-${i}`] = check('host', sv.host)
       e[`sv-port-${i}`] = check('port', sv.port)
     })
-    if (!f.servers.length) e.servers = 'Add at least one server.'
+    if (!f.servers.length) e.servers = t('networks.badServers')
     e.nick = check('nick', f.nick)
     e.altNick = check('optnick', f.altNick)
-    e.username = /[\s@!:]/.test(f.username) ? 'The ident can’t contain spaces, @, ! or :.' : ''
+    e.username = /[\s@!:]/.test(f.username) ? t('networks.badIdent') : ''
     if (f.floodOn) {
-      e.floodRate = +f.floodRate > 0 && +f.floodRate <= 100 ? '' : 'Lines per second, more than 0 and up to 100.'
-      e.floodBurst = Number.isInteger(+f.floodBurst) && +f.floodBurst >= 1 && +f.floodBurst <= 1000 ? '' : 'Whole number of lines, 1–1000.'
+      e.floodRate = +f.floodRate > 0 && +f.floodRate <= 100 ? '' : t('networks.badFloodRate')
+      e.floodBurst = Number.isInteger(+f.floodBurst) && +f.floodBurst >= 1 && +f.floodBurst <= 1000 ? '' : t('networks.badFloodBurst')
     }
-    e.joinDelay = Number.isInteger(+f.joinDelay) && +f.joinDelay >= 0 && +f.joinDelay <= 600 ? '' : 'Seconds, 0–600.'
-    Object.assign(e, checkAuth(f))
+    e.joinDelay = Number.isInteger(+f.joinDelay) && +f.joinDelay >= 0 && +f.joinDelay <= 600 ? '' : t('networks.badJoinDelay')
+    Object.assign(e, checkAuth(f, t))
     errs = Object.fromEntries(Object.entries(e).filter(([, v]) => v))
     return !Object.keys(errs).length
   }
@@ -202,14 +204,14 @@
       if (id == null) {
         const n = await api.addNetwork(body())
         if (f.enabled) await api.connect(n.id).catch(() => {})
-        toast(`Added ${n.name}${f.enabled ? ' — connecting…' : ''}`)
+        toast(t(f.enabled ? 'networks.addedConnecting' : 'networks.added', { name: n.name }))
         refreshNets(); refreshMe()
         goto(`/networks/${n.id}`, { replaceState: true })
         return
       }
       const n = await api.updateNetwork(id, body())
       net = n; f = fromNet(n)
-      toast(msg || (n.reconnected ? `Saved ${n.name} — reconnecting to apply` : `Saved ${n.name}`))
+      toast(msg || t(n.reconnected ? 'networks.savedReconnecting' : 'networks.saved', { name: n.name }))
       refreshNets()
     } catch (err) {
       formErr = err.message.charAt(0).toUpperCase() + err.message.slice(1) + '.'
@@ -218,54 +220,54 @@
   }
   async function toggleConnect(on) {
     try {
-      if (on) { await api.connect(id); toast(`Connecting to ${net.name}…`) } else { await api.disconnect(id); toast(`Disconnected from ${net.name}. Settings kept.`) }
+      if (on) { await api.connect(id); toast(t('networks.connecting', { name: net.name })) } else { await api.disconnect(id); toast(t('networks.disconnected', { name: net.name })) }
       net = await api.network(id); f.enabled = net.enabled; refreshNets()
     } catch (e) { toast(e.message, 'bad') }
   }
   async function remove() {
-    if (!(await confirmDialog({ title: `Remove ${net.name}?`, body: 'evrd disconnects, deletes its settings, and deletes this network’s chat history. It can’t be undone.', action: 'Remove network', typed: net.name }))) return
-    try { await api.removeNetwork(id); toast(`Removed ${net.name}`); refreshNets(); refreshMe(); goto('/networks') } catch (e) { toast(e.message, 'bad') }
+    if (!(await confirmDialog({ title: t('networks.removeConfirm', { name: net.name }), body: t('networks.removeBody'), action: t('networks.removeNetwork'), typed: net.name }))) return
+    try { await api.removeNetwork(id); toast(t('networks.removed', { name: net.name })); refreshNets(); refreshMe(); goto('/networks') } catch (e) { toast(e.message, 'bad') }
   }
   const pwState = (has, v) => (v === '' ? 'cleared' : v !== undefined ? 'new' : has ? 'saved' : 'none')
 </script>
 
-<svelte:head><title>{id == null ? 'Add a network' : net ? `${net.name} settings` : 'Network'} · evrd</title></svelte:head>
+<svelte:head><title>{id == null ? t('networks.addANetwork') : net ? t('networks.pageTitle', { name: net.name }) : t('networks.network')} · evrd</title></svelte:head>
 
 {#if loadErr}
-  <div class="callout bad" role="alert"><Icon name="alert" /><span>{loadErr} <a href="/networks">Back to networks</a></span></div>
+  <div class="callout bad" role="alert"><Icon name="alert" /><span>{loadErr} <a href="/networks">{t('networks.backToNetworks')}</a></span></div>
 {:else if !f}
   <div class="skel" style="height:120px"></div><div class="skel" style="height:320px;margin-top:16px"></div>
 {:else}
   <div class="page-head enter">
     <div class="titles">
-      <a class="back" href="/networks"><Icon name="chevron" class="i-sm flip" />Networks</a>
-      <h1>{id == null ? 'Add a network' : net.name}</h1>
-      <p>{id == null ? 'evrd connects as soon as you save, and stays connected.' : `${net.servers?.length || 1} server${(net.servers?.length || 1) === 1 ? '' : 's'} · ${net.currentNick || net.nick}${net.server ? ' · on ' + net.server : ''}`}</p>
+      <a class="back" href="/networks"><Icon name="chevron" class="i-sm flip" />{t('networks.back')}</a>
+      <h1>{id == null ? t('networks.addANetwork') : net.name}</h1>
+      <p>{id == null ? t('networks.addIntro') : `${t('networks.serverCount', { count: net.servers?.length || 1 })} · ${net.currentNick || net.nick}${net.server ? ' · ' + t('networks.onServer', { server: net.server }) : ''}`}</p>
     </div>
     {#if net}
       <div class="od-cluster">
         <StatusChip status={state.status} />
-        <a class="btn" href="/chat?net={net.id}"><Icon name="message" />Open chat</a>
+        <a class="btn" href="/chat?net={net.id}"><Icon name="message" />{t('networks.openChat')}</a>
       </div>
     {/if}
   </div>
 
   <div class="editor">
-    <nav class="toc" aria-label="Sections">
-      {#if net}<a href="#connect">Connect a client</a>{/if}
-      {#each SECTIONS as [k, l]}<a href="#{k}">{l}</a>{/each}
-      {#if net}<a href="#log">Connection log</a><a href="#danger">Remove</a>{/if}
+    <nav class="toc" aria-label={t('networks.sections')}>
+      {#if net}<a href="#connect">{t('networks.section.connect')}</a>{/if}
+      {#each SECTIONS as k}<a href="#{k}">{t(`networks.section.${k}`)}</a>{/each}
+      {#if net}<a href="#log">{t('networks.section.log')}</a><a href="#danger">{t('networks.section.remove')}</a>{/if}
     </nav>
 
-    <form class="form sections" novalidate onsubmit={save} aria-label={id == null ? 'Add a network' : `Edit ${net.name}`}>
+    <form class="form sections" novalidate onsubmit={save} aria-label={id == null ? t('networks.formAdd') : t('networks.formEdit', { name: net.name })}>
       {#if formErr}<div class="callout bad" role="alert" id="form-err"><Icon name="alert" /><span>{formErr}</span></div>{/if}
       {#if state && state.status !== 'connected' && state.status !== 'disconnected' && state.lastError && !state.untrustedFingerprint}
         <div class="callout bad" role="status" data-testid="conn-problem">
           <Icon name="alert" />
           <div class="od-stack" style="--od-gap:6px">
-            <span><b>Can’t connect{state.server ? ' to ' + state.server : ''}:</b> {state.lastError}.</span>
+            <span><b>{state.server ? t('networks.cantConnectTo', { server: state.server }) : t('networks.cantConnect')}</b> {state.lastError}.</span>
             {#if state.hint}<span>{state.hint}</span>{/if}
-            <span class="faint" style="font-size:var(--fs-xs)">{state.retryIn ? `Trying again in ${wait(state.retryIn)}` : 'Trying again'}{state.attempts > 1 ? ` · attempt ${state.attempts}` : ''} · <a href="#log">connection log</a></span>
+            <span class="faint" style="font-size:var(--fs-xs)">{state.retryIn ? t('networks.tryingAgainIn', { wait: wait(state.retryIn) }) : t('networks.tryingAgain')}{state.attempts > 1 ? ` · ${t('networks.attempt', { count: state.attempts })}` : ''} · <a href="#log">{t('networks.connectionLogLink')}</a></span>
           </div>
         </div>
       {/if}
@@ -273,10 +275,10 @@
         <div class="callout warn" role="alert">
           <Icon name="shield" />
           <div class="od-stack" style="--od-gap:8px">
-            <span><b>evrd refused {net.server || 'the server'}’s certificate.</b> {net.lastError}</span>
+            <span><b>{t('networks.certRefused', { server: net.server || t('networks.theServer') })}</b> {net.lastError}</span>
             <span class="mono fp">{colon(net.untrustedFingerprint)}</span>
-            <span>If you know this is the right server (a self-signed certificate, say), trust this exact certificate.</span>
-            <div><button class="btn btn-sm" type="button" onclick={trustSeen}><Icon name="check" />Trust this certificate</button></div>
+            <span>{t('networks.certTrustHelp')}</span>
+            <div><button class="btn btn-sm" type="button" onclick={trustSeen}><Icon name="check" />{t('networks.trustCert')}</button></div>
           </div>
         </div>
       {/if}
@@ -288,9 +290,9 @@
         <div class="callout" role="status" data-testid="directory-picked">
           <Icon name="check" />
           <span>
-            <b>{picked.name}</b>: its servers{picked.channels?.length ? ' and channels' : ''} are filled in below. Check your nickname under <a href="#identity">Identity</a>, then add it.
-            {#if loginHint(picked)}{loginHint(picked)}{/if}
-            {#if picked.homepage}<a href={picked.homepage} target="_blank" rel="noopener noreferrer">About {picked.name}</a>{/if}
+            <Msg key={picked.channels?.length ? 'networks.pickedChannels' : 'networks.picked'}>{#snippet name()}<b>{picked.name}</b>{/snippet}{#snippet identity()}<a href="#identity">{t('networks.section.identity')}</a>{/snippet}</Msg>
+            {#if loginHint(picked, t)}{loginHint(picked, t)}{/if}
+            {#if picked.homepage}<a href={picked.homepage} target="_blank" rel="noopener noreferrer">{t('networks.about', { name: picked.name })}</a>{/if}
           </span>
         </div>
       {/if}
@@ -298,15 +300,17 @@
       {#if net}
         <section class="card" id="connect" aria-labelledby="connect-h" data-testid="connect-box">
           <div class="panel-grid">
-            <div class="od-stack"><h2 id="connect-h">Connect a client</h2><p class="desc">Point your IRC client at evrd to use {net.name} — you get what you missed, then the live feed.</p></div>
+            <div class="od-stack"><h2 id="connect-h">{t('networks.section.connect')}</h2><p class="desc">{t('networks.connectIntro', { name: net.name })}</p></div>
             <div class="kv-list">
-              <div class="kv"><div class="od-field"><span class="k">Server</span><span class="v mono">{session.config?.ircHost}</span></div><Copy text={session.config?.ircHost || ''} label="Copy server" /></div>
-              <div class="kv"><div class="od-field"><span class="k">Port</span><span class="v mono">{ircPort().port}{ircPort().tls ? ' · TLS' : ' · no TLS'}</span></div><Copy text={String(ircPort().port)} label="Copy port" /></div>
-              <div class="kv"><div class="od-field"><span class="k">Server password</span><span class="v mono" data-testid="connect-pass">{me.username}/{net.name}:<i>password</i></span></div><Copy text="{me.username}/{net.name}:" label="Copy server password" /></div>
+              <div class="kv"><div class="od-field"><span class="k">{t('networks.server')}</span><span class="v mono">{session.config?.ircHost}</span></div><Copy text={session.config?.ircHost || ''} label={t('networks.copyServer')} /></div>
+              <div class="kv"><div class="od-field"><span class="k">{t('networks.port')}</span><span class="v mono">{ircPort().port}{ircPort().tls ? ' · TLS' : ` · ${t('networks.noTls')}`}</span></div><Copy text={String(ircPort().port)} label={t('networks.copyPort')} /></div>
+              <div class="kv"><div class="od-field"><span class="k">{t('networks.serverPassword')}</span><span class="v mono" data-testid="connect-pass">{me.username}/{net.name}:<i>{t('networks.passwordWord')}</i></span></div><Copy text="{me.username}/{net.name}:" label={t('networks.copyServerPassword')} /></div>
               <p class="desc" style="font-size:var(--fs-xs)">
-                {#if me.hasPassword}<i>password</i> is your account password or a <a href="/clients">client password</a>.
-                {:else}You sign in with {session.config?.ssoLabel || 'single sign-on'}, so <i>password</i> is a <a href="/clients">client password</a> — not your {session.config?.ssoLabel || 'SSO'} password.{/if}
-                {#if session.config?.ircSelfSigned && ircPort().tls} The certificate is self-signed: accept it in your client.{/if}
+                {#snippet pw()}<i>{t('networks.passwordWord')}</i>{/snippet}
+                {#snippet clientPw()}<a href="/clients">{t('networks.clientPassword')}</a>{/snippet}
+                {#if me.hasPassword}<Msg key="networks.passwordIsAccount" password={pw} clientPassword={clientPw} />
+                {:else}<Msg key="networks.passwordIsClient" vars={{ sso: session.config?.ssoLabel || t('networks.sso'), ssoShort: session.config?.ssoLabel || t('networks.ssoShort') }} password={pw} clientPassword={clientPw} />{/if}
+                {#if session.config?.ircSelfSigned && ircPort().tls} {t('networks.selfSigned')}{/if}
               </p>
             </div>
           </div>
@@ -315,11 +319,11 @@
 
       <section class="card" id="general" aria-labelledby="general-h">
         <div class="panel-grid">
-          <div class="od-stack"><h2 id="general-h">Network</h2><p class="desc">The name is how clients pick it: <span class="code">{me.username}/{f.name || 'name'}:password</span>.</p></div>
+          <div class="od-stack"><h2 id="general-h">{t('networks.network')}</h2><p class="desc"><Msg key="networks.nameIntro">{#snippet example()}<span class="code">{me.username}/{f.name || t('networks.nameWord')}:{t('networks.passwordWord')}</span>{/snippet}</Msg></p></div>
           <div class="form-grid">
-            <Field id="name" label="Name" required err={errs.name}><input class="input" id="name" placeholder="libera" autocomplete="off" bind:value={f.name} aria-invalid={!!errs.name} /></Field>
+            <Field id="name" label={t('networks.name')} required err={errs.name}><input class="input" id="name" placeholder="libera" autocomplete="off" bind:value={f.name} aria-invalid={!!errs.name} /></Field>
             <div class="check-row">
-              <span class="od-field"><span id="conn-l">Connected</span><span>Off keeps the settings without connecting.</span></span>
+              <span class="od-field"><span id="conn-l">{t('networks.connected')}</span><span>{t('networks.connectedHelp')}</span></span>
               <Switch checked={f.enabled} labelledby="conn-l" onchange={(v) => (id == null ? (f.enabled = v) : toggleConnect(v))} />
             </div>
           </div>
@@ -328,49 +332,49 @@
 
       <section class="card" id="servers" aria-labelledby="servers-h">
         <div class="panel-grid">
-          <div class="od-stack"><h2 id="servers-h">Servers</h2><p class="desc">evrd connects to the first one. When the link drops it moves on to the next, round the list — like ZNC.</p></div>
+          <div class="od-stack"><h2 id="servers-h">{t('networks.section.servers')}</h2><p class="desc">{t('networks.serversIntro')}</p></div>
           <div class="od-stack" style="--od-gap:12px">
             {#if errs.servers}<p class="err-text">{errs.servers}</p>{/if}
             {#each f.servers as sv, i}
               <div class="server-row" data-testid="server-row">
                 <span class="idx mono">{i + 1}</span>
-                <Field id="sv-host-{i}" label="Server" err={errs[`sv-host-${i}`]}><input class="input mono" id="sv-host-{i}" placeholder="irc.libera.chat" spellcheck="false" autocomplete="off" bind:value={sv.host} aria-invalid={!!errs[`sv-host-${i}`]} /></Field>
-                <Field id="sv-port-{i}" label="Port" err={errs[`sv-port-${i}`]}><input class="input mono" id="sv-port-{i}" inputmode="numeric" bind:value={sv.port} aria-invalid={!!errs[`sv-port-${i}`]} /></Field>
+                <Field id="sv-host-{i}" label={t('networks.server')} err={errs[`sv-host-${i}`]}><input class="input mono" id="sv-host-{i}" placeholder="irc.libera.chat" spellcheck="false" autocomplete="off" bind:value={sv.host} aria-invalid={!!errs[`sv-host-${i}`]} /></Field>
+                <Field id="sv-port-{i}" label={t('networks.port')} err={errs[`sv-port-${i}`]}><input class="input mono" id="sv-port-{i}" inputmode="numeric" bind:value={sv.port} aria-invalid={!!errs[`sv-port-${i}`]} /></Field>
                 <div class="tls"><span class="label" id="sv-tls-l-{i}">TLS</span><Switch checked={sv.tls} labelledby="sv-tls-l-{i}" onchange={(v) => setTLS(sv, v)} /></div>
-                <Field id="sv-pass-{i}" label="Server password" encrypted help={pwState(sv.hasPassword, sv.password) === 'saved' ? 'Saved — type to replace.' : pwState(sv.hasPassword, sv.password) === 'cleared' ? 'Will be removed.' : 'Sent as PASS. Usually empty.'}>
+                <Field id="sv-pass-{i}" label={t('networks.serverPassword')} encrypted help={pwState(sv.hasPassword, sv.password) === 'saved' ? t('networks.passSaved') : pwState(sv.hasPassword, sv.password) === 'cleared' ? t('networks.passRemoved') : t('networks.passHelp')}>
                   <div class="input-group">
-                    <input class="input mono" id="sv-pass-{i}" type="password" autocomplete="new-password" placeholder={sv.hasPassword && sv.password === undefined ? '•••••••• (unchanged)' : ''} value={sv.password ?? ''} oninput={(e) => (sv.password = e.currentTarget.value)} />
-                    {#if sv.hasPassword && sv.password !== ''}<button class="btn btn-ghost btn-sm" type="button" onclick={() => (sv.password = '')}>Clear</button>{/if}
+                    <input class="input mono" id="sv-pass-{i}" type="password" autocomplete="new-password" placeholder={sv.hasPassword && sv.password === undefined ? t('networks.unchanged') : ''} value={sv.password ?? ''} oninput={(e) => (sv.password = e.currentTarget.value)} />
+                    {#if sv.hasPassword && sv.password !== ''}<button class="btn btn-ghost btn-sm" type="button" onclick={() => (sv.password = '')}>{t('networks.clear')}</button>{/if}
                   </div>
                 </Field>
                 <div class="actions">
-                  <button class="icon-btn" type="button" aria-label="Move server {i + 1} up" disabled={i === 0} onclick={() => moveServer(i, -1)}><Icon name="chevronDown" class="flip-v" /></button>
-                  <button class="icon-btn" type="button" aria-label="Move server {i + 1} down" disabled={i === f.servers.length - 1} onclick={() => moveServer(i, 1)}><Icon name="chevronDown" /></button>
-                  <button class="icon-btn" type="button" aria-label="Remove server {i + 1}" disabled={f.servers.length === 1} onclick={() => removeServer(i)}><Icon name="trash" /></button>
+                  <button class="icon-btn" type="button" aria-label={t('networks.moveUp', { n: i + 1 })} disabled={i === 0} onclick={() => moveServer(i, -1)}><Icon name="chevronDown" class="flip-v" /></button>
+                  <button class="icon-btn" type="button" aria-label={t('networks.moveDown', { n: i + 1 })} disabled={i === f.servers.length - 1} onclick={() => moveServer(i, 1)}><Icon name="chevronDown" /></button>
+                  <button class="icon-btn" type="button" aria-label={t('networks.removeServer', { n: i + 1 })} disabled={f.servers.length === 1} onclick={() => removeServer(i)}><Icon name="trash" /></button>
                 </div>
               </div>
             {/each}
-            <div><button class="btn btn-sm" type="button" onclick={addServer}><Icon name="plus" />Add a server</button></div>
+            <div><button class="btn btn-sm" type="button" onclick={addServer}><Icon name="plus" />{t('networks.addServer')}</button></div>
           </div>
         </div>
       </section>
 
       <section class="card" id="identity" aria-labelledby="identity-h">
         <div class="panel-grid">
-          <div class="od-stack"><h2 id="identity-h">Identity</h2><p class="desc">Who you are on this network. Empty fields use your <a href="/account#bouncer">account defaults</a>.</p></div>
+          <div class="od-stack"><h2 id="identity-h">{t('networks.section.identity')}</h2><p class="desc"><Msg key="networks.identityIntro">{#snippet defaults()}<a href="/account#bouncer">{t('networks.accountDefaults')}</a>{/snippet}</Msg></p></div>
           <div class="form-grid">
-            <Field id="nick" label="Nickname" required err={errs.nick}><input class="input mono" id="nick" spellcheck="false" autocomplete="off" bind:value={f.nick} aria-invalid={!!errs.nick} /></Field>
-            <Field id="altNick" label="Alternate nickname" help="Tried when the nickname is taken." err={errs.altNick}><input class="input mono" id="altNick" spellcheck="false" autocomplete="off" placeholder={me.defaultAltNick || `${f.nick || 'nick'}_`} bind:value={f.altNick} aria-invalid={!!errs.altNick} /></Field>
-            <Field id="username" label="Ident" help="The user part of nick!ident@host." err={errs.username}><input class="input mono" id="username" spellcheck="false" autocomplete="off" placeholder={settings.defaultIdent || f.nick || 'same as nick'} bind:value={f.username} aria-invalid={!!errs.username} /></Field>
-            <Field id="realname" label="Real name" help="Shown in /whois."><input class="input" id="realname" placeholder={me.defaultRealname || f.nick} bind:value={f.realname} /></Field>
-            <Field id="quitMsg" label="Quit message" help="Sent when you switch the network off." span><input class="input" id="quitMsg" placeholder={settings.quitMsg || 'none'} bind:value={f.quitMsg} /></Field>
-            <Field id="bindHost" label="Bind host" span help={binds.locked ? 'Set by your admin.' : binds.any ? 'The local address to connect from. Admins can use any address this server has.' : binds.hosts.length ? 'The local address evrd connects from.' : 'This bouncer doesn’t offer a choice of address.'}>
+            <Field id="nick" label={t('networks.nick')} required err={errs.nick}><input class="input mono" id="nick" spellcheck="false" autocomplete="off" bind:value={f.nick} aria-invalid={!!errs.nick} /></Field>
+            <Field id="altNick" label={t('networks.altNick')} help={t('networks.altNickHelp')} err={errs.altNick}><input class="input mono" id="altNick" spellcheck="false" autocomplete="off" placeholder={me.defaultAltNick || `${f.nick || t('networks.nickWord')}_`} bind:value={f.altNick} aria-invalid={!!errs.altNick} /></Field>
+            <Field id="username" label={t('networks.ident')} help={t('networks.identHelp')} err={errs.username}><input class="input mono" id="username" spellcheck="false" autocomplete="off" placeholder={settings.defaultIdent || f.nick || t('networks.sameAsNick')} bind:value={f.username} aria-invalid={!!errs.username} /></Field>
+            <Field id="realname" label={t('networks.realname')} help={t('networks.realnameHelp')}><input class="input" id="realname" placeholder={me.defaultRealname || f.nick} bind:value={f.realname} /></Field>
+            <Field id="quitMsg" label={t('networks.quitMsg')} help={t('networks.quitMsgHelp')} span><input class="input" id="quitMsg" placeholder={settings.quitMsg || t('networks.none')} bind:value={f.quitMsg} /></Field>
+            <Field id="bindHost" label={t('networks.bindHost')} span help={binds.locked ? t('networks.bindLocked') : binds.any ? t('networks.bindAny') : binds.hosts.length ? t('networks.bindHosts') : t('networks.bindNone')}>
               {#if binds.any}
-                <input class="input mono" id="bindHost" list="bindhost-list" placeholder={settings.bindHost || 'server default'} bind:value={f.bindHost} />
+                <input class="input mono" id="bindHost" list="bindhost-list" placeholder={settings.bindHost || t('networks.serverDefaultLower')} bind:value={f.bindHost} />
                 <datalist id="bindhost-list">{#each binds.hosts as h}<option value={h}></option>{/each}</datalist>
               {:else}
                 <Select id="bindHost" bind:value={f.bindHost} disabled={binds.locked || !binds.hosts.length} options={[
-                  { value: '', label: settings.bindHost ? `Account default (${settings.bindHost})` : 'Server default' },
+                  { value: '', label: settings.bindHost ? t('networks.accountDefault', { host: settings.bindHost }) : t('networks.serverDefault') },
                   ...binds.hosts.map((h) => ({ value: h, label: h })),
                   ...(f.bindHost && !binds.hosts.includes(f.bindHost) ? [{ value: f.bindHost, label: f.bindHost }] : []),
                 ]} />
@@ -383,59 +387,59 @@
       <section class="card" id="sasl" aria-labelledby="sasl-h">
         <div class="panel-grid">
           <div class="od-stack">
-            <h2 id="sasl-h">Authentication</h2>
-            <p class="desc">How evrd logs in to your account with the network’s services: SASL while connecting, or IDENTIFY to NickServ once connected. Pick your network’s kind to fill it in. <a href="https://github.com/4evrd/evrd/blob/main/docs/services.md" target="_blank" rel="noreferrer">More</a></p>
-            {#if state?.auth}<p class="desc" data-testid="auth-state"><span class="chip">{authLabel(state.auth)}</span></p>{/if}
+            <h2 id="sasl-h">{t('networks.section.sasl')}</h2>
+            <p class="desc">{t('networks.authIntro')} <a href="https://github.com/4evrd/evrd/blob/main/docs/services.md" target="_blank" rel="noreferrer">{t('networks.more')}</a></p>
+            {#if state?.auth}<p class="desc" data-testid="auth-state"><span class="chip">{authLabel(state.auth, t)}</span></p>{/if}
           </div>
           <div class="form-grid">
-            <Field id="authPreset" label="Network services">
-              <Select id="authPreset" value={presetOf(f)} onchange={(v) => applyPreset(f, v)} options={PRESETS.map((p) => ({ value: p.key, label: p.label }))} />
+            <Field id="authPreset" label={t('networks.authPreset')}>
+              <Select id="authPreset" value={presetOf(f)} onchange={(v) => applyPreset(f, v)} options={PRESETS.map((p) => ({ value: p.key, label: t(p.label) }))} />
             </Field>
-            <Field id="authMethod" label="Login method">
-              <Select id="authMethod" bind:value={f.authMethod} options={METHODS.map(([k, l]) => ({ value: k, label: l }))} />
+            <Field id="authMethod" label={t('networks.authMethod')}>
+              <Select id="authMethod" bind:value={f.authMethod} options={METHODS.map(([k, l]) => ({ value: k, label: t(l) }))} />
             </Field>
             {#if usesPassword(f)}
-              <Field id="saslUser" label="Account name" help="Usually your registered nick."><input class="input mono" id="saslUser" spellcheck="false" autocomplete="off" placeholder={f.authMethod === 'sasl' || f.authMethod === 'auto' ? f.username || f.nick || 'nick' : f.nick || 'nick'} bind:value={f.saslUser} /></Field>
-              <Field id="saslPass" label="Password" encrypted help={pwState(f.hasPassword, f.password) === 'saved' ? 'A password is saved. Type a new one to replace it.' : pwState(f.hasPassword, f.password) === 'cleared' ? 'Will be removed: evrd won’t log in.' : 'Your services password. Leave empty if you don’t have an account.'}>
+              <Field id="saslUser" label={t('networks.account')} help={t('networks.accountHelp')}><input class="input mono" id="saslUser" spellcheck="false" autocomplete="off" placeholder={f.authMethod === 'sasl' || f.authMethod === 'auto' ? f.username || f.nick || t('networks.nickWord') : f.nick || t('networks.nickWord')} bind:value={f.saslUser} /></Field>
+              <Field id="saslPass" label={t('networks.password')} encrypted help={pwState(f.hasPassword, f.password) === 'saved' ? t('networks.authPassSaved') : pwState(f.hasPassword, f.password) === 'cleared' ? t('networks.authPassRemoved') : t('networks.authPassHelp')}>
                 <div class="input-group">
-                  <input class="input mono" id="saslPass" type="password" autocomplete="new-password" placeholder={f.hasPassword && f.password === undefined ? '•••••••• (unchanged)' : ''} value={f.password ?? ''} oninput={(e) => (f.password = e.currentTarget.value)} />
-                  {#if f.hasPassword && f.password !== ''}<button class="btn btn-ghost btn-sm" type="button" onclick={() => (f.password = '')}>Clear</button>{/if}
+                  <input class="input mono" id="saslPass" type="password" autocomplete="new-password" placeholder={f.hasPassword && f.password === undefined ? t('networks.unchanged') : ''} value={f.password ?? ''} oninput={(e) => (f.password = e.currentTarget.value)} />
+                  {#if f.hasPassword && f.password !== ''}<button class="btn btn-ghost btn-sm" type="button" onclick={() => (f.password = '')}>{t('networks.clear')}</button>{/if}
                 </div>
               </Field>
             {/if}
             {#if f.authMethod === 'none' && f.modules?.q?.enabled}
-              <p class="desc span-2">The q module logs in to QuakeNet’s Q with this account and password.</p>
+              <p class="desc span-2">{t('networks.qModule')}</p>
             {/if}
             {#if f.authMethod === 'auto' || f.authMethod === 'nickserv'}
-              <Field id="servicesNick" label="Services nick" help={f.authMethod === 'auto' ? 'Used when the network has no SASL.' : 'Where IDENTIFY goes. /NS sends the server’s own NS command.'} err={errs.servicesNick}><input class="input mono" id="servicesNick" spellcheck="false" autocomplete="off" placeholder="NickServ" bind:value={f.servicesNick} aria-invalid={!!errs.servicesNick} /></Field>
-              <Field id="identifyArgs" label="IDENTIFY sends">
+              <Field id="servicesNick" label={t('networks.servicesNick')} help={f.authMethod === 'auto' ? t('networks.servicesNickAuto') : t('networks.servicesNickHelp')} err={errs.servicesNick}><input class="input mono" id="servicesNick" spellcheck="false" autocomplete="off" placeholder="NickServ" bind:value={f.servicesNick} aria-invalid={!!errs.servicesNick} /></Field>
+              <Field id="identifyArgs" label={t('networks.identifyArgs')}>
                 <Select id="identifyArgs" bind:value={f.identifyArgs} options={[
-                  { value: '', label: 'The account only when it isn’t the nick in use' },
-                  { value: 'account', label: 'Account and password (Atheme, Anope)' },
-                  { value: 'password', label: 'Just the password (older services)' },
+                  { value: '', label: t('networks.identifyArgs.auto') },
+                  { value: 'account', label: t('networks.identifyArgs.account') },
+                  { value: 'password', label: t('networks.identifyArgs.password') },
                 ]} />
               </Field>
-              <Field id="identifyOn" label="Identify">
+              <Field id="identifyOn" label={t('networks.identifyOn')}>
                 <Select id="identifyOn" bind:value={f.identifyOn} options={[
-                  { value: '', label: 'As soon as evrd is connected' },
-                  { value: 'prompt', label: 'When NickServ asks for the password' },
+                  { value: '', label: t('networks.identifyOn.connect') },
+                  { value: 'prompt', label: t('networks.identifyOn.prompt') },
                 ]} />
               </Field>
             {/if}
             {#if f.authMethod === 'command'}
-              <Field id="authCommand" label="Login command" span encrypted help="Raw IRC, or /msg target text. <span class='code'>%account%</span>, <span class='code'>%password%</span> and <span class='code'>%nick%</span> are filled in — don’t type the password itself." err={errs.authCommand}><input class="input mono" id="authCommand" spellcheck="false" autocomplete="off" placeholder="PRIVMSG X@channels.undernet.org :LOGIN %account% %password%" bind:value={f.authCommand} aria-invalid={!!errs.authCommand} /></Field>
+              <Field id="authCommand" label={t('networks.authCommand')} span encrypted err={errs.authCommand}>{#snippet helpBody()}<Msg key="networks.authCommandHelp">{#snippet account()}<span class="code">%account%</span>{/snippet}{#snippet password()}<span class="code">%password%</span>{/snippet}{#snippet nick()}<span class="code">%nick%</span>{/snippet}</Msg>{/snippet}<input class="input mono" id="authCommand" spellcheck="false" autocomplete="off" placeholder="PRIVMSG X@channels.undernet.org :LOGIN %account% %password%" bind:value={f.authCommand} aria-invalid={!!errs.authCommand} /></Field>
             {/if}
             {#if f.authMethod !== 'none'}
-              <Field id="ghost" label="When the nick is taken" help="After logging in, ask services to free it, then switch to it.">
+              <Field id="ghost" label={t('networks.ghost')} help={t('networks.ghostHelp')}>
                 <Select id="ghost" bind:value={f.ghost} options={[
-                  { value: '', label: 'Keep the alternate nick' },
-                  { value: 'ghost', label: 'GHOST it' },
-                  { value: 'regain', label: 'REGAIN it (Atheme)' },
-                  { value: 'recover', label: 'RECOVER it (Anope)' },
+                  { value: '', label: t('networks.ghost.keep') },
+                  { value: 'ghost', label: t('networks.ghost.ghost') },
+                  { value: 'regain', label: t('networks.ghost.regain') },
+                  { value: 'recover', label: t('networks.ghost.recover') },
                 ]} />
               </Field>
-              <Field id="authTimeout" label="Wait for services" help="Seconds to wait for an answer (0 = 15)." err={errs.authTimeout}><input class="input mono" id="authTimeout" inputmode="numeric" bind:value={f.authTimeout} aria-invalid={!!errs.authTimeout} /></Field>
-              <div class="check-row span-2"><span class="od-field"><span id="jaa-l">Join channels after identifying</span><span>Holds the joins until services confirm the login, for channels only logged-in users may join (+r).</span></span><Switch checked={f.joinAfterAuth} labelledby="jaa-l" onchange={(v) => (f.joinAfterAuth = v)} /></div>
+              <Field id="authTimeout" label={t('networks.authTimeout')} help={t('networks.authTimeoutHelp')} err={errs.authTimeout}><input class="input mono" id="authTimeout" inputmode="numeric" bind:value={f.authTimeout} aria-invalid={!!errs.authTimeout} /></Field>
+              <div class="check-row span-2"><span class="od-field"><span id="jaa-l">{t('networks.joinAfterAuth')}</span><span>{t('networks.joinAfterAuthHelp')}</span></span><Switch checked={f.joinAfterAuth} labelledby="jaa-l" onchange={(v) => (f.joinAfterAuth = v)} /></div>
             {/if}
           </div>
         </div>
@@ -443,23 +447,23 @@
 
       <section class="card" id="tls" aria-labelledby="tls-h">
         <div class="panel-grid">
-          <div class="od-stack"><h2 id="tls-h">Certificates</h2><p class="desc">How evrd decides to trust a TLS server. A listed fingerprint always wins.</p></div>
+          <div class="od-stack"><h2 id="tls-h">{t('networks.section.tls')}</h2><p class="desc">{t('networks.tlsIntro')}</p></div>
           <div class="od-stack" style="--od-gap:4px">
-            <div class="check-row"><span class="od-field"><span id="pki-l">Verify with certificate authorities</span><span>Accept certificates a public CA signed for the server’s name (TrustPKI).</span></span><Switch checked={f.trustPKI} labelledby="pki-l" onchange={(v) => (f.trustPKI = v)} /></div>
-            <div class="check-row"><span class="od-field"><span id="all-l">Trust every certificate</span><span>Skips all checks (TrustAllCerts). Anyone in the middle could read your traffic.</span></span><Switch checked={f.trustAllCerts} labelledby="all-l" onchange={(v) => (f.trustAllCerts = v)} /></div>
-            {#if f.trustAllCerts}<div class="callout warn"><Icon name="alert" /><span>Certificates aren’t checked for this network. Prefer trusting the server’s fingerprint below.</span></div>{/if}
-            <span class="caps" style="margin-top:var(--s3)">Trusted fingerprints (SHA-256)</span>
+            <div class="check-row"><span class="od-field"><span id="pki-l">{t('networks.trustPKI')}</span><span>{t('networks.trustPKIHelp')}</span></span><Switch checked={f.trustPKI} labelledby="pki-l" onchange={(v) => (f.trustPKI = v)} /></div>
+            <div class="check-row"><span class="od-field"><span id="all-l">{t('networks.trustAll')}</span><span>{t('networks.trustAllHelp')}</span></span><Switch checked={f.trustAllCerts} labelledby="all-l" onchange={(v) => (f.trustAllCerts = v)} /></div>
+            {#if f.trustAllCerts}<div class="callout warn"><Icon name="alert" /><span>{t('networks.trustAllWarn')}</span></div>{/if}
+            <span class="caps" style="margin-top:var(--s3)">{t('networks.fingerprints')}</span>
             <div class="rows">
               {#each f.fingerprints as fp}
-                <div class="row fp-row"><span class="mono fp">{colon(fp)}</span><button class="btn btn-ghost btn-sm" type="button" aria-label="Remove fingerprint {colon(fp).slice(0, 11)}" onclick={() => (f.fingerprints = f.fingerprints.filter((x) => x !== fp))}>Remove</button></div>
+                <div class="row fp-row"><span class="mono fp">{colon(fp)}</span><button class="btn btn-ghost btn-sm" type="button" aria-label={t('networks.removeFingerprint', { fp: colon(fp).slice(0, 11) })} onclick={() => (f.fingerprints = f.fingerprints.filter((x) => x !== fp))}>{t('networks.remove')}</button></div>
               {:else}
-                <p class="desc" style="font-size:var(--fs-xs)">None. For a self-signed server, add its certificate’s SHA-256 here — evrd shows it when it refuses one.</p>
+                <p class="desc" style="font-size:var(--fs-xs)">{t('networks.noFingerprints')}</p>
               {/each}
             </div>
-            <Field id="newFp" label="Add a fingerprint" err={errs.newFp}>
+            <Field id="newFp" label={t('networks.addFingerprint')} err={errs.newFp}>
               <div class="input-group">
-                <input class="input mono" id="newFp" placeholder="AB:CD:…  (64 hex digits)" spellcheck="false" autocomplete="off" bind:value={newFp} onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFp() } }} />
-                <button class="btn" type="button" onclick={() => addFp()}><Icon name="plus" />Add</button>
+                <input class="input mono" id="newFp" placeholder={t('networks.fpPlaceholder')} spellcheck="false" autocomplete="off" bind:value={newFp} onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFp() } }} />
+                <button class="btn" type="button" onclick={() => addFp()}><Icon name="plus" />{t('networks.add')}</button>
               </div>
             </Field>
           </div>
@@ -468,32 +472,32 @@
 
       <section class="card" id="channels" aria-labelledby="channels-h">
         <div class="panel-grid">
-          <div class="od-stack"><h2 id="channels-h">Channels</h2><p class="desc">Joined on every connect. /join and /part keep this list up to date. Detached channels stay joined and logged but are hidden from IRC clients until you /join them.</p></div>
+          <div class="od-stack"><h2 id="channels-h">{t('networks.section.channels')}</h2><p class="desc">{t('networks.channelsIntro')}</p></div>
           <div class="od-stack" style="--od-gap:12px">
             {#if f.channels.length}
               <div class="table-wrap">
                 <table class="chan-table">
-                  <thead><tr><th scope="col">Channel</th><th scope="col">Key</th><th scope="col">Detached</th><th scope="col">Join on connect</th><th scope="col"><span class="sr-only">Remove</span></th></tr></thead>
+                  <thead><tr><th scope="col">{t('networks.channel')}</th><th scope="col">{t('networks.key')}</th><th scope="col">{t('networks.detached')}</th><th scope="col">{t('networks.joinOnConnect')}</th><th scope="col"><span class="sr-only">{t('networks.remove')}</span></th></tr></thead>
                   <tbody>
                     {#each f.channels as c (c.name)}
                       <tr data-testid="chan-row">
                         <td class="mono">{c.name}</td>
-                        <td><input class="input mono key" aria-label="Key for {c.name}" placeholder="none" autocomplete="off" bind:value={c.key} /></td>
-                        <td><Switch checked={c.detached} label="Detach {c.name}" onchange={(v) => (c.detached = v)} /></td>
-                        <td><Switch checked={!c.disabled} label="Join {c.name} on connect" onchange={(v) => (c.disabled = !v)} /></td>
-                        <td><button class="icon-btn" type="button" aria-label="Remove {c.name}" onclick={() => (f.channels = f.channels.filter((x) => x !== c))}><Icon name="trash" /></button></td>
+                        <td><input class="input mono key" aria-label={t('networks.keyFor', { channel: c.name })} placeholder={t('networks.none')} autocomplete="off" bind:value={c.key} /></td>
+                        <td><Switch checked={c.detached} label={t('networks.detach', { channel: c.name })} onchange={(v) => (c.detached = v)} /></td>
+                        <td><Switch checked={!c.disabled} label={t('networks.joinChannel', { channel: c.name })} onchange={(v) => (c.disabled = !v)} /></td>
+                        <td><button class="icon-btn" type="button" aria-label={t('networks.removeChannel', { channel: c.name })} onclick={() => (f.channels = f.channels.filter((x) => x !== c))}><Icon name="trash" /></button></td>
                       </tr>
                     {/each}
                   </tbody>
                 </table>
               </div>
             {:else}
-              <p class="desc">No channels yet.</p>
+              <p class="desc">{t('networks.noChannels')}</p>
             {/if}
-            <Field id="newChan" label="Add channels" help="Separate with commas or spaces." err={errs.newChan}>
+            <Field id="newChan" label={t('networks.addChannels')} help={t('networks.addChannelsHelp')} err={errs.newChan}>
               <div class="input-group">
                 <input class="input mono" id="newChan" placeholder="#evrd, #go-nuts" spellcheck="false" autocomplete="off" bind:value={newChan} onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addChannels() } }} />
-                <button class="btn" type="button" onclick={addChannels}><Icon name="plus" />Add</button>
+                <button class="btn" type="button" onclick={addChannels}><Icon name="plus" />{t('networks.add')}</button>
               </div>
             </Field>
           </div>
@@ -502,14 +506,14 @@
 
       <section class="card" id="modules" aria-labelledby="modules-h">
         <div class="panel-grid">
-          <div class="od-stack"><h2 id="modules-h">Modules</h2><p class="desc">Extra behaviour for this network, like ZNC’s modules. Changes apply when you save — without reconnecting; perform’s commands run at the next sign-in.</p></div>
+          <div class="od-stack"><h2 id="modules-h">{t('networks.section.modules')}</h2><p class="desc">{t('networks.modulesIntro')}</p></div>
           <div class="mod-list">
             {#each available as m (m.name)}
               {@const on = !!f.modules[m.name]?.enabled}
               <div class="mod" class:on data-testid="module-{m.name}">
                 <div class="check-row">
                   <span class="od-field"><span id="mod-{m.name}-l">{m.title}{#if m.znc}<span class="chip" style="margin-left:8px">ZNC {m.znc}</span>{/if}</span><span>{m.description}</span></span>
-                  {#if m.off}<span class="chip">Switched off by an admin</span>
+                  {#if m.off}<span class="chip">{t('networks.moduleOff')}</span>
                   {:else}<Switch checked={on} labelledby="mod-{m.name}-l" onchange={(v) => setMod(m.name, v)} />{/if}
                 </div>
                 {#if on && !m.off && m.settings?.length}
@@ -528,7 +532,7 @@
                 {/if}
               </div>
             {:else}
-              <p class="desc">Loading modules…</p>
+              <p class="desc">{t('networks.loadingModules')}</p>
             {/each}
           </div>
         </div>
@@ -536,25 +540,25 @@
 
       <section class="card" id="advanced" aria-labelledby="advanced-h">
         <div class="panel-grid">
-          <div class="od-stack"><h2 id="advanced-h">Advanced</h2><p class="desc">Character set for networks that don’t use UTF-8, and how fast evrd may send.</p></div>
+          <div class="od-stack"><h2 id="advanced-h">{t('networks.section.advanced')}</h2><p class="desc">{t('networks.advancedIntro')}</p></div>
           <div class="form-grid">
-            <Field id="encoding" label="Encoding">
+            <Field id="encoding" label={t('networks.encoding')}>
               <Select id="encoding" bind:value={f.encodingName} options={[{ value: '', label: 'UTF-8' }, ...ENCODINGS.map((e) => ({ value: e, label: e }))]} />
             </Field>
             {#if f.encodingName}
-              <Field id="encMode" label="Use it">
+              <Field id="encMode" label={t('networks.encMode')}>
                 <Select id="encMode" value={f.encodingAlways ? 'always' : 'fallback'} onchange={(v) => (f.encodingAlways = v === 'always')} options={[
-                  { value: 'fallback', label: 'Only for text that isn’t UTF-8 (send UTF-8)' },
-                  { value: 'always', label: `For everything (send in ${f.encodingName})` },
+                  { value: 'fallback', label: t('networks.encFallback') },
+                  { value: 'always', label: t('networks.encAlways', { encoding: f.encodingName }) },
                 ]} />
               </Field>
             {:else}<span></span>{/if}
-            <div class="check-row span-2"><span class="od-field"><span id="flood-l">Flood protection</span><span>Sends a burst, then paces lines so the server doesn’t disconnect you for flooding.</span></span><Switch checked={f.floodOn} labelledby="flood-l" onchange={(v) => (f.floodOn = v)} /></div>
+            <div class="check-row span-2"><span class="od-field"><span id="flood-l">{t('networks.flood')}</span><span>{t('networks.floodHelp')}</span></span><Switch checked={f.floodOn} labelledby="flood-l" onchange={(v) => (f.floodOn = v)} /></div>
             {#if f.floodOn}
-              <Field id="floodRate" label="Lines per second" err={errs.floodRate}><input class="input mono" id="floodRate" inputmode="decimal" bind:value={f.floodRate} aria-invalid={!!errs.floodRate} /></Field>
-              <Field id="floodBurst" label="Burst" help="Lines sent at once before pacing starts." err={errs.floodBurst}><input class="input mono" id="floodBurst" inputmode="numeric" bind:value={f.floodBurst} aria-invalid={!!errs.floodBurst} /></Field>
+              <Field id="floodRate" label={t('networks.floodRate')} err={errs.floodRate}><input class="input mono" id="floodRate" inputmode="decimal" bind:value={f.floodRate} aria-invalid={!!errs.floodRate} /></Field>
+              <Field id="floodBurst" label={t('networks.floodBurst')} help={t('networks.floodBurstHelp')} err={errs.floodBurst}><input class="input mono" id="floodBurst" inputmode="numeric" bind:value={f.floodBurst} aria-invalid={!!errs.floodBurst} /></Field>
             {/if}
-            <Field id="joinDelay" label="Join delay" help="Seconds to wait after connecting before joining (time for NickServ, cloaks…)." err={errs.joinDelay}><input class="input mono" id="joinDelay" inputmode="numeric" bind:value={f.joinDelay} aria-invalid={!!errs.joinDelay} /></Field>
+            <Field id="joinDelay" label={t('networks.joinDelay')} help={t('networks.joinDelayHelp')} err={errs.joinDelay}><input class="input mono" id="joinDelay" inputmode="numeric" bind:value={f.joinDelay} aria-invalid={!!errs.joinDelay} /></Field>
           </div>
         </div>
       </section>
@@ -562,13 +566,13 @@
       {#if net}
         <section class="card" id="log" aria-labelledby="log-h">
           <div class="section-head" style="margin-bottom:var(--s3)">
-            <div class="od-stack"><h2 id="log-h">Connection log</h2><p class="desc">What evrd did and what the server said while connecting — newest last. What evrd sends isn’t shown (it can carry passwords).</p></div>
-            {#if log?.length}<button class="btn btn-ghost btn-sm" type="button" onclick={copyLog}><Icon name="copy" />Copy</button>{/if}
+            <div class="od-stack"><h2 id="log-h">{t('networks.section.log')}</h2><p class="desc">{t('networks.logIntro')}</p></div>
+            {#if log?.length}<button class="btn btn-ghost btn-sm" type="button" onclick={copyLog}><Icon name="copy" />{t('networks.copy')}</button>{/if}
           </div>
           {#if !log}
             <div class="skel" style="height:80px"></div>
           {:else if !log.length}
-            <p class="desc" style="font-size:var(--fs-sm)">Nothing yet: entries appear when evrd connects this network.</p>
+            <p class="desc" style="font-size:var(--fs-sm)">{t('networks.logEmpty')}</p>
           {:else}
             <ConnLog entries={log} />
           {/if}
@@ -576,15 +580,15 @@
 
         <section class="card danger-card" id="danger" aria-labelledby="danger-h">
           <div class="panel-grid">
-            <div class="od-stack"><h2 id="danger-h">Remove network</h2><p class="desc">Disconnects and deletes its settings and chat history.</p></div>
-            <div><button class="btn btn-danger" type="button" onclick={remove}><Icon name="trash" />Remove {net.name}</button></div>
+            <div class="od-stack"><h2 id="danger-h">{t('networks.removeNetwork')}</h2><p class="desc">{t('networks.removeIntro')}</p></div>
+            <div><button class="btn btn-danger" type="button" onclick={remove}><Icon name="trash" />{t('networks.removeName', { name: net.name })}</button></div>
           </div>
         </section>
       {/if}
 
       <div class="save-bar">
-        <a class="btn btn-ghost" href="/networks">Cancel</a>
-        <button class="btn btn-primary" type="submit" disabled={saving}>{#if saving}<span class="spinner" aria-hidden="true"></span>Saving…{:else}<Icon name="check" />{id == null ? 'Add network' : 'Save changes'}{/if}</button>
+        <a class="btn btn-ghost" href="/networks">{t('common.cancel')}</a>
+        <button class="btn btn-primary" type="submit" disabled={saving}>{#if saving}<span class="spinner" aria-hidden="true"></span>{t('networks.saving')}{:else}<Icon name="check" />{id == null ? t('networks.addNetwork') : t('networks.saveChanges')}{/if}</button>
       </div>
     </form>
   </div>

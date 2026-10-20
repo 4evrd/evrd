@@ -1,4 +1,6 @@
 // Toasts, the confirm dialog and drawers, rendered once by the layout.
+import { t } from './i18n.svelte.js'
+
 export const toasts = $state([])
 let nextId = 1
 
@@ -20,7 +22,7 @@ export const dialog = $state({ current: null })
 
 // confirmDialog resolves true when the (destructive) action is confirmed.
 // typed: text the user must type to enable the action.
-export function confirmDialog({ title, body, action = 'Delete', typed = '', danger = true }) {
+export function confirmDialog({ title, body, action = t('common.delete'), typed = '', danger = true }) {
   return new Promise((resolve) => {
     dialog.current = { title, body, action, typed, danger, resolve }
   })

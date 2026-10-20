@@ -5,6 +5,7 @@
   import { api } from '$lib/api.js'
   import { session } from '$lib/session.svelte.js'
   import { greeting } from '$lib/format.js'
+  import { t } from '$lib/i18n.svelte.js'
 
   let ov = $state(null)
   let err = $state('')
@@ -21,21 +22,21 @@
   const clients = $derived(ov?.clients || [])
 </script>
 
-<svelte:head><title>Overview · evrd</title></svelte:head>
+<svelte:head><title>{t('overview.pageTitle')}</title></svelte:head>
 
 <div class="page-head enter">
   <div class="titles">
-    <h1>Overview</h1>
-    <p>{greeting()}, {me.username}. {#if ov}{connected} of {nets.length} network{nets.length === 1 ? ' is' : 's are'} connected and {clients.length} client{clients.length === 1 ? ' is' : 's are'} attached.{/if}</p>
+    <h1>{t('overview.title')}</h1>
+    <p>{t('overview.hello', { greeting: greeting(), name: me.username })} {#if ov}{t('overview.summary', { networks: t('overview.summaryNetworks', { connected, count: nets.length }), clients: t('overview.summaryClients', { count: clients.length }) })}{/if}</p>
   </div>
   <div class="od-cluster">
-    <a class="btn" href="/clients"><Icon name="plug" />Connect a client</a>
-    <a class="btn btn-primary" href="/networks/new"><Icon name="plus" />Add network</a>
+    <a class="btn" href="/clients"><Icon name="plug" />{t('overview.connectClient')}</a>
+    <a class="btn btn-primary" href="/networks/new"><Icon name="plus" />{t('overview.addNetwork')}</a>
   </div>
 </div>
 
 {#if err && !ov}
-  <div class="callout bad" role="alert"><Icon name="alert" /><span>Couldn’t load your overview: {err}</span></div>
+  <div class="callout bad" role="alert"><Icon name="alert" /><span>{t('overview.loadFailed', { error: err })}</span></div>
 {/if}
 
 <UserOverview {ov} usage={me.usage} limits={me.limits} />

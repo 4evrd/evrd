@@ -10,6 +10,7 @@
   // Hovering shows the hour under the pointer: each network's lines and the
   // events in it. Marker labels stack in rows rather than overlap.
   import { hourAt, hourSpan, hourRows, lanes } from '$lib/format.js'
+  import { t } from '$lib/i18n.svelte.js'
 
   let { series = [], start = 0, markers = [], focus = null } = $props()
   let width = $state(0)
@@ -48,7 +49,7 @@
   }))
   const axis = $derived.by(() => {
     if (!start) return []
-    return [0, 4, 8, 12, 16, 20, 24].map((h) => (h === 24 ? 'now' : new Date((start + h * 3600) * 1000).toTimeString().slice(0, 5)))
+    return [0, 4, 8, 12, 16, 20, 24].map((h) => (h === 24 ? t('format.now') : new Date((start + h * 3600) * 1000).toTimeString().slice(0, 5)))
   })
   // a label is about 7px a character in the mono caption, plus its swatch
   const marks = $derived(lanes(markers.filter((m) => m.at >= start && m.at <= start + 24 * 3600 + 3600).map((m) => {
@@ -100,5 +101,5 @@
       {/if}
     </div>
   </div>
-  <div class="axis-x" aria-hidden="true">{#each axis as t}<span>{t}</span>{/each}</div>
+  <div class="axis-x" aria-hidden="true">{#each axis as a}<span>{a}</span>{/each}</div>
 </div>
