@@ -29,7 +29,7 @@ const realEn = async () => {
 }
 
 test('every format round-trips, plurals included', () => {
-  for (const f of FORMATS) {
+  for (const f of FORMATS.filter((f) => !f.templateOnly)) {
     const file = exportFile(f.id, { code: 'de', name: 'Deutsch', messages: de, en })
     assert.equal(file.filename, `evrd-de.${f.ext}`)
     const back = parseFile(file.filename, file.text, en)
@@ -43,7 +43,7 @@ test('round trips with the real English messages and other plural rules', async 
   const real = await realEn()
   const ru = { 'format.minutesAgo': { one: '{count} минуту назад', few: '{count} минуты назад', many: '{count} минут назад', other: '{count} минуты назад' }, 'account.language': 'Язык' }
   const ja = { 'format.minutesAgo': { other: '{count} 分前' } }
-  for (const f of FORMATS) {
+  for (const f of FORMATS.filter((f) => !f.templateOnly)) {
     for (const [code, messages] of [['ru', ru], ['ja', ja]]) {
       const file = exportFile(f.id, { code, name: 'x', messages, en: real })
       const back = parseFile(file.filename, file.text, real)
@@ -58,18 +58,23 @@ test('templates: every English key, nothing translated', async () => {
   const real = await realEn()
   for (const f of FORMATS) {
     const file = exportFile(f.id, { code: 'it', messages: { 'a.hello': 'Ciao' }, en: real, template: true })
-    assert.equal(file.filename, `evrd-template.${f.templateExt || f.ext}`)
+    assert.equal(file.filename, `evrd-template.${f.ext}`)
     for (const k of ['account.language', 'format.minutesAgo']) assert.ok(file.text.includes(k), `${f.id} has ${k}`)
     const back = parseFile(file.filename, file.text, real)
     assert.deepEqual(back.messages, {}, f.id)
     assert.equal(back.code, '', f.id)
   }
-  const pot = exportFile('po', { en, template: true }).text
+  const pot = exportFile('pot', { en, template: true }).text
   assert.match(pot, /"Language: \\n"/)
   assert.match(pot, /"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\\n"/)
   assert.match(pot, /"Content-Type: text\/plain; charset=UTF-8\\n"/)
   assert.match(pot, /#\. Keep \{count\} unchanged\.\nmsgctxt "a\.n"\nmsgid "\{count\} file"\nmsgid_plural "\{count\} files"\nmsgstr\[0\] ""\nmsgstr\[1\] ""/)
   assert.match(pot, /msgid ""\n"Line one\\n"\n"Line two"/)
+  // the .po template opens in Poedit as is: no placeholder plural rule
+  const po = exportFile('po', { en, template: true })
+  assert.equal(po.filename, 'evrd-template.po')
+  assert.doesNotMatch(po.text, /Plural-Forms/)
+  assert.match(po.text, /msgctxt "a\.n"\nmsgid "\{count\} file"\nmsgid_plural "\{count\} files"/)
   const csv = exportFile('csv', { en, template: true }).text
   assert.ok(csv.startsWith('\uFEFFkey,english,translation,notes\r\n'))
   assert.ok(csv.includes('a.n#one,{count} file,,a; plural form: one; keep {count} unchanged\r\n'))

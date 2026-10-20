@@ -18,7 +18,9 @@ import { FORMS, isPlural, flatten, pluralCategories, displayName } from './langp
 export const FORMATS = [
   { id: 'json', label: 'JSON', ext: 'json', mime: 'application/json' },
   { id: 'csv', label: 'CSV', ext: 'csv', mime: 'text/csv' },
-  { id: 'po', label: 'gettext PO', ext: 'po', templateExt: 'pot', mime: 'text/x-gettext-translation' },
+  { id: 'po', label: 'PO (Poedit)', ext: 'po', mime: 'text/x-gettext-translation' },
+  // the gettext template: offered only as a template (a language is a .po)
+  { id: 'pot', label: 'POT (gettext template)', ext: 'pot', templateOnly: true, mime: 'text/x-gettext-translation' },
   { id: 'xliff12', label: 'XLIFF 1.2', ext: 'xlf', mime: 'application/xliff+xml' },
   { id: 'xliff2', label: 'XLIFF 2.0', ext: 'xlf', mime: 'application/xliff+xml' },
   { id: 'yaml', label: 'YAML', ext: 'yaml', mime: 'application/yaml' },
@@ -482,8 +484,8 @@ export function exportFile(format, { code = '', name = '', messages = {}, en = {
   if (!f) throw new FormatError('unknownFormat')
   if (template) { code = ''; name = ''; messages = {} }
   const keys = [...Object.keys(en), ...Object.keys(messages).filter((k) => !(k in en))]
-  const text = { json: writeJSON, csv: writeCSV, po: writePO, xliff12: writeXLIFF12, xliff2: writeXLIFF2, yaml: writeYAML }[format]({ code, name, messages, en, keys, template })
-  const ext = template ? f.templateExt || f.ext : f.ext
+  const text = { json: writeJSON, csv: writeCSV, po: writePO, pot: writePO, xliff12: writeXLIFF12, xliff2: writeXLIFF2, yaml: writeYAML }[format]({ code, name, messages, en, keys, template, pot: format === 'pot' })
+  const ext = f.ext
   return { filename: `evrd-${template ? 'template' : code}.${ext}`, text, mime: f.mime }
 }
 
@@ -535,7 +537,7 @@ function writeCSV(p) {
   return '﻿' + out.join('\r\n') + '\r\n'
 }
 
-function writePO({ code, name, messages, en, keys, template }) {
+function writePO({ code, name, messages, en, keys, template, pot }) {
   const plurals = template ? null : poPlurals(code)
   const head = [
     'Project-Id-Version: evrd',
@@ -543,7 +545,9 @@ function writePO({ code, name, messages, en, keys, template }) {
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: 8bit',
     `Language: ${code}`,
-    `Plural-Forms: ${template ? 'nplurals=INTEGER; plural=EXPRESSION;' : plurals.header}`,
+    // a .pot has gettext's placeholder; a .po template has none: Poedit
+    // fills it in once the language is set
+    ...(template && !pot ? [] : [`Plural-Forms: ${template ? 'nplurals=INTEGER; plural=EXPRESSION;' : plurals.header}`]),
     ...(name ? [`X-Language-Name: ${name}`] : []),
     'X-Generator: evrd',
   ]

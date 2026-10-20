@@ -49,8 +49,8 @@
   <button class="btn" class:btn-sm={small} class:btn-ghost={ghost} type="button" id={id} aria-haspopup="menu" aria-expanded={open} aria-label={aria || undefined} onclick={show}><Icon name="download" />{label}</button>
   {#if open}
     <div class="dd-list pd-list" role="menu" aria-labelledby={id}>
-      {#each FORMATS as f}
-        <button class="dd-opt" type="button" role="menuitem" onclick={() => pick(f.id)}>{f.label}<span class="sub">.{load ? f.ext : f.templateExt || f.ext}</span></button>
+      {#each FORMATS.filter((f) => !(load && f.templateOnly)) as f}
+        <button class="dd-opt" type="button" role="menuitem" onclick={() => pick(f.id)}>{f.label}<span class="sub">.{f.ext}</span></button>
       {/each}
       <span class="sub pd-hint">{t('packs.formatHint')}</span>
     </div>
