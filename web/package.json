@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "evrd web app \u2014 SvelteKit static SPA, served next to the daemon's /api.",
+  "description": "evrd web app — SvelteKit static SPA, served next to the daemon's /api.",
   "packageManager": "pnpm@11.8.0",
   "scripts": {
     "dev": "vite dev",
@@ -17,11 +17,11 @@
     "test:coverage": "node --test --experimental-test-coverage src/lib/*.test.js"
   },
   "devDependencies": {
-    "@playwright/test": "^1.50.0",
+    "@playwright/test": "^1.64.1",
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/kit": "^2.16.0",
-    "@sveltejs/vite-plugin-svelte": "^5.0.3",
-    "svelte": "^5.25.0",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "svelte": "^5.57.2",
     "svelte-check": "4.7.7",
     "vite": "^6.2.0"
   }
