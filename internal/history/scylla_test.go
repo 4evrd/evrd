@@ -166,10 +166,16 @@ func TestScyllaUnreachableReturnsErrors(t *testing.T) {
 	_, errs["Buffers"] = s.Buffers(1)
 	_, errs["Networks"] = s.Networks()
 	_, errs["Count"] = s.Count(1, "#a", 10)
+	_, errs["Range"] = s.Range(1, "#a", Query{Limit: 10})
+	_, errs["Targets"] = Targets(s, 1, ID{}, ID{}, 10, false)
 	for name, err := range errs {
 		if !errors.Is(err, gocql.ErrSessionClosed) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+	// no limit: nothing asked, nothing to fail
+	if got, err := s.Range(1, "#a", Query{}); got != nil || err != nil {
+		t.Errorf("no limit: %v %v", got, err)
 	}
 }
 

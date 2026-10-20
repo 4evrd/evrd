@@ -23,15 +23,13 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/cockroachdb/pebble/v2"
 )
 
 type pebbleStore struct {
-	db  *pebble.DB
-	seq atomic.Uint32
+	db *pebble.DB
 	// life lets Close wait for calls in flight; after it, calls return
 	// ErrClosed instead of panicking inside Pebble (goroutines still
 	// recording messages while the daemon shuts down).
@@ -101,9 +99,14 @@ func bufferPrefix(networkID int64, target string) []byte {
 }
 
 func messageKey(m Message, seq uint32) []byte {
-	k := bufferPrefix(m.NetworkID, m.Target)
-	k = binary.BigEndian.AppendUint64(k, uint64(m.Time.UnixNano()))
-	return binary.BigEndian.AppendUint32(k, seq)
+	return idKey(m.NetworkID, m.Target, ID{Nanos: m.Time.UnixNano(), Seq: seq})
+}
+
+// idKey is the key of the line at id (whether or not there is one).
+func idKey(networkID int64, target string, id ID) []byte {
+	k := bufferPrefix(networkID, target)
+	k = binary.BigEndian.AppendUint64(k, uint64(id.Nanos))
+	return binary.BigEndian.AppendUint32(k, id.Seq)
 }
 
 // upperBound is the first key after every key starting with prefix.
@@ -160,6 +163,15 @@ func decode(networkID int64, b []byte) (Message, error) {
 	}, nil
 }
 
+// decodeAt is decode, taking the line's Seq from the end of its key.
+func decodeAt(networkID int64, key, value []byte) (Message, error) {
+	m, err := decode(networkID, value)
+	if err == nil && len(key) >= 4 {
+		m.Seq = binary.BigEndian.Uint32(key[len(key)-4:])
+	}
+	return m, err
+}
+
 // --- operations --------------------------------------------------------------
 
 func (s *pebbleStore) Add(m Message) error {
@@ -172,7 +184,10 @@ func (s *pebbleStore) Add(m Message) error {
 	}
 	batch := s.db.NewBatch()
 	defer batch.Close()
-	if err := batch.Set(messageKey(m, s.seq.Add(1)), encode(m), nil); err != nil {
+	if m.Seq == 0 {
+		m.Seq = NextSeq()
+	}
+	if err := batch.Set(messageKey(m, m.Seq), encode(m), nil); err != nil {
 		return err
 	}
 	// Index the buffer the first time this process sees it.
@@ -202,7 +217,7 @@ func (s *pebbleStore) Recent(networkID int64, target string, limit int) ([]Messa
 	defer it.Close()
 	var out []Message
 	for ok := it.Last(); ok && len(out) < limit; ok = it.Prev() {
-		m, err := decode(networkID, it.Value())
+		m, err := decodeAt(networkID, it.Key(), it.Value())
 		if err != nil {
 			continue // skip a damaged record rather than lose the buffer
 		}
@@ -210,6 +225,47 @@ func (s *pebbleStore) Recent(networkID int64, target string, limit int) ([]Messa
 	}
 	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
 		out[i], out[j] = out[j], out[i]
+	}
+	return out, it.Error()
+}
+
+func (s *pebbleStore) Range(networkID int64, target string, q Query) ([]Message, error) {
+	if !s.enter() {
+		return nil, ErrClosed
+	}
+	defer s.life.RUnlock()
+	prefix := bufferPrefix(networkID, target)
+	lo, hi := prefix, upperBound(prefix)
+	if !q.After.IsZero() {
+		lo = append(idKey(networkID, target, q.After), 0) // just past it
+	}
+	if !q.Before.IsZero() {
+		hi = idKey(networkID, target, q.Before)
+	}
+	if q.Limit <= 0 || bytes.Compare(lo, hi) >= 0 {
+		return nil, nil
+	}
+	it, err := s.db.NewIter(&pebble.IterOptions{LowerBound: lo, UpperBound: hi})
+	if err != nil {
+		return nil, err
+	}
+	defer it.Close()
+	first, next := it.First, it.Next
+	if q.Latest {
+		first, next = it.Last, it.Prev
+	}
+	var out []Message
+	for ok := first(); ok && len(out) < q.Limit; ok = next() {
+		m, err := decodeAt(networkID, it.Key(), it.Value())
+		if err != nil {
+			continue
+		}
+		out = append(out, m)
+	}
+	if q.Latest {
+		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+			out[i], out[j] = out[j], out[i]
+		}
 	}
 	return out, it.Error()
 }

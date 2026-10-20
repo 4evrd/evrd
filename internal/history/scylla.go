@@ -25,6 +25,7 @@ import (
 	"log/slog"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,8 +41,7 @@ const (
 )
 
 type scyllaStore struct {
-	s   *gocql.Session
-	seq atomic.Uint32
+	s *gocql.Session
 
 	queue   chan scyllaWrite
 	pending atomic.Int64 // queued or in flight
@@ -187,7 +187,10 @@ func (s *scyllaStore) Add(m Message) error {
 	s.mu.Unlock()
 
 	s.pending.Add(1)
-	w := scyllaWrite{m: m, seq: s.seq.Add(1)}
+	if m.Seq == 0 {
+		m.Seq = NextSeq()
+	}
+	w := scyllaWrite{m: m, seq: m.Seq}
 	select {
 	case s.queue <- w:
 	default:
@@ -267,22 +270,78 @@ func (s *scyllaStore) Recent(networkID int64, target string, limit int) ([]Messa
 		if len(out) >= limit {
 			break
 		}
-		it := s.s.Query(`SELECT ts, target, sender, kind, text, extra FROM lines
+		it := s.s.Query(`SELECT ts, seq, target, sender, kind, text, extra FROM lines
 			WHERE network_id = ? AND buffer = ? AND bucket = ? LIMIT ?`,
 			networkID, buf, b, limit-len(out)).Iter()
-		var ts int64
-		var m Message
-		for it.Scan(&ts, &m.Target, &m.Sender, &m.Kind, &m.Text, &m.Extra) {
-			m.NetworkID, m.Time = networkID, time.Unix(0, ts)
-			out = append(out, m)
-			m = Message{}
-		}
+		out = scanLines(it, networkID, out)
 		if err := it.Close(); err != nil {
 			return nil, err
 		}
 	}
 	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
 		out[i], out[j] = out[j], out[i]
+	}
+	return out, nil
+}
+
+// scanLines appends the rows of a SELECT ts, seq, target, sender, kind, text,
+// extra to out.
+func scanLines(it *gocql.Iter, networkID int64, out []Message) []Message {
+	var ts int64
+	var seq int32
+	var m Message
+	for it.Scan(&ts, &seq, &m.Target, &m.Sender, &m.Kind, &m.Text, &m.Extra) {
+		m.NetworkID, m.Time, m.Seq = networkID, time.Unix(0, ts), uint32(seq)
+		out = append(out, m)
+		m = Message{}
+	}
+	return out
+}
+
+// Range reads the buckets the range spans, newest first for Latest and
+// oldest first otherwise, until it has Limit lines.
+func (s *scyllaStore) Range(networkID int64, target string, q Query) ([]Message, error) {
+	if q.Limit <= 0 {
+		return nil, nil
+	}
+	buf := strings.ToLower(target)
+	buckets, err := s.buckets(networkID, buf)
+	if err != nil {
+		return nil, err
+	}
+	cql := `SELECT ts, seq, target, sender, kind, text, extra FROM lines
+		WHERE network_id = ? AND buffer = ? AND bucket = ?`
+	var bounds []any
+	if !q.After.IsZero() {
+		cql += ` AND (ts, seq) > (?, ?)`
+		bounds = append(bounds, q.After.Nanos, int32(q.After.Seq))
+	}
+	if !q.Before.IsZero() {
+		cql += ` AND (ts, seq) < (?, ?)`
+		bounds = append(bounds, q.Before.Nanos, int32(q.Before.Seq))
+	}
+	if !q.Latest {
+		cql += ` ORDER BY ts ASC, seq ASC`
+		slices.Reverse(buckets)
+	}
+	cql += ` LIMIT ?`
+	var out []Message
+	for _, b := range buckets {
+		if len(out) >= q.Limit {
+			break
+		}
+		if !q.After.IsZero() && b < bucketOf(q.After.Time()) || !q.Before.IsZero() && b > bucketOf(q.Before.Time()) {
+			continue
+		}
+		args := append([]any{networkID, buf, b}, bounds...)
+		it := s.s.Query(cql, append(args, q.Limit-len(out))...).Iter()
+		out = scanLines(it, networkID, out)
+		if err := it.Close(); err != nil {
+			return nil, err
+		}
+	}
+	if q.Latest {
+		slices.Reverse(out)
 	}
 	return out, nil
 }
