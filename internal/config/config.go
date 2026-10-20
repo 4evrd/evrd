@@ -71,6 +71,10 @@ type Config struct {
 	PublicURL string
 	// IRCHost is the hostname shown to users for attaching a native client.
 	IRCHost string
+	// IRCSTS is how long IRC clients are told (IRCv3 sts) to connect with
+	// TLS only, when evrd has a TLS listener and a certificate they trust;
+	// 0 turns it off.
+	IRCSTS time.Duration
 
 	Auth     Auth
 	Limits   Limits
@@ -334,6 +338,10 @@ type Limits struct {
 	BacklogLines int
 }
 
+// DefaultIRCSTS is how long clients keep to TLS (sts) by default: a day,
+// so turning TLS off again strands clients for a day at most.
+const DefaultIRCSTS = 24 * time.Hour
+
 // Default returns a config with sensible defaults.
 func Default() *Config {
 	return &Config{
@@ -342,6 +350,7 @@ func Default() *Config {
 		History: "pebble:history",
 		API:     ":8098",
 		IRCHost: "localhost",
+		IRCSTS:  DefaultIRCSTS,
 		Auth: Auth{
 			PasswordLogin:  true,
 			SessionTTL:     30 * 24 * time.Hour,
@@ -534,6 +543,15 @@ func (c *Config) set(key, val string) error {
 		c.PublicURL = strings.TrimRight(val, "/")
 	case "irc_host":
 		c.IRCHost = val
+	case "irc_sts":
+		if on, berr := parseBool(val); berr == nil {
+			c.IRCSTS = 0
+			if on {
+				c.IRCSTS = DefaultIRCSTS
+			}
+		} else if c.IRCSTS, err = time.ParseDuration(val); err == nil && c.IRCSTS < 0 {
+			err = fmt.Errorf("irc_sts must be a duration (e.g. 24h) or off")
+		}
 	case "password_login":
 		c.Auth.PasswordLogin, err = parseBool(val)
 	case "session_ttl":

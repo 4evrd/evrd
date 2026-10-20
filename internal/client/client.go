@@ -16,6 +16,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/bouncer"
@@ -41,6 +42,15 @@ type Server struct {
 	dir *directory.Directory // nil: none
 
 	publicURL string // the web app's address; "" when unknown
+
+	// followEvery is how often a session checks its network for a new
+	// connection and changed capabilities (3s; tests shorten it).
+	followEvery time.Duration
+	// lsWait is how long a CAP LS answer waits for the network (lsWait;
+	// tests shorten it).
+	lsWait time.Duration
+
+	sts stsState
 }
 
 // SetDirectory gives *status the network directory (addnetwork <id>).
@@ -92,6 +102,7 @@ func (s *Server) listen(ctx context.Context, url string) {
 		var conf *tls.Config
 		if conf, err = s.tlsConfig(); err == nil {
 			if ln, err = listen.TCP(addr); err == nil {
+				s.tlsPort(ln.Addr().String())
 				ln = tls.NewListener(ln, conf)
 			}
 		}

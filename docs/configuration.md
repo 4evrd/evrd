@@ -29,6 +29,7 @@ are stored in the database and win over the file (see below).
 | `secret_key` (`EVRD_SECRET_KEY`), `secret_key_file`, `secret_key_old` | — | encrypts saved network passwords and module settings; see [Saved passwords](#saved-passwords) |
 | `public_url` | — | the web app's address, e.g. `https://bnc.example.org` (SSO redirects back here) |
 | `irc_host` | `localhost` | the host name users give their IRC clients (shown in the web app) |
+| `irc_sts` | `24h` | how long IRC clients are told to connect over TLS only (IRCv3 `sts`), or `off`; offered only with an `ircs://` listener and a certificate clients trust for `irc_host` — see [STS](#sts-tls-only-for-irc-clients) |
 | `password_login` | `yes` | allow password sign-in to the web app; `no` leaves only single sign-on (Admin → Settings refuses it until SSO is set up) |
 | `session_ttl` | `720h` | how long a web sign-in lasts |
 | `trusted_proxies` (`EVRD_TRUSTED_PROXIES`) | the local host | the proxies whose `X-Forwarded-For` is believed: addresses or CIDR ranges, space-separated (file or environment only). From anywhere else the connection's own address counts — it's what each user's allowed hosts are checked against. Set it to the proxy's network when the proxy isn't on the same machine (e.g. Docker: `172.16.0.0/12`) |
@@ -196,6 +197,23 @@ runs):
 Certificates evrd gets or makes (and the ACME account) are kept in the
 database, encrypted with `secret_key`, so every node of a cluster serves the
 same ones and nothing is written to disk.
+
+### STS: TLS only for IRC clients
+
+With an `ircs://` listener and a certificate clients trust for `irc_host`
+(Let's Encrypt, or `files` from a public CA — never `selfsigned`), evrd offers
+IRC clients the IRCv3 `sts` capability: a client on a plain port is told the
+TLS port, and one on TLS how long to keep to it (`irc_sts`, a day by
+default). Clients that support it (Goguma, gamja, Halloy, Senpai, WeeChat…)
+then connect with TLS only, and refuse a plain connection until that time
+runs out.
+
+That's the lock-in: once a client has seen it, taking TLS away — removing the
+`ircs://` listener, or a certificate that expires or no longer matches — locks
+it out until the duration passes. Keep the duration modest (the default is a
+day), and set `irc_sts off` first, and wait that long, before removing TLS.
+evrd checks the certificate every few minutes and stops offering `sts` as
+soon as it isn't one clients would trust.
 
 **Who serves HTTPS** for the web app is your choice:
 

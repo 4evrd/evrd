@@ -192,7 +192,7 @@ func TestRegistrationEdges(t *testing.T) {
 	for _, l := range []string{"PASS alice/one:alice-password", "NICK alice", "USER alice 0 * :alice"} {
 		ic.send(l)
 	}
-	ic.expect("CAP * LS :batch cap-notify draft/chathistory draft/event-playback echo-message message-tags server-time")
+	ic.expect("CAP alice LS :batch cap-notify draft/chathistory draft/event-playback ") // answered once the network is known
 	ic.send("CAP REQ :server-time")
 	ic.expect("ACK :server-time")
 	ic.send("CAP REQ :-server-time")
@@ -200,7 +200,7 @@ func TestRegistrationEdges(t *testing.T) {
 	ic.send("CAP END")
 	ic.expect(" 001 alice_one ")
 	ic.send("CAP LIST")
-	if l := ic.expect(" LIST :"); !strings.HasSuffix(l, "LIST :") {
+	if l := ic.expect(" LIST :"); !strings.HasSuffix(l, "LIST :cap-notify") { // CAP 302 implies cap-notify
 		t.Fatalf("server-time is still on: %q", l)
 	}
 }
@@ -270,7 +270,7 @@ func TestRelayHidesBouncerTraffic(t *testing.T) {
 	for _, l := range []string{
 		"PING :hidden-ping",
 		":fake 002 alice_one :hidden-002",
-		":fake 005 alice_one :hidden-005",
+		":fake 005 alice_one MONITOR=100 :are supported", // ISUPPORT passes
 		":fake CAP alice_one ACK :hidden-cap",
 		":fake 001 renamed :welcome back", // a re-registration under another nick
 		":bob!u@h PRIVMSG #one :visible",
@@ -281,7 +281,7 @@ func TestRelayHidesBouncerTraffic(t *testing.T) {
 	if anyHas(seen, "hidden") || anyHas(seen, "welcome back") {
 		t.Fatalf("bouncer traffic reached the client: %q", seen)
 	}
-	if !anyHas(seen, ":alice_one!alice_one@evrd NICK renamed") {
+	if !anyHas(seen, ":alice_one!alice_one@evrd NICK renamed") || !anyHas(seen, "005 alice_one MONITOR=100") {
 		t.Fatalf("no NICK for the new registration: %q", seen)
 	}
 	ic.status("info", "PRIVMSG renamed :Account alice")

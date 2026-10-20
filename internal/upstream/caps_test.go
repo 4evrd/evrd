@@ -20,10 +20,10 @@ func TestMessageTagsAreRequestedWhenOffered(t *testing.T) {
 	eventually(t, "registered", func() bool { return c.Status() == StatusConnected })
 	got := s.last().got()
 	sasl, tags, auth, end := index(got, "CAP REQ :sasl"), index(got, "CAP REQ :message-tags"), index(got, "AUTHENTICATE PLAIN"), index(got, "CAP END")
-	if sasl < 0 || tags < 0 || auth < tags || end < auth || s.count("CAP REQ") != 2 {
+	if sasl < 0 || tags < 0 || auth < tags || end < auth || s.count("CAP REQ") != 3 {
 		t.Fatalf("negotiation: %q", got)
 	}
-	if !c.HasCap("message-tags") || !c.HasCap("sasl") || c.HasCap("multi-prefix") {
+	if !c.HasCap("message-tags") || !c.HasCap("sasl") || !c.HasCap("multi-prefix") || c.HasCap("away-notify") {
 		t.Fatal("acknowledged caps")
 	}
 
@@ -40,7 +40,7 @@ func TestMessageTagsAreRequestedWhenOffered(t *testing.T) {
 	}
 
 	// not offered: not asked for
-	s = startScripted(t, capServer("multi-prefix", true, ""))
+	s = startScripted(t, capServer("x-unwanted", true, ""))
 	c = New(s.network(store.Network{Nick: "carol"}), quiet, Options{})
 	run(t, c)
 	eventually(t, "registered", func() bool { return c.Status() == StatusConnected })
@@ -75,9 +75,9 @@ func TestMessageTagsRefusedAndMultilineLS(t *testing.T) {
 
 func TestCapsChangeAfterRegistration(t *testing.T) {
 	s, c := connected(t, store.Network{Nick: "me"}, Options{})
-	s.send(":srv CAP me NEW :message-tags away-notify")
+	s.send(":srv CAP me NEW :message-tags x-unwanted")
 	eventually(t, "asked for", func() bool { return s.has("CAP REQ :message-tags") })
-	if s.has("CAP REQ :away-notify") || s.count("CAP END") != 1 {
+	if s.has("CAP REQ :x-unwanted") || s.count("CAP END") != 1 {
 		t.Fatalf("got %q", s.last().got())
 	}
 	s.send(":srv CAP me ACK :message-tags")

@@ -72,7 +72,7 @@ func TestCapLS302(t *testing.T) {
 	defer c.Close()
 	ic := &ircClient{t: t, c: c, sc: bufio.NewScanner(c)}
 	ic.send("CAP LS 302")
-	ic.expect("CAP * LS :batch cap-notify draft/chathistory draft/event-playback echo-message message-tags server-time")
+	ic.expect("CAP * LS :batch cap-notify draft/chathistory draft/event-playback ")
 	ic.send("CAP REQ :draft/chathistory draft/event-playback batch message-tags server-time echo-message cap-notify")
 	ic.expect("ACK :draft/chathistory")
 	ic.send("CAP END")
