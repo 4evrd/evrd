@@ -111,6 +111,7 @@
 
   {#if tab === 'profile'}
     <div role="tabpanel" id="profile" aria-labelledby="t-profile" class="card">
+      <div class="form">
       <form class="form" novalidate onsubmit={saveProfile}>
         <div class="panel-grid">
           <div class="od-stack"><h2>{t('account.identity')}</h2><p class="desc">{t('account.identityHelp')}</p></div>
@@ -151,6 +152,7 @@
             {/if}
           </div>
         </div>
+      </div>
       </div>
     </div>
   {:else if tab === 'bouncer'}
