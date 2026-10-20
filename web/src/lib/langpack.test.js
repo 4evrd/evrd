@@ -25,20 +25,20 @@ test('layers: personal over server over built-in over English', () => {
 })
 
 test('languages on offer', () => {
-  const list = languageList(LANGUAGES, [{ code: 'de', name: 'Deutsch' }, { code: 'it', name: 'Italiano (ufficio)' }], { code: 'xx', name: 'Mine' })
-  assert.deepEqual(list.map((l) => l.code), ['en', 'it', 'es', 'tr', 'de', 'xx'])
+  const list = languageList(LANGUAGES, [{ code: 'pl', name: 'Polski' }, { code: 'it', name: 'Italiano (ufficio)' }], { code: 'xx', name: 'Mine' })
+  assert.deepEqual(list.map((l) => l.code), ['en', 'it', 'es', 'tr', 'de', 'id', 'ja', 'pl', 'xx'])
   assert.equal(list.find((l) => l.code === 'it').name, 'Italiano (ufficio)')
   assert.equal(LANGUAGES.find((l) => l.code === 'it').name, 'Italiano') // not changed in place
   // the personal pack's name wins; a pack without one keeps the name
-  assert.equal(languageList(LANGUAGES, [{ code: 'de', name: 'Deutsch' }], { code: 'de', name: 'Mein Deutsch' }).filter((l) => l.code === 'de').length, 1)
+  assert.equal(languageList(LANGUAGES, [{ code: 'pl', name: 'Polski' }], { code: 'pl', name: 'Mój polski' }).filter((l) => l.code === 'pl').length, 1)
   assert.equal(languageList(LANGUAGES, [], { code: 'es', name: '' }).find((l) => l.code === 'es').name, 'Español')
 })
 
 test('pick with language packs', () => {
-  const codes = ['en', 'it', 'es', 'tr', 'de', 'pt-BR']
-  assert.equal(pick('de', [], codes), 'de')
-  assert.equal(pick('de', ['it']), 'it') // without the packs, de isn't on offer
-  assert.equal(pick('', ['de-AT', 'it'], codes), 'de')
+  const codes = ['en', 'it', 'es', 'tr', 'pl', 'pt-BR']
+  assert.equal(pick('pl', [], codes), 'pl')
+  assert.equal(pick('pl', ['it']), 'it') // without the packs, pl isn't on offer
+  assert.equal(pick('', ['pl-PL', 'it'], codes), 'pl')
   assert.equal(pick('', ['pt-br'], codes), 'pt-BR')
   assert.equal(pick('', ['fr'], codes), 'en')
 })

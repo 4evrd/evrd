@@ -40,7 +40,8 @@ test('message files', async () => {
 test('pick', () => {
   assert.equal(pick('it', ['en-US']), 'it')
   assert.equal(pick('', ['tr-TR', 'en']), 'tr')
-  assert.equal(pick('', ['de-DE', 'es-MX']), 'es')
-  assert.equal(pick('', ['de']), 'en')
+  assert.equal(pick('', ['pl-PL', 'es-MX']), 'es')
+  assert.equal(pick('', ['de-DE', 'es-MX']), 'de')
+  assert.equal(pick('', ['pl']), 'en')
   assert.equal(pick('xx', ['it']), 'it')
 })

@@ -12,7 +12,7 @@ import (
 
 // Languages are the web app's built-in languages (web/src/lib/i18n). An
 // account's language may also be a server language pack's, or its own pack's.
-var Languages = []string{"en", "it", "es", "tr"}
+var Languages = []string{"en", "it", "es", "tr", "de", "id", "ja"}
 
 // userDTO is what a user sees about their own account (and what an admin
 // sees, plus the overrides from adminUserDTO).

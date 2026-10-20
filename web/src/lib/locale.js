@@ -7,6 +7,9 @@ export const LANGUAGES = [
   { code: 'it', name: 'Italiano' },
   { code: 'es', name: 'Español' },
   { code: 'tr', name: 'Türkçe' },
+  { code: 'de', name: 'Deutsch' },
+  { code: 'id', name: 'Bahasa Indonesia' },
+  { code: 'ja', name: '日本語' },
 ]
 
 // pick is the language to use: the account's choice, else the first of the
