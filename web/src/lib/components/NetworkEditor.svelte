@@ -427,7 +427,7 @@
               </Field>
             {/if}
             {#if f.authMethod === 'command'}
-              <Field id="authCommand" label={t('networks.authCommand')} span encrypted help={t('networks.authCommandHelp', { account: "<span class='code'>%account%</span>", password: "<span class='code'>%password%</span>", nick: "<span class='code'>%nick%</span>" })} err={errs.authCommand}><input class="input mono" id="authCommand" spellcheck="false" autocomplete="off" placeholder="PRIVMSG X@channels.undernet.org :LOGIN %account% %password%" bind:value={f.authCommand} aria-invalid={!!errs.authCommand} /></Field>
+              <Field id="authCommand" label={t('networks.authCommand')} span encrypted err={errs.authCommand}>{#snippet helpBody()}<Msg key="networks.authCommandHelp">{#snippet account()}<span class="code">%account%</span>{/snippet}{#snippet password()}<span class="code">%password%</span>{/snippet}{#snippet nick()}<span class="code">%nick%</span>{/snippet}</Msg>{/snippet}<input class="input mono" id="authCommand" spellcheck="false" autocomplete="off" placeholder="PRIVMSG X@channels.undernet.org :LOGIN %account% %password%" bind:value={f.authCommand} aria-invalid={!!errs.authCommand} /></Field>
             {/if}
             {#if f.authMethod !== 'none'}
               <Field id="ghost" label={t('networks.ghost')} help={t('networks.ghostHelp')}>

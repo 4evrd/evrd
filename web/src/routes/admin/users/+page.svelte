@@ -6,6 +6,7 @@
   import Drawer from '$lib/components/Drawer.svelte'
   import Field from '$lib/components/Field.svelte'
   import Switch from '$lib/components/Switch.svelte'
+  import Msg from '$lib/components/Msg.svelte'
   import { api } from '$lib/api.js'
   import { session } from '$lib/session.svelte.js'
   import { toast, openDrawer, closeDrawers } from '$lib/ui.svelte.js'
@@ -125,7 +126,8 @@
 
 <Drawer id="new-drawer" title={t('adminUsers.newUser')} sub={t('adminUsers.newUserSub')}>
   <form class="drawer-body form" id="new-form" novalidate onsubmit={create}>
-    <Field id="n-user" label={t('adminUsers.username')} required help={t('adminUsers.usernameHelp', { format: '<span class="code">user/network:password</span>' })} err={nuErr.username}>
+    <Field id="n-user" label={t('adminUsers.username')} required err={nuErr.username}>
+      {#snippet helpBody()}<Msg key="adminUsers.usernameHelp">{#snippet format()}<span class="code">user/network:password</span>{/snippet}</Msg>{/snippet}
       <input class="input mono" id="n-user" autocomplete="off" spellcheck="false" placeholder={t('adminUsers.usernamePlaceholder')} bind:value={nu.username} aria-invalid={!!nuErr.username} />
     </Field>
     <Field id="n-pass" label={t('adminUsers.tempPassword')} required help={t('adminUsers.tempPasswordHelp')} err={nuErr.password}>
