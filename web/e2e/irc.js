@@ -2,31 +2,38 @@ import net from 'node:net'
 
 // A raw IRC client for tests: attaches to evrd's IRC listener the way irssi or
 // HexChat would (PASS user/network:password), records every line and lets a
-// test wait for one. caps, if any, are requested (CAP LS 302) before signing in.
-// With sasl it signs in with SASL PLAIN instead of PASS; before are lines sent
-// before NICK and USER (BOUNCER BIND…).
+// test wait for one. caps, if any, are negotiated the way a modern client
+// does: CAP LS 302, PASS/NICK/USER, then CAP REQ once the LS answer is in
+// (so the network's capabilities can be had), and CAP END once that's
+// answered. With sasl it signs in with SASL PLAIN instead of PASS; before are
+// lines sent before NICK and USER (BOUNCER BIND…).
 export class IRC {
   static connect({ user, network, password, nick, caps, sasl, before = [], version = 'e2e-client 1.0', host = process.env.E2E_IRC_HOST || 'localhost', port = +(process.env.E2E_IRC_PORT || 6667) }) {
     const c = new IRC()
     c.version = version
     const login = `${user}${network ? '/' + network : ''}`
+    const want = [...(caps || []), ...(sasl ? ['sasl'] : [])]
+    const pending = new Set(want)
+    // what comes after each step of the negotiation
+    c.negotiate = (line) => {
+      if (/^:\S+ CAP \S+ LS :/.test(line) && pending.size === want.length) c.send(`CAP REQ :${want.join(' ')}`)
+      const answer = line.match(/^:\S+ CAP \S+ (ACK|NAK) :(.*)$/)
+      if (answer && pending.size) {
+        for (const cap of answer[2].split(' ')) pending.delete(cap)
+        if (pending.size) return
+        if (sasl && c.lines.some((l) => / CAP \S+ ACK :(.* )?sasl( |$)/.test(l))) c.send('AUTHENTICATE PLAIN')
+        else c.send('CAP END')
+      }
+      if (line === 'AUTHENTICATE +') c.send('AUTHENTICATE ' + Buffer.from(`\0${login}\0${password}`).toString('base64'))
+      if (/^:\S+ 90[34] /.test(line)) c.send('CAP END')
+    }
     return new Promise((resolve, reject) => {
       c.sock = net.connect(port, host, () => {
-        const want = [...(caps || []), ...(sasl ? ['sasl'] : [])]
-        if (want.length) {
-          c.send('CAP LS 302')
-          c.send(`CAP REQ :${want.join(' ')}`)
-        }
-        if (sasl) {
-          c.send('AUTHENTICATE PLAIN')
-          c.send('AUTHENTICATE ' + Buffer.from(`\0${login}\0${password}`).toString('base64'))
-        } else {
-          c.send(`PASS ${login}:${password}`)
-        }
+        if (want.length) c.send('CAP LS 302')
+        if (!sasl) c.send(`PASS ${login}:${password}`)
         for (const l of before) c.send(l)
         c.send(`NICK ${nick || user}`)
         c.send(`USER ${user} 0 * :${user}`)
-        if (want.length) c.send('CAP END')
         resolve(c)
       })
       c.sock.on('error', reject)
@@ -38,6 +45,7 @@ export class IRC {
           const line = buf.slice(0, i)
           buf = buf.slice(i + 2)
           c.lines.push(line)
+          c.negotiate(line)
           if (line.startsWith('PING ')) c.send('PONG ' + line.slice(5))
           // answer evrd's CTCP VERSION so it can name this client
           const v = line.match(/^:(\S+?)!\S+ PRIVMSG \S+ :\x01VERSION\x01$/)

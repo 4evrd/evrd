@@ -110,24 +110,26 @@ test('backlog comes as a history batch with real events, *buffextras for plain c
 
 const joined = (c) => c.waitFor(new RegExp(` 366 \\S+ ${chan.replace('#', '\\#')} `, 'i'))
 
-test("the network's capabilities come with CAP NEW and pass through", async () => {
-  irc = await IRC.connect({ user: me.name, network: 'Dev', password: me.password, caps: ['batch', 'message-tags', 'server-time'] })
-  const offer = await irc.waitFor(/ CAP \S+ NEW :/)
+test("the network's capabilities are offered while registering and pass through", async () => {
+  // asked for at registration, as clients do: evrd's CAP LS waits for PASS
+  // to know the network, and offers its capabilities
+  irc = await IRC.connect({ user: me.name, network: 'Dev', password: me.password, caps: ['batch', 'message-tags', 'server-time', 'extended-join', 'away-notify', 'labeled-response'] })
+  const offer = await irc.waitFor(/ CAP \S+ LS :/)
   for (const c of ['extended-join', 'away-notify', 'multi-prefix', 'labeled-response']) expect(offer).toContain(c)
-  irc.send('CAP REQ :extended-join away-notify labeled-response')
-  await irc.waitFor(/ CAP \S+ ACK :extended-join away-notify labeled-response/)
+  await irc.waitFor(/ CAP \S+ ACK :batch message-tags server-time extended-join away-notify labeled-response$/)
   await joined(irc)
   const plain = await IRC.connect({ user: me.name, network: 'Dev', password: me.password })
   try {
     await joined(plain)
     // AWAY for the client that asked; an extended JOIN, plain for the other
     peer.send('AWAY :lunch')
-    await irc.waitFor(new RegExp(`^(@\\S+ )?:${them.name}!\\S+ AWAY :lunch$`, 'i'))
+    // (ergo leaves out the colon before a one-word trailing parameter)
+    await irc.waitFor(new RegExp(`^(@\\S+ )?:${them.name}!\\S+ AWAY :?lunch$`, 'i'))
     peer.send(`PART ${chan}`)
     peer.send(`JOIN ${chan}`)
-    await irc.waitFor(new RegExp(`:${them.name}!\\S+ JOIN ${chan.replace('#', '\\#')} \\S+ :`, 'i'))
+    await irc.waitFor(new RegExp(`:${them.name}!\\S+ JOIN ${chan.replace('#', '\\#')} \\S+ :?\\S`, 'i'))
     await plain.waitFor(new RegExp(`:${them.name}!\\S+ JOIN ${chan.replace('#', '\\#')}$`, 'i'))
-    expect(plain.lines.some((l) => / AWAY :lunch$/.test(l))).toBe(false)
+    expect(plain.lines.some((l) => / AWAY :?lunch$/.test(l))).toBe(false)
 
     // a labeled command goes to the network and comes back labeled, to
     // this client only
