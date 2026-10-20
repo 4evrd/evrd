@@ -79,6 +79,8 @@ type session struct {
 	capture   *[]string
 	label     string
 	labelSent bool
+
+	mlines map[string]*multiline // the client's open draft/multiline batches
 }
 
 func newSession(srv *Server, conn net.Conn) *session {
@@ -696,6 +698,9 @@ func (se *session) dispatch(m irc.Message) {
 			return
 		}
 		target, text := m.Params[0], m.Params[len(m.Params)-1]
+		if se.inMultiline(m) {
+			return
+		}
 		if strings.EqualFold(target, statusNick) {
 			if m.Command == "PRIVMSG" {
 				se.statusCommand(text)
@@ -710,6 +715,10 @@ func (se *session) dispatch(m irc.Message) {
 		// honor echo-message ourselves; plain clients display it locally.
 		if se.caps["echo-message"] {
 			se.send(se.tags(id, "", tags) + fmt.Sprintf(":%s!%s@%s %s %s :%s", se.unick, se.unick, serverName, m.Command, target, text))
+		}
+	case "BATCH":
+		if !se.clientBatch(m) {
+			se.passOn(m)
 		}
 	case "CHATHISTORY":
 		if !se.caps["draft/chathistory"] {

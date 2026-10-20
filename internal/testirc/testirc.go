@@ -108,7 +108,7 @@ func StartCaps(t testing.TB, log *Log, caps string) string {
 							out(":fake CAP * LS :%s", caps)
 						case len(f) > 2 && f[1] == "REQ":
 							req := strings.TrimPrefix(f[2], ":")
-							if strings.Contains(" "+caps+" ", " "+req+" ") {
+							if offered(caps, req) {
 								acked = append(acked, req)
 								out(":fake CAP %s ACK :%s", orStar(nick), req)
 							} else {
@@ -147,6 +147,16 @@ func StartCaps(t testing.TB, log *Log, caps string) string {
 		}
 	}()
 	return ln.Addr().String()
+}
+
+// offered reports whether caps (CAP LS words, maybe with values) has name.
+func offered(caps, name string) bool {
+	for _, c := range strings.Fields(caps) {
+		if n, _, _ := strings.Cut(c, "="); n == name {
+			return true
+		}
+	}
+	return false
 }
 
 func orStar(nick string) string {

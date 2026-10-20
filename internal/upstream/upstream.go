@@ -1369,6 +1369,43 @@ func (c *Conn) SendTagged(origin, tags, command, target, text string) history.ID
 	return m.ID()
 }
 
+// SendMultiline sends lines as one draft/multiline batch of PRIVMSGs or
+// NOTICEs and records them, a message per line (a concat line joins the one
+// before). It returns the recorded messages' IDs.
+func (c *Conn) SendMultiline(origin, tags, command, target string, lines []string, concat []bool) []history.ID {
+	ref := "ml" + strconv.FormatUint(uint64(history.NextSeq()), 36)
+	c.sendUser(c.withTags(tags, "BATCH +"+ref+" draft/multiline "+target))
+	var texts []string
+	for i, l := range lines {
+		tag := "batch=" + ref
+		if concat[i] {
+			tag += ";draft/multiline-concat"
+		}
+		c.sendUser("@" + tag + " " + command + " " + target + " :" + l)
+		if concat[i] && len(texts) > 0 {
+			texts[len(texts)-1] += l
+		} else {
+			texts = append(texts, l)
+		}
+	}
+	c.sendUser("BATCH -" + ref)
+	kind := "message"
+	if command == "NOTICE" {
+		kind = "notice"
+	}
+	var ids []history.ID
+	for _, text := range texts {
+		c.count("out", kind)
+		m := history.Message{
+			NetworkID: c.net.ID, Target: target, Sender: c.Nick(), Kind: kind, Text: text,
+			Time: time.Now(), Seq: history.NextSeq(), Origin: origin, Tags: tags,
+		}
+		c.emit(m)
+		ids = append(ids, m.ID())
+	}
+	return ids
+}
+
 // SendTagMsg sends a TAGMSG (typing, a reaction) with client-only tags when
 // the network takes message-tags, and passes it on live to the user's other
 // clients. It's never recorded: typing is gone in a moment.

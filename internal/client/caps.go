@@ -31,7 +31,7 @@ var ownCaps = []string{
 var linkCaps = []string{
 	"multi-prefix", "userhost-in-names", "extended-join", "account-notify", "account-tag",
 	"away-notify", "chghost", "invite-notify", "setname", "draft/channel-rename",
-	"draft/message-redaction", "extended-monitor", "labeled-response",
+	"draft/message-redaction", "extended-monitor", "labeled-response", "draft/multiline",
 }
 
 // offer is what this client may ask for now, with each one's value.
@@ -121,7 +121,7 @@ func (se *session) handleCap(m irc.Message) {
 		offer := se.offer()
 		for _, c := range req {
 			batch := se.caps["batch"] || slices.Contains(req, "batch")
-			if _, ok := offer[strings.TrimPrefix(c, "-")]; !ok || !requestable(c) || c == "labeled-response" && !batch {
+			if _, ok := offer[strings.TrimPrefix(c, "-")]; !ok || !requestable(c) || needsBatch[c] && !batch {
 				se.send(fmt.Sprintf(":%s CAP %s NAK :%s", serverName, nick, m.Params[1]))
 				return
 			}
@@ -138,6 +138,9 @@ func (se *session) handleCap(m irc.Message) {
 		se.capNegotiating = false
 	}
 }
+
+// needsBatch are the capabilities a client needs batch for.
+var needsBatch = map[string]bool{"labeled-response": true, "draft/multiline": true}
 
 // requestable reports whether a client may ask for a capability (sts only
 // informs).
