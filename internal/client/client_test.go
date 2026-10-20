@@ -95,6 +95,7 @@ func newRigCaps(t *testing.T, caps string) *rig {
 	addr := ln.Addr().String()
 	ln.Close()
 	srv := NewServer(b, acc, log, "", "")
+	srv.followEvery = 100 * time.Millisecond
 	go srv.ListenAndServe(ctx, []string{"irc+insecure://" + addr})
 
 	u, err := acc.Create(accounts.CreateInput{Username: "alice", Password: "alice-password"})
@@ -252,7 +253,7 @@ func TestCapReqIsAllOrNothing(t *testing.T) {
 	ic.send("CAP REQ :echo-message")
 	ic.expect("ACK :echo-message")
 	ic.send("CAP LIST")
-	ic.expect("LIST :echo-message")
+	ic.expect("LIST :cap-notify echo-message")
 }
 
 func TestJumpAndNetworkManagement(t *testing.T) {

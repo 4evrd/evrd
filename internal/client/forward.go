@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -83,7 +84,7 @@ func (se *session) acceptForwarded() bool {
 	se.fromIP = m.Params[1]
 	if m.Params[2] != "-" {
 		for _, c := range strings.Split(m.Params[2], ",") {
-			if supportedCaps[c] {
+			if slices.Contains(ownCaps, c) {
 				se.caps[c] = true
 			}
 		}

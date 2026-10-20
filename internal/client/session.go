@@ -38,9 +38,13 @@ type session struct {
 	nick           string
 	user           string
 	capNegotiating bool
-	caps           map[string]bool
-	regLines       []string // PASS/NICK/USER as sent, replayed when forwarding
-	internal       bool     // forwarded here by another node (already vetted)
+	capVersion     int               // the client's CAP LS version (302…)
+	caps           map[string]bool   // what it asked for
+	advertised     map[string]string // what it was last told it may ask for
+	registered     bool
+	ubatch         map[string]bool // the network's open batches: passed to this client?
+	regLines       []string        // PASS/NICK/USER as sent, replayed when forwarding
+	internal       bool            // forwarded here by another node (already vetted)
 
 	// Attached state. After registration, only the bridge goroutine touches
 	// these, so jumping networks needs no locking.
@@ -64,37 +68,15 @@ type session struct {
 	batches int // BATCH references handed out
 }
 
-// supportedCaps are the IRCv3 capabilities a client may request. None takes
-// a value in CAP LS 302, and cap-notify is accepted though the list never
-// changes.
-var supportedCaps = map[string]bool{
-	"batch":                true,
-	"cap-notify":           true,
-	"draft/chathistory":    true,
-	"draft/event-playback": true,
-	"echo-message":         true,
-	"message-tags":         true,
-	"server-time":          true,
-}
-
-// capLS is the CAP LS reply's list.
-func capLS() string {
-	var caps []string
-	for c := range supportedCaps {
-		caps = append(caps, c)
-	}
-	sort.Strings(caps)
-	return strings.Join(caps, " ")
-}
-
 func newSession(srv *Server, conn net.Conn) *session {
 	return &session{
-		id:   strconv.FormatInt(sessionSeq.Add(1), 10),
-		srv:  srv,
-		conn: conn,
-		r:    bufio.NewReaderSize(conn, 4096),
-		w:    bufio.NewWriter(conn),
-		caps: map[string]bool{},
+		id:     strconv.FormatInt(sessionSeq.Add(1), 10),
+		srv:    srv,
+		conn:   conn,
+		r:      bufio.NewReaderSize(conn, 4096),
+		w:      bufio.NewWriter(conn),
+		caps:   map[string]bool{},
+		ubatch: map[string]bool{},
 	}
 }
 
@@ -158,6 +140,7 @@ func (se *session) serve(ctx context.Context) {
 			break
 		}
 	}
+	se.registered = true
 	if se.forwardIfElsewhere(ctx) {
 		return
 	}
@@ -167,50 +150,6 @@ func (se *session) serve(ctx context.Context) {
 	defer se.release()
 	defer se.unsubscribe()
 	se.bridge(ctx)
-}
-
-// handleCap answers CAP during and after registration. A REQ is all or
-// nothing: ACK only when every capability in it is supported.
-func (se *session) handleCap(m irc.Message) {
-	if len(m.Params) == 0 {
-		return
-	}
-	nick := orElse(se.nick, "*")
-	switch strings.ToUpper(m.Params[0]) {
-	case "LS":
-		if se.up == nil {
-			se.capNegotiating = true
-		}
-		se.send(fmt.Sprintf(":%s CAP %s LS :%s", serverName, nick, capLS()))
-	case "LIST":
-		var on []string
-		for c := range se.caps {
-			on = append(on, c)
-		}
-		sort.Strings(on)
-		se.send(fmt.Sprintf(":%s CAP %s LIST :%s", serverName, nick, strings.Join(on, " ")))
-	case "REQ":
-		if len(m.Params) < 2 {
-			return
-		}
-		req := strings.Fields(m.Params[1])
-		for _, c := range req {
-			if !supportedCaps[strings.TrimPrefix(c, "-")] {
-				se.send(fmt.Sprintf(":%s CAP %s NAK :%s", serverName, nick, m.Params[1]))
-				return
-			}
-		}
-		for _, c := range req {
-			if name, off := strings.CutPrefix(c, "-"); off {
-				delete(se.caps, name)
-			} else {
-				se.caps[c] = true
-			}
-		}
-		se.send(fmt.Sprintf(":%s CAP %s ACK :%s", serverName, nick, m.Params[1]))
-	case "END":
-		se.capNegotiating = false
-	}
 }
 
 // attach authenticates and binds the session to a network, then sends the
@@ -291,6 +230,7 @@ func (se *session) attach() bool {
 	se.unick = orElse(se.up.Nick(), chosen.Nick)
 	telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("ok"))
 	se.welcome()
+	se.syncCaps()
 	se.joinChannels()
 	se.replayBacklog()
 	// Ask the client what it is (shown on the clients page and in the
@@ -340,9 +280,7 @@ func (se *session) welcome() {
 	se.send(fmt.Sprintf(":%s 002 %s :Your host is %s", serverName, n, serverName))
 	se.send(fmt.Sprintf(":%s 003 %s :evrd bouncer", serverName, n))
 	se.send(fmt.Sprintf(":%s 004 %s %s evrd o o", serverName, n, serverName))
-	if se.caps["draft/chathistory"] {
-		se.send(fmt.Sprintf(":%s 005 %s CHATHISTORY=%d MSGREFTYPES=msgid,timestamp :are supported by this server", serverName, n, chathistoryMax))
-	}
+	se.sendISupport()
 	se.send(fmt.Sprintf(":%s 375 %s :- %s message of the day -", serverName, n, serverName))
 	se.send(fmt.Sprintf(":%s 372 %s :- network %s (%s:%d)", serverName, n, se.net.Name, se.net.Host, se.net.Port))
 	se.send(fmt.Sprintf(":%s 372 %s :- /msg *status help for bouncer commands", serverName, n))
@@ -363,10 +301,20 @@ func (se *session) joinChannels() {
 		}
 		// Make the client open the buffer, then ask the upstream for the real
 		// names/topic — the replies stream back over the raw feed.
-		se.send(fmt.Sprintf(":%s!%s@%s JOIN %s", se.unick, se.unick, serverName, ch))
+		se.send(se.selfJoin(ch))
 		se.up.SendRaw("NAMES " + ch)
 		se.up.SendRaw("TOPIC " + ch)
 	}
+}
+
+// selfJoin is the JOIN that opens a channel on the client: in the
+// extended-join form (account, realname) for a client that asked for it.
+func (se *session) selfJoin(ch string) string {
+	line := fmt.Sprintf(":%s!%s@%s JOIN %s", se.unick, se.unick, serverName, ch)
+	if se.caps["extended-join"] {
+		line += " " + orElse(se.up.Account(), "*") + " :" + orElse(se.net.Realname, se.unick)
+	}
+	return line
 }
 
 // replayBacklog plays back each attached channel and each private buffer:
@@ -472,6 +420,7 @@ func (se *session) jump(n store.Network) error {
 		se.att.Update(func(ci *bouncer.ClientInfo) { ci.Networks = []string{n.Name} })
 	}
 	se.statusf("Jumped from %s to %s.", oldName, n.Name)
+	se.syncCaps()
 	se.joinChannels()
 	se.replayBacklog()
 	return nil
@@ -501,7 +450,7 @@ func (se *session) bridge(ctx context.Context) {
 
 	// The network's connection is replaced when it's disconnected and
 	// connected again (from *status or the web app); follow it.
-	follow := time.NewTicker(3 * time.Second)
+	follow := time.NewTicker(orDefault(se.srv.followEvery, 3*time.Second))
 	defer follow.Stop()
 
 	for {
@@ -535,61 +484,11 @@ func (se *session) bridge(ctx context.Context) {
 				se.raw, se.unsubRaw = conn.SubscribeRaw()
 				se.msgs, se.unsubMsg = conn.Subscribe()
 			}
+			se.syncCaps()
 		case <-ctx.Done():
 			return
 		}
 	}
-}
-
-// relay forwards one raw upstream line, keeping the session's view of its
-// nick in step and hiding what only makes sense to the bouncer.
-func (se *session) relay(line upstream.Line) {
-	m := irc.Parse(line.Text)
-	switch m.Command {
-	case "PING", "PONG", "CAP", "AUTHENTICATE":
-		return
-	case "001":
-		// The upstream re-registered (it reconnected). Don't replay the
-		// welcome; just bring the client's nick along if it changed.
-		if len(m.Params) > 0 && m.Params[0] != se.unick {
-			se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, serverName, m.Params[0]))
-			se.unick = m.Params[0]
-		}
-		return
-	case "002", "003", "004", "005":
-		return
-	case "NICK":
-		if len(m.Params) > 0 && strings.EqualFold(nickFromPrefix(m.Prefix), se.unick) {
-			se.unick = m.Params[0]
-		}
-	}
-	if m.Command == "TAGMSG" && !se.caps["message-tags"] {
-		return // typing and the like: only for clients that take tags
-	}
-	if line.Origin == se.id && !se.caps["echo-message"] {
-		return // this session's own TAGMSG
-	}
-	if ch := lineChannel(m); ch != "" && se.up.ChannelSettings(ch).Detached {
-		return // detached: kept and logged, not shown
-	}
-	text, tags := se.tagged(line)
-	if m.Command == "TAGMSG" && tags == "" {
-		return // nothing left to say
-	}
-	se.send(tags + text)
-}
-
-// tagged splits a server line into the line and the tags this client gets:
-// the time and msgid of what it recorded, so it matches its history, and the
-// client-only tags (+typing, +draft/reply…) for a client with message-tags.
-// The server's own tags (its msgid, account…) never pass.
-func (se *session) tagged(line upstream.Line) (text, tags string) {
-	text = line.Text
-	var own string
-	if strings.HasPrefix(text, "@") {
-		own, text, _ = strings.Cut(text[1:], " ")
-	}
-	return text, se.tags(line.ID, "", clientTags(irc.Parse("@"+own+" X").Tags))
 }
 
 // clientTags are the client-only tags (+…) among tags, as "k=v;…" in a fixed
@@ -640,7 +539,7 @@ func (se *session) tags(id history.ID, batch, client string) string {
 	if se.caps["message-tags"] && id.Seq != 0 {
 		t = append(t, "msgid="+id.String())
 	}
-	if se.caps["message-tags"] && client != "" {
+	if client != "" {
 		t = append(t, client)
 	}
 	if len(t) == 0 {
@@ -681,7 +580,7 @@ func (se *session) detach(chans []string) {
 
 func (se *session) attachChannel(ch string) {
 	se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Detached = false })
-	se.send(fmt.Sprintf(":%s!%s@%s JOIN %s", se.unick, se.unick, serverName, ch))
+	se.send(se.selfJoin(ch))
 	se.up.SendRaw("NAMES " + ch)
 	se.up.SendRaw("TOPIC " + ch)
 	if !se.caps["draft/chathistory"] {
@@ -808,7 +707,7 @@ func (se *session) formatAs(m history.Message, playback bool) string {
 func (se *session) formatIn(m history.Message, playback bool, batch string) string {
 	var b strings.Builder
 	client := ""
-	if !playback {
+	if !playback && se.caps["message-tags"] {
 		client = m.Tags // sent live with the line
 	}
 	b.WriteString(se.tags(m.ID(), batch, client))

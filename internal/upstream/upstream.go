@@ -127,9 +127,12 @@ type Conn struct {
 	triedAlt bool
 	// caps: what the network offers (CAP LS may take several lines), how
 	// many of evrd's requests are unanswered, and what it acknowledged
-	capsOffered map[string]bool
+	capsOffered map[string]string // name -> value
 	capsWaiting int
-	capsListing bool // a CAP LIST reply is coming in over several lines
+	capsListing bool     // a CAP LIST reply is coming in over several lines
+	isupport    []string // the server's ISUPPORT tokens, in order
+	account     string   // the services account we're logged in to ("" unknown)
+	ids         msgids   // the network's msgids for recent lines, and ours
 	caps        map[string]bool
 	saved       []string        // channels to join on (re)connect, in order
 	channels    map[string]bool // channels currently joined
@@ -276,7 +279,7 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		userAttr:     strconv.FormatInt(n.UserID, 10),
 		netAttr:      strconv.FormatInt(n.ID, 10),
 		nick:         n.Nick,
-		capsOffered:  map[string]bool{},
+		capsOffered:  map[string]string{},
 		caps:         map[string]bool{},
 		saved:        saved,
 		channels:     map[string]bool{},
@@ -571,7 +574,8 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		c.nick = resumed.Nick
 	}
 	c.triedAlt = false
-	c.capsOffered, c.caps, c.capsWaiting = map[string]bool{}, map[string]bool{}, 0
+	c.capsOffered, c.caps, c.capsWaiting = map[string]string{}, map[string]bool{}, 0
+	c.isupport, c.account = nil, ""
 	c.channels = map[string]bool{}
 	c.members = map[string]map[string]*Member{}
 	c.topics = map[string]string{}
@@ -629,6 +633,11 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		out := Line{Text: line}
 		if c.recorded {
 			out.ID = c.line
+			if id := m.Tags["msgid"]; id != "" {
+				c.mu.Lock()
+				c.ids.add(id, c.line.String())
+				c.mu.Unlock()
+			}
 		}
 		c.line = history.ID{}
 		c.broadcastRaw(out) // full-fidelity feed for attached IRC clients
@@ -741,7 +750,16 @@ func (c *Conn) handle(m irc.Message) {
 		c.log.Warn("SASL failed, continuing unauthenticated", "network", c.net.Name)
 		c.saslFailed(lastParam(m))
 		c.send("CAP END")
+	case "901": // RPL_LOGGEDOUT
+		c.mu.Lock()
+		c.account = ""
+		c.mu.Unlock()
 	case "900": // RPL_LOGGEDIN: after registration, the answer to IDENTIFY
+		if len(m.Params) > 2 {
+			c.mu.Lock()
+			c.account = m.Params[2]
+			c.mu.Unlock()
+		}
 		if c.Status() == StatusConnected {
 			c.mu.Lock()
 			gen := c.auth.gen
@@ -783,6 +801,11 @@ func (c *Conn) handle(m irc.Message) {
 		c.note("evrd", false, "Signed in as "+c.Nick())
 		c.modsRegistered()
 	case "005": // RPL_ISUPPORT
+		if len(m.Params) > 2 {
+			c.mu.Lock()
+			c.isupport = mergeISupport(c.isupport, m.Params[1:len(m.Params)-1])
+			c.mu.Unlock()
+		}
 		for _, tok := range m.Params[1:] {
 			if v, ok := strings.CutPrefix(tok, "PREFIX=("); ok {
 				if modes, chars, ok := strings.Cut(v, ")"); ok && len(modes) == len(chars) {
@@ -924,6 +947,10 @@ func (c *Conn) handle(m irc.Message) {
 			c.applyModes(m.Params[0], m.Params[1], m.Params[2:])
 			c.mu.Unlock()
 			c.event("mode", m.Params[0], nickOf(m.Prefix), strings.Join(m.Params[1:], " "), "")
+		}
+	case "RENAME": // draft/channel-rename: RENAME old new [reason]
+		if len(m.Params) >= 2 && c.Joined(m.Params[0]) {
+			c.renamed(m.Params[0], m.Params[1])
 		}
 	case "PRIVMSG", "NOTICE":
 		if c.fromServices(m.Prefix) {
@@ -1090,18 +1117,6 @@ func (c *Conn) parted(ch string, forget bool) {
 	}
 }
 
-// wantCaps are the capabilities evrd asks a network for when it offers them
-// (sasl is asked for apart, when there's a password to log in with).
-var wantCaps = []string{"message-tags"}
-
-// HasCap reports whether the network acknowledged a capability on this
-// connection.
-func (c *Conn) HasCap(name string) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.caps[name]
-}
-
 // handleCap negotiates capabilities: each one in wantCaps the network offers,
 // and sasl when there's a password. Each is asked for on its own, so a
 // refusal costs only that one. Once all are answered: SASL PLAIN if sasl was
@@ -1144,10 +1159,14 @@ func (c *Conn) handleCap(m irc.Message) {
 		c.mu.Lock()
 		for _, n := range names() {
 			delete(c.caps, n)
+			delete(c.capsOffered, n)
 		}
 		c.mu.Unlock()
 		return
 	case "NEW":
+		c.mu.Lock()
+		c.offer(caps)
+		c.mu.Unlock()
 		for _, n := range names() {
 			if slices.Contains(wantCaps, n) && !c.HasCap(n) {
 				c.send("CAP REQ :" + n)
@@ -1160,8 +1179,8 @@ func (c *Conn) handleCap(m irc.Message) {
 			for _, n := range names() {
 				if name, off := strings.CutPrefix(n, "-"); off {
 					delete(c.caps, name)
-				} else {
-					c.caps[n] = true
+				} else if _, ok := c.capsOffered[n]; ok {
+					c.caps[n] = true // only what was offered: some servers ACK oddly
 				}
 			}
 		}
@@ -1193,15 +1212,13 @@ func (c *Conn) handleCap(m irc.Message) {
 			return
 		}
 		c.mu.Lock()
-		for _, n := range names() {
-			c.capsOffered[n] = true
-		}
+		c.offer(caps)
 		var req []string
-		if sasl && c.capsOffered["sasl"] {
+		if _, ok := c.capsOffered["sasl"]; ok && sasl {
 			req = append(req, "sasl")
 		}
 		for _, n := range wantCaps {
-			if c.capsOffered[n] {
+			if _, ok := c.capsOffered[n]; ok {
 				req = append(req, n)
 			}
 		}
@@ -1236,7 +1253,17 @@ func (c *Conn) handleCap(m irc.Message) {
 func (c *Conn) offers(name string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.capsOffered[name]
+	_, ok := c.capsOffered[name]
+	return ok
+}
+
+// offer notes the capabilities (with their values) in a CAP LS or NEW.
+// Holds c.mu.
+func (c *Conn) offer(caps string) {
+	for _, f := range strings.Fields(caps) {
+		name, value, _ := strings.Cut(f, "=")
+		c.capsOffered[name] = value
+	}
 }
 
 // sendSASL responds to an AUTHENTICATE + challenge with a SASL PLAIN payload:
@@ -1349,7 +1376,7 @@ func (c *Conn) SendTagMsg(origin, tags, target string) {
 	if tags == "" || !c.HasCap("message-tags") {
 		return
 	}
-	c.sendUser("@" + tags + " TAGMSG " + target)
+	c.sendUser(c.withTags(tags, "TAGMSG "+target))
 	c.broadcastRaw(Line{Text: "@" + tags + " :" + c.Nick() + " TAGMSG " + target, Origin: origin})
 }
 
@@ -1358,7 +1385,22 @@ func (c *Conn) withTags(tags, line string) string {
 	if tags == "" || !c.HasCap("message-tags") {
 		return line
 	}
-	return "@" + tags + " " + line
+	return "@" + c.networkRefs(tags) + " " + line
+}
+
+// networkRefs turns the msgids replies and reactions name from evrd's, which
+// clients know, into the network's.
+func (c *Conn) networkRefs(tags string) string {
+	kvs := strings.Split(tags, ";")
+	for i, kv := range kvs {
+		k, v, _ := strings.Cut(kv, "=")
+		if k == "+draft/reply" || k == "+reply" {
+			if theirs, ok := c.NetworkMsgID(v); ok {
+				kvs[i] = k + "=" + theirs
+			}
+		}
+	}
+	return strings.Join(kvs, ";")
 }
 
 // SetAway marks the user away with msg ("" comes back), now and after any

@@ -16,6 +16,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/bouncer"
@@ -41,6 +42,10 @@ type Server struct {
 	dir *directory.Directory // nil: none
 
 	publicURL string // the web app's address; "" when unknown
+
+	// followEvery is how often a session checks its network for a new
+	// connection and changed capabilities (3s; tests shorten it).
+	followEvery time.Duration
 }
 
 // SetDirectory gives *status the network directory (addnetwork <id>).
