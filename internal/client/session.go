@@ -73,6 +73,12 @@ type session struct {
 	batches  int                          // BATCH references handed out
 	netsSent map[string]map[string]string // networks as last told (bouncer-networks-notify)
 	marks    map[string]time.Time         // read markers as last told (read-marker)
+
+	// labeled-response: while a labeled command runs, what evrd answers is
+	// captured to label it; a command passed on carries the label upstream.
+	capture   *[]string
+	label     string
+	labelSent bool
 }
 
 func newSession(srv *Server, conn net.Conn) *session {
@@ -655,6 +661,15 @@ func (se *session) attachChannel(ch string) {
 }
 
 func (se *session) handleClient(m irc.Message) {
+	if label := m.Tags["label"]; label != "" && se.caps["labeled-response"] {
+		se.labeled(label, m)
+		return
+	}
+	se.dispatch(m)
+}
+
+// dispatch carries out a client's command.
+func (se *session) dispatch(m irc.Message) {
 	if se.up == nil && !unboundOK[m.Command] {
 		se.send(fmt.Sprintf(":%s NOTICE %s :This is a bouncer connection, on no network: pick one with BOUNCER BIND", serverName, se.unick))
 		return
@@ -712,11 +727,11 @@ func (se *session) handleClient(m irc.Message) {
 		// The server's NICK reply comes back over the raw feed and updates
 		// both the upstream's and this session's nick.
 		if len(m.Params) > 0 {
-			se.up.SendRaw("NICK " + m.Params[0])
+			se.toNetwork("NICK " + m.Params[0])
 		}
 	case "JOIN":
 		if len(m.Params) == 0 {
-			se.up.SendRaw(m.String())
+			se.toNetwork(m.String())
 			return
 		}
 		chans := strings.Split(m.Params[0], ",")
@@ -740,7 +755,7 @@ func (se *session) handleClient(m irc.Message) {
 			if len(restKeys) > 0 {
 				line += " " + strings.Join(restKeys, ",")
 			}
-			se.up.SendRaw(line)
+			se.toNetwork(line)
 		}
 	case "DETACH": // ZNC's client command: /detach #chan[,#chan]
 		if len(m.Params) > 0 {
@@ -769,7 +784,7 @@ func (se *session) passOn(m irc.Message) {
 	if se.up.ClientLine(m.String()) {
 		return
 	}
-	se.up.SendRaw(m.String())
+	se.toNetwork(m.String())
 }
 
 // format renders a stored message as an IRC line for replay, tagged with
@@ -895,6 +910,10 @@ func describe(m history.Message) string {
 func (se *session) send(line string) {
 	se.wmu.Lock()
 	defer se.wmu.Unlock()
+	if se.capture != nil {
+		*se.capture = append(*se.capture, line)
+		return
+	}
 	se.w.WriteString(line + "\r\n")
 	se.w.Flush()
 }

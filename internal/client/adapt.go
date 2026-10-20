@@ -82,6 +82,9 @@ func (se *session) route(m irc.Message) bool {
 	switch {
 	case strings.HasPrefix(ref, "+") && len(m.Params) > 1:
 		ok := se.caps["batch"] && se.batchKind(m.Params[1])
+		if m.Params[1] == "labeled-response" {
+			_, ok = se.ownLabel(m.Tags["label"])
+		}
 		if parent := m.Tags["batch"]; parent != "" && !se.ubatch[parent] {
 			ok = false
 		}
@@ -100,8 +103,6 @@ func (se *session) batchKind(kind string) bool {
 	switch kind {
 	case "draft/multiline":
 		return se.caps["draft/multiline"]
-	case "labeled-response":
-		return se.caps["labeled-response"]
 	}
 	return true
 }
@@ -124,6 +125,8 @@ func (se *session) lineTags(id history.ID, theirs map[string]string) string {
 			ok = se.caps["account-tag"]
 		case k == "batch":
 			ok = se.ubatch[v]
+		case k == "label":
+			v, ok = se.ownLabel(v)
 		case k == "draft/multiline-concat":
 			ok = se.caps["draft/multiline"]
 		}
@@ -155,6 +158,9 @@ func (se *session) localRef(tag, v string) string {
 func (se *session) adapt(m irc.Message) (out []irc.Message, keep bool) {
 	p := m.Params
 	switch m.Command {
+	case "ACK": // labeled-response: for the client whose command it was
+		_, mine := se.ownLabel(m.Tags["label"])
+		return nil, mine
 	case "ACCOUNT":
 		return nil, se.caps["account-notify"]
 	case "AWAY":

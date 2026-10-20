@@ -9,6 +9,7 @@ package client
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,7 +31,7 @@ var ownCaps = []string{
 var linkCaps = []string{
 	"multi-prefix", "userhost-in-names", "extended-join", "account-notify", "account-tag",
 	"away-notify", "chghost", "invite-notify", "setname", "draft/channel-rename",
-	"draft/message-redaction", "extended-monitor",
+	"draft/message-redaction", "extended-monitor", "labeled-response",
 }
 
 // offer is what this client may ask for now, with each one's value.
@@ -119,7 +120,8 @@ func (se *session) handleCap(m irc.Message) {
 		req := strings.Fields(m.Params[1])
 		offer := se.offer()
 		for _, c := range req {
-			if _, ok := offer[strings.TrimPrefix(c, "-")]; !ok || !requestable(c) {
+			batch := se.caps["batch"] || slices.Contains(req, "batch")
+			if _, ok := offer[strings.TrimPrefix(c, "-")]; !ok || !requestable(c) || c == "labeled-response" && !batch {
 				se.send(fmt.Sprintf(":%s CAP %s NAK :%s", serverName, nick, m.Params[1]))
 				return
 			}

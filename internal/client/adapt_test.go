@@ -9,7 +9,7 @@ import (
 
 // everyLinkCap is a network offering every capability evrd passes through.
 const everyLinkCap = "message-tags batch multi-prefix userhost-in-names extended-join account-notify account-tag " +
-	"away-notify chghost invite-notify setname draft/channel-rename draft/message-redaction extended-monitor standard-replies"
+	"away-notify chghost invite-notify setname draft/channel-rename draft/message-redaction extended-monitor standard-replies labeled-response"
 
 // full attaches a client that takes every capability: evrd's at
 // registration, the network's once offered (CAP NEW).
