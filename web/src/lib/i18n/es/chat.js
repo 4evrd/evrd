@@ -77,4 +77,7 @@ export default {
   'chat.ev.nick': '{nick} ahora se llama {other}',
   'chat.ev.topic': '{nick} ha cambiado el tema a: {text}',
   'chat.ev.mode': '{nick} pone el modo {text}',
+  'chat.typingOne': '{nick} está escribiendo…',
+  'chat.typingTwo': '{a} y {b} están escribiendo…',
+  'chat.typingMany': 'Varias personas están escribiendo…',
 }

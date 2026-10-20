@@ -79,4 +79,7 @@ export default {
   'chat.ev.nick': '{nick} は {other} に名前を変更しました',
   'chat.ev.topic': '{nick} がトピックを変更しました: {text}',
   'chat.ev.mode': '{nick} がモード {text} を設定しました',
+  'chat.typingOne': '{nick} が入力中…',
+  'chat.typingTwo': '{a} と {b} が入力中…',
+  'chat.typingMany': '複数の人が入力中…',
 }

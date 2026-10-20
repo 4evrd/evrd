@@ -219,3 +219,27 @@ test('long names shorten instead of pushing the buffer list into the chat', asyn
   })
   expect(fits).toBe(true)
 })
+
+test('typing shows both ways between the web chat and an IRC client', async ({ page }) => {
+  const input = await openChat(page)
+  // the other user types in an IRCv3 client (message-tags)
+  const typer = await IRC.connect({ user: them.name, network: 'Dev', password: them.password, caps: ['message-tags'] })
+  try {
+    await typer.waitFor(new RegExp(` 366 \\S+ ${chan.replace('#', '\\#')} `, 'i'))
+    await expect(async () => {
+      typer.send(`@+typing=active TAGMSG ${chan}`)
+      await expect(page.getByTestId('typing')).toHaveText(`${them.name} is typing…`, { timeout: 2000 })
+    }).toPass({ timeout: 20000 })
+    // their message ends it
+    typer.send(`PRIVMSG ${chan} :there`)
+    await expect(log(page).getByText('there', { exact: true })).toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('typing')).toHaveText('')
+
+    // and this user's typing in the web chat reaches their client
+    await input.pressSequentially('hel')
+    await typer.waitFor(new RegExp(`^@\\+typing=active :${me.name}!\\S+ TAGMSG ${chan.replace('#', '\\#')}$`, 'i'), 15000)
+    await input.fill('')
+    await input.press('Backspace')
+    await typer.waitFor(new RegExp(`^@\\+typing=done :${me.name}!\\S+ TAGMSG ${chan.replace('#', '\\#')}$`, 'i'), 15000)
+  } finally { typer.close() }
+})

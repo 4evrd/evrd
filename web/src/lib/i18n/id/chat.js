@@ -79,4 +79,7 @@ export default {
   'chat.ev.nick': '{nick} sekarang dikenal sebagai {other}',
   'chat.ev.topic': '{nick} mengganti topik menjadi: {text}',
   'chat.ev.mode': '{nick} mengatur mode {text}',
+  'chat.typingOne': '{nick} sedang mengetik…',
+  'chat.typingTwo': '{a} dan {b} sedang mengetik…',
+  'chat.typingMany': 'Beberapa orang sedang mengetik…',
 }

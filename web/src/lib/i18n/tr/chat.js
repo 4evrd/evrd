@@ -77,4 +77,7 @@ export default {
   'chat.ev.nick': '{nick} artık {other} olarak biliniyor',
   'chat.ev.topic': '{nick} konuyu değiştirdi: {text}',
   'chat.ev.mode': '{nick} modu ayarladı: {text}',
+  'chat.typingOne': '{nick} yazıyor…',
+  'chat.typingTwo': '{a} ve {b} yazıyor…',
+  'chat.typingMany': 'Birkaç kişi yazıyor…',
 }

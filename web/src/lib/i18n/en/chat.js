@@ -79,4 +79,7 @@ export default {
   'chat.ev.nick': '{nick} is now known as {other}',
   'chat.ev.topic': '{nick} changed the topic to: {text}',
   'chat.ev.mode': '{nick} set mode {text}',
+  'chat.typingOne': '{nick} is typing…',
+  'chat.typingTwo': '{a} and {b} are typing…',
+  'chat.typingMany': 'Several people are typing…',
 }
