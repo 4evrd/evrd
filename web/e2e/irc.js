@@ -3,20 +3,30 @@ import net from 'node:net'
 // A raw IRC client for tests: attaches to evrd's IRC listener the way irssi or
 // HexChat would (PASS user/network:password), records every line and lets a
 // test wait for one. caps, if any, are requested (CAP LS 302) before signing in.
+// With sasl it signs in with SASL PLAIN instead of PASS; before are lines sent
+// before NICK and USER (BOUNCER BIND…).
 export class IRC {
-  static connect({ user, network, password, nick, caps, version = 'e2e-client 1.0', host = process.env.E2E_IRC_HOST || 'localhost', port = +(process.env.E2E_IRC_PORT || 6667) }) {
+  static connect({ user, network, password, nick, caps, sasl, before = [], version = 'e2e-client 1.0', host = process.env.E2E_IRC_HOST || 'localhost', port = +(process.env.E2E_IRC_PORT || 6667) }) {
     const c = new IRC()
     c.version = version
+    const login = `${user}${network ? '/' + network : ''}`
     return new Promise((resolve, reject) => {
       c.sock = net.connect(port, host, () => {
-        if (caps?.length) {
+        const want = [...(caps || []), ...(sasl ? ['sasl'] : [])]
+        if (want.length) {
           c.send('CAP LS 302')
-          c.send(`CAP REQ :${caps.join(' ')}`)
-          c.send('CAP END')
+          c.send(`CAP REQ :${want.join(' ')}`)
         }
-        c.send(`PASS ${user}${network ? '/' + network : ''}:${password}`)
+        if (sasl) {
+          c.send('AUTHENTICATE PLAIN')
+          c.send('AUTHENTICATE ' + Buffer.from(`\0${login}\0${password}`).toString('base64'))
+        } else {
+          c.send(`PASS ${login}:${password}`)
+        }
+        for (const l of before) c.send(l)
         c.send(`NICK ${nick || user}`)
         c.send(`USER ${user} 0 * :${user}`)
+        if (want.length) c.send('CAP END')
         resolve(c)
       })
       c.sock.on('error', reject)

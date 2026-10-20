@@ -107,3 +107,72 @@ test('backlog comes as a history batch with real events, *buffextras for plain c
     expect(plain.lines.some((l) => l.includes('BATCH'))).toBe(false)
   } finally { plain.close() }
 })
+
+const joined = (c) => c.waitFor(new RegExp(` 366 \\S+ ${chan.replace('#', '\\#')} `, 'i'))
+
+test("the network's capabilities come with CAP NEW and pass through", async () => {
+  irc = await IRC.connect({ user: me.name, network: 'Dev', password: me.password, caps: ['batch', 'message-tags', 'server-time'] })
+  const offer = await irc.waitFor(/ CAP \S+ NEW :/)
+  for (const c of ['extended-join', 'away-notify', 'multi-prefix', 'labeled-response']) expect(offer).toContain(c)
+  irc.send('CAP REQ :extended-join away-notify labeled-response')
+  await irc.waitFor(/ CAP \S+ ACK :extended-join away-notify labeled-response/)
+  await joined(irc)
+  const plain = await IRC.connect({ user: me.name, network: 'Dev', password: me.password })
+  try {
+    await joined(plain)
+    // AWAY for the client that asked; an extended JOIN, plain for the other
+    peer.send('AWAY :lunch')
+    await irc.waitFor(new RegExp(`^(@\\S+ )?:${them.name}!\\S+ AWAY :lunch$`, 'i'))
+    peer.send(`PART ${chan}`)
+    peer.send(`JOIN ${chan}`)
+    await irc.waitFor(new RegExp(`:${them.name}!\\S+ JOIN ${chan.replace('#', '\\#')} \\S+ :`, 'i'))
+    await plain.waitFor(new RegExp(`:${them.name}!\\S+ JOIN ${chan.replace('#', '\\#')}$`, 'i'))
+    expect(plain.lines.some((l) => / AWAY :lunch$/.test(l))).toBe(false)
+
+    // a labeled command goes to the network and comes back labeled, to
+    // this client only
+    irc.send(`@label=w1 WHOIS ${them.name}`)
+    await irc.waitFor(/^@label=w1[ ;]/)
+    await plain.waitFor(/ 318 /)
+    expect(plain.lines.some((l) => l.includes('label='))).toBe(false)
+  } finally { plain.close() }
+})
+
+test('SASL sign-in, bouncer networks and BIND, as Goguma does', async () => {
+  irc = await IRC.connect({ user: me.name, password: me.password, sasl: true, caps: ['soju.im/bouncer-networks', 'soju.im/bouncer-networks-notify', 'batch'] })
+  await irc.waitFor(/ 903 /)
+  await irc.waitFor(/ 001 \S+ :Welcome to evrd — a bouncer connection/)
+  const id = (await irc.waitFor(/BOUNCER NETWORK \d+ \S*name=Dev/)).match(/NETWORK (\d+)/)[1]
+
+  // one connection per network
+  const bound = await IRC.connect({ user: me.name, password: me.password, sasl: true, caps: ['soju.im/bouncer-networks'], before: [`BOUNCER BIND ${id}`] })
+  try {
+    await bound.waitFor(new RegExp(` 005 \\S+ .*BOUNCER_NETID=${id}`))
+    await joined(bound)
+  } finally { bound.close() }
+
+  // add one, see it, remove it
+  irc.send('BOUNCER ADDNETWORK host=irc.example.invalid;name=Extra;tls=0')
+  const extra = (await irc.waitFor(/BOUNCER ADDNETWORK \d+$/)).match(/(\d+)$/)[1]
+  await irc.waitFor(new RegExp(`BOUNCER NETWORK ${extra} \\S*name=Extra`))
+  irc.send(`BOUNCER DELNETWORK ${extra}`)
+  await irc.waitFor(new RegExp(`BOUNCER NETWORK ${extra} \\*$`))
+
+  // a wrong password
+  const bad = await IRC.connect({ user: me.name, password: 'wrong', sasl: true })
+  try {
+    await bad.waitFor(/ 904 /)
+  } finally { bad.close() }
+})
+
+test('read markers sync between clients', async () => {
+  irc = await IRC.connect({ user: me.name, network: 'Dev', password: me.password, caps: ['draft/read-marker'] })
+  await irc.waitFor(new RegExp(`MARKREAD ${chan.replace('#', '\\#')} `, 'i'))
+  const other = await IRC.connect({ user: me.name, network: 'Dev', password: me.password, caps: ['draft/read-marker'] })
+  try {
+    await joined(other)
+    const ts = new Date().toISOString()
+    irc.send(`MARKREAD ${chan} timestamp=${ts}`)
+    await other.waitFor(new RegExp(`MARKREAD ${chan.replace('#', '\\#')} timestamp=${ts.replace(/\./g, '\\.')}`, 'i'), 15000)
+  } finally { other.close() }
+})
