@@ -6,7 +6,7 @@ import (
 
 func TestNoImplicitNames(t *testing.T) {
 	r := newRig(t)
-	ic := r.attach("alice/one:alice-password", "draft/no-implicit-names")
+	ic := r.attach("alice/one:alice-password", "no-implicit-names")
 	// the NAMES evrd asks for when attaching aren't for it
 	ic.send("JOIN #new")
 	ic.expect("JOIN #new")

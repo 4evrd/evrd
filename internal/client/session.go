@@ -49,7 +49,13 @@ type session struct {
 	saslBuf        string          // its payload so far
 	saslUser       store.User      // who SASL signed in
 	saslDevice     string
-	bindID         string // BOUNCER BIND's network
+	partial        []byte // a line read so far
+	lsWaiting      bool   // a CAP LS waits for the network to be known
+	lsSince        time.Time
+	lsLine         string         // that CAP LS, passed on if the client is forwarded
+	regKey         string         // what regUp was worked out from
+	regUp          *upstream.Conn // the network a registering client is headed for
+	bindID         string         // BOUNCER BIND's network
 
 	// Attached state. After registration, only the bridge goroutine touches
 	// these, so jumping networks needs no locking.
@@ -102,12 +108,12 @@ func newSession(srv *Server, conn net.Conn) *session {
 const maxLine = 16 << 10
 
 // readLine reads one line without its line ending.
+// A line cut short by a read deadline is kept for the next call.
 func (se *session) readLine() (string, error) {
-	var line []byte
 	for {
 		chunk, err := se.r.ReadSlice('\n')
-		line = append(line, chunk...)
-		if len(line) > maxLine {
+		se.partial = append(se.partial, chunk...)
+		if len(se.partial) > maxLine {
 			return "", errors.New("line too long")
 		}
 		if err == bufio.ErrBufferFull {
@@ -116,7 +122,9 @@ func (se *session) readLine() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return strings.TrimRight(string(line), "\r\n"), nil
+		line := strings.TrimRight(string(se.partial), "\r\n")
+		se.partial = nil
+		return line, nil
 	}
 }
 
@@ -128,11 +136,25 @@ func (se *session) serve(ctx context.Context) {
 
 	// Registration: gather CAP / PASS / NICK / USER.
 	for {
+		if se.lsWaiting {
+			se.conn.SetReadDeadline(se.lsSince.Add(orDefault(se.srv.lsWait, lsWait)))
+		}
 		line, err := se.readLine()
+		if se.lsWaiting {
+			se.conn.SetReadDeadline(time.Time{})
+		}
+		var ne net.Error
+		if errors.As(err, &ne) && ne.Timeout() && se.lsWaiting {
+			se.answerLS() // the client waits for it
+			continue
+		}
 		if err != nil {
 			return
 		}
 		m := irc.Parse(line)
+		if se.lsWaiting && (m.Command == "CAP" || m.Command == "AUTHENTICATE") {
+			se.answerLS()
+		}
 		switch m.Command {
 		case "CAP":
 			se.handleCap(m)
@@ -169,6 +191,13 @@ func (se *session) serve(ctx context.Context) {
 			}
 		case "QUIT":
 			return
+		}
+		if se.lsWaiting && se.nick != "" && se.user != "" {
+			// another node's user: that node answers, knowing the network
+			if se.pass != "" && se.forwardIfElsewhere(ctx) {
+				return
+			}
+			se.answerLS()
 		}
 		if se.nick != "" && se.user != "" && !se.capNegotiating {
 			break
@@ -737,7 +766,7 @@ func (se *session) dispatch(m irc.Message) {
 		}
 		se.passOn(m)
 	case "NAMES":
-		if se.caps["draft/no-implicit-names"] && len(m.Params) > 0 {
+		if se.caps["no-implicit-names"] && len(m.Params) > 0 {
 			if se.namesAsked == nil {
 				se.namesAsked = map[string]int{}
 			}

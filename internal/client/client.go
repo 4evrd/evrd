@@ -46,6 +46,9 @@ type Server struct {
 	// followEvery is how often a session checks its network for a new
 	// connection and changed capabilities (3s; tests shorten it).
 	followEvery time.Duration
+	// lsWait is how long a CAP LS answer waits for the network (lsWait;
+	// tests shorten it).
+	lsWait time.Duration
 
 	sts stsState
 }

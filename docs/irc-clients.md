@@ -68,10 +68,17 @@ A client that asks for no capabilities gets what IRC clients always got from
 evrd. A client that asks gets IRCv3: evrd's own capabilities, offered on every
 network, and the network's, passed through while the network has them. evrd
 asks the network for each one it passes through when the network offers it.
-The network isn't known while a client registers (it picks one with PASS,
-SASL or BOUNCER BIND), so its capabilities follow as `CAP NEW` once the client
-is attached, and `CAP NEW` or `CAP DEL` whenever the link gains or loses one
-or the client jumps networks (`cap-notify`, implied by `CAP LS 302`). Lines a
+
+A client picks its network with PASS, SASL or BOUNCER BIND. Clients send
+`CAP LS` first, usually with PASS, NICK and USER right behind, so evrd's answer
+waits for those (at most a second and a half) and then offers the network's
+capabilities too, which the client can ask for before `CAP END`. When the
+network isn't known by then (SASL comes after `CAP LS`), they follow as
+`CAP NEW` once the client is attached. `CAP NEW` and `CAP DEL` also come when
+the link gains or loses one or the client jumps networks (`cap-notify`,
+implied by `CAP LS 302`). A `CAP REQ` that asks for some of the network's
+capabilities it can't have yet gets the others ACKed and those NAKed;
+anything else unknown NAKs the whole request, as the spec says. Lines a
 capability brings reach the clients that asked for it; the others get them
 translated, or not at all.
 
@@ -84,7 +91,7 @@ translated, or not at all.
 | `draft/chathistory`, `draft/event-playback` | evrd's | backlog pushed on attach |
 | `draft/read-marker` | evrd's | — |
 | `soju.im/bouncer-networks`, `soju.im/bouncer-networks-notify` | evrd's | `*status` network commands |
-| `draft/no-implicit-names` | evrd's | every NAMES reply |
+| `no-implicit-names` | evrd's | every NAMES reply |
 | `draft/pre-away` | evrd's | — |
 | `sts` | evrd's, with a trusted certificate | — |
 | `multi-prefix` | the network's | the highest prefix only (NAMES, WHO) |
@@ -195,7 +202,7 @@ the one before); each saved line has its own msgid.
 [STS](configuration.md#sts-tls-only-for-irc-clients). It's offered only with a
 TLS listener and a certificate clients trust.
 
-**`draft/no-implicit-names`**: only the NAMES replies the client asked for.
+**`no-implicit-names`**: only the NAMES replies the client asked for.
 **`draft/pre-away`**: an AWAY sent while registering is set once attached
 (`AWAY *` is left to auto-away).
 

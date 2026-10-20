@@ -139,6 +139,9 @@ func (se *session) splice(node store.Node) error {
 		capList = "-"
 	}
 	intro := fmt.Sprintf("EVRD-PROXY %s %s %s\r\n", se.srv.secret, remoteHost(se.conn), capList)
+	if se.lsWaiting {
+		intro += se.lsLine + "\r\n" // the owner answers it
+	}
 	for _, l := range se.regLines {
 		intro += l + "\r\n"
 	}

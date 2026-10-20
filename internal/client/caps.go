@@ -16,13 +16,15 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/upstream"
 )
 
 // ownCaps are evrd's own capabilities, offered whatever the network.
 // standard-replies is evrd's too: a client without it gets the network's
 // FAIL, WARN and NOTE as notices.
 var ownCaps = []string{
-	"batch", "cap-notify", "draft/chathistory", "draft/event-playback", "draft/no-implicit-names",
+	"batch", "cap-notify", "draft/chathistory", "draft/event-playback", "no-implicit-names",
 	"draft/pre-away", "draft/read-marker", "echo-message",
 	"message-tags", "sasl", "server-time", "standard-replies",
 	"soju.im/bouncer-networks", "soju.im/bouncer-networks-notify",
@@ -41,18 +43,78 @@ func (se *session) offer() map[string]string {
 	for _, c := range ownCaps {
 		out[c] = ""
 	}
+	link := se.up
+	if link == nil && !se.registered {
+		link = se.regLink()
+	}
 	out["sasl"] = "PLAIN"
 	if v := se.srv.stsValue(se.secure()); v != "" {
 		out["sts"] = v
 	}
-	if se.up != nil {
+	if link != nil {
 		for _, c := range linkCaps {
-			if se.up.HasCap(c) {
-				out[c] = se.up.CapValue(c)
+			if link.HasCap(c) {
+				out[c] = link.CapValue(c)
 			}
 		}
 	}
 	return out
+}
+
+// lsWait is how long a CAP LS answer waits for the client to say which
+// network it's for (PASS, NICK and USER usually follow at once).
+const lsWait = 1500 * time.Millisecond
+
+// regLink is the link of the network a registering client is headed for, as
+// far as it's known yet — from SASL, PASS (the user's first network when it
+// names none) or BOUNCER BIND — so its capabilities can be offered before
+// registration ends. nil when it isn't known, isn't running on this node,
+// or the password doesn't hold.
+func (se *session) regLink() *upstream.Conn {
+	key := se.pass + "\x00" + se.bindID
+	if key == se.regKey {
+		return se.regUp
+	}
+	se.regKey, se.regUp = key, nil
+	login, password, _ := strings.Cut(se.pass, ":")
+	username, network, _ := strings.Cut(login, "/")
+	u := se.saslUser
+	if u.ID == 0 {
+		var err error
+		if password == "" {
+			return nil
+		}
+		if u, _, err = se.srv.acc.IRCLogin(username, password); err != nil {
+			return nil
+		}
+	}
+	if !se.srv.b.Owns(u.ID) || network == "" && se.bindID == "" && se.caps["soju.im/bouncer-networks"] {
+		return nil // another node's, or a bouncer connection
+	}
+	nets, _ := se.srv.b.Store().ListNetworks(u.ID)
+	var n store.Network
+	ok := false
+	switch {
+	case se.bindID != "":
+		n, ok = findNetworkID(nets, se.bindID)
+	case network != "":
+		n, ok = findNetwork(nets, network)
+	case len(nets) > 0:
+		n, ok = nets[0], true
+	}
+	if ok {
+		if c, running := se.srv.b.ConnFor(n.ID); running {
+			se.regUp = c
+		}
+	}
+	return se.regUp
+}
+
+// answerLS answers a CAP LS that waited for the network.
+func (se *session) answerLS() {
+	se.lsWaiting = false
+	se.advertised = se.offer()
+	se.sendCapList("LS", se.capWords(se.advertised))
 }
 
 // capWords is an offer as CAP LS words, sorted, with values for CAP 302.
@@ -108,8 +170,12 @@ func (se *session) handleCap(m irc.Message) {
 				se.caps["cap-notify"] = true // implied by CAP 302
 			}
 		}
-		se.advertised = se.offer()
-		se.sendCapList("LS", se.capWords(se.advertised))
+		if !se.registered && se.pass == "" && se.bindID == "" && se.lsSince.IsZero() {
+			// which network isn't known yet: wait a moment for PASS
+			se.lsWaiting, se.lsSince, se.lsLine = true, time.Now(), strings.TrimSpace("CAP LS "+strings.Join(m.Params[1:], " "))
+			return
+		}
+		se.answerLS()
 	case "LIST":
 		var on []string
 		for c := range se.caps {
@@ -123,21 +189,36 @@ func (se *session) handleCap(m irc.Message) {
 		}
 		req := strings.Fields(m.Params[1])
 		offer := se.offer()
+		batch := se.caps["batch"] || slices.Contains(req, "batch")
+		var ok, bad []string
+		hard := false
 		for _, c := range req {
-			batch := se.caps["batch"] || slices.Contains(req, "batch")
-			if _, ok := offer[strings.TrimPrefix(c, "-")]; !ok || !requestable(c) || needsBatch[c] && !batch {
-				se.send(fmt.Sprintf(":%s CAP %s NAK :%s", serverName, nick, m.Params[1]))
-				return
+			name := strings.TrimPrefix(c, "-")
+			if _, offered := offer[name]; !offered || !requestable(c) || needsBatch[c] && !batch {
+				bad = append(bad, c)
+				hard = hard || !slices.Contains(linkCaps, name)
+				continue
 			}
+			ok = append(ok, c)
 		}
-		for _, c := range req {
+		if hard || len(ok) == 0 {
+			// all or nothing, as the spec has it
+			se.send(fmt.Sprintf(":%s CAP %s NAK :%s", serverName, nick, m.Params[1]))
+			return
+		}
+		// Only the network's capabilities missing (the network isn't known,
+		// or doesn't have them): the rest needn't fail with them.
+		for _, c := range ok {
 			if name, off := strings.CutPrefix(c, "-"); off {
 				delete(se.caps, name)
 			} else {
 				se.caps[c] = true
 			}
 		}
-		se.send(fmt.Sprintf(":%s CAP %s ACK :%s", serverName, nick, m.Params[1]))
+		se.send(fmt.Sprintf(":%s CAP %s ACK :%s", serverName, nick, strings.Join(ok, " ")))
+		if len(bad) > 0 {
+			se.send(fmt.Sprintf(":%s CAP %s NAK :%s", serverName, nick, strings.Join(bad, " ")))
+		}
 	case "END":
 		se.capNegotiating = false
 	}

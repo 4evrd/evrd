@@ -96,6 +96,7 @@ func newRigCaps(t *testing.T, caps string) *rig {
 	ln.Close()
 	srv := NewServer(b, acc, log, "", "")
 	srv.followEvery = 100 * time.Millisecond
+	srv.lsWait = 200 * time.Millisecond
 	go srv.ListenAndServe(ctx, []string{"irc+insecure://" + addr})
 
 	u, err := acc.Create(accounts.CreateInput{Username: "alice", Password: "alice-password"})

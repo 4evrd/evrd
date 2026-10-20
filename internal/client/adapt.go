@@ -224,7 +224,7 @@ func (se *session) adapt(m irc.Message) (out []irc.Message, keep bool) {
 // client with no-implicit-names gets only those it asked for (end marks
 // the reply's last line).
 func (se *session) namesWanted(ch string, end bool) bool {
-	if !se.caps["draft/no-implicit-names"] {
+	if !se.caps["no-implicit-names"] {
 		return true
 	}
 	key := strings.ToLower(ch)
