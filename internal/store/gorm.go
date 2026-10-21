@@ -35,8 +35,18 @@ func Open(dsn string) (Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}); err != nil {
+	hadPlayback := db.Migrator().HasTable(&BufferPlayback{})
+	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}); err != nil {
 		return nil, err
+	}
+	if !hadPlayback {
+		// Auto-clearing buffers went by the account's last visit before each
+		// network kept its own: start every network from there.
+		if err := db.Exec(`INSERT INTO buffer_playbacks (network_id, buffer, cleared_at)
+			SELECT networks.id, '', users.last_seen_at FROM networks JOIN users ON users.id = networks.user_id
+			WHERE users.last_seen_at IS NOT NULL`).Error; err != nil {
+			return nil, err
+		}
 	}
 	return &gormStore{db: db}, nil
 }
@@ -98,8 +108,10 @@ func (s *gormStore) DeleteUser(id int64) error {
 			return err
 		}
 		if len(netIDs) > 0 {
-			if err := tx.Where("network_id IN ?", netIDs).Delete(&ReadMarker{}).Error; err != nil {
-				return err
+			for _, m := range []any{&ReadMarker{}, &BufferPlayback{}} {
+				if err := tx.Where("network_id IN ?", netIDs).Delete(m).Error; err != nil {
+					return err
+				}
 			}
 		}
 		for _, m := range []any{&Network{}, &Session{}, &ClientPassword{}, &UserEvent{}, &UserLanguagePack{}} {
@@ -239,7 +251,10 @@ func (s *gormStore) DeleteNetwork(userID, id int64) error {
 		if res.Error != nil || res.RowsAffected == 0 {
 			return res.Error
 		}
-		return tx.Where("network_id = ?", id).Delete(&ReadMarker{}).Error
+		if err := tx.Where("network_id = ?", id).Delete(&ReadMarker{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("network_id = ?", id).Delete(&BufferPlayback{}).Error
 	})
 }
 
@@ -282,6 +297,45 @@ func (s *gormStore) ReadMarkers(networkID int64) (map[string]time.Time, error) {
 		out[r.Buffer] = r.ReadAt
 	}
 	return out, nil
+}
+
+func (s *gormStore) BufferPlaybacks(networkID int64) (map[string]BufferPlayback, error) {
+	var rows []BufferPlayback
+	if err := s.db.Where("network_id = ?", networkID).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]BufferPlayback, len(rows))
+	for _, r := range rows {
+		out[r.Buffer] = r
+	}
+	return out, nil
+}
+
+func (s *gormStore) UpdateBufferPlayback(networkID int64, buffers []string, f func(*BufferPlayback)) error {
+	// One statement per buffer, not a transaction: SQLite would refuse a
+	// write transaction while the network's other writes go on.
+	have, err := s.BufferPlaybacks(networkID)
+	if err != nil {
+		return err
+	}
+	for _, b := range buffers {
+		b = strings.ToLower(b)
+		bp := have[b]
+		f(&bp)
+		bp.NetworkID, bp.Buffer = networkID, b
+		if bp.Lines == nil && bp.AutoClear == nil && bp.ClearedAt == nil {
+			err = s.db.Where("network_id = ? AND buffer = ?", networkID, b).Delete(&BufferPlayback{}).Error
+		} else {
+			err = s.db.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "network_id"}, {Name: "buffer"}},
+				DoUpdates: clause.AssignmentColumns([]string{"lines", "auto_clear", "cleared_at"}),
+			}).Create(&bp).Error
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *gormStore) AddUserEvent(e UserEvent) error {

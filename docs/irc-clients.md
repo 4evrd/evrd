@@ -36,7 +36,8 @@ The web chat understands `/join`, `/part`, `/msg`, `/query`, `/me`, `/notice`,
 | command | does |
 |---|---|
 | `networks` | your networks, their status, and which one this client is on |
-| `jump <network>` | switch this client to another network |
+| `jumpnetwork <network>` | switch this client to another network |
+| `jump [server]` | reconnect to the network's next server, or the one named (`jump <network>` still switches network) |
 | `connect [network]` / `disconnect [network]` | bring a network up or down (default: this one) |
 | `addnetwork <name> <host> [[+]port] [nick]` | add a network; `+port` is TLS (default `+6697`) |
 | `addnetwork <id>` / `directory [search]` | add a network from the [network directory](network-directory.md) by its id (`addnetwork libera`); list or search it |
@@ -45,10 +46,33 @@ The web chat understands `/join`, `/part`, `/msg`, `/query`, `/me`, `/notice`,
 | `set [network] <setting> <value>` | change `name`, `host`, `port` (`+port` = TLS), `tls`, `nick`, `altnick`, `ident`, `realname`, `password`, `sasluser`, `auth`, `servicesnick`, `identifyargs`, `identifyon`, `authcommand`, `ghost`, `joinafterauth`, `authtimeout` ([services login](services.md)), `bindhost`, `quitmsg`, `encoding`, `trustallcerts`, `trustpki`, `floodrate`, `floodburst`, `joindelay` (`-` clears); reconnects when needed |
 | `listservers` / `addserver <host> [[+]port] [pass]` / `delserver <host> [port]` | the network's servers, tried in turn |
 | `listfingerprints` / `addfingerprint <sha-256>` / `delfingerprint <sha-256>` | trusted server certificates |
-| `detach <#chan>` | hide a channel from IRC clients (still joined and logged); `/join` brings it back |
-| `channels` | this network's saved channels |
-| `playback <channel\|nick> [lines]` | replay a buffer (default 50, up to 500) |
+| `detach <#chan>` / `attach <#chan>` | hide a channel from IRC clients (still joined and logged) / show it again with what you missed (`/join` does too) |
+| `disablechan <#chan>` / `enablechan <#chan>` | leave a channel but keep it saved, with its key / join it again |
+| `channels` / `showchan <#chan>` | this network's saved channels / one channel's state, settings and buffer |
+| `listnicks <#chan>` / `topics` | who's in a channel / your channels' topics |
+| `buffers` | this network's buffers: lines played back, auto-clear, what's waiting |
+| `setbuffer <buffer\|*> [lines\|-]` | how many lines a buffer plays back (0–500; `*` is the network's default) |
+| `autoclear <buffer> on\|off\|-` | play back only what's new, or the last lines every time (`-`: your account's setting) |
+| `clearbuffer <buffer>` / `clearallbuffers` / `clearallchannelbuffers` / `clearallquerybuffers` | start playback over from now (history keeps the lines) |
+| `playbuffer <buffer>` / `playback <buffer> [lines]` | play a buffer back as on attach / replay its last lines from history, cleared or not |
+| `setbindhost <host>` / `clearbindhost` / `showbindhost` / `setuserbindhost <host>` / `clearuserbindhost` | the network's and your account's bind host |
+| `listclients` / `uptime` / `traffic` | attached clients / how long evrd has run / where the network's traffic is |
+| `listusers` / `listallusernetworks` | admins: every user / every user's networks |
 | `info` / `version` | your account and limits / the evrd version |
+
+Buffer names take wildcards (`clearbuffer #evrd*`) and lists (`#a,#b`).
+
+### Playback buffers
+
+Each channel and private message has a buffer, per network. When an IRC
+client attaches it gets each buffer's last lines (*Account → Bouncer*:
+playback lines; `setbuffer` for one network or one buffer). A buffer that
+**auto-clears** (*Account → Bouncer* for channels and for private messages;
+`autoclear` for one buffer) plays back only what came since an IRC client was
+last on that network — nothing while another client is on it, as with ZNC.
+`clearbuffer` starts a buffer over. The lines stay in history either way: the
+web chat, `playback` and `CHATHISTORY` still have them. A client with
+`draft/chathistory` gets no playback; it asks for what it wants.
 
 Anything you send shows up in the web console and on
 your other attached clients too — all sessions share one upstream connection.

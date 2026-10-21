@@ -1,0 +1,213 @@
+import { test, expect } from '@playwright/test'
+import { login, freshUser, addNetwork, uniq } from './helpers.js'
+import { IRC } from './irc.js'
+
+// ZNC's *status commands from a real IRC client, and playback buffers per
+// network and channel: "me" attaches to evrd like irssi would; "them" is
+// someone else on the dev ircd, typing from their own evrd network.
+
+let me, them, chan, netA, netB, talk
+const clients = []
+const esc = (s) => s.replace(/[#.*+?^${}()|[\]\\]/g, '\\$&')
+
+test.beforeEach(async () => {
+  chan = '#' + uniq('st')
+  me = await freshUser('me')
+  them = await freshUser('them')
+  netA = await addNetwork(me.api, { name: 'A', nick: me.name, channels: [chan] })
+  netB = await addNetwork(me.api, { name: 'B', nick: me.name + 'b' })
+  await addNetwork(them.api, { name: 'Dev', nick: them.name, channels: [chan] })
+  talk = await IRC.connect({ user: them.name, network: 'Dev', password: them.password })
+  clients.push(talk)
+  await talk.waitFor(new RegExp(` 366 \\S+ ${esc(chan)} `, 'i'))
+  // me is in the channel too before anyone talks
+  await expect.poll(async () => (await me.api.get(`/api/networks/${netA.id}`)).channels.length, { timeout: 20000 }).toBeGreaterThan(0)
+})
+test.afterEach(async () => {
+  while (clients.length) clients.pop().close()
+  await me.cleanup()
+  await them.cleanup()
+})
+
+async function attach(network, user = me) {
+  const c = await IRC.connect({ user: user.name, network, password: user.password })
+  clients.push(c)
+  await c.waitFor(/ 376 /)
+  return c
+}
+
+// cmd sends a *status command and waits for a reply matching re.
+function cmd(c, text, re, timeout) {
+  const reply = c.next(new RegExp(`^:\\*status!\\S+ PRIVMSG \\S+ :.*${typeof re === 'string' ? esc(re) : re.source}`), timeout)
+  c.send(`PRIVMSG *status :${text}`)
+  return reply
+}
+
+// replayed attaches, and returns the lines that came before *status
+// answered uptime (playback comes first), then detaches.
+async function replayed(network) {
+  const c = await attach(network)
+  await cmd(c, 'uptime', 'evrd has been running')
+  const lines = [...c.lines]
+  c.close()
+  await c.closed()
+  await new Promise((r) => setTimeout(r, 500)) // evrd notes it left
+  return lines.join('\n')
+}
+
+test('auto-clear is per network: what a client saw isn’t replayed; another network keeps its own', async () => {
+  const a = await attach('A')
+  await cmd(a, `autoclear ${chan} on`, `${chan} auto-clears`)
+  talk.send(`PRIVMSG ${chan} :seen live`)
+  await a.waitFor(/:seen live$/)
+  a.close()
+  await a.closed()
+  await new Promise((r) => setTimeout(r, 500))
+
+  // a private message on B, where no client was
+  talk.send(`PRIVMSG ${me.name}b :while you were on A`)
+  await new Promise((r) => setTimeout(r, 1000))
+
+  expect(await replayed('A')).not.toContain('seen live')
+  expect(await replayed('B')).toContain('while you were on A')
+  expect(await replayed('B')).not.toContain('while you were on A') // cleared by then
+
+  // a line while away is replayed, once
+  talk.send(`PRIVMSG ${chan} :while you were away`)
+  await new Promise((r) => setTimeout(r, 1000))
+  expect(await replayed('A')).toContain('while you were away')
+  expect(await replayed('A')).not.toContain('while you were away')
+})
+
+test('nothing is replayed that another attached client is seeing', async () => {
+  const stay = await attach('A')
+  await cmd(stay, `autoclear ${chan} on`, 'auto-clears')
+  talk.send(`PRIVMSG ${chan} :the other client has it`)
+  await stay.waitFor(/:the other client has it$/)
+  expect(await replayed('A')).not.toContain('the other client has it')
+})
+
+test('buffers: setbuffer, clearbuffer, playbuffer and playback', async () => {
+  const a = await attach('A')
+  for (let i = 1; i <= 5; i++) talk.send(`PRIVMSG ${chan} :line ${i}`)
+  await a.waitFor(/:line 5$/)
+  await cmd(a, 'buffers', new RegExp(`${esc(chan)}\\s+50 lines · keeps`))
+  await cmd(a, `setbuffer ${chan} 2`, `${chan} plays back 2 lines.`)
+  await cmd(a, 'setbuffer * 7', 'Buffers on A play back 7 lines')
+  await cmd(a, `showchan ${chan}`, 'buffer: plays back 2 lines · keeps its buffer')
+  a.close()
+  await a.closed()
+  await new Promise((r) => setTimeout(r, 500))
+
+  let seen = await replayed('A')
+  expect(seen).toContain('line 4')
+  expect(seen).toContain('line 5')
+  expect(seen).not.toContain('line 3')
+
+  const c = await attach('A')
+  await cmd(c, `playbuffer ${chan}`, 'Replayed 2 line(s)')
+  await cmd(c, `clearbuffer ${chan.slice(0, 4)}*`, 'Cleared 1 buffer on A')
+  await cmd(c, `playbuffer ${chan}`, `The buffer for ${chan} is empty.`)
+  // history still has it
+  await cmd(c, `playback ${chan} 10`, 'Replayed')
+  expect(c.lines.some((l) => / line 1$/.test(l))).toBe(true) // (with its time in front)
+  await cmd(c, `setbuffer ${chan} -`, `${chan} plays back 7 lines.`)
+  await cmd(c, 'clearallchannelbuffers', 'channel buffer')
+  await cmd(c, 'clearallquerybuffers', /query buffer/)
+  await cmd(c, 'clearallbuffers', /Cleared \d+ buffers? on A/)
+  c.close()
+  await c.closed()
+  await new Promise((r) => setTimeout(r, 500))
+  seen = await replayed('A')
+  expect(seen).not.toContain('line 5')
+})
+
+test('channels: detach, attach, disable, enable, nicks, topics, showchan', async () => {
+  const a = await attach('A')
+  a.send(`TOPIC ${chan} :status e2e topic`) // (me is the channel op)
+  await talk.waitFor(/:status e2e topic$/)
+  await cmd(a, `listnicks ${chan}`, them.name)
+  await cmd(a, 'topics', 'status e2e topic')
+  await cmd(a, `showchan ${chan}`, new RegExp(`${esc(chan)} on A — joined, 2 nicks`))
+  await cmd(a, 'channels', chan)
+
+  // detach hides it, attach brings it back with what was missed
+  const hidden = a.next(new RegExp(`PART ${esc(chan)} :Detached`, 'i'))
+  a.send(`PRIVMSG *status :detach ${chan}`)
+  await hidden
+  talk.send(`PRIVMSG ${chan} :said while detached`)
+  await new Promise((r) => setTimeout(r, 800))
+  expect(a.lines.some((l) => l.endsWith(':said while detached'))).toBe(false)
+  const back = a.next(/said while detached$/) // (played back with its time)
+  a.send(`PRIVMSG *status :attach ${chan}`) // JOIN and playback follow
+  await back
+  await cmd(a, `attach ${chan}`, `${chan} isn't detached.`)
+
+  // disable parts it (them sees it) but keeps it saved; enable joins again
+  const parted = talk.next(new RegExp(`^:${esc(me.name)}!\\S+ PART ${esc(chan)}`, 'i'))
+  await cmd(a, `disablechan ${chan}`, `Disabled ${chan}: left it, kept it saved.`)
+  await parted
+  const n = await me.api.get(`/api/networks/${netA.id}`)
+  expect(n.channels.map((c) => c.toLowerCase())).toContain(chan.toLowerCase())
+  await cmd(a, `showchan ${chan}`, 'saved, not joined · disabled')
+  const joined = talk.next(new RegExp(`^:${esc(me.name)}!\\S+ JOIN :?${esc(chan)}`, 'i'))
+  await cmd(a, `enablechan ${chan}`, `Enabled ${chan}: joining it.`)
+  await joined
+})
+
+test('jump: to the next server, to another network and back', async () => {
+  const a = await attach('A')
+  await cmd(a, 'listservers', '1. ircd 6667')
+  await cmd(a, 'jump', 'Reconnecting A to ircd:6667')
+  await expect.poll(async () => (await me.api.get(`/api/networks/${netA.id}`)).status, { timeout: 20000 }).toBe('connected')
+  await cmd(a, 'jump B', 'Jumped from A to B.')
+  await cmd(a, 'networks', '* B')
+  await cmd(a, 'jumpnetwork A', 'Jumped from B to A.')
+  await cmd(a, 'jump nowhere', 'neither one of your networks nor a server of A')
+})
+
+test('clients, uptime, traffic, bind hosts, modules, and what evrd does elsewhere', async () => {
+  const a = await attach('A')
+  // (its name comes in its answer to evrd's CTCP VERSION)
+  await expect(async () => { await cmd(a, 'listclients', 'e2e-client', 1500) }).toPass({ timeout: 10000 })
+  await cmd(a, 'uptime', 'evrd has been running for')
+  await cmd(a, 'traffic', /Traffic|health page/)
+  await cmd(a, 'showbindhost', "This network's bind host: (not set)")
+  await cmd(a, 'listmods', 'loadmod <module>')
+  await cmd(a, 'listavailmods', 'loadmod <module>')
+  await cmd(a, 'rehash', "evrd applies settings as they're saved")
+  await cmd(a, 'saveconfig', "evrd saves every change as it's made")
+  await cmd(a, 'reloadmod q', 'Modules are built into evrd')
+  await cmd(a, 'help', 'clearallquerybuffers')
+  // ZNC's raw command form
+  const r = a.next(/:\*status!\S+ PRIVMSG \S+ :.*evrd has been running/)
+  a.send('ZNC Uptime')
+  await r
+})
+
+test('admin listings are for admins only', async () => {
+  const a = await attach('A')
+  await cmd(a, 'listusers', 'Admins only.')
+  await cmd(a, 'listallusernetworks', 'Admins only.')
+
+  const boss = await freshUser('boss', { admin: true })
+  try {
+    await addNetwork(boss.api, { name: 'Dev', nick: boss.name })
+    const b = await attach('Dev', boss)
+    await cmd(b, 'listusers', me.name)
+    await cmd(b, 'listallusernetworks', new RegExp(`${esc(me.name)}\\s+B`))
+  } finally { await boss.cleanup() }
+})
+
+test('the web chat runs the buffer commands too', async ({ page }) => {
+  await login(page, me.name, me.password)
+  await page.goto(`/chat?net=${netA.id}&buf=${encodeURIComponent('*status')}`)
+  await expect(page.locator('.live.on')).toBeVisible({ timeout: 10000 })
+  const input = page.getByRole('textbox', { name: 'Message' })
+  await input.fill(`setbuffer ${chan} 3`)
+  await input.press('Enter')
+  await expect(page.locator('.log').getByText(`${chan} plays back 3 lines.`)).toBeVisible({ timeout: 5000 })
+  await input.fill(`playbuffer ${chan}`)
+  await input.press('Enter')
+  await expect(page.locator('.log').getByText(/already shows each buffer's history/)).toBeVisible({ timeout: 5000 })
+})
