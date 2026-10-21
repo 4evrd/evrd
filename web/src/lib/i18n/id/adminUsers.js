@@ -67,6 +67,8 @@ export default {
   'adminUsers.unread': 'Belum dibaca',
   'adminUsers.nMentions': { other: '{count} mention' },
   'adminUsers.connectionLog': 'Log koneksi',
+  'adminUsers.health': 'Kesehatan',
+  'adminUsers.healthName': 'Kesehatan {name}',
   'adminUsers.nothingLogged': 'Belum ada log: entri muncul saat evrd menyambungkan network ini.',
   'adminUsers.inNoChannels': 'Tidak ada di channel mana pun.',
   'adminUsers.savedChannels': 'Channel tersimpan: {channels}',

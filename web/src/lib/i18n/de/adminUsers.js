@@ -67,6 +67,8 @@ export default {
   'adminUsers.unread': 'Ungelesen',
   'adminUsers.nMentions': { one: '{count} Erwähnung', other: '{count} Erwähnungen' },
   'adminUsers.connectionLog': 'Verbindungsprotokoll',
+  'adminUsers.health': 'Zustand',
+  'adminUsers.healthName': 'Zustand von {name}',
   'adminUsers.nothingLogged': 'Noch nichts protokolliert: Einträge erscheinen, wenn evrd dieses Netzwerk verbindet.',
   'adminUsers.inNoChannels': 'In keinem Channel.',
   'adminUsers.savedChannels': 'Gespeicherte Channels: {channels}',

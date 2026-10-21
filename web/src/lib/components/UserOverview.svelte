@@ -105,7 +105,7 @@
       empty={q.trim() ? t('overview.noChannelMatch') : filter === 'all' ? t('overview.noChannels') : t('overview.allChannelsRead')}>
       {#snippet source(l, dim)}
         {@const n = nets.find((x) => x.id === l.id)}
-        <a class="net-node" class:muted-node={filter !== 'all' && !shown.some((c) => c.source === n.id)} href={href(`/networks#net-${n.id}`, `#net-${n.id}`)} style="--net:{n.color}">
+        <a class="net-node" class:muted-node={filter !== 'all' && !shown.some((c) => c.source === n.id)} href={href(`/networks/${n.id}/health`, `#net-${n.id}`)} style="--net:{n.color}">
           <div class="head">
             <span class="mono-badge" aria-hidden="true">{n.short}</span>
             <span class="od-field od-fill"><span class="od-truncate">{n.name}</span><span class="od-truncate">{n.host}:{n.port}{n.tls ? ' · TLS' : ''}</span></span>

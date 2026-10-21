@@ -247,6 +247,7 @@
     {#if net}
       <div class="od-cluster">
         <StatusChip status={state.status} />
+        <a class="btn btn-ghost" href="/networks/{net.id}/health" title={t('networks.healthTip')}><Icon name="chart" />{t('networks.health')}</a>
         <a class="btn" href="/chat?net={net.id}"><Icon name="message" />{t('networks.openChat')}</a>
       </div>
     {/if}
