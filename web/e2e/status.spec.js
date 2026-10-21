@@ -178,7 +178,14 @@ test('clients, uptime, traffic, bind hosts, modules, and what evrd does elsewher
   await cmd(a, 'rehash', "evrd applies settings as they're saved")
   await cmd(a, 'saveconfig', "evrd saves every change as it's made")
   await cmd(a, 'reloadmod q', 'Modules are built into evrd')
-  await cmd(a, 'help', 'clearallquerybuffers')
+  await cmd(a, 'help', 'CLEARALLQUERYBUFFERS')
+  // typed as their own (/clearbuffer #chan), and the network keeps its own (/version)
+  const own = a.next(/:\*status!\S+ PRIVMSG \S+ :Cleared 1 buffer on A/)
+  a.send(`CLEARBUFFER ${chan}`)
+  await own
+  const list = a.next(/ 323 /) // the network's LIST answer
+  a.send('LIST')
+  await list
   // ZNC's raw command form
   const r = a.next(/:\*status!\S+ PRIVMSG \S+ :.*evrd has been running/)
   a.send('ZNC Uptime')
@@ -207,6 +214,19 @@ test('the web chat runs the buffer commands too', async ({ page }) => {
   await input.fill(`setbuffer ${chan} 3`)
   await input.press('Enter')
   await expect(page.locator('.log').getByText(`${chan} plays back 3 lines.`)).toBeVisible({ timeout: 5000 })
+  // from any buffer: /znc …, and *status commands as their own
+  await page.goto(`/chat?net=${netA.id}&buf=${encodeURIComponent(chan)}`)
+  await expect(page.locator('.live.on')).toBeVisible({ timeout: 10000 })
+  await input.fill(`/setbuffer ${chan} 4`)
+  await input.press('Enter')
+  await expect(page.locator('#buf-title')).toHaveText('*status')
+  await expect(page.locator('.log').getByText(`${chan} plays back 4 lines.`)).toBeVisible({ timeout: 5000 })
+  await input.fill('/znc uptime')
+  await input.press('Enter')
+  await expect(page.locator('.log').getByText(/evrd has been running/)).toBeVisible({ timeout: 5000 })
+  await input.fill('/notacommand')
+  await input.press('Enter')
+  await expect(page.getByText(/\/notacommand isn’t supported here/)).toBeVisible()
   await input.fill(`playbuffer ${chan}`)
   await input.press('Enter')
   await expect(page.locator('.log').getByText(/already shows each buffer's history/)).toBeVisible({ timeout: 5000 })

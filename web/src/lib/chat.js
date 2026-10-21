@@ -32,7 +32,9 @@ export const COMMANDS = [
 //   { status: command }                 a *status command
 //   { close: true } | { help: true }
 //   { error: '…' }
-export function parse(input, target) {
+// statusCommands are the *status commands that work as their own
+// (/clearbuffer #chan), from the server's config.
+export function parse(input, target, statusCommands = []) {
   const line = input.trim()
   if (!line) return null
   const plain = !line.startsWith('/') || line.startsWith('//')
@@ -57,7 +59,7 @@ export function parse(input, target) {
       if (/^\*status$/i.test(m[1])) return { status: m[2], open: '*status' }
       return isChan(m[1]) ? { send: { target: m[1], text: m[2] } } : { open: m[1], send: { target: m[1], text: m[2] } }
     }
-    case 'status':
+    case 'status': case 'znc':
       return { status: rest || 'help', open: '*status' }
     case 'query': case 'q': {
       const m = rest.match(/^(\S+)\s*(.*)$/)
@@ -91,6 +93,7 @@ export function parse(input, target) {
     case 'help': case 'commands':
       return { help: true }
   }
+  if (statusCommands.includes(cmd.toLowerCase())) return { status: `${cmd.toLowerCase()}${rest ? ' ' + rest : ''}`, open: '*status' }
   return { error: t('chat.unsupported', { command: '/' + cmd }) }
 }
 
