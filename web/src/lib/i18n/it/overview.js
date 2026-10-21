@@ -126,4 +126,11 @@ export default {
   'overview.rcKindFailed': 'Connessione fallita',
   'overview.rcKindConnected': 'Connessa',
   'overview.rcKindNetsplit': 'Netsplit',
+  'overview.searchTopology': 'Cerca reti e canali',
+  'overview.noMatch': 'Nessuna rete o canale corrisponde a “{q}”.',
+  'overview.noChannelMatch': 'Nessun canale corrisponde.',
+  'overview.zoom': 'Zoom',
+  'overview.zoomOut': 'Riduci',
+  'overview.zoomIn': 'Ingrandisci',
+  'overview.zoomFit': 'Adatta',
 }

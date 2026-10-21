@@ -126,4 +126,11 @@ export default {
   'overview.rcKindFailed': 'Bağlanamadı',
   'overview.rcKindConnected': 'Bağlandı',
   'overview.rcKindNetsplit': 'Netsplit',
+  'overview.searchTopology': 'Ağ ve kanal ara',
+  'overview.noMatch': '“{q}” ile eşleşen ağ ya da kanal yok.',
+  'overview.noChannelMatch': 'Eşleşen kanal yok.',
+  'overview.zoom': 'Yakınlaştırma',
+  'overview.zoomOut': 'Uzaklaştır',
+  'overview.zoomIn': 'Yakınlaştır',
+  'overview.zoomFit': 'Sığdır',
 }

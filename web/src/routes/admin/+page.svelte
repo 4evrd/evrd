@@ -99,7 +99,7 @@
         {#if !nodes.length}
           <p class="desc">{t('admin.noNodes')}</p>
         {:else}
-          <Topology left={leftNodes} right={shown} leftLabel={t('admin.evrdNodes')} rightLabel={label[filter]} empty={t('admin.noMatch')} strandsPer={6} single>
+          <Topology label={t('admin.evrdNodes')} zoomLabels={{ toolbar: t('overview.zoom'), out: t('overview.zoomOut'), in: t('overview.zoomIn'), fit: t('overview.zoomFit') }} left={leftNodes} right={shown} leftLabel={t('admin.evrdNodes')} rightLabel={label[filter]} empty={t('admin.noMatch')} strandsPer={6} single>
             {#snippet source(l)}
               {@const n = nodes.find((x) => x.id === l.id)}
               <div class="net-node" style="--net:{n.color}">

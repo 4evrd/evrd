@@ -135,4 +135,11 @@ export default {
   'overview.rcKindFailed': 'Gagal tersambung',
   'overview.rcKindConnected': 'Tersambung',
   'overview.rcKindNetsplit': 'Netsplit',
+  'overview.searchTopology': 'Cari jaringan dan channel',
+  'overview.noMatch': 'Tidak ada jaringan atau channel yang cocok dengan “{q}”.',
+  'overview.noChannelMatch': 'Tidak ada channel yang cocok.',
+  'overview.zoom': 'Zoom',
+  'overview.zoomOut': 'Perkecil',
+  'overview.zoomIn': 'Perbesar',
+  'overview.zoomFit': 'Paskan',
 }

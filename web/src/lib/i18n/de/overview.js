@@ -135,4 +135,11 @@ export default {
   'overview.rcKindFailed': 'Keine Verbindung möglich',
   'overview.rcKindConnected': 'Verbunden',
   'overview.rcKindNetsplit': 'Netsplit',
+  'overview.searchTopology': 'Netzwerke und Channels suchen',
+  'overview.noMatch': 'Kein Netzwerk und kein Channel passt zu „{q}“.',
+  'overview.noChannelMatch': 'Kein Channel passt.',
+  'overview.zoom': 'Zoom',
+  'overview.zoomOut': 'Verkleinern',
+  'overview.zoomIn': 'Vergrößern',
+  'overview.zoomFit': 'Einpassen',
 }
