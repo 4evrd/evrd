@@ -360,8 +360,7 @@ func TestStatusShowAndSet(t *testing.T) {
 
 func TestModulesFromStatus(t *testing.T) {
 	r := newRig(t)
-	ic := r.attach("alice/one:alice-password")
-	ic.expect("JOIN #one")
+	ic := r.attached() // (connected: the alias needs the link's modules running)
 	ic.send("PRIVMSG *status :loadmod nosuch")
 	ic.expect(`No module "nosuch"`)
 	ic.send("PRIVMSG *status :loadmod alias")

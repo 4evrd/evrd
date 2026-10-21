@@ -70,7 +70,9 @@ playback lines; `setbuffer` for one network or one buffer). A buffer that
 **auto-clears** (*Account → Bouncer* for channels and for private messages;
 `autoclear` for one buffer) plays back only what came since an IRC client was
 last on that network — nothing while another client is on it, as with ZNC.
-`clearbuffer` starts a buffer over. The lines stay in history either way: the
+`clearbuffer` starts a buffer over. The network's page in the web app has
+the same settings under **Playback**: lines per buffer for the network, each
+buffer's lines and what it plays back, what's waiting, and clearing. The lines stay in history either way: the
 web chat, `playback` and `CHATHISTORY` still have them. A client with
 `draft/chathistory` gets no playback; it asks for what it wants.
 

@@ -438,11 +438,10 @@ func (se *session) replayBacklog() {
 	if se.caps["draft/chathistory"] {
 		return
 	}
-	bps := se.playbacks()
-	lastOn := se.lastOnNetwork(bps)
+	p := se.playRules()
 	play := func(name string) {
-		if n := se.bufferLines(bps, name); n > 0 {
-			se.playbackSince(name, n, se.playFrom(bps, name, lastOn))
+		if n := p.Lines(name); n > 0 {
+			se.playbackSince(name, n, p.From(name))
 		}
 	}
 	for _, ch := range se.up.Channels() {
@@ -701,12 +700,8 @@ func (se *session) attachChannel(ch string) {
 	se.up.SendRaw("TOPIC " + ch)
 	if !se.caps["draft/chathistory"] {
 		// what it missed while detached: after its clear mark
-		bps := se.playbacks()
-		since := time.Time{}
-		if at := bps[strings.ToLower(ch)].ClearedAt; at != nil {
-			since = *at
-		}
-		se.playbackSince(ch, max(se.bufferLines(bps, ch), 1), since)
+		p := se.playRules()
+		se.playbackSince(ch, max(p.Lines(ch), 1), p.ClearedAt(ch))
 	}
 }
 

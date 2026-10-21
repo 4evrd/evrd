@@ -14,6 +14,7 @@
   import ConnLog from './ConnLog.svelte'
   import DirectoryPicker from './DirectoryPicker.svelte'
   import Msg from './Msg.svelte'
+  import PlaybackSettings from './PlaybackSettings.svelte'
   import { api } from '$lib/api.js'
   import { wait } from '$lib/format.js'
   import { fromDirectory, loginHint } from '$lib/directory.js'
@@ -256,7 +257,7 @@
   <div class="editor">
     <nav class="toc" aria-label={t('networks.sections')}>
       {#if net}<a href="#connect">{t('networks.section.connect')}</a>{/if}
-      {#each SECTIONS as k}<a href="#{k}">{t(`networks.section.${k}`)}</a>{/each}
+      {#each SECTIONS as k}<a href="#{k}">{t(`networks.section.${k}`)}</a>{#if k === 'channels' && net}<a href="#playback">{t('networks.section.playback')}</a>{/if}{/each}
       {#if net}<a href="#log">{t('networks.section.log')}</a><a href="#danger">{t('networks.section.remove')}</a>{/if}
     </nav>
 
@@ -504,6 +505,8 @@
           </div>
         </div>
       </section>
+
+      {#if net}<PlaybackSettings id={net.id} name={net.name} />{/if}
 
       <section class="card" id="modules" aria-labelledby="modules-h">
         <div class="panel-grid">

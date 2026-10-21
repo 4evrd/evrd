@@ -469,7 +469,7 @@ pre.snippet b { color: var(--primary); font-weight: 500; }
 pre.snippet em { color: var(--nick); font-style: normal; }
 
 /* table */
-.table-wrap { overflow-x: auto; border-radius: var(--r-row); }
+.table-wrap { position: relative; overflow-x: auto; border-radius: var(--r-row); } /* (holds its .sr-only labels in) */
 table { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-size: var(--fs-sm); }
 th { text-align: left; font-size: var(--fs-2xs); letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--faint); font-weight: 600; padding: 0 var(--s4) var(--s1); white-space: nowrap; }
 td { padding: var(--s3) var(--s4); background: var(--row); vertical-align: middle; }
