@@ -138,4 +138,8 @@ export default {
   'overview.searchTopology': 'Search networks and channels',
   'overview.noMatch': 'No network or channel matches “{q}”.',
   'overview.noChannelMatch': 'No channels match.',
+  'overview.zoom': 'Zoom',
+  'overview.zoomOut': 'Zoom out',
+  'overview.zoomIn': 'Zoom in',
+  'overview.zoomFit': 'Fit',
 }

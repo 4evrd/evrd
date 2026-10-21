@@ -101,7 +101,7 @@
   {:else if q.trim() && !shownNets.length}
     <p class="desc" data-testid="topo-nomatch">{t('overview.noMatch', { q: q.trim() })}</p>
   {:else}
-    <Topology left={shownNets.map((n) => ({ id: n.id, color: n.color }))} right={shown} leftLabel={t('overview.upstreamNetworks')} rightLabel={chanLabel[filter]}
+    <Topology label={t('overview.topology')} zoomLabels={{ toolbar: t('overview.zoom'), out: t('overview.zoomOut'), in: t('overview.zoomIn'), fit: t('overview.zoomFit') }} left={shownNets.map((n) => ({ id: n.id, color: n.color }))} right={shown} leftLabel={t('overview.upstreamNetworks')} rightLabel={chanLabel[filter]}
       empty={q.trim() ? t('overview.noChannelMatch') : filter === 'all' ? t('overview.noChannels') : t('overview.allChannelsRead')}>
       {#snippet source(l, dim)}
         {@const n = nets.find((x) => x.id === l.id)}

@@ -546,9 +546,14 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
 .topo-search { position: relative; display: flex; align-items: center; min-width: 0; flex: 1 1 220px; max-width: 320px; }
 .topo-search .i { position: absolute; left: 12px; color: var(--muted); pointer-events: none; }
 .topo-search .input { padding-left: 36px; width: 100%; }
-.topo-viewport { max-height: min(640px, 70vh); overflow: auto; contain: layout paint; cursor: grab; border-radius: var(--r-row); scrollbar-gutter: stable; }
+.topo-viewport { position: relative; height: 600px; overflow: hidden; contain: strict; cursor: grab; touch-action: none; border-radius: var(--r-row); }
+.topo-viewport:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.topo-viewport > .topo { transform-origin: 0 0; will-change: transform; }
 .topo-viewport.panning { cursor: grabbing; user-select: none; }
-.topo-viewport.panning * { pointer-events: none; }
+.topo-viewport.panning .topo { pointer-events: none; }
+.topo-zoom { position: absolute; right: var(--s3); bottom: var(--s3); z-index: 2; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: var(--r-pill); background: var(--panel, var(--bg)); border: 1px solid var(--line-soft); box-shadow: 0 4px 16px rgb(0 0 0 / 0.25); cursor: default; }
+.topo-zoom .icon-btn { width: 32px; height: 32px; font-size: 18px; line-height: 1; }
+.topo-k { min-width: 44px; text-align: center; font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .topo-links .halo { opacity: 0.25; }
 .topo { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(48px, 0.5fr) minmax(0, 1fr); gap: 0; }
 .topo-col { display: grid; gap: var(--s3); align-content: start; position: relative; z-index: 1; }
