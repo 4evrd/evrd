@@ -43,7 +43,7 @@
 
   const lines = $derived(metrics ? [{ name: t('health.messages'), color: 'var(--cyan)', points: se.lines }] : [])
   const drops = $derived(metrics ? [{ name: t('health.dropped'), color: 'var(--bad)', points: se.dropped }, { name: t('health.failed'), color: 'var(--warn)', points: se.failed }] : [])
-  const lag = $derived(metrics ? [{ name: t('health.lagAvg'), points: se.lagAvg }, { name: t('health.lagWorst'), points: se.lagMax }] : [])
+  const lag = $derived(metrics ? [{ name: t('health.lagAvg'), points: se.lagAvg }, { name: t('health.lagWorst'), points: se.lagMax, color: 'var(--warn)' }] : [])
   const hasLag = $derived(metrics && se.lagAvg?.some((v) => v != null))
   const disconnects = $derived((sum.dropped || 0) + (sum.failed || 0))
   const ms = (v) => (v == null ? '—' : t('health.ms', { ms: Math.round(v).toLocaleString(i18n.intl) }))
@@ -109,7 +109,7 @@
         <section class="card" aria-labelledby="h-lag">
           <div class="section-head"><div class="od-stack"><span class="caps">{t('health.lagCaps')}</span><h2 id="h-lag">{t('health.lagTitle')}</h2></div></div>
           {#if !hasLag}<div class="chart-empty">{t('health.noLag')}</div>
-          {:else}<MetricChart series={lag} start={data.start} {step} unit="ms" />{/if}
+          {:else}<MetricChart series={lag} start={data.start} {step} unit="ms" fancy />{/if}
         </section>
 
         <section class="card" aria-labelledby="h-msgs">
