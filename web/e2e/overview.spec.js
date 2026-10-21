@@ -123,3 +123,51 @@ test('many networks fit in their tile', async ({ page }) => {
   const next = await page.locator('.tile', { has: page.getByTestId('tile-clients') }).boundingBox()
   expect(box.x + box.width).toBeLessThanOrEqual(next.x)
 })
+
+test('the topology is a fixed-size map: search, pan, zoom, fit', async ({ page }) => {
+  const tag = uniq('t')
+  for (let i = 1; i <= 6; i++) await addNetwork(u.api, { name: `Map${i}`, nick: `${u.name}m${i}`.slice(0, 30), channels: [`#${tag}-${i}a`, `#${tag}-${i}b`] })
+  await login(page, u.name, u.password)
+  const vp = page.locator('.topo-viewport')
+  await expect(page.locator('.topo-item')).toHaveCount(12, { timeout: 20000 })
+  await expect.poll(async () => Math.round((await vp.boundingBox()).height)).toBe(600)
+  const view = () => page.locator('.topo-viewport > .topo').evaluate((e) => e.style.transform)
+
+  // dragging pans; a drag doesn't open the card it started on
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await vp.scrollIntoViewIfNeeded()
+  const b = await vp.boundingBox()
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height - 40)
+  await page.mouse.down()
+  await page.mouse.move(b.x + b.width / 2, b.y + 40, { steps: 8 })
+  await page.mouse.up()
+  expect(await view()).toMatch(/translate\(0px, -\d/)
+  await expect(page).toHaveURL(/\/$/)
+
+  // zoom buttons and Fit (the whole topology inside the box)
+  await page.getByRole('button', { name: 'Zoom in' }).click()
+  await expect(page.locator('.topo-k')).toHaveText('125%')
+  await page.getByRole('button', { name: 'Fit' }).click()
+  const inside = await page.locator('.topo-viewport > .topo').evaluate((e) => {
+    const t = e.getBoundingClientRect(), v = e.parentElement.getBoundingClientRect()
+    return t.top >= v.top - 1 && t.bottom <= v.bottom + 1
+  })
+  expect(inside).toBe(true)
+  await page.getByRole('button', { name: '100%' }).click()
+  await expect(page.locator('.topo-k')).toHaveText('100%')
+
+  // search: a network brings its channels; a channel name finds one; the box keeps its size
+  await page.getByTestId('topo-search').fill('map3')
+  await expect(page.locator('.topo-src')).toHaveCount(1)
+  await expect(page.locator('.topo-item')).toHaveCount(2)
+  await page.getByTestId('topo-search').fill(`${tag}-5b`)
+  await expect(page.locator('.topo-item')).toHaveCount(1)
+  await expect.poll(async () => Math.round((await vp.boundingBox()).height)).toBe(600)
+  await page.getByTestId('topo-search').fill('nothing-like-this')
+  await expect(page.getByTestId('topo-nomatch')).toBeVisible()
+
+  // a plain click still opens the channel
+  await page.getByTestId('topo-search').fill(`${tag}-5b`)
+  await page.locator('.topo-item a').click()
+  await expect(page).toHaveURL(/\/chat\?net=/)
+})
