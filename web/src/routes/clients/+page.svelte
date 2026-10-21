@@ -95,7 +95,7 @@
 
     <section class="card enter" aria-labelledby="guide-h">
       <div class="section-head"><div class="od-stack"><span class="caps">{t('clients.setupGuide')}</span><h2 id="guide-h">{t('clients.setUp')}</h2></div></div>
-      <div style="display:grid;gap:var(--s4)">
+      <div style="display:grid;grid-template-columns:minmax(0, 1fr);gap:var(--s4)">
         <div class="tabs" role="tablist" aria-label={t('clients.client')}>
           {#each TABS as [k, l]}<button class="tab" role="tab" aria-selected={tab === k} onclick={() => (tab = k)}>{l}</button>{/each}
         </div>
@@ -196,6 +196,12 @@ Password        <b>{me.username}/{firstNet}:</b><em>{pwText}</em></pre>
 </Drawer>
 
 <style>
+  /* phones: every client's tab in view, and the steps wrap instead of
+     scrolling sideways (copying gets the same text) */
+  @media (max-width: 559px) {
+    .tabs .tab { flex: 1 1 auto; padding-inline: 8px; }
+    pre.snippet { white-space: pre-wrap; overflow-wrap: anywhere; }
+  }
   .pw-row { --cols: 36px minmax(0, 1fr) auto auto; }
   .pic { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--bg-deep); color: var(--nick); }
 </style>

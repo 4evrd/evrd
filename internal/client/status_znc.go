@@ -192,16 +192,16 @@ func (se *session) cmdShowChan(args []string) {
 	if se.up != nil && se.up.Joined(ch) {
 		se.statusf("  topic: %s", orElse(se.up.Topic(ch), "(none)"))
 	}
-	bps := se.playbacks()
+	p := se.playRules()
 	mode := "keeps its buffer"
-	if se.autoClears(bps, ch) {
+	if p.AutoClears(ch) {
 		mode = "auto-clears"
 	}
 	cleared := ""
-	if at := bps[strings.ToLower(ch)].ClearedAt; at != nil {
+	if at := p.ClearedAt(ch); !at.IsZero() {
 		cleared = " · cleared " + at.Local().Format("2006-01-02 15:04")
 	}
-	se.statusf("  buffer: plays back %d lines · %s%s", se.bufferLines(bps, ch), mode, cleared)
+	se.statusf("  buffer: plays back %d lines · %s%s", p.Lines(ch), mode, cleared)
 }
 
 func prefixed(p, s string) string {

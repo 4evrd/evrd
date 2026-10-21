@@ -32,6 +32,12 @@ The web chat understands `/join`, `/part`, `/msg`, `/query`, `/me`, `/notice`,
 `/msg *status help` lists the bouncer's own commands. ZNC's names work too
 (`ListNetworks`, `JumpNetwork`, `AddNetwork`…), and so does ZNC's raw command:
 `/znc ListNetworks` (or `/quote znc …`) is the same as `/msg *status ListNetworks`.
+Most commands also work as their own: `/listnetworks`, `/clearbuffer #evrd`
+(clients that send unknown commands to the server, like irssi and HexChat;
+in WeeChat use `/quote clearbuffer #evrd`), and in the web chat. Commands are
+case-insensitive. The ones IRC has itself — `LIST`, `HELP`, `CONNECT`, `INFO`,
+`VERSION`, `MODULES`, `REHASH`, `RESTART` — still go to the network; use
+`/znc` or `/msg *status` for evrd's.
 
 | command | does |
 |---|---|
@@ -70,7 +76,9 @@ playback lines; `setbuffer` for one network or one buffer). A buffer that
 **auto-clears** (*Account → Bouncer* for channels and for private messages;
 `autoclear` for one buffer) plays back only what came since an IRC client was
 last on that network — nothing while another client is on it, as with ZNC.
-`clearbuffer` starts a buffer over. The lines stay in history either way: the
+`clearbuffer` starts a buffer over. The network's page in the web app has
+the same settings under **Playback**: lines per buffer for the network, each
+buffer's lines and what it plays back, what's waiting, and clearing. The lines stay in history either way: the
 web chat, `playback` and `CHATHISTORY` still have them. A client with
 `draft/chathistory` gets no playback; it asks for what it wants.
 

@@ -69,6 +69,9 @@ export const api = {
   directory: () => req('GET', '/api/directory'),
   channel: (id, target) => req('GET', `/api/networks/${id}/channel?${q({ target })}`),
   markRead: (id, target = '') => req('POST', `/api/networks/${id}/read`, { target }),
+  playback: (id) => req('GET', `/api/networks/${id}/playback`),
+  setPlayback: (id, change) => req('PATCH', `/api/networks/${id}/playback`, change),
+  clearPlayback: (id, buffers) => req('POST', `/api/networks/${id}/playback/clear`, { buffers }),
 
   // openStream connects a network's live message WebSocket (same origin, so
   // the session cookie authenticates it). onMessage gets each message.

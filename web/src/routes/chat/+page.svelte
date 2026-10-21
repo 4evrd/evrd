@@ -204,7 +204,7 @@
 
   async function send(e) {
     e.preventDefault()
-    const cmd = parse(text, buf)
+    const cmd = parse(text, buf, session.config?.statusCommands)
     if (!cmd) return
     const fail = () => { toast(t('chat.notConnected'), 'bad'); return false }
     if (cmd.error) { local(cmd.error); return }

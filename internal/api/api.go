@@ -43,6 +43,9 @@ import (
 // implements it, so both share one set of commands).
 type StatusRunner interface {
 	WebStatus(userID int64, n store.Network, text string, out func(string))
+	// StatusCommands are the commands the web chat takes as their own
+	// (/clearbuffer …), lowercased.
+	StatusCommands() []string
 }
 
 type Server struct {
@@ -183,6 +186,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/networks/{id}/health", user(s.handleNetworkHealth))
 	mux.HandleFunc("GET /api/networks/{id}/channel", user(s.handleChannel))
 	mux.HandleFunc("POST /api/networks/{id}/read", user(s.handleMarkRead))
+	mux.HandleFunc("GET /api/networks/{id}/playback", user(s.handlePlayback))
+	mux.HandleFunc("PATCH /api/networks/{id}/playback", user(s.handleSetPlayback))
+	mux.HandleFunc("POST /api/networks/{id}/playback/clear", user(s.handleClearPlayback))
 	mux.HandleFunc("GET /api/me/clients", user(s.handleMyClients))
 	mux.HandleFunc("GET /api/me/events", user(s.handleMyEvents))
 	mux.HandleFunc("GET /api/overview", user(s.handleOverview))
@@ -224,7 +230,15 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		// the forms mark those fields
 		"secretsEncrypted": store.SecretsEncrypted(),
 		"version":          version.Version,
+		"statusCommands":   s.statusCommands(),
 	})
+}
+
+func (s *Server) statusCommands() []string {
+	if s.status == nil {
+		return []string{}
+	}
+	return s.status.StatusCommands()
 }
 
 // selfSigned says whether IRC clients will see a self-signed certificate

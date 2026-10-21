@@ -97,6 +97,55 @@ var statusAliases = map[string]string{
 	"listtrustedserverfingerprints": "listfingerprints",
 }
 
+// networkCommands are IRC's own commands that share a name with a *status
+// command: sent as a command they go to the network (LIST, VERSION…); the
+// bouncer's are /msg *status or /znc away.
+var networkCommands = map[string]bool{"help": true, "connect": true, "info": true, "version": true,
+	"modules": true, "rehash": true, "restart": true, "list": true}
+
+// isStatusCommand reports whether a client's command (/clearbuffer …) is a
+// *status command evrd answers itself, not one for the network.
+func isStatusCommand(cmd string) bool {
+	name := strings.ToLower(cmd)
+	if networkCommands[name] {
+		return false
+	}
+	if _, ok := statusAliases[name]; ok {
+		return true
+	}
+	if _, ok := notHere[name]; ok {
+		return true
+	}
+	for _, c := range statusCmds {
+		if c.name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// StatusCommands lists every command a client may type as its own (for the
+// web chat), lowercased and sorted.
+func (s *Server) StatusCommands() []string {
+	var out []string
+	add := func(name string) {
+		if isStatusCommand(name) {
+			out = append(out, name)
+		}
+	}
+	for _, c := range statusCmds {
+		add(c.name)
+	}
+	for a := range statusAliases {
+		add(a)
+	}
+	for n := range notHere {
+		add(n)
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
 func (se *session) statusCommand(text string) {
 	fields := strings.Fields(text)
 	if len(fields) == 0 {
@@ -141,10 +190,11 @@ func (se *session) statusf(format string, a ...any) {
 }
 
 func (se *session) cmdHelp([]string) {
-	se.statusf("evrd commands — /msg %s <command>:", statusNick)
+	se.statusf("evrd commands — /msg %s <command>, /znc <command>, or most as their own: /CLEARBUFFER #chan", statusNick)
 	for _, c := range statusCmds {
-		se.statusf("  %-42s %s", strings.TrimSpace(c.name+" "+c.args), c.help)
+		se.statusf("  %-42s %s", strings.TrimSpace(strings.ToUpper(c.name)+" "+c.args), c.help)
 	}
+	se.statusf("Commands are case-insensitive. HELP, CONNECT, INFO, VERSION and MODULES as their own go to the network.")
 }
 
 // networks loads the user's networks, reporting a failure itself.
