@@ -135,4 +135,7 @@ export default {
   'overview.rcKindFailed': 'Couldn’t connect',
   'overview.rcKindConnected': 'Connected',
   'overview.rcKindNetsplit': 'Netsplit',
+  'overview.searchTopology': 'Search networks and channels',
+  'overview.noMatch': 'No network or channel matches “{q}”.',
+  'overview.noChannelMatch': 'No channels match.',
 }

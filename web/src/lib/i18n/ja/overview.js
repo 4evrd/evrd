@@ -135,4 +135,7 @@ export default {
   'overview.rcKindFailed': '接続失敗',
   'overview.rcKindConnected': '接続',
   'overview.rcKindNetsplit': 'ネットスプリット',
+  'overview.searchTopology': 'ネットワークとチャンネルを検索',
+  'overview.noMatch': '「{q}」に一致するネットワークやチャンネルはありません。',
+  'overview.noChannelMatch': '一致するチャンネルはありません。',
 }

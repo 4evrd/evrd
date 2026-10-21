@@ -37,7 +37,7 @@
 
   /* screen skeleton (optional): bars take their own space, the middle scrolls — no padding guessed for chrome */
   .od-screen { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
-  .od-scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+  .od-scroll { overflow-y: auto; min-height: 0; }
 
   /* horizontal rail: the next item peeks at the edge; trailing room survives overflow */
   .od-rail { display: flex; gap: var(--od-gap, 8px); overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
@@ -542,12 +542,20 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
 /* ===========================================================================
    overview — topology + traffic
    =========================================================================== */
+.topo-tools { gap: var(--s3); flex-wrap: wrap; justify-content: flex-end; }
+.topo-search { position: relative; display: flex; align-items: center; min-width: 0; flex: 1 1 220px; max-width: 320px; }
+.topo-search .i { position: absolute; left: 12px; color: var(--muted); pointer-events: none; }
+.topo-search .input { padding-left: 36px; width: 100%; }
+.topo-viewport { max-height: min(640px, 70vh); overflow: auto; contain: layout paint; cursor: grab; border-radius: var(--r-row); scrollbar-gutter: stable; }
+.topo-viewport.panning { cursor: grabbing; user-select: none; }
+.topo-viewport.panning * { pointer-events: none; }
+.topo-links .halo { opacity: 0.25; }
 .topo { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(48px, 0.5fr) minmax(0, 1fr); gap: 0; }
 .topo-col { display: grid; gap: var(--s3); align-content: start; position: relative; z-index: 1; }
 .topo-col.right { gap: var(--s2); }
 .topo-col.right > .caps { grid-column: 1 / -1; }
 .topo-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: visible; }
-.topo-links path { fill: none; stroke-width: 1.2; stroke-linecap: round; opacity: 0.55; transition: opacity var(--t-fast) var(--ease-out), stroke-width var(--t-fast) var(--ease-out); }
+.topo-links path { fill: none; stroke-width: 1.2; stroke-linecap: round; opacity: 0.55; transition: opacity var(--t-fast) var(--ease-out); }
 .topo-links path.dim { opacity: 0.12; }
 .topo-links path.hl { opacity: 1; stroke-width: 1.8; }
 .topo-links circle { stroke: none; }

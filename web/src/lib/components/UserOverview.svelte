@@ -24,9 +24,15 @@
 
   // topology: channels hang off their network
   let filter = $state('all')
+  // search: a network by name or host (bringing its channels), a channel by name
+  let q = $state('')
+  const has = (s) => String(s || '').toLowerCase().includes(q.trim().toLowerCase())
+  const netHit = (n) => has(n.name) || has(n.host)
   const allChans = $derived(nets.flatMap((n) => (n.buffers || []).map((b) => ({ ...b, key: `${n.id}/${b.name}`, source: n.id, net: n, dashed: n.status !== 'connected' }))))
   const match = { all: () => true, unread: (c) => c.unread > 0 || c.mentions > 0, mention: (c) => c.mentions > 0 }
-  const shown = $derived(allChans.filter(match[filter]))
+  const found = $derived(q.trim() ? allChans.filter((c) => has(c.name) || netHit(c.net)) : allChans)
+  const shown = $derived(found.filter(match[filter]))
+  const shownNets = $derived(q.trim() ? nets.filter((n) => netHit(n) || found.some((c) => c.source === n.id)) : nets)
   const counts = $derived({ all: allChans.length, unread: allChans.filter(match.unread).length, mention: allChans.filter(match.mention).length })
   const chanLabel = $derived({ all: t('overview.chansAll'), unread: t('overview.chansUnread'), mention: t('overview.chansMention') })
 
@@ -79,19 +85,24 @@
 <section class="card topo-card enter" aria-labelledby="topo-h">
   <div class="section-head" style="margin-bottom:var(--s5)">
     <div class="od-stack"><span class="caps">{t('overview.liveTopology')}</span><h2 id="topo-h">{t('overview.topology')}</h2></div>
+    <div class="od-row topo-tools">
+    <label class="topo-search"><Icon name="search" class="i-sm" /><span class="sr-only">{t('overview.searchTopology')}</span><input class="input" type="search" placeholder={t('overview.searchTopology')} bind:value={q} data-testid="topo-search" /></label>
     <div class="tabs status-tabs" role="tablist" aria-label={t('overview.channelFilter')}>
       {#each [['all', t('overview.filterAll')], ['unread', t('overview.filterUnread')], ['mention', t('overview.filterMentions')]] as [k, l]}
         <button class="tab" role="tab" aria-selected={filter === k} onclick={() => (filter = k)}>{l} <span class="n">{counts[k]}</span></button>
       {/each}
+    </div>
     </div>
   </div>
   {#if !ov}
     <div class="skel"></div><div class="skel" style="margin-top:8px"></div>
   {:else if !nets.length}
     <div class="empty"><span class="ic"><Icon name="globe" /></span><h3>{t('overview.noNetworks')}</h3>{#if admin}<p>{t('overview.userNoNetworks', { who })}</p>{:else}<p>{t('overview.addNetworksHelp')}</p><a class="btn btn-primary btn-sm" href="/networks/new"><Icon name="plus" />{t('overview.addNetwork')}</a>{/if}</div>
+  {:else if q.trim() && !shownNets.length}
+    <p class="desc" data-testid="topo-nomatch">{t('overview.noMatch', { q: q.trim() })}</p>
   {:else}
-    <Topology left={nets.map((n) => ({ id: n.id, color: n.color }))} right={shown} leftLabel={t('overview.upstreamNetworks')} rightLabel={chanLabel[filter]}
-      empty={filter === 'all' ? t('overview.noChannels') : t('overview.allChannelsRead')}>
+    <Topology left={shownNets.map((n) => ({ id: n.id, color: n.color }))} right={shown} leftLabel={t('overview.upstreamNetworks')} rightLabel={chanLabel[filter]}
+      empty={q.trim() ? t('overview.noChannelMatch') : filter === 'all' ? t('overview.noChannels') : t('overview.allChannelsRead')}>
       {#snippet source(l, dim)}
         {@const n = nets.find((x) => x.id === l.id)}
         <a class="net-node" class:muted-node={filter !== 'all' && !shown.some((c) => c.source === n.id)} href={href(`/networks#net-${n.id}`, `#net-${n.id}`)} style="--net:{n.color}">
