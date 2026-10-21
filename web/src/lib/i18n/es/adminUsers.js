@@ -67,6 +67,8 @@ export default {
   'adminUsers.unread': 'Sin leer',
   'adminUsers.nMentions': { one: '{count} mención', other: '{count} menciones' },
   'adminUsers.connectionLog': 'Registro de conexión',
+  'adminUsers.health': 'Estado',
+  'adminUsers.healthName': 'Estado de {name}',
   'adminUsers.nothingLogged': 'Aún no hay nada registrado: las entradas aparecen cuando evrd conecta esta red.',
   'adminUsers.inNoChannels': 'En ningún canal.',
   'adminUsers.savedChannels': 'Canales guardados: {channels}',

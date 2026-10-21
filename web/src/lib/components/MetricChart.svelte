@@ -5,7 +5,7 @@
   // series: [{ name, points: [number|null …] }]   (null: no data there)
   // start:  unix seconds of points[0]; step: seconds between points
   // unit:   shown after values ('ms', …)
-  import { netColor, chartMax } from '$lib/format.js'
+  import { netColor, chartMax, date } from '$lib/format.js'
   import { i18n, t } from '$lib/i18n.svelte.js'
 
   let { series = [], start = 0, step = 3600, unit = '' } = $props()
@@ -29,6 +29,7 @@
   const fmt = (v) => (v == null ? '—' : (Math.abs(v) >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'k' : String(Math.round(v * 10) / 10)) + (unit ? ' ' + unit : ''))
   const label = (i) => {
     const d = new Date((start + i * step) * 1000)
+    if (step >= 86400) return date(start + i * step + step / 2) // a day: its middle, wherever midnight falls
     return step >= 3600 ? d.toLocaleDateString(i18n.intl, { weekday: 'short' }) + ' ' + d.toTimeString().slice(0, 5) : d.toTimeString().slice(0, 5)
   }
   const ticks = $derived([0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * (n - 1))))

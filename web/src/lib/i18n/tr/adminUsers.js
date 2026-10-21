@@ -67,6 +67,8 @@ export default {
   'adminUsers.unread': 'Okunmamış',
   'adminUsers.nMentions': { one: '{count} anılma', other: '{count} anılma' },
   'adminUsers.connectionLog': 'Bağlantı günlüğü',
+  'adminUsers.health': 'Durum',
+  'adminUsers.healthName': 'Durum: {name}',
   'adminUsers.nothingLogged': 'Henüz kayıt yok: evrd bu ağa bağlandığında kayıtlar görünür.',
   'adminUsers.inNoChannels': 'Hiçbir kanalda değil.',
   'adminUsers.savedChannels': 'Kayıtlı kanallar: {channels}',

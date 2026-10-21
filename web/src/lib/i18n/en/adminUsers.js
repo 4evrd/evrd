@@ -67,6 +67,8 @@ export default {
   'adminUsers.unread': 'Unread',
   'adminUsers.nMentions': { one: '{count} mention', other: '{count} mentions' },
   'adminUsers.connectionLog': 'Connection log',
+  'adminUsers.health': 'Health',
+  'adminUsers.healthName': 'Health of {name}',
   'adminUsers.nothingLogged': 'Nothing logged yet: entries appear when evrd connects this network.',
   'adminUsers.inNoChannels': 'In no channels.',
   'adminUsers.savedChannels': 'Saved channels: {channels}',

@@ -124,7 +124,7 @@
         </div>
         <div class="foot">
           <a class="btn btn-sm" href="/chat?net={n.id}" aria-disabled={!on ? 'true' : undefined} tabindex={on ? undefined : -1}><Icon name="message" />{t('networks.openChat')}{#if n.mentions}<span class="count mention">{n.mentions}</span>{:else if n.unread}<span class="count">{n.unread}</span>{/if}</a>
-          <div class="od-cluster"><a class="btn btn-ghost btn-sm" href="/networks/{n.id}" aria-label={t('networks.editName', { name: n.name })}><Icon name="pencil" />{t('networks.edit')}</a></div>
+          <div class="od-cluster"><a class="btn btn-ghost btn-sm" href="/networks/{n.id}/health" aria-label={t('networks.healthName', { name: n.name })} title={t('networks.healthTip')} data-testid="health-link"><Icon name="chart" /></a><a class="btn btn-ghost btn-sm" href="/networks/{n.id}" aria-label={t('networks.editName', { name: n.name })}><Icon name="pencil" />{t('networks.edit')}</a></div>
         </div>
       </article>
     {/each}

@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -336,18 +335,8 @@ func (s *Server) handleNetworkLog(w http.ResponseWriter, r *http.Request) {
 // handleAdminNetworkLog is a user's network's connection log, for admins
 // helping them (GET /api/admin/users/{id}/networks/{nid}/log).
 func (s *Server) handleAdminNetworkLog(w http.ResponseWriter, r *http.Request) {
-	u, ok := s.adminTarget(w, r)
+	n, ok := s.adminNetwork(w, r)
 	if !ok {
-		return
-	}
-	nid, err := strconv.ParseInt(r.PathValue("nid"), 10, 64)
-	if err != nil {
-		writeErr(w, http.StatusNotFound, "no such network")
-		return
-	}
-	n, err := s.st().NetworkByID(nid)
-	if err != nil || n.UserID != u.ID {
-		writeErr(w, http.StatusNotFound, "no such network")
 		return
 	}
 	writeJSON(w, http.StatusOK, s.b.NetworkLog(n.ID))

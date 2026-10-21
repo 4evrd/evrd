@@ -177,7 +177,7 @@
             <div><span class="caps">{t('adminUsers.unread')}</span><span class="mono">{n.unread}{n.mentions ? ' · ' + t('adminUsers.nMentions', { count: n.mentions }) : ''}</span></div>
           </div>
           {#if n.lastError && n.status !== 'connected'}<p class="callout warn" data-testid="net-problem"><Icon name="alert" /><span><b>{n.lastError}.</b>{#if n.hint} {n.hint}{/if}</span></p>{/if}
-          <div><button class="btn btn-ghost btn-sm" type="button" aria-expanded={!!logs[n.id]} onclick={() => toggleLog(n.id)}><Icon name={logs[n.id] ? 'chevronDown' : 'chevron'} class="i-sm" />{t('adminUsers.connectionLog')}</button></div>
+          <div class="od-cluster"><button class="btn btn-ghost btn-sm" type="button" aria-expanded={!!logs[n.id]} onclick={() => toggleLog(n.id)}><Icon name={logs[n.id] ? 'chevronDown' : 'chevron'} class="i-sm" />{t('adminUsers.connectionLog')}</button><a class="btn btn-ghost btn-sm" href="/admin/users/{id}/networks/{n.id}/health" aria-label={t('adminUsers.healthName', { name: n.name })}><Icon name="chart" class="i-sm" />{t('adminUsers.health')}</a></div>
           {#if logs[n.id]}
             {#if logs[n.id].length}<ConnLog entries={logs[n.id]} />{:else}<p class="desc" style="font-size:var(--fs-xs)">{t('adminUsers.nothingLogged')}</p>{/if}
           {/if}

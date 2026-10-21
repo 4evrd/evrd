@@ -67,6 +67,8 @@ export default {
   'adminUsers.unread': '未読',
   'adminUsers.nMentions': { other: '{count} 件のメンション' },
   'adminUsers.connectionLog': '接続ログ',
+  'adminUsers.health': '状態',
+  'adminUsers.healthName': '{name} の状態',
   'adminUsers.nothingLogged': 'まだログはありません。evrd がこのネットワークに接続するとエントリーが表示されます。',
   'adminUsers.inNoChannels': 'どのチャンネルにも参加していません。',
   'adminUsers.savedChannels': '保存済みのチャンネル: {channels}',
