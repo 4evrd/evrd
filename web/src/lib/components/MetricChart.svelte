@@ -1,6 +1,6 @@
 <script>
-  // A small line chart for the admin metrics page: one line per series over
-  // evenly spaced points, with a y scale and a hover readout.
+  // A small line chart (admin metrics, network health): one line per series
+  // over evenly spaced points, with a y scale and a hover readout.
   //
   // series: [{ name, points: [number|null …], color? }]   (null: no data there)
   // start:  unix seconds of points[0]; step: seconds between points

@@ -65,7 +65,7 @@
             {#if empty(p)}
               <div class="chart-empty">{m.range === '7d' ? t('admin.metrics.nothingThisWeek') : t('admin.metrics.nothingInRange')}</div>
             {:else}
-              <MetricChart series={p.series} start={m.start} step={m.step} unit={p.unit} />
+              <MetricChart series={p.series} start={m.start} step={m.step} unit={p.unit} fancy />
             {/if}
             <p class="desc" style="font-size:var(--fs-xs);margin-top:var(--s2)">{p.help}</p>
           </section>
