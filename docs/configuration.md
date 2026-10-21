@@ -168,8 +168,9 @@ ZNC offers without modules:
 
 Per-user settings (Account → Bouncer): default ident, quit message and bind
 host; playback lines and whether channels / private messages only play back
-what arrived since you were last attached (AutoClearChanBuffer /
-AutoClearQueryBuffer); timestamps prepended/appended for clients without
+what arrived since an IRC client was last on that network
+(AutoClearChanBuffer / AutoClearQueryBuffer; `*status` `setbuffer` and
+`autoclear` change them per network or per channel); timestamps prepended/appended for clients without
 server-time (strftime format, time zone); fixed CTCP replies (an empty reply
 blocks the request; with no client attached evrd answers VERSION, PING and
 TIME itself); and the addresses allowed to sign in, web and IRC.

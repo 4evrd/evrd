@@ -226,6 +226,9 @@ type Options struct {
 	// Detaching reports that evrd itself is stopping: a held connection is
 	// left to the holder then, instead of quitting.
 	Detaching func() bool
+	// JumpTo, when set, starts at that server (an index into the server
+	// list) on a new link, not a held one: ZNC's Jump.
+	JumpTo *int
 	// AltNick is tried when the nick is taken while registering (the
 	// network's own alternate nick wins).
 	AltNick string
@@ -264,7 +267,7 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		links:        opts.Links,
 		linkID:       opts.LinkID,
 		detaching:    opts.Detaching,
-		tryResume:    opts.Links != nil,
+		tryResume:    opts.Links != nil && opts.JumpTo == nil,
 		altNick:      orElse(strings.TrimSpace(n.AltNick), strings.TrimSpace(opts.AltNick)),
 		quitMsg:      orElse(n.QuitMsg, opts.QuitMsg),
 		joinDelay:    time.Duration(n.JoinDelay) * time.Second,
@@ -290,6 +293,9 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		health:       Health{Status: StatusDisconnected, Lag: -1},
 		subs:         map[chan history.Message]struct{}{},
 		rawSubs:      map[chan Line]struct{}{},
+	}
+	if opts.JumpTo != nil {
+		c.serverIdx = *opts.JumpTo
 	}
 	if c.pingEvery <= 0 {
 		c.pingEvery = DefaultPingInterval
@@ -914,7 +920,8 @@ func (c *Conn) handle(m irc.Message) {
 		ch, who := m.Params[0], nickOf(m.Prefix)
 		c.event("part", ch, who, lastParamIf(m, 2), "")
 		if c.isMe(m.Prefix) {
-			c.parted(ch, true)
+			// a disabled channel stays saved, to enable again
+			c.parted(ch, !c.ChannelSettings(ch).Disabled)
 		} else {
 			c.mu.Lock()
 			delete(c.members[strings.ToLower(ch)], strings.ToLower(who))

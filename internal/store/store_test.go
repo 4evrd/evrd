@@ -178,3 +178,53 @@ func TestLeases(t *testing.T) {
 		t.Fatal("lease of a real user was deleted")
 	}
 }
+
+func TestBufferPlayback(t *testing.T) {
+	st := open(t)
+	n, _ := st.CreateNetwork(Network{UserID: 1, Name: "x"})
+	two, now := 2, time.Now().UTC().Truncate(time.Second)
+	if err := st.UpdateBufferPlayback(n.ID, []string{"#A", "bob"}, func(bp *BufferPlayback) { bp.Lines, bp.ClearedAt = &two, &now }); err != nil {
+		t.Fatal(err)
+	}
+	on := true
+	st.UpdateBufferPlayback(n.ID, []string{"#a"}, func(bp *BufferPlayback) { bp.AutoClear = &on })
+	bps, _ := st.BufferPlaybacks(n.ID)
+	a := bps["#a"]
+	if len(bps) != 2 || *a.Lines != 2 || !*a.AutoClear || !a.ClearedAt.Equal(now) {
+		t.Fatalf("%+v", bps)
+	}
+	// back to all defaults: gone
+	st.UpdateBufferPlayback(n.ID, []string{"bob"}, func(bp *BufferPlayback) { *bp = BufferPlayback{} })
+	if bps, _ := st.BufferPlaybacks(n.ID); len(bps) != 1 {
+		t.Fatalf("%+v", bps)
+	}
+	st.DeleteNetwork(1, n.ID)
+	if bps, _ := st.BufferPlaybacks(n.ID); len(bps) != 0 {
+		t.Fatalf("left after the network went: %+v", bps)
+	}
+}
+
+func TestBufferPlaybackStartsFromTheLastVisit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "evrd.db")
+	st, err := Open("sqlite:" + path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := time.Now().UTC().Truncate(time.Second)
+	u, _ := st.CreateUser(User{Username: "alice"})
+	st.TouchUserSeen(u.ID, seen)
+	n, _ := st.CreateNetwork(Network{UserID: u.ID, Name: "x"})
+	// as before buffer playback existed
+	st.(*gormStore).db.Exec("DROP TABLE buffer_playbacks")
+	st.Close()
+
+	st, err = Open("sqlite:" + path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	bps, _ := st.BufferPlaybacks(n.ID)
+	if at := bps[""].ClearedAt; at == nil || !at.Equal(seen) {
+		t.Fatalf("%+v", bps)
+	}
+}

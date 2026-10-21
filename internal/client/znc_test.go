@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/store"
 )
 
 // until reads until a line contains want and returns every line read.
@@ -113,8 +114,10 @@ func TestPlaybackOnlyNewWithAutoClear(t *testing.T) {
 	u.PrependTimestamp = false
 	r.st.UpdateUser(u)
 	now := time.Now()
-	r.st.TouchUserSeen(u.ID, now.Add(-10*time.Minute))
 	n := r.network("one")
+	// an IRC client was last on one 10 minutes ago
+	last := now.Add(-10 * time.Minute)
+	r.st.UpdateBufferPlayback(n.ID, []string{""}, func(bp *store.BufferPlayback) { bp.ClearedAt = &last })
 	r.hist.Add(history.Message{NetworkID: n.ID, Target: "#one", Sender: "bob", Kind: "message", Text: "old news", Time: now.Add(-20 * time.Minute)})
 	r.hist.Add(history.Message{NetworkID: n.ID, Target: "#one", Sender: "bob", Kind: "message", Text: "fresh news", Time: now.Add(-5 * time.Minute)})
 

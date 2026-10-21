@@ -269,6 +269,22 @@ type ReadMarker struct {
 	ReadAt    time.Time
 }
 
+// BufferPlayback is a buffer's playback settings and how far it's been
+// cleared, like ZNC's per-channel buffers. Buffer "" holds the network's own:
+// its default line count, and when an IRC client was last on it.
+type BufferPlayback struct {
+	NetworkID int64  `gorm:"primaryKey;autoIncrement:false"`
+	Buffer    string `gorm:"primaryKey;size:255"` // lowercased
+	// Lines is how many lines to play back (nil: the network's, then the
+	// account's; 0: none).
+	Lines *int
+	// AutoClear plays only what's new since an IRC client was last on the
+	// network (nil: the account's setting for channels or queries).
+	AutoClear *bool
+	// ClearedAt hides older lines from playback (ClearBuffer).
+	ClearedAt *time.Time
+}
+
 // UserEvent is an entry in a user's activity feed (network lost, netsplit,
 // client attached…).
 type UserEvent struct {
@@ -432,6 +448,14 @@ type Store interface {
 	// ReadMarkers is how far each of a network's buffers is read (by
 	// lowercased buffer name).
 	ReadMarkers(networkID int64) (map[string]time.Time, error)
+
+	// buffer playback
+	// BufferPlaybacks is a network's playback settings, by lowercased
+	// buffer name ("" for the network's own).
+	BufferPlaybacks(networkID int64) (map[string]BufferPlayback, error)
+	// UpdateBufferPlayback changes the given buffers' playback settings (a
+	// buffer back to all defaults is dropped).
+	UpdateBufferPlayback(networkID int64, buffers []string, f func(*BufferPlayback)) error
 
 	// activity feed
 	AddUserEvent(e UserEvent) error

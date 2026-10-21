@@ -35,7 +35,8 @@ func init() {
 	statusCmds = []statusCmd{
 		{"help", "", "This list.", (*session).cmdHelp},
 		{"networks", "", "Your networks, their status, and which one you're on.", (*session).cmdNetworks},
-		{"jump", "<network>", "Switch this client to another network.", (*session).cmdJump},
+		{"jumpnetwork", "<network>", "Switch this client to another network.", (*session).cmdJumpNetwork},
+		{"jump", "[server|network]", "Reconnect to the next server (or the one named); a network name switches to that network.", (*session).cmdJump},
 		{"connect", "[network]", "Connect a network (default: this one).", (*session).cmdConnect},
 		{"disconnect", "[network]", "Disconnect a network (default: this one). evrd stops reconnecting it.", (*session).cmdDisconnect},
 		{"addnetwork", "<name> <host> [[+]port] [nick] | <id>", "Add a network. +port means TLS (default +6697). With just an id, one from the directory.", (*session).cmdAddNetwork},
@@ -49,22 +50,48 @@ func init() {
 		{"listfingerprints", "", "Certificate fingerprints trusted for this network.", (*session).cmdListFingerprints},
 		{"addfingerprint", "<sha-256>", "Trust a server certificate by its SHA-256 fingerprint.", (*session).cmdAddFingerprint},
 		{"delfingerprint", "<sha-256>", "Stop trusting a certificate fingerprint.", (*session).cmdDelFingerprint},
-		{"detach", "<#channel>[,…]", "Hide channels from IRC clients; evrd stays in them and keeps logging. /join brings them back.", (*session).cmdDetach},
+		{"detach", "<#channel>[,…]", "Hide channels from IRC clients; evrd stays in them and keeps logging. /join or attach brings them back.", (*session).cmdDetach},
+		{"attach", "<#channel>[,…]", "Show detached channels again, with what you missed.", (*session).cmdAttach},
+		{"disablechan", "<#channel>[,…]", "Leave channels but keep them saved (with their key).", (*session).cmdDisableChan},
+		{"enablechan", "<#channel>[,…]", "Join disabled channels again.", (*session).cmdEnableChan},
 		{"channels", "", "The channels saved for this network (JOIN and PART update it).", (*session).cmdChannels},
-		{"playback", "<channel|nick> [lines]", fmt.Sprintf("Replay a buffer's last lines (default 50, up to %d).", maxPlayback), (*session).cmdPlayback},
+		{"showchan", "<#channel>", "A channel's state, settings and buffer.", (*session).cmdShowChan},
+		{"listnicks", "<#channel>", "Who's in a channel.", (*session).cmdListNicks},
+		{"topics", "", "The topics of your channels.", (*session).cmdTopics},
+		{"buffers", "", "This network's buffers: lines played back, auto-clear, what's waiting.", (*session).cmdBuffers},
+		{"playbuffer", "<channel|nick>", "Play a buffer back, as on attach (after its clear mark).", (*session).cmdPlayBuffer},
+		{"playback", "<channel|nick> [lines]", fmt.Sprintf("Replay a buffer's last lines from history, cleared or not (default 50, up to %d).", maxPlayback), (*session).cmdPlayback},
+		{"clearbuffer", "<channel|nick>[,…]", "Clear buffers: playback starts after now (history keeps the lines). Wildcards work.", (*session).cmdClearBuffer},
+		{"clearallbuffers", "", "Clear every buffer on this network.", (*session).cmdClearAllBuffers},
+		{"clearallchannelbuffers", "", "Clear every channel buffer on this network.", (*session).cmdClearAllChannelBuffers},
+		{"clearallquerybuffers", "", "Clear every query buffer on this network.", (*session).cmdClearAllQueryBuffers},
+		{"setbuffer", "<channel|nick|*> [lines|-]", fmt.Sprintf("How many lines a buffer plays back (0–%d; * for this network's default; - for the default).", maxPlayback), (*session).cmdSetBuffer},
+		{"autoclear", "<channel|nick>[,…] on|off|-", "Play back only what's new (on) or the last lines every time (off); - for your account's setting.", (*session).cmdAutoClear},
 		{"modules", "", "This network's modules: which are on, and what each does.", (*session).cmdModules},
 		{"loadmod", "<module>", "Switch a module on for this network.", (*session).cmdLoadMod},
 		{"unloadmod", "<module>", "Switch a module off for this network.", (*session).cmdUnloadMod},
 		{"modset", "<module> <setting> <value>", "Change a module's setting (lines: separate them with \" | \").", (*session).cmdModSet},
+		{"setbindhost", "<host>", "This network's local address.", (*session).cmdSetBindHost},
+		{"clearbindhost", "", "Back to your account's bind host.", (*session).cmdClearBindHost},
+		{"showbindhost", "", "This network's and your account's bind hosts.", (*session).cmdShowBindHost},
+		{"setuserbindhost", "<host>", "Your account's bind host (for networks without their own).", (*session).cmdSetUserBindHost},
+		{"clearuserbindhost", "", "Clear your account's bind host.", (*session).cmdClearUserBindHost},
 		{"info", "", "Your account, limits and attached clients.", (*session).cmdInfo},
+		{"listclients", "", "Your attached IRC clients and web chats.", (*session).cmdListClients},
+		{"uptime", "", "How long evrd has been running.", (*session).cmdUptime},
+		{"traffic", "", "Where to see this network's traffic.", (*session).cmdTraffic},
+		{"listusers", "", "Admins: every user.", (*session).cmdListUsers},
+		{"listallusernetworks", "", "Admins: every user's networks.", (*session).cmdListAllUserNetworks},
 		{"version", "", "The evrd version.", (*session).cmdVersion},
 	}
 }
 
 // aliases map ZNC's names for the same commands.
 var statusAliases = map[string]string{
-	"listnetworks": "networks", "listnets": "networks", "jumpnetwork": "jump",
-	"addnet": "addnetwork", "delnet": "delnetwork", "listchans": "channels",
+	"listnetworks": "networks", "listnets": "networks",
+	"listmods": "modules", "listavailmods": "modules", "listnetmods": "modules", "listavailablemodules": "modules",
+	"listbuffers": "buffers",
+	"addnet":      "addnetwork", "delnet": "delnetwork", "listchans": "channels",
 	"shownetwork": "show", "setnetwork": "set",
 	"addtrustedserverfingerprint": "addfingerprint", "deltrustedserverfingerprint": "delfingerprint",
 	"listtrustedserverfingerprints": "listfingerprints",
@@ -85,6 +112,10 @@ func (se *session) statusCommand(text string) {
 			c.run(se, fields[1:])
 			return
 		}
+	}
+	if why, ok := notHere[name]; ok {
+		se.statusf("%s", why)
+		return
 	}
 	se.statusf("Unknown command %q — try help.", fields[0])
 }
@@ -167,29 +198,7 @@ func (se *session) cmdNetworks([]string) {
 		}
 		se.statusf("%s%-16s %-12s as %-14s %s:%s%d · %s", here, n.Name, se.srv.b.Status(n.ID), nick, n.Host, tls, n.Port, plural(len(n.Channels), "channel"))
 	}
-	se.statusf("%s. * = this client. jump <network> to switch.", plural(len(nets), "network"))
-}
-
-func (se *session) cmdJump(args []string) {
-	if se.web != nil {
-		se.statusf("In the web app, pick a network from the Networks page instead.")
-		return
-	}
-	if len(args) != 1 {
-		se.statusf("Usage: jump <network>")
-		return
-	}
-	n, ok := se.network(args)
-	if !ok {
-		return
-	}
-	if n.ID == se.net.ID {
-		se.statusf("You're already on %s.", n.Name)
-		return
-	}
-	if err := se.jump(n); err != nil {
-		se.statusf("Couldn't jump to %s: %v", n.Name, err)
-	}
+	se.statusf("%s. * = this client. jumpnetwork <network> to switch.", plural(len(nets), "network"))
 }
 
 func (se *session) cmdConnect(args []string) {

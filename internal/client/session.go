@@ -212,6 +212,7 @@ func (se *session) serve(ctx context.Context) {
 	}
 	defer se.release()
 	defer se.unsubscribe()
+	defer se.markOnNetwork() // until now
 	se.bridge(ctx)
 }
 
@@ -406,7 +407,7 @@ func (se *session) welcome() {
 
 func (se *session) joinChannels() {
 	for _, ch := range se.up.Channels() {
-		if se.up.ChannelSettings(ch).Detached {
+		if cs := se.up.ChannelSettings(ch); cs.Detached || cs.Disabled && !se.up.Joined(ch) {
 			continue
 		}
 		// Make the client open the buffer, then ask the upstream for the real
@@ -429,37 +430,35 @@ func (se *session) selfJoin(ch string) string {
 }
 
 // replayBacklog plays back each attached channel and each private buffer:
-// the last PlaybackLines lines, or — when the user auto-clears that kind of
-// buffer — only what arrived since they were last here, ZNC-style. A client
-// with draft/chathistory gets none: it asks for what it wants.
+// its last lines (its own count, the network's or the account's), after its
+// clear mark — and when it auto-clears, ZNC-style, only what arrived since an
+// IRC client was last on this network. A client with draft/chathistory gets
+// none: it asks for what it wants.
 func (se *session) replayBacklog() {
-	n := se.acct.PlaybackLines
-	if n <= 0 || se.caps["draft/chathistory"] {
+	if se.caps["draft/chathistory"] {
 		return
 	}
-	var since time.Time
-	if se.acct.LastSeenAt != nil {
-		since = *se.acct.LastSeenAt
-	}
-	cutoff := func(auto bool) time.Time {
-		if auto {
-			return since
+	bps := se.playbacks()
+	lastOn := se.lastOnNetwork(bps)
+	play := func(name string) {
+		if n := se.bufferLines(bps, name); n > 0 {
+			se.playbackSince(name, n, se.playFrom(bps, name, lastOn))
 		}
-		return time.Time{}
 	}
 	for _, ch := range se.up.Channels() {
-		if se.up.ChannelSettings(ch).Detached {
+		if cs := se.up.ChannelSettings(ch); cs.Detached || cs.Disabled && !se.up.Joined(ch) {
 			continue
 		}
-		se.playbackSince(ch, n, cutoff(se.acct.AutoClearChanBuffer))
+		play(ch)
 	}
 	bufs, _ := se.srv.b.History().Buffers(se.net.ID)
 	for _, b := range bufs {
-		if isChannelName(b) {
+		if b == "" || isChannelName(b) {
 			continue
 		}
-		se.playbackSince(b, n, cutoff(se.acct.AutoClearQueryBuffer))
+		play(b)
 	}
+	se.markOnNetwork()
 }
 
 // playback sends the last n lines of a buffer.
@@ -516,6 +515,7 @@ func isChannelName(s string) bool { return s != "" && strings.ContainsRune("#&+!
 // leaves the old network's channels and gets the new one's, with backlog.
 func (se *session) jump(n store.Network) error {
 	old := se.up.Channels()
+	se.markOnNetwork() // leaving it
 	oldName := se.net.Name
 	if err := se.bind(n); err != nil {
 		return err
@@ -700,7 +700,13 @@ func (se *session) attachChannel(ch string) {
 	se.up.SendRaw("NAMES " + ch)
 	se.up.SendRaw("TOPIC " + ch)
 	if !se.caps["draft/chathistory"] {
-		se.playback(ch, max(se.acct.PlaybackLines, 1))
+		// what it missed while detached: after its clear mark
+		bps := se.playbacks()
+		since := time.Time{}
+		if at := bps[strings.ToLower(ch)].ClearedAt; at != nil {
+			since = *at
+		}
+		se.playbackSince(ch, max(se.bufferLines(bps, ch), 1), since)
 	}
 }
 

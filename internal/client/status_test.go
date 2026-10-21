@@ -119,9 +119,10 @@ func TestStatusNetworkCommandErrors(t *testing.T) {
 	r := newRig(t)
 	ic := r.attached()
 
-	ic.status("jump", "Usage: jump <network>")
+	ic.status("jumpnetwork", "Usage: jumpnetwork <network>")
 	ic.status("jump one", "You're already on one.")
-	ic.status("jump nope", `No network called "nope"`)
+	ic.status("jumpnetwork nope", `No network called "nope"`)
+	ic.status("jump nope", `"nope" is neither one of your networks nor a server of one`)
 
 	ic.status("addnetwork", "Usage: addnetwork")
 	ic.status("addnetwork lonely", `No network "lonely" in the directory`)

@@ -182,7 +182,20 @@ func (b *Bouncer) Start(ctx context.Context) error {
 
 // Connect starts (and marks enabled) the upstream connection for a network. A
 // no-op if it's already running.
-func (b *Bouncer) Connect(networkID int64) error {
+func (b *Bouncer) Connect(networkID int64) error { return b.connect(networkID, nil) }
+
+// JumpServer reconnects a running network, starting at server i of its list
+// (ZNC's Jump).
+func (b *Bouncer) JumpServer(networkID int64, i int) error {
+	if _, ok := b.ConnFor(networkID); !ok {
+		return errors.New("it isn't connected")
+	}
+	b.logNote(networkID, "Jumping to another server")
+	b.Disconnect(networkID)
+	return b.connect(networkID, &i)
+}
+
+func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 	n, err := b.store.NetworkByID(networkID)
 	if err != nil {
 		return err
@@ -239,7 +252,8 @@ func (b *Bouncer) Connect(networkID int64) error {
 				b.log.Warn("save channels", "network", n.Name, "err", err)
 			}
 		},
-		Dial: dial,
+		Dial:   dial,
+		JumpTo: jumpTo,
 	}
 	if b.links != nil {
 		opts.Links, opts.LinkID = b.links, linkID(networkID)
