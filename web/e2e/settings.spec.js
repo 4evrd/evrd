@@ -30,8 +30,11 @@ test('an admin changes server settings; they apply live and can be reset', async
     await expect(host.getByText(/by e2eadmin/)).toBeVisible()
 
     // live: the IRC clients page and the user's limit follow at once
-    await page.goto('/clients')
-    await expect(page.getByTestId('irc-host')).toHaveText('irc.e2e.example')
+    // (the other node of the cluster takes it on its next poll: reload until it has)
+    await expect(async () => {
+      await page.goto('/clients')
+      await expect(page.getByTestId('irc-host')).toHaveText('irc.e2e.example', { timeout: 2000 })
+    }).toPass({ timeout: 20000 })
     await expect.poll(async () => (await u.api.get('/api/me')).limits.maxNetworks).toBe(1)
 
     // restart-only settings say so
