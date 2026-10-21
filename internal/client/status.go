@@ -577,11 +577,11 @@ func (se *session) cmdSet(args []string) {
 	}
 	se.srv.b.Reconfigure(n)
 	shown := value
-	if field == "password" || field == "authcommand" {
+	switch {
+	case clear:
+		shown = "(cleared)"
+	case field == "password" || field == "authcommand":
 		shown = "(hidden)"
-		if clear {
-			shown = "(cleared)"
-		}
 	}
 	if accounts.NeedsReconnect(before, n) && se.srv.b.Status(n.ID) != upstream.StatusDisconnected {
 		if err := se.srv.b.Reconnect(n.ID); err != nil {

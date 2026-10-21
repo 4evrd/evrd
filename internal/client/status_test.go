@@ -205,7 +205,7 @@ func TestStatusSetEverySetting(t *testing.T) {
 
 	// "-" clears
 	for _, c := range []string{"altnick", "sasluser", "encoding", "ident", "realname"} {
-		ic.status("set second "+c+" -", "Saved "+c+" = - on second.")
+		ic.status("set second "+c+" -", "Saved "+c+" = (cleared) on second.")
 	}
 	n, _ = r.st.NetworkByID(two.ID)
 	if n.AltNick != "" || n.SASLUser != "" || n.Encoding != "" || n.Username != "" || n.Realname != "" {
@@ -386,4 +386,61 @@ func TestStatusDirectory(t *testing.T) {
 	if out := run("addnetwork nope"); !anyHas(out, `No network "nope" in the directory`) {
 		t.Fatalf("unknown id: %q", out)
 	}
+}
+
+func TestStatusZNCOddsAndEnds(t *testing.T) {
+	r := newRig(t)
+	ic := r.attached()
+	// bind hosts: this evrd offers none
+	ic.status("showbindhost", "This network's bind host: (not set) · your account's: (not set)")
+	ic.status("setbindhost", "Usage: setbindhost <host>")
+	ic.status("setbindhost 192.0.2.1", "doesn't offer bind hosts")
+	ic.status("clearbindhost", "Saved bindhost = (cleared)")
+	ic.status("setuserbindhost", "Usage: setuserbindhost <host>")
+	ic.status("setuserbindhost 192.0.2.1", "doesn't offer bind hosts")
+	ic.status("clearuserbindhost", "Cleared your account's bind host.")
+
+	// admins only
+	ic.status("listusers", "Admins only.")
+	ic.status("listallusernetworks", "Admins only.")
+	u, _ := r.st.UserByUsername("alice")
+	u.Role = store.RoleAdmin
+	r.st.UpdateUser(u)
+	other := r.attached()
+	other.status("listusers", "alice")
+	other.status("listusers", "1 user.")
+	other.status("listallusernetworks", "2 networks.")
+
+	ic.status("traffic", "on each network's health page")
+	r.srv.SetPublicURL("https://evrd.example/")
+	ic.status("traffic", fmt.Sprintf("Traffic for one: https://evrd.example/networks/%d/health", r.network("one").ID))
+	for _, alias := range []string{"listmods", "listavailmods", "listnetmods"} {
+		ic.status(alias, "loadmod <module>")
+	}
+	ic.status("listbuffers", "#one")
+	for cmd, why := range notHere {
+		ic.status(cmd, why)
+	}
+	ic.status("listnicks", "Usage: listnicks <#channel>")
+	ic.status("showchan", "Usage: showchan <#channel>")
+	ic.status("showchan #nope", "#nope on one — not saved")
+	ic.status("attach", "Usage: attach")
+	ic.status("attach #nope", "You're not on #nope.")
+	ic.status("disablechan", "Usage: disablechan")
+	ic.status("enablechan", "Usage: enablechan")
+	ic.status("jump a b", "Usage: jump [server|network]")
+}
+
+func TestJumpToANamedServer(t *testing.T) {
+	r := newRig(t)
+	ic := r.attached()
+	n := r.network("one")
+	ic.status(fmt.Sprintf("addserver localhost %d", n.Port), "Added localhost")
+	ic.status("jump localhost", fmt.Sprintf("Reconnecting one to localhost:%d", n.Port))
+	eventually(t, "on localhost", func() bool {
+		c, ok := r.b.ConnFor(n.ID)
+		return ok && r.b.Status(n.ID) == upstream.StatusConnected && strings.HasPrefix(c.Health().Server, "localhost:")
+	})
+	ic.status("disconnect", "Disconnected from one")
+	ic.status("jump", "one isn't connected")
 }

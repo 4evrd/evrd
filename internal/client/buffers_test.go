@@ -180,3 +180,26 @@ func TestJumpServer(t *testing.T) {
 	eventually(t, "back", func() bool { return r.b.Status(n.ID) == upstream.StatusConnected })
 	ic.status("jump two", "Jumped from one to two.")
 }
+
+func TestClearAllBuffersAndPlayBuffer(t *testing.T) {
+	r := newRig(t)
+	ic := r.attached()
+	ic.status("playbuffer", "Usage: playbuffer")
+	ic.status("playbuffer #empty", "The buffer for #empty is empty.")
+	ic.send("SIMULATE :bob!u@h PRIVMSG #one :in the channel")
+	ic.send("SIMULATE :bob!u@h PRIVMSG alice_one :in private")
+	r.said("one", "#one", "in the channel")
+	r.said("one", "bob", "in private")
+	ic.status("playbuffer #one", "in the channel")
+	ic.status("clearallchannelbuffers", "Cleared 1 channel buffer on one")
+	ic.status("playbuffer #one", "The buffer for #one is empty.")
+	ic.status("playbuffer bob", "in private")
+	ic.status("clearallquerybuffers", "Cleared 1 query buffer on one")
+	ic.status("playbuffer bob", "The buffer for bob is empty.")
+	ic.status("clearallbuffers", "Cleared 2 buffers on one")
+	ic.status("clearbuffer", "Usage: clearbuffer")
+	ic.status("autoclear #one", "Usage: autoclear")
+	ic.status("autoclear #one maybe", "autoclear is on, off or -")
+	ic.status("autoclear #one,bob off", "#one keeps its buffer")
+	ic.status("setbuffer #one 501", "Lines is a number from 0 to 500")
+}
