@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +16,6 @@ import (
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
-	"github.com/4evrd/evrd/internal/version"
 )
 
 // status sends a *status command and waits for a reply containing want.
@@ -447,30 +445,12 @@ func TestJumpToANamedServer(t *testing.T) {
 	ic.status("jump", "one isn't connected")
 }
 
-func TestStatusCommandsAsTheirOwn(t *testing.T) {
+func TestStatusHelpInCaps(t *testing.T) {
 	r := newRig(t)
 	ic := r.attached()
 	ic.status("help", "  CLEARBUFFER <channel|nick>[,…]")
-	ic.status("help", "/CLEARBUFFER #chan")
-
-	// typed as their own: /listnetworks, /clearbuffer #one, any case
-	ic.send("LISTNETWORKS")
-	ic.expect("* one")
-	ic.send("clearbuffer #one")
-	ic.expect("Cleared 1 buffer on one")
-	ic.send("SetBuffer #one 5")
-	ic.expect("#one plays back 5 lines.")
-	ic.send("REHASH") // (an oper's: the network's)
-
-	// the network's own commands go to the network
-	ic.send("VERSION")
-	ic.send("PRIVMSG *status :uptime")
-	if seen := ic.until("evrd has been running"); anyHas(seen, "PRIVMSG alice_one :evrd "+version.Version) || anyHas(seen, "evrd applies settings") {
-		t.Fatalf("a network command was taken as *status's:\n%s", strings.Join(seen, "\n"))
-	}
-	eventually(t, "sent on", func() bool { return r.irc.Has("VERSION") && r.irc.Has("REHASH") })
-
-	if !slices.Contains(r.srv.StatusCommands(), "clearbuffer") || slices.Contains(r.srv.StatusCommands(), "version") || slices.Contains(r.srv.StatusCommands(), "list") {
-		t.Fatalf("StatusCommands: %v", r.srv.StatusCommands())
-	}
+	ic.status("HeLp", "Commands are case-insensitive.")
+	// a *status command sent as its own goes to the network
+	ic.send("CLEARBUFFER #one")
+	eventually(t, "sent on", func() bool { return r.irc.Has("CLEARBUFFER #one") })
 }

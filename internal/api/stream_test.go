@@ -42,8 +42,6 @@ func nextWith(t *testing.T, ws *websocket.Conn, field, want string) map[string]a
 
 type fakeStatus struct{ got chan string }
 
-func (fakeStatus) StatusCommands() []string { return []string{"clearbuffer"} }
-
 func (f fakeStatus) WebStatus(userID int64, n store.Network, text string, out func(string)) {
 	f.got <- text
 	out("you said " + text + " on " + n.Name)

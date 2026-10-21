@@ -837,12 +837,6 @@ func (se *session) dispatch(m irc.Message) {
 	case "AUTHENTICATE":
 		se.numeric("907", ":You have already authenticated")
 	default:
-		// a *status command typed as its own (/clearbuffer #evrd), unless
-		// it's the network's (LIST, VERSION…) or an alias takes it
-		if isStatusCommand(m.Command) && !se.up.ClientLine(m.String()) {
-			se.statusCommand(strings.ToLower(m.Command) + " " + strings.Join(m.Params, " "))
-			return
-		}
 		se.passOn(m)
 	}
 }
