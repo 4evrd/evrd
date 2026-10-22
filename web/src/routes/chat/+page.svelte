@@ -14,7 +14,7 @@
   import { session, refreshNets } from '$lib/session.svelte.js'
   import { toast } from '$lib/ui.svelte.js'
   import { clock, hue } from '$lib/format.js'
-  import { parse, describe, isChan, isEvent, COMMANDS } from '$lib/chat.js'
+  import { parse, describe, isChan, isEvent, COMMANDS, tableCells, isTableRule } from '$lib/chat.js'
   import { t, i18n } from '$lib/i18n.svelte.js'
 
   let nets = $state([])
@@ -285,6 +285,14 @@
         marked = true
         out.push({ backlog: t('chat.missed', { count: after }) })
       }
+      // *status's Markdown tables (help…): consecutive rows make one table,
+      // the first its header
+      const cells = m.sender === '*status' && m.kind === 'message' ? tableCells(m.text) : null
+      if (cells) {
+        const last = out.at(-1)
+        if (last?.table) { if (!isTableRule(cells)) last.table.push(cells) } else out.push({ table: [cells], time: m.time, sender: m.sender })
+        continue
+      }
       out.push(m)
     }
     return out
@@ -381,6 +389,7 @@
           {:else if m.kind === 'local' || m.kind === 'system'}<div class="msg event"><time></time><span class="nick">·</span><span class="text">{m.text}</span></div>
           {:else if isEvent(m.kind)}<div class="msg event ev-{m.kind}"><time>{clock(m.time)}</time><span class="nick">{m.kind === 'join' ? '→' : ['part', 'quit', 'kick'].includes(m.kind) ? '←' : '•'}</span><span class="text">{describe(m)}</span></div>
           {:else if m.kind === 'action'}<div class="msg" class:self={same(m.sender, nick)}><time>{clock(m.time)}</time><span class="nick" style="--c:{hue(m.sender)}">*</span><span class="text"><span style="color:var(--c, {hue(m.sender)})">{m.sender}</span> {m.text}</span></div>
+          {:else if m.table}<div class="msg" data-testid="status-table"><time>{clock(m.time)}</time><span class="nick" style="--c:{hue(m.sender)}">{m.sender}</span><div class="text md-wrap"><table class="md-table"><thead><tr>{#each m.table[0] as c}<th scope="col">{c}</th>{/each}</tr></thead><tbody>{#each m.table.slice(1) as r}<tr>{#each r as c, i}<td class:cmd={i < 2}>{c}</td>{/each}</tr>{/each}</tbody></table></div></div>
           {:else}<div class="msg" class:self={same(m.sender, nick)} class:highlight={isHighlight(m)}><time>{clock(m.time)}</time><span class="nick" style="--c:{hue(m.sender)}" title={m.sender}>{m.kind === 'notice' ? `-${m.sender}-` : m.sender}</span><span class="text">{m.text}</span></div>
           {/if}
         {:else}
@@ -411,6 +420,17 @@
 {/if}
 
 <style>
+  /* *status's tables (help…). The chat's text column is narrow, so each row
+     stacks: its first cells on one line (command, arguments), the last below. */
+  .md-table, .md-table tbody { display: block; width: auto; border-spacing: 0; font-size: var(--fs-sm); }
+  .md-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .md-table tr { display: flex; flex-wrap: wrap; column-gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); cursor: auto; }
+  .md-table tr:last-child { border-bottom: 0; }
+  .md-table td { display: block; padding: 0; background: none; border-radius: 0; }
+  .md-table tbody tr:hover td { background: none; }
+  .md-table td.cmd { font-family: var(--font-mono); color: var(--muted); }
+  .md-table td.cmd:first-child { color: var(--primary); }
+  .md-table td:last-child { flex-basis: 100%; }
   .net-select { position: relative; }
   .net-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
   .net-dot.connected { background: var(--ok, var(--primary)); }

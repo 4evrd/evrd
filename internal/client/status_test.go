@@ -448,9 +448,23 @@ func TestJumpToANamedServer(t *testing.T) {
 func TestStatusHelpInCaps(t *testing.T) {
 	r := newRig(t)
 	ic := r.attached()
-	ic.status("help", "  CLEARBUFFER <channel|nick>[,…]")
+	ic.status("help", "| CLEARBUFFER            | <channel\\|nick>[,…]")
+	ic.status("help", "SET's settings: name, host, port")
 	ic.status("HeLp", "Commands are case-insensitive.")
 	// a *status command sent as its own goes to the network
 	ic.send("CLEARBUFFER #one")
 	eventually(t, "sent on", func() bool { return r.irc.Has("CLEARBUFFER #one") })
+}
+
+func TestMarkdownTable(t *testing.T) {
+	got := strings.Join(markdownTable([][]string{{"Command", "Arguments", "Description"}, {"JUMP", "[server|network]", "Reconnect."}, {"UPTIME", "", "How long."}}), "\n")
+	want := strings.Join([]string{
+		"| Command | Arguments         | Description",
+		"| ------- | ----------------- | ---",
+		"| JUMP    | [server\\|network] | Reconnect.",
+		"| UPTIME  |                   | How long.",
+	}, "\n")
+	if got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
 }

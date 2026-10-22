@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/directory"
@@ -43,7 +44,7 @@ func init() {
 		{"directory", "[search]", "Public networks you can add by id (addnetwork <id>).", (*session).cmdDirectory},
 		{"delnetwork", "<network>", "Remove a network and its saved history.", (*session).cmdDelNetwork},
 		{"show", "[network]", "A network's settings (default: this one).", (*session).cmdShow},
-		{"set", "[network] <setting> <value>", "Change a setting: " + strings.Join(settingNames, ", ") + " (- clears).", (*session).cmdSet},
+		{"set", "[network] <setting> <value>", "Change a network setting (listed below the table; - clears).", (*session).cmdSet},
 		{"listservers", "", "This network's servers, in failover order.", (*session).cmdListServers},
 		{"addserver", "<host> [[+]port] [password]", "Add a server (tried in turn when the link drops). +port means TLS.", (*session).cmdAddServer},
 		{"delserver", "<host> [port]", "Remove a server.", (*session).cmdDelServer},
@@ -142,10 +143,58 @@ func (se *session) statusf(format string, a ...any) {
 
 func (se *session) cmdHelp([]string) {
 	se.statusf("evrd commands — /msg %s <command> or /znc <command>:", statusNick)
+	rows := [][]string{{"Command", "Arguments", "Description"}}
 	for _, c := range statusCmds {
-		se.statusf("  %-42s %s", strings.TrimSpace(strings.ToUpper(c.name)+" "+c.args), c.help)
+		rows = append(rows, []string{strings.ToUpper(c.name), c.args, c.help})
 	}
+	for _, l := range markdownTable(rows) {
+		se.statusf("%s", l)
+	}
+	se.statusf("SET's settings: %s.", strings.Join(settingNames, ", "))
 	se.statusf("Commands are case-insensitive.")
+}
+
+// markdownTable lays rows out as a Markdown table, the first row its header,
+// the columns padded so they line up in a fixed-width font (the web chat
+// draws it as a table). A "|" in a cell is escaped (\|).
+func markdownTable(rows [][]string) []string {
+	esc := func(c string) string { return strings.ReplaceAll(c, "|", "\\|") }
+	var width []int
+	for _, r := range rows {
+		for i, c := range r {
+			if i == len(width) {
+				width = append(width, 0)
+			}
+			width[i] = max(width[i], utf8.RuneCountInString(esc(c)))
+		}
+	}
+	// (the last column isn't padded and rows don't end in "|": both are
+	// optional, and its cells vary the most)
+	line := func(cells []string) string {
+		var b strings.Builder
+		for i, w := range width {
+			c := ""
+			if i < len(cells) {
+				c = esc(cells[i])
+			}
+			b.WriteString("| " + c)
+			if i < len(width)-1 {
+				b.WriteString(strings.Repeat(" ", max(w-utf8.RuneCountInString(c), 0)) + " ")
+			}
+		}
+		return b.String()
+	}
+	out := []string{line(rows[0])}
+	sep := make([]string, len(width))
+	for i, w := range width {
+		sep[i] = strings.Repeat("-", max(w, 3))
+	}
+	sep[len(sep)-1] = "---"
+	out = append(out, line(sep))
+	for _, r := range rows[1:] {
+		out = append(out, line(r))
+	}
+	return out
 }
 
 // networks loads the user's networks, reporting a failure itself.
