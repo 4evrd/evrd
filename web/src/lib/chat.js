@@ -94,6 +94,20 @@ export function parse(input, target) {
   return { error: t('chat.unsupported', { command: '/' + cmd }) }
 }
 
+// tableCells splits a Markdown table row ("| a | b \| c |") into its cells,
+// or returns null for a line that isn't one. *status sends tables this way.
+export function tableCells(text) {
+  if (!text || text[0] !== '|') return null
+  const cells = []
+  let cur = ''
+  for (let i = 1; i < text.length; i++) {
+    if (text[i] === '\\' && text[i + 1] === '|') { cur += '|'; i++ } else if (text[i] === '|') { cells.push(cur.trim()); cur = '' } else cur += text[i]
+  }
+  if (cur.trim()) cells.push(cur.trim()) // (the closing "|" is optional)
+  return cells
+}
+export const isTableRule = (cells) => cells.length > 0 && cells.every((c) => /^:?-{3,}:?$/.test(c))
+
 export function describe(m) {
   const v = { nick: m.sender, other: m.extra, text: m.text }
   // part, quit and kick have a form with the reason

@@ -178,7 +178,7 @@ test('clients, uptime, traffic, bind hosts, modules, and what evrd does elsewher
   await cmd(a, 'rehash', "evrd applies settings as they're saved")
   await cmd(a, 'saveconfig', "evrd saves every change as it's made")
   await cmd(a, 'reloadmod q', 'Modules are built into evrd')
-  await cmd(a, 'help', 'CLEARALLQUERYBUFFERS')
+  await cmd(a, 'help', /\| CLEARALLQUERYBUFFERS +\| +\| Clear every query buffer/)
   // commands of the same name as their own go to the network
   const list = a.next(/ 323 /) // the network's LIST answer
   a.send('LIST')
@@ -208,6 +208,12 @@ test('the web chat runs the buffer commands too', async ({ page }) => {
   await page.goto(`/chat?net=${netA.id}&buf=${encodeURIComponent('*status')}`)
   await expect(page.locator('.live.on')).toBeVisible({ timeout: 10000 })
   const input = page.getByRole('textbox', { name: 'Message' })
+  // help comes as a Markdown table, drawn as one
+  await input.fill('help')
+  await input.press('Enter')
+  const help = page.getByTestId('status-table').last()
+  await expect(help.getByRole('row').filter({ hasText: 'CLEARBUFFER' })).toContainText('<channel|nick>[,…]')
+  await expect(help.getByRole('columnheader', { name: 'Description' })).toHaveCount(1)
   await input.fill(`setbuffer ${chan} 3`)
   await input.press('Enter')
   await expect(page.locator('.log').getByText(`${chan} plays back 3 lines.`)).toBeVisible({ timeout: 5000 })
