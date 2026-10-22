@@ -32,12 +32,7 @@ The web chat understands `/join`, `/part`, `/msg`, `/query`, `/me`, `/notice`,
 `/msg *status help` lists the bouncer's own commands. ZNC's names work too
 (`ListNetworks`, `JumpNetwork`, `AddNetwork`…), and so does ZNC's raw command:
 `/znc ListNetworks` (or `/quote znc …`) is the same as `/msg *status ListNetworks`.
-Most commands also work as their own: `/listnetworks`, `/clearbuffer #evrd`
-(clients that send unknown commands to the server, like irssi and HexChat;
-in WeeChat use `/quote clearbuffer #evrd`), and in the web chat. Commands are
-case-insensitive. The ones IRC has itself — `LIST`, `HELP`, `CONNECT`, `INFO`,
-`VERSION`, `MODULES`, `REHASH`, `RESTART` — still go to the network; use
-`/znc` or `/msg *status` for evrd's.
+Commands are case-insensitive; the web chat takes `/znc …` too.
 
 | command | does |
 |---|---|
