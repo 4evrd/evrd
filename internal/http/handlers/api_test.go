@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -41,9 +42,22 @@ func newEnv(t *testing.T, mutate ...func(*config.Config)) *env {
 	return newEnvOn(t, openStore(t), mutate...)
 }
 
+// scratchDir is a temp dir removed when the test ends, best effort: the
+// bouncer's goroutines may still be finishing writes as the test returns,
+// which would make t.TempDir's cleanup fail the test.
+func scratchDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "evrd-api-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	return dir
+}
+
 func openStore(t *testing.T) store.Store {
 	t.Helper()
-	st, err := store.Open("sqlite:" + filepath.Join(t.TempDir(), "evrd.db"))
+	st, err := store.Open("sqlite:" + filepath.Join(scratchDir(t), "evrd.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +88,7 @@ func newEnvStatus(t *testing.T, st store.Store, status evrdhttp.StatusRunner, mu
 	if err != nil {
 		t.Fatal(err)
 	}
-	hist, err := history.Open(filepath.Join(t.TempDir(), "history"))
+	hist, err := history.Open(filepath.Join(scratchDir(t), "history"))
 	if err != nil {
 		t.Fatal(err)
 	}
