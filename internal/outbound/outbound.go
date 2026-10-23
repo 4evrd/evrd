@@ -27,6 +27,7 @@ import (
 	"net/netip"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -40,14 +41,18 @@ type Config struct {
 	// Prefix6 gives each user their own IPv6 source address from it. It wins
 	// over Bind for IPv6 destinations.
 	Prefix6 netip.Prefix
+	// IPv4First tries a server's IPv4 addresses before its IPv6 ones
+	// (prefer_ipv6 no); IPv6 goes first otherwise.
+	IPv4First bool
 }
 
 // Dialer opens upstream connections according to a Config.
 type Dialer struct {
-	cfg  Config
-	v4   []netip.Addr
-	v6   []netip.Addr
-	pace pacer
+	cfg       Config
+	v4        []netip.Addr
+	v6        []netip.Addr
+	pace      pacer
+	ipv4First atomic.Bool // cfg.IPv4First, changed live (SetIPv4First)
 	// resolve and dial are replaceable for tests.
 	resolve func(ctx context.Context, host string) ([]netip.Addr, error)
 	dial    func(ctx context.Context, local, remote netip.AddrPort, freebind bool) (net.Conn, error)
@@ -56,6 +61,7 @@ type Dialer struct {
 // New returns a Dialer for cfg.
 func New(cfg Config) (*Dialer, error) {
 	d := &Dialer{cfg: cfg, pace: pacer{next: map[string]time.Time{}}, resolve: resolve, dial: dialFrom}
+	d.ipv4First.Store(cfg.IPv4First)
 	if cfg.Rate > 0 {
 		d.pace.interval = time.Duration(float64(time.Second) / cfg.Rate)
 	}
@@ -121,8 +127,7 @@ func (d *Dialer) DialFrom(ctx context.Context, userID int64, bind, host string, 
 		return nil, err
 	}
 	var lastErr error
-	for _, remote := range addrs {
-		remote = remote.Unmap()
+	for _, remote := range d.order(addrs) {
 		var local netip.Addr
 		for _, l := range locals {
 			if l = l.Unmap(); l.Is4() == remote.Is4() {
@@ -162,11 +167,16 @@ func (d *Dialer) SetRate(rate float64) {
 	d.pace.mu.Unlock()
 }
 
-// order puts the destinations we have a source of our own for first: IPv6
-// when there's a prefix or IPv6 binds, IPv4 when there are only IPv4 binds.
+// SetIPv4First changes whether IPv4 addresses are tried before IPv6 ones.
+func (d *Dialer) SetIPv4First(on bool) { d.ipv4First.Store(on) }
+
+// order puts a server's IPv6 addresses first, or its IPv4 ones when
+// IPv4First is set or the only source addresses of our own are IPv4 binds
+// (so users keep them), keeping the resolver's order within each family.
 func (d *Dialer) order(addrs []netip.Addr) []netip.Addr {
-	prefer6 := d.cfg.Prefix6.IsValid() || len(d.v6) > 0
-	prefer4 := len(d.v4) > 0 && !prefer6
+	only4 := len(d.v4) > 0 && len(d.v6) == 0 && !d.cfg.Prefix6.IsValid()
+	prefer4 := d.ipv4First.Load() || only4
+	prefer6 := !prefer4
 	var first, rest []netip.Addr
 	for _, a := range addrs {
 		a = a.Unmap()

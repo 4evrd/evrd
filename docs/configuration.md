@@ -39,6 +39,7 @@ are stored in the database and win over the file (see below).
 | `oidc_label`, `oidc_auto_create`, `oidc_link_existing`, `oidc_admin_role` | `single sign-on`, `yes`, `no`, — | sign-in button text and account rules for SSO |
 | `max_networks`, `max_clients`, `backlog_lines` | `0`, `0`, `2000` | per-user defaults (0 = unlimited); admins override per user |
 | `connect_rate` | `5` | most new connections per second to one IRC server host, per node |
+| `prefer_ipv6` | `yes` | connect to IRC servers over IPv6 first, falling back to IPv4; `no` tries IPv4 first. With only IPv4 `upstream_bind` addresses, IPv4 goes first either way |
 | `bindhost` | — | local addresses users may choose to connect from (repeatable) |
 | `upstream_bind`, `upstream_prefix6` (`EVRD_UPSTREAM_BIND`, `EVRD_UPSTREAM_PREFIX6`) | — | spread users over source addresses; see [clustering](clustering.md#source-addresses-and-connect-pacing) |
 | `otel_endpoint` (`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`), `otel_interval`, `metrics_url` (`EVRD_METRICS_URL`) | —, `15s`, — | metrics; see [Metrics](#metrics) |
@@ -62,7 +63,7 @@ Environment — those are locked in the UI). **Reset** removes a value set here,
 falling back to evrd.conf or the default.
 
 **Editable:** `irc_host`, `public_url`, `max_networks`, `max_clients`,
-`backlog_lines`, `connect_rate`, `bindhost`, `network_directory`, `tls`, `acme_email`, `acme_hosts`,
+`backlog_lines`, `connect_rate`, `prefer_ipv6`, `bindhost`, `network_directory`, `tls`, `acme_email`, `acme_hosts`,
 `acme_ca`, `tls_cert`, `tls_key`, `password_login`, `session_ttl`,
 `cookie_secure`, the `oidc_*` directives, `otel_endpoint`, `otel_interval`,
 `metrics_url`. Most apply live on every node within a few seconds; `public_url`,

@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -76,6 +77,24 @@ func TestOrderPrefersFamiliesWeHaveSourcesFor(t *testing.T) {
 	d4, _ := New(Config{Bind: []netip.Addr{netip.MustParseAddr("192.0.2.1")}})
 	if got := d4.order([]netip.Addr{addrs[1], addrs[0]}); !got[0].Is4() {
 		t.Fatalf("with only v4 binds: %v", got)
+	}
+}
+
+func TestOrderIPv6FirstUnlessToldOtherwise(t *testing.T) {
+	a4, b4 := netip.MustParseAddr("192.0.2.9"), netip.MustParseAddr("192.0.2.10")
+	a6, b6 := netip.MustParseAddr("2001:db8::9"), netip.MustParseAddr("2001:db8::10")
+	addrs := []netip.Addr{a4, a6, b4, b6}
+	d, _ := New(Config{})
+	if got := d.order(addrs); !slices.Equal(got, []netip.Addr{a6, b6, a4, b4}) {
+		t.Fatalf("no sources of our own: %v", got)
+	}
+	d.SetIPv4First(true)
+	if got := d.order(addrs); !slices.Equal(got, []netip.Addr{a4, b4, a6, b6}) {
+		t.Fatalf("IPv4 first: %v", got)
+	}
+	p, _ := New(Config{Prefix6: netip.MustParsePrefix("2001:db8:42::/64"), IPv4First: true})
+	if got := p.order(addrs); !got[0].Is4() {
+		t.Fatalf("IPv4 first wins over a v6 prefix: %v", got)
 	}
 }
 
