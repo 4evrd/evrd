@@ -719,6 +719,9 @@ func (se *session) dispatch(m irc.Message) {
 		se.send(fmt.Sprintf(":%s NOTICE %s :This is a bouncer connection, on no network: pick one with BOUNCER BIND", serverName, se.unick))
 		return
 	}
+	if se.ownNickLine(m) {
+		return
+	}
 	switch m.Command {
 	case "BOUNCER":
 		se.bouncerCommand(m.Params)
