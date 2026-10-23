@@ -134,6 +134,7 @@
           <div class="od-stack" style="--od-gap:2px">
             <span class="who od-truncate">{me.username}@{session.config?.ircHost}</span>
             <span class="sub">{t('shell.netsUp', { up, total: session.nets.length, attached: me.usage.attached })}</span>
+            {#if session.config?.version}<span class="sub version" data-testid="evrd-version">{t('shell.version', { version: session.config.version })}</span>{/if}
           </div>
           {#if me.limits.maxNetworks}
             <span class="ubar" role="img" aria-label={t('shell.netsUsed', { used: me.usage.networks, max: me.limits.maxNetworks })}><span style="transform:scaleX({ratio(me.usage.networks, me.limits.maxNetworks)})"></span></span>

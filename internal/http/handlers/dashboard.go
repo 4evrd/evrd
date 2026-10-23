@@ -21,6 +21,7 @@ import (
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
+	"github.com/4evrd/evrd/internal/version"
 )
 
 // Metric names as VictoriaMetrics stores them (OpenTelemetry names with
@@ -604,7 +605,18 @@ func (s *Handlers) AdminOverview(w http.ResponseWriter, r *http.Request) {
 		"now":       now.Unix(),
 		"attention": attention, "upstreams": upList, "storage": s.storageHealth(),
 		"ircHost": s.cfg().IRCHost,
+		"version": version.Version, "holder": s.holderStatus(ctx),
 	})
+}
+
+// holderStatus is the connection holder for the overview, with whether it
+// keeps IRC clients connected through evrd's restarts.
+func (s *Handlers) holderStatus(ctx context.Context) map[string]any {
+	h := s.b.Holder(ctx)
+	return map[string]any{
+		"configured": h.Configured, "reachable": h.Reachable, "protocol": h.Protocol, "build": h.Build,
+		"holdsClients": h.Reachable && h.Protocol >= 2 && !s.cfg().KeepClientsOut,
+	}
 }
 
 // storageHealth checks the account database and the history store.

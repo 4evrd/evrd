@@ -33,6 +33,7 @@
 //	    waiting for evrd (new ones, and held ones with their state)
 //	{"op":"attach-client","client":"c17"} → {"ok":true,"state":…}, then the
 //	    lines the client sent meanwhile, then the stream
+//	{"op":"hello"}                → {"ok":true,"protocol":2,"build":"0.32.0"}
 //
 // On a client's stream evrd may send control lines, which start with a NUL
 // and never reach the client: "\x00state <json>" saves the state the next
@@ -85,6 +86,15 @@ type response struct {
 
 	Listeners []Listener      `json:"listeners,omitempty"`
 	State     json.RawMessage `json:"state,omitempty"`
+	Protocol  int             `json:"protocol,omitempty"` // hello
+	Build     string          `json:"build,omitempty"`    // hello: the holder's evrd release
+}
+
+// HolderInfo is what a holder says about itself (Client.Hello). Build is
+// empty for a holder from before hello.
+type HolderInfo struct {
+	Protocol int
+	Build    string
 }
 
 // Listener is an IRC listener the holder accepts clients on.

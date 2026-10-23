@@ -32,6 +32,7 @@ export default {
   'shell.bouncer': 'Bouncer',
   'shell.netsUp': '{up} of {total} networks up · {attached} attached',
   'shell.netsUsed': '{used} of {max} networks used',
+  'shell.version': 'evrd {version}',
 
   // top bar
   'shell.openNav': 'Open navigation',
