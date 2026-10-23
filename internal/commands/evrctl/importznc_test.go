@@ -1,4 +1,4 @@
-package main
+package evrctl
 
 import (
 	"io"
@@ -37,7 +37,7 @@ func TestImportZNC(t *testing.T) {
 	write("moddata/log/gone/#x/2024-03-10.log", "[11:00:00] <bob> a deleted network\n")
 
 	c := &ctl{stdout: io.Discard, stderr: io.Discard}
-	if err := c.importZNC(cfg, []string{"akadmin", znc}); err != nil {
+	if err := c.importZNC(cfg, zncOptions{tz: "UTC"}, []string{"akadmin", znc}); err != nil {
 		t.Fatal(err)
 	}
 

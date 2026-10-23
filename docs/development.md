@@ -12,7 +12,10 @@ This is a monorepo with three parts:
 | **cli**   | `cmd/evrctl`        | Command-line admin for a running daemon.                         |
 | **spa**   | `web/`              | The Svelte web client (Vite + Svelte 5 + Tailwind).             |
 
-`cmd/evrd` and `cmd/evrctl` are thin entrypoints; the real logic lives in
+`cmd/evrd`, `cmd/evrctl` and `cmd/evrd-links` are thin entrypoints: their
+command lines are Cobra commands in `internal/commands` (`evrd`, `evrctl`,
+`evrdlinks`), one file per command, which still take Go-style single-dash
+flags (`-config`) as well as `--config`. The real logic lives in
 `internal/`:
 
 - `store` — the account database (users, sessions, IRC client passwords,
