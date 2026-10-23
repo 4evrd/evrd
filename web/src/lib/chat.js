@@ -94,16 +94,22 @@ export function parse(input, target) {
   return { error: t('chat.unsupported', { command: '/' + cmd }) }
 }
 
-// tableCells splits a Markdown table row ("| a | b \| c |") into its cells,
-// or returns null for a line that isn't one. *status sends tables this way.
-export function tableCells(text) {
-  if (!text || text[0] !== '|') return null
+// tableCells splits a Markdown table row ("| a | b|c | d") into its cells,
+// or returns null for a line that isn't one. *status sends tables this way,
+// in IRC's monospace formatting (\x11). Only a "|" with spaces around it
+// breaks a column, so "<channel|nick>" stays one cell; with columns given,
+// what's past the last column stays in it. The closing "|" is optional, and
+// "\|" is how older evrd wrote a "|" in a cell.
+export function tableCells(text, columns = Infinity) {
+  text = (text || '').replaceAll('\x11', '').replace(/\s\|\s*$/, '')
+  if (text[0] !== '|') return null
   const cells = []
   let cur = ''
   for (let i = 1; i < text.length; i++) {
-    if (text[i] === '\\' && text[i + 1] === '|') { cur += '|'; i++ } else if (text[i] === '|') { cells.push(cur.trim()); cur = '' } else cur += text[i]
+    const sep = text[i] === '|' && /\s/.test(text[i - 1]) && (i + 1 === text.length || /\s/.test(text[i + 1]))
+    if (text[i] === '\\' && text[i + 1] === '|') { cur += '|'; i++ } else if (sep && cells.length < columns - 1) { cells.push(cur.trim()); cur = '' } else cur += text[i]
   }
-  if (cur.trim()) cells.push(cur.trim()) // (the closing "|" is optional)
+  if (cur.trim()) cells.push(cur.trim())
   return cells
 }
 export const isTableRule = (cells) => cells.length > 0 && cells.every((c) => /^:?-{3,}:?$/.test(c))
