@@ -14,7 +14,10 @@ func TestReadMarkersSync(t *testing.T) {
 	b := r.attached("draft/read-marker")
 	n := r.network("one")
 
-	at := time.Now().Add(-time.Minute).UTC().Truncate(time.Millisecond)
+	// ahead of the marker evrd sets when it first loads the network's
+	// buffers (now): markers only move forward, so one from the past could
+	// be overtaken by it, depending on timing
+	at := time.Now().Add(time.Minute).UTC().Truncate(time.Millisecond)
 	ts := "timestamp=" + at.Format(timeFormat)
 	a.send("MARKREAD #one " + ts)
 	a.expect(":evrd MARKREAD #one " + ts)
@@ -51,5 +54,23 @@ func TestReadMarkersSync(t *testing.T) {
 	plain.send("PRIVMSG *status :version")
 	if seen := plain.until("PRIVMSG alice_one :evrd "); anyHas(seen, "MARKREAD") {
 		t.Fatalf("answered without the cap: %q", seen)
+	}
+}
+
+// A marker moved while a client is still attaching (its JOINs and backlog
+// going out) reaches it once it's attached.
+func TestReadMarkerMovedWhileAttaching(t *testing.T) {
+	r := newRig(t)
+	a := r.attached("draft/read-marker")
+	n := r.network("one")
+	b := r.attach("alice/one:alice-password", "draft/read-marker")
+	b.expect(" 001 ")
+	at := time.Now().Add(time.Minute).UTC().Truncate(time.Millisecond)
+	ts := "timestamp=" + at.Format(timeFormat)
+	a.send("MARKREAD #one " + ts) // b may be anywhere in its attach
+	a.expect(":evrd MARKREAD #one " + ts)
+	b.expect(":evrd MARKREAD #one " + ts)
+	if ms, _ := r.b.ReadMarkers(n.ID); !ms["#one"].Equal(at) {
+		t.Fatalf("markers %v", ms)
 	}
 }

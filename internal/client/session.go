@@ -326,6 +326,7 @@ func (se *session) attach() bool {
 	se.welcome()
 	se.syncCaps()
 	if !unbound {
+		se.startMarks()
 		se.joinChannels()
 		se.replayBacklog()
 		se.syncMarks()
@@ -531,7 +532,7 @@ func (se *session) jump(n store.Network) error {
 	}
 	se.statusf("Jumped from %s to %s.", oldName, n.Name)
 	se.syncCaps()
-	se.marks = nil
+	se.startMarks()
 	se.joinChannels()
 	se.replayBacklog()
 	se.syncMarks()
