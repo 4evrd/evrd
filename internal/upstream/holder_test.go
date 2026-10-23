@@ -159,3 +159,43 @@ func TestPrefixlessNoticeGoesUnderTheServer(t *testing.T) {
 		t.Fatalf("filed under %q, want the server %q", got.Load(), host)
 	}
 }
+
+// Resuming asks for every channel's members and topic, at the network's
+// flood rate. Meanwhile the link must still be read: the holder gives up
+// on an evrd that doesn't read for 30s, which ended the resumed link and
+// made evrd reconnect (part and rejoin everything) after each restart.
+func TestResumeKeepsReadingWhileItCatchesUp(t *testing.T) {
+	var log testirc.Log
+	addr := testirc.StartLogged(t, &log)
+	host, port, _ := net.SplitHostPort(addr)
+	p, _ := strconv.Atoi(port)
+	var chans []string
+	for i := range 30 {
+		chans = append(chans, "#c"+strconv.Itoa(i))
+	}
+	n := store.Network{ID: 8, Nick: "alice", Host: host, Port: p, Channels: chans, FloodRate: 2, FloodBurst: 1}
+	holder := startTestHolder(t)
+	var stopping atomic.Bool
+	opts := Options{Links: holder, LinkID: "n8", Detaching: stopping.Load}
+
+	c1 := New(n, quiet, opts)
+	cancel1 := run(t, c1)
+	eventually(t, "registered", func() bool { return c1.Status() == StatusConnected })
+	stopping.Store(true)
+	cancel1()
+	time.Sleep(200 * time.Millisecond)
+
+	stopping.Store(false)
+	var got atomic.Bool
+	opts.Persist = func(m history.Message) {
+		if strings.Contains(m.Text, "said during the resume") {
+			got.Store(true)
+		}
+	}
+	c2 := New(n, quiet, opts)
+	run(t, c2)
+	eventually(t, "connected again", func() bool { return c2.Status() == StatusConnected })
+	log.Send(":bob!b@h PRIVMSG #c1 :said during the resume")
+	// (61 lines at 2 a second: 30s if nothing is read until they're sent)
+	eventually(t, "read while the resume's NAMES and TOPICs go out", got.Load)
+}
