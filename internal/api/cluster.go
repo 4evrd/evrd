@@ -19,6 +19,9 @@ import (
 	"strconv"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/cluster"
 	"github.com/4evrd/evrd/internal/store"
@@ -41,7 +44,7 @@ func (s *Server) InternalHandler() http.Handler {
 	mux := http.NewServeMux()
 	s.routes(mux)
 	mux.HandleFunc("GET /internal/usage", s.handleInternalUsage)
-	return s.auth.Forwarded(s.secret, mux)
+	return s.auth.Forwarded(s.secret, traced(true, mux))
 }
 
 // ListenInternal runs the internal endpoint until ctx is cancelled.
@@ -100,6 +103,8 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, node store.Node
 			// the browser's address as this node sees it (the owner can't
 			// tell from X-Forwarded-For whom to believe)
 			pr.Out.Header.Set(auth.HeaderClient, s.auth.ClientIP(pr.In))
+			// the owner's spans continue this request's trace
+			otel.GetTextMapPropagator().Inject(pr.In.Context(), propagation.HeaderCarrier(pr.Out.Header))
 		},
 		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
 			s.log.Warn("forward to owner", "node", node.ID, "err", err)

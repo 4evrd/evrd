@@ -30,7 +30,7 @@ type Server struct {
 	b       *bouncer.Bouncer
 	cl      Cluster // nil: a single node that serves every user
 	secret  string
-	acc     *accounts.Service
+	acc     accounts.AccountServiceImpl
 	log     *slog.Logger
 	tlsCert string
 	tlsKey  string
@@ -76,7 +76,7 @@ func (s *Server) clientsPage() string {
 	return s.publicURL + "/clients"
 }
 
-func NewServer(b *bouncer.Bouncer, acc *accounts.Service, log *slog.Logger, tlsCert, tlsKey string) *Server {
+func NewServer(b *bouncer.Bouncer, acc accounts.AccountServiceImpl, log *slog.Logger, tlsCert, tlsKey string) *Server {
 	return &Server{b: b, acc: acc, log: log, tlsCert: tlsCert, tlsKey: tlsKey}
 }
 

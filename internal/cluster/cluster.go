@@ -54,9 +54,16 @@ type Hooks struct {
 	Lose    func(userID int64) // stop everything the user has here
 }
 
+// Repository is what a cluster member keeps in the database: nodes and
+// leases, and the users to hold.
+type Repository interface {
+	store.ClusterRepositoryImpl
+	ListUsers(ctx context.Context) ([]store.User, error)
+}
+
 // Cluster is this node's view of ownership.
 type Cluster struct {
-	st    store.Store
+	st    Repository
 	self  store.Node
 	hooks Hooks
 	log   *slog.Logger
@@ -71,7 +78,7 @@ type Cluster struct {
 
 // New creates the cluster member for this node. self.ID must be unique and
 // stable per process; HTTPURL and IRCAddr are its internal endpoints.
-func New(st store.Store, self store.Node, hooks Hooks, log *slog.Logger) *Cluster {
+func New(st Repository, self store.Node, hooks Hooks, log *slog.Logger) *Cluster {
 	return &Cluster{st: st, self: self, hooks: hooks, log: log, now: time.Now, ttl: DefaultLeaseTTL, held: map[int64]bool{}}
 }
 

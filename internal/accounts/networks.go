@@ -192,7 +192,7 @@ func Charset(enc string) (encoding.Encoding, error) {
 // CheckNetworkName refuses a name another of the user's networks already has
 // (names pick the network in PASS user/network:secret, so they must differ).
 func (s *Service) CheckNetworkName(userID int64, name string, exceptID int64) error {
-	nets, err := s.st.ListNetworks(context.Background(), userID)
+	nets, err := s.ListNetworks(context.Background(), userID)
 	if err != nil {
 		return err
 	}

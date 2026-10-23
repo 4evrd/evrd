@@ -53,9 +53,9 @@ type Server struct {
 	cl      Cluster                         // nil: a single node that serves every user
 	secret  string                          // the cluster secret
 	metrics atomic.Pointer[metricsq.Client] // nil: dashboards show no charts
-	acc     *accounts.Service
-	auth    *auth.Manager
-	langs   languages.ServiceImpl
+	acc     accounts.AccountServiceImpl
+	auth    auth.AuthServiceImpl
+	langs   languages.LanguageServiceImpl
 	state   cluster.StateServiceImpl
 	cfgp    atomic.Pointer[config.Config]
 	// settings, when set, edits the server settings (Admin → Settings).
@@ -70,9 +70,9 @@ type Server struct {
 // Services are what the API works through, besides the bouncer: handlers
 // never reach the repositories themselves.
 type Services struct {
-	Accounts  *accounts.Service
-	Auth      *auth.Manager
-	Languages languages.ServiceImpl
+	Accounts  accounts.AccountServiceImpl
+	Auth      auth.AuthServiceImpl
+	Languages languages.LanguageServiceImpl
 	Cluster   cluster.StateServiceImpl // nodes and leases (with or without a cluster)
 }
 
@@ -149,7 +149,7 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/auth/", http.NotFoundHandler())
 		mux.Handle("/", webApp(s.webApp))
 	}
-	return auth.SameOrigin(mux)
+	return auth.SameOrigin(traced(false, mux))
 }
 
 // routes registers the signed-in routes. Each is served on the node that

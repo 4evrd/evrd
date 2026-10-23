@@ -321,7 +321,8 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 	// Metrics: pushed over OTLP (to VictoriaMetrics), read back for the
 	// dashboards from metrics_url.
 	stopTelemetry, err := telemetry.Setup(ctx, telemetry.Config{
-		Endpoint: cfg.Metrics.OTLPEndpoint, Interval: cfg.Metrics.Interval, NodeID: cc.NodeID, Version: version.Version,
+		Endpoint: cfg.Metrics.OTLPEndpoint, Interval: cfg.Metrics.Interval, TracesEndpoint: cfg.Metrics.TracesEndpoint,
+		NodeID: cc.NodeID, Version: version.Version,
 	})
 	if err != nil {
 		log.Error("telemetry", "err", err)

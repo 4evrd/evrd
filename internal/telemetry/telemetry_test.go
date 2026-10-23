@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel"
 )
 
 // Setup must start (no schema clashes) and push OTLP to the endpoint.
@@ -35,6 +37,30 @@ func TestSetupExportsOTLP(t *testing.T) {
 	}
 	if got.Load() == 0 {
 		t.Fatal("nothing was exported")
+	}
+}
+
+// Spans go to the traces endpoint, flushed by shutdown.
+func TestSetupExportsTraces(t *testing.T) {
+	var got atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		if r.URL.Path == "/v1/traces" && len(b) > 0 {
+			got.Add(1)
+		}
+	}))
+	defer srv.Close()
+	shutdown, err := Setup(context.Background(), Config{TracesEndpoint: srv.URL + "/v1/traces", NodeID: "test", Version: "dev"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, span := otel.Tracer("evrd/test").Start(context.Background(), "Test.Span")
+	span.End()
+	if err := shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got.Load() == 0 {
+		t.Fatal("no spans were exported")
 	}
 }
 
