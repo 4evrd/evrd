@@ -7,20 +7,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// UserRepository keeps users: accounts, their settings and when they were last seen (see UserRepositoryImpl).
+// UserRepository is the UserRepositoryImpl on the SQL database.
 type UserRepository struct{ db *DB }
 
-// NewUserRepository is the users: accounts, their settings and when they were last seen repository on db.
+// NewUserRepository makes a UserRepository on db.
 func NewUserRepository(db *DB) UserRepositoryImpl { return &UserRepository{db: db} }
 
 func (r *UserRepository) CreateUser(ctx context.Context, u User) (User, error) {
-	if u.Role == "" {
-		u.Role = RoleUser
-	}
-	if u.TimestampFormat == "" { // a new user: ZNC-like playback defaults
-		u.PlaybackLines, u.AutoClearQueryBuffer = 50, true
-		u.PrependTimestamp, u.TimestampFormat = true, "[%H:%M:%S]"
-	}
 	if err := r.db.DB.WithContext(ctx).Create(&u).Error; err != nil {
 		return User{}, err
 	}

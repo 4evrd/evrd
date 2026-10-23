@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-// CacheRepository keeps cached certificates and fetched documents (see CacheRepositoryImpl).
+// CacheRepository is the CacheRepositoryImpl on the SQL database.
 type CacheRepository struct{ db *DB }
 
-// NewCacheRepository is the cached certificates and fetched documents repository on db.
+// NewCacheRepository makes a CacheRepository on db.
 func NewCacheRepository(db *DB) CacheRepositoryImpl { return &CacheRepository{db: db} }
 
 func (r *CacheRepository) CertCache(ctx context.Context, key string) (string, error) {

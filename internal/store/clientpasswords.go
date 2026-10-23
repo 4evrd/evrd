@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-// ClientPasswordRepository keeps IRC client passwords (see ClientPasswordRepositoryImpl).
+// ClientPasswordRepository is the ClientPasswordRepositoryImpl on the SQL database.
 type ClientPasswordRepository struct{ db *DB }
 
-// NewClientPasswordRepository is the IRC client passwords repository on db.
+// NewClientPasswordRepository makes a ClientPasswordRepository on db.
 func NewClientPasswordRepository(db *DB) ClientPasswordRepositoryImpl {
 	return &ClientPasswordRepository{db: db}
 }

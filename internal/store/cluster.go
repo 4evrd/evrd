@@ -9,10 +9,10 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// ClusterRepository keeps cluster nodes, their settings and users' leases (see ClusterRepositoryImpl).
+// ClusterRepository is the ClusterRepositoryImpl on the SQL database.
 type ClusterRepository struct{ db *DB }
 
-// NewClusterRepository is the cluster nodes, their settings and users' leases repository on db.
+// NewClusterRepository makes a ClusterRepository on db.
 func NewClusterRepository(db *DB) ClusterRepositoryImpl { return &ClusterRepository{db: db} }
 
 func (r *ClusterRepository) Leases(ctx context.Context, now time.Time) ([]UserLease, error) {

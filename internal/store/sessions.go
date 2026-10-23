@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-// SessionRepository keeps web sign-in sessions (see SessionRepositoryImpl).
+// SessionRepository is the SessionRepositoryImpl on the SQL database.
 type SessionRepository struct{ db *DB }
 
-// NewSessionRepository is the web sign-in sessions repository on db.
+// NewSessionRepository makes a SessionRepository on db.
 func NewSessionRepository(db *DB) SessionRepositoryImpl { return &SessionRepository{db: db} }
 
 func (r *SessionRepository) CreateSession(ctx context.Context, sess Session) error {

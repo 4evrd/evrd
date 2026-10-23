@@ -7,10 +7,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// SettingRepository keeps settings changed in the admin UI (see SettingRepositoryImpl).
+// SettingRepository is the SettingRepositoryImpl on the SQL database.
 type SettingRepository struct{ db *DB }
 
-// NewSettingRepository is the settings changed in the admin UI repository on db.
+// NewSettingRepository makes a SettingRepository on db.
 func NewSettingRepository(db *DB) SettingRepositoryImpl { return &SettingRepository{db: db} }
 
 func (r *SettingRepository) Settings(ctx context.Context) ([]Setting, error) {

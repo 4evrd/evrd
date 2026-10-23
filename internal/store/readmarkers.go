@@ -8,10 +8,10 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// ReadMarkerRepository keeps how far each buffer is read (see ReadMarkerRepositoryImpl).
+// ReadMarkerRepository is the ReadMarkerRepositoryImpl on the SQL database.
 type ReadMarkerRepository struct{ db *DB }
 
-// NewReadMarkerRepository is the how far each buffer is read repository on db.
+// NewReadMarkerRepository makes a ReadMarkerRepository on db.
 func NewReadMarkerRepository(db *DB) ReadMarkerRepositoryImpl { return &ReadMarkerRepository{db: db} }
 
 func (r *ReadMarkerRepository) SetReadMarker(ctx context.Context, networkID int64, buffer string, at time.Time) error {

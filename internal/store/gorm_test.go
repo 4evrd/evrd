@@ -58,7 +58,7 @@ func TestUsers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A new user gets the role and playback defaults.
+	// A new user gets the role and playback defaults: the columns' own.
 	if bob.ID == 0 || bob.Role != RoleUser || bob.IsAdmin() || bob.PlaybackLines != 50 ||
 		!bob.AutoClearQueryBuffer || !bob.PrependTimestamp || bob.TimestampFormat != "[%H:%M:%S]" {
 		t.Fatalf("defaults: %+v", bob)
