@@ -259,8 +259,14 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 	}
 	b.SetDialer(ob.DialFrom)
 	b.SetModulesOff(cfg.ModulesOff)
+	var holder *links.Client
+	clientsBack := make(chan struct{}) // the clients the holder kept are back
 	if linksSocket != "" {
-		b.SetLinks(links.NewClient(linksSocket))
+		holder = links.NewClient(linksSocket)
+		b.SetLinks(holder)
+		if !cfg.KeepClientsOut {
+			b.ResumeAfter(clientsBack)
+		}
 		log.Info("connection holder on: IRC connections survive restarts", "socket", linksSocket)
 	}
 	if len(cfg.Outbound.Bind) > 0 || cfg.Outbound.Prefix6.IsValid() {
@@ -331,6 +337,13 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 
 	// Downstream IRC listener for native clients (Hexchat, irssi, …).
 	irc := client.NewServer(b, acc, log, cfg.TLSCert, cfg.TLSKey)
+	if holder != nil && !cfg.KeepClientsOut {
+		irc.SetHolder(holder)
+	}
+	go func() {
+		<-irc.Ready()
+		close(clientsBack)
+	}()
 	srv := evrdhttp.New(b, evrdhttp.Services{
 		Accounts:  acc,
 		Auth:      am,

@@ -38,6 +38,7 @@ acme_ca https://ca.example/dir
 https_listen :443
 http_listen :80
 links_socket /run/links.sock
+hold_clients no
 identd_listen :1113
 provision_token tok
 web_root /srv/web
@@ -102,6 +103,9 @@ backlog_lines 600
 	check("https_listen", c.HTTPSListen, ":443")
 	check("http_listen", c.HTTPListen, ":80")
 	check("links_socket", c.LinksSocket, "/run/links.sock")
+	if !c.KeepClientsOut {
+		t.Error("hold_clients no: clients still held")
+	}
 	check("identd_listen", c.IdentdListen, ":1113")
 	check("provision_token", c.ProvisionToken, "tok")
 	check("web_root", c.WebRoot, "/srv/web")
@@ -179,7 +183,7 @@ func TestLoadFileErrors(t *testing.T) {
 		"nonsense 1", "tls magic", "password_login maybe", "session_ttl soon", "cookie_secure 2",
 		"oidc_auto_create x", "oidc_link_existing x", "cluster_lease x", "connect_rate fast",
 		"settings_write_conf x", "upstream_bind not-an-ip", "upstream_prefix6 192.0.2.1",
-		"otel_interval x", "max_networks x", "max_clients x", "backlog_lines x",
+		"otel_interval x", "hold_clients x", "max_networks x", "max_clients x", "backlog_lines x",
 	} {
 		_, err := LoadFile(writeConf(t, "irc_host ok\n"+line+"\n"))
 		if err == nil {

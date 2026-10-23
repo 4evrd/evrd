@@ -59,6 +59,13 @@ func (a *Attachment) Update(f func(*ClientInfo)) {
 	a.b.mu.Unlock()
 }
 
+// Info is the client's description.
+func (a *Attachment) Info() ClientInfo {
+	a.b.mu.Lock()
+	defer a.b.mu.Unlock()
+	return a.c.info
+}
+
 // Release unregisters the client.
 func (a *Attachment) Release() {
 	b := a.b

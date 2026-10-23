@@ -17,6 +17,7 @@ import (
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/telemetry"
 	"github.com/4evrd/evrd/internal/upstream"
@@ -89,7 +90,14 @@ type session struct {
 	mlines map[string]*multiline // the client's open draft/multiline batches
 
 	namesAsked map[string]int // NAMES the client asked for, by channel (no-implicit-names)
-	preAway    *string        // AWAY sent while registering (pre-away)
+
+	// held is the client's connection when the holder has it (hold.go);
+	// restored, that it was picked up from the last evrd's state.
+	held       *links.ClientConn
+	restored   bool
+	restoredAt time.Time
+	savedState []byte
+	preAway    *string // AWAY sent while registering (pre-away)
 }
 
 func newSession(srv *Server, conn net.Conn) *session {
@@ -129,12 +137,38 @@ func (se *session) readLine() (string, error) {
 }
 
 func (se *session) serve(ctx context.Context) {
-	defer se.conn.Close()
+	defer se.closeConn(ctx)
 	if se.internal && !se.acceptForwarded() {
 		return
 	}
 
-	// Registration: gather CAP / PASS / NICK / USER.
+	if !se.restored {
+		if !se.register(ctx) {
+			return
+		}
+		se.registered = true
+		if se.forwardIfElsewhere(ctx) {
+			return
+		}
+		if !se.attach() {
+			return
+		}
+		se.saveState()
+	}
+	defer func() {
+		se.unsubscribe()
+		if se.heldOver(ctx) {
+			return // still attached, as far as the next evrd is concerned
+		}
+		se.markOnNetwork() // until now
+		se.release()
+	}()
+	se.bridge(ctx)
+}
+
+// register reads the client's registration: CAP, PASS, NICK, USER (and
+// SASL). False if the client went, or went to another node.
+func (se *session) register(ctx context.Context) bool {
 	for {
 		if se.lsWaiting {
 			se.conn.SetReadDeadline(se.lsSince.Add(orDefault(se.srv.lsWait, lsWait)))
@@ -149,7 +183,7 @@ func (se *session) serve(ctx context.Context) {
 			continue
 		}
 		if err != nil {
-			return
+			return false
 		}
 		m := irc.Parse(line)
 		if se.lsWaiting && (m.Command == "CAP" || m.Command == "AUTHENTICATE") {
@@ -190,30 +224,19 @@ func (se *session) serve(ctx context.Context) {
 				se.bouncerFail("ACCOUNT_REQUIRED", strings.Join(append(m.Params, "*")[:1], ""), "Sign in first")
 			}
 		case "QUIT":
-			return
+			return false
 		}
 		if se.lsWaiting && se.nick != "" && se.user != "" {
 			// another node's user: that node answers, knowing the network
 			if se.pass != "" && se.forwardIfElsewhere(ctx) {
-				return
+				return false
 			}
 			se.answerLS()
 		}
 		if se.nick != "" && se.user != "" && !se.capNegotiating {
-			break
+			return true
 		}
 	}
-	se.registered = true
-	if se.forwardIfElsewhere(ctx) {
-		return
-	}
-	if !se.attach() {
-		return
-	}
-	defer se.release()
-	defer se.unsubscribe()
-	defer se.markOnNetwork() // until now
-	se.bridge(ctx)
 }
 
 // signIn checks a user's secret: the account password or one of their IRC
@@ -578,12 +601,16 @@ func (se *session) bridge(ctx context.Context) {
 				return
 			}
 			se.handleClient(m)
+			se.saveState()
 		case line, ok := <-se.raw:
 			if !ok {
 				se.raw = nil
 				continue
 			}
 			se.relay(line)
+			if se.held != nil && (strings.Contains(line.Text, " NICK ") || strings.Contains(line.Text, "BATCH ")) {
+				se.saveState()
+			}
 		case m, ok := <-se.msgs:
 			if !ok {
 				se.msgs = nil
@@ -602,9 +629,14 @@ func (se *session) bridge(ctx context.Context) {
 				se.raw, se.unsubRaw = conn.SubscribeRaw()
 				se.msgs, se.unsubMsg = conn.Subscribe()
 			}
+			if se.restored && se.up != nil && se.up.Status() != upstream.StatusConnected && time.Since(se.restoredAt) < 30*time.Second {
+				continue // picked up from the last evrd: the link isn't back yet
+			}
+			se.restored = false
 			se.syncCaps()
 			se.notifyNetworks()
 			se.syncMarks()
+			se.saveState()
 		case <-ctx.Done():
 			return
 		}
