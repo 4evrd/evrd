@@ -1,6 +1,6 @@
 package client
 
-// evrd's own nicks (*status, *buffextras) start with "*", which no IRC nick
+// evrd's own nicks (*status) start with "*", which no IRC nick
 // can. A client asking the network about them (mIRC's whois on query, its
 // notify list's ISON, a /msg to a ZNC module evrd doesn't have) would get
 // the network's "No such nick/channel", which the client shows in the
@@ -18,9 +18,7 @@ import (
 func isOwnNick(name string) bool { return len(name) > 1 && name[0] == '*' }
 
 // knownNick reports whether evrd has a user by that name.
-func knownNick(name string) bool {
-	return strings.EqualFold(name, statusNick) || strings.EqualFold(name, "*buffextras")
-}
+func knownNick(name string) bool { return strings.EqualFold(name, statusNick) }
 
 // ownNickLine answers a client's line about evrd's own nicks, reporting
 // whether it took the line. Lines that also name the network's nicks go on

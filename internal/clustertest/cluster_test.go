@@ -403,6 +403,12 @@ func TestIRCClientsAreSplicedToTheOwner(t *testing.T) {
 		t.Fatal("the client was attached on the non-owner")
 	}
 	// server-time, negotiated with the first node, still applies on the owner.
+	nets, _ := e.st.ListNetworks(t.Context(), u.ID)
+	ic.send("PRIVMSG #c :through the splice")
+	eventually(t, "the line saved", func() bool {
+		msgs, _ := owner.b.History().Recent(nets[0].ID, "#c", 10)
+		return len(msgs) > 0 && msgs[len(msgs)-1].Text == "through the splice"
+	})
 	ic.send("PRIVMSG *status :playback #c")
 	ic.expect("Replayed")
 

@@ -171,19 +171,19 @@ func (se *session) chathistory(p []string) {
 		fail("MESSAGE_ERROR", sub, target, ":Messages could not be retrieved")
 		return
 	}
-	batch := se.openBatch("chathistory", target)
-	for _, m := range msgs {
-		se.send(se.formatIn(m, true, batch))
-	}
-	se.closeBatch(batch)
+	se.sendHistory(target, msgs)
 }
 
 // lines reads a slice of a buffer for CHATHISTORY. Channel events only go to
-// a client with draft/event-playback; for the others they're skipped, and
-// reading goes on so they don't use up the limit.
+// a client with draft/event-playback.
 func (se *session) lines(target string, q history.Query) ([]history.Message, error) {
+	return se.readLines(target, q, se.caps["draft/event-playback"])
+}
+
+// readLines reads a slice of a buffer: chat lines, and channel events if
+// events is set. Skipped events don't use up the limit; reading goes on.
+func (se *session) readLines(target string, q history.Query, events bool) ([]history.Message, error) {
 	h := se.srv.b.History()
-	events := se.caps["draft/event-playback"]
 	need := q.Limit
 	var out []history.Message
 	for need > 0 {

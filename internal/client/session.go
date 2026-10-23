@@ -466,19 +466,22 @@ func (se *session) playback(target string, n int) int {
 	return se.playbackSince(target, n, time.Time{})
 }
 
-// playbackSince sends the last n lines of a buffer newer than since.
+// playbackSince sends the last n lines of a buffer newer than since. Only
+// lines the client gets count: channel events for a client that takes them
+// (draft/event-playback, in a batch), else just the chat.
 func (se *session) playbackSince(target string, n int, since time.Time) int {
-	msgs, _ := se.srv.b.History().Recent(se.net.ID, target, n)
-	var newer []history.Message
-	for _, m := range msgs {
-		if m.Time.After(since) {
-			newer = append(newer, m)
-		}
+	q := history.Query{Limit: n, Latest: true}
+	if !since.IsZero() {
+		q.After = history.ID{Nanos: since.UnixNano(), Seq: history.MaxSeq}
 	}
-	if len(newer) > 0 {
-		se.sendHistory(target, newer)
+	msgs, err := se.readLines(target, q, se.caps["batch"] && se.caps["draft/event-playback"])
+	if err != nil {
+		se.srv.log.Warn("playback", "network", se.net.ID, "target", target, "err", err)
 	}
-	return len(newer)
+	if len(msgs) > 0 {
+		se.sendHistory(target, msgs)
+	}
+	return len(msgs)
 }
 
 // sendHistory sends a buffer's lines as playback: in a chathistory batch for
@@ -486,7 +489,9 @@ func (se *session) playbackSince(target string, n int, since time.Time) int {
 func (se *session) sendHistory(target string, msgs []history.Message) {
 	batch := se.openBatch("chathistory", target)
 	for _, m := range msgs {
-		se.send(se.formatIn(m, true, batch))
+		if line := se.formatIn(m, true, batch); line != "" {
+			se.send(line)
+		}
 	}
 	se.closeBatch(batch)
 }
@@ -861,9 +866,9 @@ func (se *session) passOn(m irc.Message) {
 }
 
 // format renders a stored message as an IRC line for replay, tagged with
-// server-time when the client negotiated it. Channel events (joins, parts, …)
-// come from *buffextras as plain text, the way ZNC's module replays them, so
-// replay never touches the client's idea of who is in the channel.
+// server-time when the client negotiated it. A channel event (join, part, …)
+// is "" outside a draft/event-playback batch: replayed as a real line it
+// would change the client's idea of who is in the channel.
 func (se *session) format(m history.Message) string { return se.formatAs(m, true) }
 
 // formatAs renders m; playback lines (not live ones) carry the user's
@@ -901,11 +906,11 @@ func (se *session) formatIn(m history.Message, playback bool, batch string) stri
 	}
 	prefix := sender + "!" + sender + "@" + se.net.Name
 	if !isChat(m.Kind) {
-		if ev, ok := eventLine(m, prefix); ok && batch != "" && se.caps["draft/event-playback"] {
-			b.WriteString(ev)
-		} else {
-			b.WriteString(fmt.Sprintf(":*buffextras!buffextras@%s PRIVMSG %s :%s", serverName, m.Target, stamp(describe(m))))
+		ev, ok := eventLine(m, prefix)
+		if !ok || batch == "" || !se.caps["draft/event-playback"] {
+			return ""
 		}
+		b.WriteString(ev)
 		return b.String()
 	}
 	text := stamp(m.Text)
@@ -951,33 +956,6 @@ func eventLine(m history.Message, prefix string) (string, bool) {
 // isChat reports whether a stored kind is something someone said.
 func isChat(kind string) bool {
 	return kind == "message" || kind == "notice" || kind == "action" || kind == ""
-}
-
-// describe is a channel event as a sentence.
-func describe(m history.Message) string {
-	why := func(s string) string {
-		if s == "" {
-			return ""
-		}
-		return " (" + s + ")"
-	}
-	switch m.Kind {
-	case "join":
-		return m.Sender + " joined"
-	case "part":
-		return m.Sender + " left" + why(m.Text)
-	case "quit":
-		return m.Sender + " quit" + why(m.Text)
-	case "kick":
-		return m.Sender + " kicked " + m.Extra + why(m.Text)
-	case "nick":
-		return m.Sender + " is now known as " + m.Extra
-	case "topic":
-		return m.Sender + " changed the topic to: " + m.Text
-	case "mode":
-		return m.Sender + " set mode " + m.Text
-	}
-	return m.Sender + " " + m.Kind + " " + m.Text
 }
 
 func (se *session) send(line string) {
