@@ -383,9 +383,8 @@ func TestQuietServerTimesOut(t *testing.T) {
 	if _, err := bufio.NewReader(st).ReadString('\n'); !errors.Is(err, io.EOF) {
 		t.Fatalf("stream: %v", err)
 	}
-	if ls := listLinks(t, cl); len(ls) != 0 {
-		t.Fatalf("links %+v", ls)
-	}
+	// the stream ends as the link is dropped, a moment before it's forgotten
+	eventually(t, "the link is gone", func() bool { return len(listLinks(t, cl)) == 0 })
 }
 
 func TestServerClosingEndsTheStream(t *testing.T) {
