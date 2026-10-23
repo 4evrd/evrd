@@ -141,7 +141,7 @@ mTLS or a shared secret, and never exposed.
 1. **Node identity and leases** (`internal/cluster`, `nodes`/`user_leases`):
    rendezvous placement, lease acquire/renew/release, fencing, gradual
    rebalancing (≤50 users per tick, once a new node has been up 10 s).
-2. **Forwarding** (`internal/api/cluster.go`, `internal/client/forward.go`):
+2. **Forwarding** (`internal/http/middleware/owner.go`, `internal/client/forward.go`):
    the internal HTTP and IRC endpoints, web requests and the chat WebSocket
    reverse-proxied to the owner, IRC clients spliced to it.
 3. **Owner-side effects and cluster jobs:** admin actions run on the owner;
