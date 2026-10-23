@@ -119,9 +119,9 @@ func TestDialFromErrors(t *testing.T) {
 	if _, err := d.DialFrom(ctx, 1, "vhost", "irc", 6667); err == nil || err.Error() != "refused by 198.51.100.2:6667" {
 		t.Fatalf("refused: %v", err)
 	}
-	// an IPv6 server from the bind host's IPv6 address
+	// an IPv6 server from the bind host's IPv6 address (freebind on Linux)
 	f.dialed = nil
-	if _, err := d.DialFrom(ctx, 1, "vhost", "irc6", 6667); err != nil || f.dialed[0] != "2001:db8::5 -> [2001:db8::99]:6667 false" {
+	if _, err := d.DialFrom(ctx, 1, "vhost", "irc6", 6667); err != nil || f.dialed[0] != fmt.Sprintf("2001:db8::5 -> [2001:db8::99]:6667 %v", canFreebind) {
 		t.Fatalf("v6: %v %v", err, f.dialed)
 	}
 	// an IP literal bind (resolved as itself by the real resolver)

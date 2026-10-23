@@ -49,7 +49,10 @@ upstream_prefix6 2001:db8:42::/64     # each user's own IPv6 address (IPv6 serve
 
 **Bind hosts** (ZNC's BindHost): `bindhost 192.0.2.20 vhost.example.org`
 (repeatable) lists local addresses users may pick to connect from, for their
-whole account or per network. Admins may use any address and can lock a
+whole account or per network. On Linux an IPv6 bind host may come from a routed prefix
+with only a local route for it, like `upstream_prefix6`'s addresses: evrd
+binds it with `IPV6_FREEBIND`, so nothing has to be added to an interface
+per address. Admins may use any address and can lock a
 user's choice (DenySetBindHost).
 
 In a cluster, keep `settings_write_conf` off: settings changed in the web app live in the database, which every node reads (see [configuration](configuration.md#server-settings-admin--settings)).

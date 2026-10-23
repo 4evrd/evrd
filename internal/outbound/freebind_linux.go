@@ -2,6 +2,9 @@ package outbound
 
 import "syscall"
 
+// canFreebind: IPv6 bind hosts are bound with IPV6_FREEBIND.
+const canFreebind = true
+
 // ipv6Freebind is IPV6_FREEBIND (linux/in6.h); the syscall package lacks it.
 const ipv6Freebind = 78
 

@@ -133,7 +133,11 @@ func (d *Dialer) DialFrom(ctx context.Context, userID int64, bind, host string, 
 		if !local.IsValid() {
 			continue
 		}
-		conn, err := d.dial(ctx, netip.AddrPortFrom(local, 0), netip.AddrPortFrom(remote, uint16(port)), false)
+		// An IPv6 bind host may come from a routed prefix with only a local
+		// route for it (one address per user, nothing on the interface), as
+		// upstream_prefix6's addresses do: bind it the same way.
+		freebind := canFreebind && local.Is6()
+		conn, err := d.dial(ctx, netip.AddrPortFrom(local, 0), netip.AddrPortFrom(remote, uint16(port)), freebind)
 		if err == nil {
 			return conn, nil
 		}
