@@ -15,6 +15,9 @@ import (
 	"github.com/4evrd/evrd/internal/version"
 )
 
+// testHolderHash is the binary hash the test holders report.
+const testHolderHash = "0123456789ab"
+
 // runHolder runs a connection holder for the test; its client.
 func runHolder(t *testing.T) *links.Client {
 	t.Helper()
@@ -30,7 +33,9 @@ func runHolder(t *testing.T) *links.Client {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go links.NewHolder(slog.New(slog.NewTextHandler(io.Discard, nil))).Serve(ctx, ln)
+	h := links.NewHolder(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	h.Hash = testHolderHash
+	go h.Serve(ctx, ln)
 	return links.NewClient(path)
 }
 
@@ -52,7 +57,8 @@ func TestAdminOverviewVersions(t *testing.T) {
 
 	e := newEnv(t)
 	e.b.SetLinks(runHolder(t))
-	if h := holder(e); h["reachable"] != true || h["protocol"] != float64(links.Version) || h["build"] != version.Version || h["holdsClients"] != true {
+	e.b.SetShippedHolder(testHolderHash)
+	if h := holder(e); h["reachable"] != true || h["protocol"] != float64(links.Version) || h["version"] != version.Version || h["older"] != false || h["holdsClients"] != true {
 		t.Fatalf("holder: %v", h)
 	}
 

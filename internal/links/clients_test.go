@@ -17,8 +17,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/4evrd/evrd/internal/version"
 )
 
 // handOver gives h a fresh listener on 127.0.0.1 and returns its address.
@@ -338,13 +336,15 @@ func TestTLSClients(t *testing.T) {
 
 func TestHello(t *testing.T) {
 	ctx := context.Background()
-	cl, _ := serveHolder(t, quietHolder())
-	if hi, err := cl.Hello(ctx); err != nil || hi.Protocol != Version || hi.Build != version.Version {
+	h := quietHolder()
+	h.Hash = "0123456789ab"
+	cl, _ := serveHolder(t, h)
+	if hi, err := cl.Hello(ctx); err != nil || hi.Protocol != Version || hi.Hash != h.Hash {
 		t.Fatalf("hello: %+v, %v", hi, err)
 	}
-	// protocol 1, and protocol 2 from before hello: the build is unknown
+	// protocol 1, and protocol 2 from before hello: the hash is unknown
 	for answer, want := range map[string]int{`{"error":"bad request or protocol version"}`: 1, `{"error":"unknown op"}`: 2} {
-		if hi, err := fakeHolder(t, answer+"\n").Hello(ctx); err != nil || hi.Protocol != want || hi.Build != "" {
+		if hi, err := fakeHolder(t, answer+"\n").Hello(ctx); err != nil || hi.Protocol != want || hi.Hash != "" {
 			t.Errorf("%s: %+v, %v", answer, hi, err)
 		}
 	}

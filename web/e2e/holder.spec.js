@@ -161,7 +161,10 @@ test('the admin overview reports the connection holder', async () => {
   try {
     const ov = await retry(() => solo.get('/api/admin/overview'))
     expect(ov.holder).toMatchObject({ configured: true, reachable: true, protocol: 2, holdsClients: true })
-    expect(ov.holder.build).toBe(ov.version)
+    // the holder's binary hash; the dev stack runs both with go run, so
+    // there's no evrd-links beside evrd to compare it with (no release, not older)
+    expect(ov.holder.hash).toMatch(/^[0-9a-f]{12}$/)
+    expect(ov.holder).toMatchObject({ version: '', older: false })
   } finally {
     await solo.dispose()
   }

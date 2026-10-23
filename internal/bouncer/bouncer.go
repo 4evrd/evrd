@@ -60,6 +60,7 @@ type Bouncer struct {
 	dial func(ctx context.Context, userID int64, bind, host string, port int) (net.Conn, error)
 	// links, when set, is the connection holder upstream connections live in.
 	links       *links.Client
+	shipped     string // the hash of the evrd-links shipped with this evrd
 	resumeAfter <-chan struct{}
 
 	holderMu sync.Mutex
@@ -77,6 +78,10 @@ func (b *Bouncer) SetDialer(dial func(ctx context.Context, userID int64, bind, h
 // survive evrd restarting (see internal/links). Call it before Start.
 func (b *Bouncer) SetLinks(l *links.Client) { b.links = l }
 
+// SetShippedHolder is the hash of the evrd-links shipped with this evrd
+// (links.ShippedHash): a holder with the same hash is this release's.
+func (b *Bouncer) SetShippedHolder(hash string) { b.shipped = hash }
+
 // ResumeAfter holds back picking up the holder's links until ready is
 // closed: the IRC clients it kept come back first (see client.Server).
 func (b *Bouncer) ResumeAfter(ready <-chan struct{}) { b.resumeAfter = ready }
@@ -86,7 +91,12 @@ type HolderStatus struct {
 	Configured bool   `json:"configured"`
 	Reachable  bool   `json:"reachable"`
 	Protocol   int    `json:"protocol,omitempty"`
-	Build      string `json:"build,omitempty"` // "" for a holder from before it said
+	Hash       string `json:"hash,omitempty"` // "" for a holder from before it said
+	// Version is evrd's when the holder is the evrd-links shipped with it.
+	Version string `json:"version,omitempty"`
+	// Older: the holder isn't the evrd-links shipped with this evrd, so a
+	// restart of it would update it.
+	Older bool `json:"older,omitempty"`
 }
 
 // holderTTL is how long Holder's answer is kept.
@@ -104,7 +114,14 @@ func (b *Bouncer) Holder(ctx context.Context) HolderStatus {
 	}
 	st := HolderStatus{Configured: true}
 	if hi, err := b.links.Hello(ctx); err == nil {
-		st.Reachable, st.Protocol, st.Build = true, hi.Protocol, hi.Build
+		st.Reachable, st.Protocol, st.Hash = true, hi.Protocol, hi.Hash
+		switch {
+		case b.shipped == "": // nothing to compare with
+		case hi.Hash == b.shipped:
+			st.Version = version.Version
+		default:
+			st.Older = true
+		}
 	}
 	b.holder, b.holderAt = st, time.Now()
 	return st

@@ -91,6 +91,10 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		log.Warn("links_socket is for a single node — in a cluster, users move between nodes instead; ignoring it")
 		linksSocket = ""
 	}
+	var shippedLinks string // read before the chroot hides it
+	if linksSocket != "" {
+		shippedLinks = links.ShippedHash()
+	}
 	if sb := (sandbox.Config{Chroot: cfg.Chroot, User: cfg.User}); sb.Enabled() {
 		// Ports below 1024 need root: bind every port first.
 		addrs := append([]string{cfg.API, cfg.HTTPSListen, cfg.HTTPListen, cfg.Cluster.InternalListen, cfg.Cluster.InternalIRCListen, cfg.IdentdListen}, cfg.Listen...)
@@ -264,6 +268,7 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 	if linksSocket != "" {
 		holder = links.NewClient(linksSocket)
 		b.SetLinks(holder)
+		b.SetShippedHolder(shippedLinks)
 		if !cfg.KeepClientsOut {
 			b.ResumeAfter(clientsBack)
 		}
