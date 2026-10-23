@@ -155,17 +155,19 @@ func (se *session) cmdHelp([]string) {
 }
 
 // markdownTable lays rows out as a Markdown table, the first row its header,
-// the columns padded so they line up in a fixed-width font (the web chat
-// draws it as a table). A "|" in a cell is escaped (\|).
+// the columns padded so they line up. Each line is in IRC's monospace
+// formatting (\x11), so clients with a proportional font (IRCCloud, The
+// Lounge…) line the columns up too. A "|" in a cell stays as it is: no IRC
+// client reads Markdown, and the web chat, which draws it as a table, only
+// takes a "|" with spaces around it as a column break.
 func markdownTable(rows [][]string) []string {
-	esc := func(c string) string { return strings.ReplaceAll(c, "|", "\\|") }
 	var width []int
 	for _, r := range rows {
 		for i, c := range r {
 			if i == len(width) {
 				width = append(width, 0)
 			}
-			width[i] = max(width[i], utf8.RuneCountInString(esc(c)))
+			width[i] = max(width[i], utf8.RuneCountInString(c))
 		}
 	}
 	// (the last column isn't padded and rows don't end in "|": both are
@@ -175,14 +177,14 @@ func markdownTable(rows [][]string) []string {
 		for i, w := range width {
 			c := ""
 			if i < len(cells) {
-				c = esc(cells[i])
+				c = cells[i]
 			}
 			b.WriteString("| " + c)
 			if i < len(width)-1 {
 				b.WriteString(strings.Repeat(" ", max(w-utf8.RuneCountInString(c), 0)) + " ")
 			}
 		}
-		return b.String()
+		return "\x11" + b.String() + "\x11"
 	}
 	out := []string{line(rows[0])}
 	sep := make([]string, len(width))

@@ -287,9 +287,9 @@
       }
       // *status's Markdown tables (help…): consecutive rows make one table,
       // the first its header
-      const cells = m.sender === '*status' && m.kind === 'message' ? tableCells(m.text) : null
+      const last = out.at(-1)
+      const cells = m.sender === '*status' && m.kind === 'message' ? tableCells(m.text, last?.table?.[0].length) : null
       if (cells) {
-        const last = out.at(-1)
         if (last?.table) { if (!isTableRule(cells)) last.table.push(cells) } else out.push({ table: [cells], time: m.time, sender: m.sender })
         continue
       }

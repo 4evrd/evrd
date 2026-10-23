@@ -448,7 +448,7 @@ func TestJumpToANamedServer(t *testing.T) {
 func TestStatusHelpInCaps(t *testing.T) {
 	r := newRig(t)
 	ic := r.attached()
-	ic.status("help", "| CLEARBUFFER            | <channel\\|nick>[,…]")
+	ic.status("help", "\x11| CLEARBUFFER            | <channel|nick>[,…]")
 	ic.status("help", "SET's settings: name, host, port")
 	ic.status("HeLp", "Commands are case-insensitive.")
 	// a *status command sent as its own goes to the network
@@ -459,10 +459,10 @@ func TestStatusHelpInCaps(t *testing.T) {
 func TestMarkdownTable(t *testing.T) {
 	got := strings.Join(markdownTable([][]string{{"Command", "Arguments", "Description"}, {"JUMP", "[server|network]", "Reconnect."}, {"UPTIME", "", "How long."}}), "\n")
 	want := strings.Join([]string{
-		"| Command | Arguments         | Description",
-		"| ------- | ----------------- | ---",
-		"| JUMP    | [server\\|network] | Reconnect.",
-		"| UPTIME  |                   | How long.",
+		"\x11| Command | Arguments        | Description\x11",
+		"\x11| ------- | ---------------- | ---\x11",
+		"\x11| JUMP    | [server|network] | Reconnect.\x11",
+		"\x11| UPTIME  |                  | How long.\x11",
 	}, "\n")
 	if got != want {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
