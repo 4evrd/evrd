@@ -68,6 +68,21 @@ func (se *session) joinedMark(ch string) {
 	se.sendMark(ch, markers[strings.ToLower(ch)])
 }
 
+// startMarks is what the client knows as it attaches to a network: the
+// markers as they are now. Taken before its channels' JOINs, so a marker
+// moved while those and the backlog go out still reaches it (syncMarks).
+func (se *session) startMarks() {
+	se.marks = nil
+	if !se.caps["draft/read-marker"] || se.up == nil {
+		return
+	}
+	markers, err := se.srv.b.ReadMarkers(se.net.ID)
+	if err != nil {
+		return // syncMarks starts from what it finds
+	}
+	se.marks = markers
+}
+
 // syncMarks tells the client about markers moved elsewhere (another client,
 // the web app, the user speaking) since it last heard.
 func (se *session) syncMarks() {
