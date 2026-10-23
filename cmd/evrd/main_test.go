@@ -406,7 +406,7 @@ func TestServes(t *testing.T) {
 
 	// An IRC client signs in; the network connection goes through the
 	// holder.
-	if w := ircRegister(t, irc); !strings.Contains(w, "Welcome to evrd — attached to testnet") {
+	if w := ircRegister(t, irc); !strings.Contains(w, "Welcome to evrd - attached to testnet") {
 		t.Fatalf("welcome: %q", w)
 	}
 	hc := links.NewClient(sock)
