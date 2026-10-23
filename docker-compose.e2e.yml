@@ -20,11 +20,15 @@ services:
       evrd:
         condition: service_started
   # The standalone node and its connection holder, from the same image.
+  # Both start as root and drop to evrd, as a server binding ports below
+  # 1024 does: evrd then binds its ports before dropping, and must leave the
+  # IRC listener the holder kept alone (holder.spec.js restarts it).
   links:
     image: evrd-e2e
     build: !reset null
     pull_policy: never
-    entrypoint: ["evrd-links", "-socket", "/run/evrd-links/links.sock"]
+    user: "0:0"
+    entrypoint: ["evrd-links", "-socket", "/run/evrd-links/links.sock", "-user", "evrd"]
     command: []
     depends_on:
       evrd:
@@ -33,7 +37,8 @@ services:
     image: evrd-e2e
     build: !reset null
     pull_policy: never
-    entrypoint: ["evrd", "-config", "/src/deploy/evrd.solo.conf"]
+    user: "0:0"
+    entrypoint: ["sh", "-c", "{ cat /src/deploy/evrd.solo.conf; echo 'user evrd'; } >/tmp/solo.conf && exec evrd -config /tmp/solo.conf"]
     command: []
     depends_on:
       evrd:
