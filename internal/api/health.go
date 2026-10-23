@@ -82,7 +82,7 @@ func (s *Server) healthOf(ctx context.Context, n store.Network, rangeKey string)
 	start := end.Add(-span)
 	slots := int(span / step)
 
-	evs, err := s.st().UserEvents(ctx, n.UserID, start, 500)
+	evs, err := s.b.UserEvents(ctx, n.UserID, start, 500)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (s *Server) adminNetwork(w http.ResponseWriter, r *http.Request) (store.Net
 		writeErr(w, http.StatusNotFound, "no such network")
 		return store.Network{}, false
 	}
-	n, err := s.st().NetworkByID(r.Context(), nid)
+	n, err := s.acc.NetworkByID(r.Context(), nid)
 	if err != nil || n.UserID != u.ID {
 		writeErr(w, http.StatusNotFound, "no such network")
 		return store.Network{}, false

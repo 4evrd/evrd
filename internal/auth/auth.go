@@ -47,6 +47,8 @@ const touchEvery = time.Minute
 
 // Manager owns sign-in, sessions and the request middleware.
 type Manager struct {
+	SessionServiceImpl // listing sessions and signing out
+
 	st    store.Store
 	acc   *accounts.Service
 	cmu   sync.Mutex // guards cfg (SetConfig)
@@ -90,9 +92,15 @@ type pendingLogin struct {
 // configured.
 func New(ctx context.Context, st store.Store, acc *accounts.Service, cfg config.Auth, publicURL string, log *slog.Logger) (*Manager, error) {
 	m := &Manager{
-		st: st, acc: acc, cfg: cfg, pub: publicURL, log: log, now: time.Now,
-		fails:   newFailureLimiter(10, 15*time.Minute),
-		pending: map[string]pendingLogin{},
+		SessionServiceImpl: NewSessionService(st),
+		st:                 st,
+		acc:                acc,
+		cfg:                cfg,
+		pub:                publicURL,
+		log:                log,
+		now:                time.Now,
+		fails:              newFailureLimiter(10, 15*time.Minute),
+		pending:            map[string]pendingLogin{},
 	}
 	if !cfg.OIDCEnabled() {
 		return m, nil

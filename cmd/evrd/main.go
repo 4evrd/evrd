@@ -30,6 +30,7 @@ import (
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/identd"
 	"github.com/4evrd/evrd/internal/identfile"
+	"github.com/4evrd/evrd/internal/languages"
 	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/listen"
 	"github.com/4evrd/evrd/internal/metricsq"
@@ -352,7 +353,12 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 
 	// Downstream IRC listener for native clients (Hexchat, irssi, …).
 	irc := client.NewServer(b, acc, log, cfg.TLSCert, cfg.TLSKey)
-	srv := api.NewServer(b, acc, am, cfg, irc, log)
+	srv := api.NewServer(b, api.Services{
+		Accounts:  acc,
+		Auth:      am,
+		Languages: languages.New(st),
+		Cluster:   cluster.NewStateService(st),
+	}, cfg, irc, log)
 	srv.SetMetrics(metricsq.New(cfg.Metrics.QueryURL))
 	srv.SetSettings(sm)
 	irc.SetTLSConfig(certMgr.IRCConfig())

@@ -84,6 +84,8 @@ func HashPassword(pw string) (string, error) {
 
 // Service applies the rules against the store.
 type Service struct {
+	NetworkServiceImpl // users' networks
+
 	st  store.Store
 	now func() time.Time
 
@@ -140,7 +142,7 @@ func (s *Service) CheckBindHost(u store.User, bind string) error {
 }
 
 func New(st store.Store, defaults config.Limits) *Service {
-	return &Service{st: st, defaults: defaults, now: time.Now}
+	return &Service{NetworkServiceImpl: NewNetworkService(st), st: st, defaults: defaults, now: time.Now}
 }
 
 // Limits are a user's effective limits; 0 means unlimited.
