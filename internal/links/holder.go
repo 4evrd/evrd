@@ -19,12 +19,14 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/4evrd/evrd/internal/irctls"
-	"github.com/4evrd/evrd/internal/version"
 )
 
 // Holder keeps links (see the package comment).
 type Holder struct {
 	log *slog.Logger
+	// Hash is the holder's binary (SelfHash, read as it started), told to
+	// evrd so it can tell whether it's the evrd-links shipped with it.
+	Hash string
 	// MaxBuffer is the most bytes kept per link while detached; older lines
 	// are dropped (and counted) past it.
 	MaxBuffer int
@@ -139,7 +141,7 @@ func (h *Holder) handle(c *net.UnixConn) {
 	case "listen":
 		h.listen(c, w, req, fd)
 	case "hello":
-		writeJSON(w, response{OK: true, Protocol: Version, Build: version.Version})
+		writeJSON(w, response{OK: true, Protocol: Version, Hash: h.Hash})
 		c.Close()
 	case "listeners":
 		writeJSON(w, response{OK: true, Listeners: h.listenerList()})

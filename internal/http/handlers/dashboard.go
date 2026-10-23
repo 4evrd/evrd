@@ -614,7 +614,8 @@ func (s *Handlers) AdminOverview(w http.ResponseWriter, r *http.Request) {
 func (s *Handlers) holderStatus(ctx context.Context) map[string]any {
 	h := s.b.Holder(ctx)
 	return map[string]any{
-		"configured": h.Configured, "reachable": h.Reachable, "protocol": h.Protocol, "build": h.Build,
+		"configured": h.Configured, "reachable": h.Reachable, "protocol": h.Protocol,
+		"hash": h.Hash, "version": h.Version, "older": h.Older,
 		"holdsClients": h.Reachable && h.Protocol >= 2 && !s.cfg().KeepClientsOut,
 	}
 }

@@ -210,13 +210,14 @@
           <div class="kv"><div class="od-field"><span class="k">{t('admin.evrdVersion')}</span><span class="v mono" data-testid="sw-evrd">{ov.version}</span></div></div>
           <div class="kv">
             <div class="od-field"><span class="k">{t('admin.holder')}</span>
-              <span class="v" data-testid="sw-holder">{#if !h.configured}{t('admin.holderNotConfigured')}{:else if !h.reachable}{t('admin.holderUnreachable')}{:else if h.build}{t('admin.holderBuild', { build: h.build, protocol: h.protocol })}{:else}{t('admin.holderProtocol', { protocol: h.protocol })}{/if}</span></div>
+              <span class="v" data-testid="sw-holder">{#if !h.configured}{t('admin.holderNotConfigured')}{:else if !h.reachable}{t('admin.holderUnreachable')}{:else if h.version}{t('admin.holderBuild', { build: h.version, protocol: h.protocol })}{:else if h.older}{t(h.hash ? 'admin.holderOlderHash' : 'admin.holderOlder', { hash: h.hash, protocol: h.protocol })}{:else if h.hash}{t('admin.holderHash', { hash: h.hash, protocol: h.protocol })}{:else}{t('admin.holderProtocol', { protocol: h.protocol })}{/if}</span></div>
             {#if h.configured && !h.reachable}<span class="chip bad">{t('admin.down')}</span>
             {:else if h.holdsClients}<span class="chip ok">{t('admin.holderKeepsClients')}</span>
             {:else if h.configured}<span class="chip {h.protocol < 2 ? 'warn' : ''}">{t('admin.holderLinksOnly')}</span>{/if}
           </div>
         </div>
-        {#if h.reachable && h.protocol < 2}<p class="desc" style="margin-top:var(--s3);font-size:var(--fs-xs)">{t('admin.holderOld')}</p>{/if}
+        {#if h.reachable && h.protocol < 2}<p class="desc" style="margin-top:var(--s3);font-size:var(--fs-xs)">{t('admin.holderOld')}</p>
+        {:else if h.reachable && h.older}<p class="desc" style="margin-top:var(--s3);font-size:var(--fs-xs)" data-testid="sw-holder-older">{t('admin.holderUpdate')}</p>{/if}
       </section>
       </div>
     </div>

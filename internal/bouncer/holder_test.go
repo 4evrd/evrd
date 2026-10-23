@@ -33,12 +33,26 @@ func TestHolderStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	go links.NewHolder(slog.New(slog.NewTextHandler(io.Discard, nil))).Serve(r.ctx, ln)
+	h := links.NewHolder(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	h.Hash = "0123456789ab"
+	go h.Serve(r.ctx, ln)
 	if st := r.b.Holder(r.ctx); st.Reachable {
 		t.Fatalf("not kept for a while: %+v", st)
 	}
 	r.b.holderAt = r.b.holderAt.Add(-holderTTL)
-	if st := r.b.Holder(r.ctx); !st.Reachable || st.Protocol != links.Version || st.Build != version.Version {
-		t.Fatalf("running: %+v", st)
+	if st := r.b.Holder(r.ctx); !st.Reachable || st.Protocol != links.Version || st.Hash != h.Hash || st.Version != "" || st.Older {
+		t.Fatalf("running, nothing shipped to compare with: %+v", st)
+	}
+
+	// the evrd-links shipped with evrd is the holder, then another one
+	r.b.SetShippedHolder(h.Hash)
+	r.b.holderAt = r.b.holderAt.Add(-holderTTL)
+	if st := r.b.Holder(r.ctx); st.Version != version.Version || st.Older {
+		t.Fatalf("the shipped one: %+v", st)
+	}
+	r.b.SetShippedHolder("ba9876543210")
+	r.b.holderAt = r.b.holderAt.Add(-holderTTL)
+	if st := r.b.Holder(r.ctx); st.Version != "" || !st.Older {
+		t.Fatalf("an older one: %+v", st)
 	}
 }

@@ -104,7 +104,8 @@ func (o *options) run(parent context.Context, stdout, stderr io.Writer) int {
 		}
 	}
 
-	sandbox.Preload() // CA certificates, for checking servers' certificates
+	self := links.SelfHash() // before the sandbox: it can't read files after
+	sandbox.Preload()        // CA certificates, for checking servers' certificates
 	sb := sandbox.Config{Chroot: o.chroot, User: o.user, Promises: "stdio inet unix recvfd"}
 	if err := sandbox.Enter(sb); err != nil {
 		log.Error("sandbox", "err", err)
@@ -113,6 +114,7 @@ func (o *options) run(parent context.Context, stdout, stderr io.Writer) int {
 
 	h := links.NewHolder(log)
 	h.MaxBuffer = o.buffer
+	h.Hash = self
 	ctx, stop := signal.NotifyContext(parent, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	log.Info("holding IRC connections", "socket", o.socket, "chroot", o.chroot, "user", o.user)
