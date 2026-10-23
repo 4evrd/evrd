@@ -269,7 +269,7 @@ func (se *session) attach() bool {
 		return false
 	}
 
-	nets, _ := se.srv.b.Store().ListNetworks(u.ID)
+	nets, _ := se.srv.b.Store().ListNetworks(context.Background(), u.ID)
 	// A bouncer-networks client that names no network gets a bouncer
 	// connection, bound to none.
 	unbound := network == "" && se.bindID == "" && se.caps["soju.im/bouncer-networks"]

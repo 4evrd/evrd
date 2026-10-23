@@ -115,7 +115,7 @@ func TestSASLRefusals(t *testing.T) {
 	// a suspended account
 	u := r.user
 	u.Suspended = true
-	r.st.UpdateUser(u)
+	r.st.UpdateUser(t.Context(), u)
 	ic.send("AUTHENTICATE PLAIN")
 	ic.expect("AUTHENTICATE +")
 	ic.send("AUTHENTICATE " + plain("", "alice", "alice-password"))

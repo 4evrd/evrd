@@ -53,7 +53,7 @@ func TestNetworkSettingsRoundTrip(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("reorder: %d %v", code, out)
 	}
-	nets, _ := e.st.ListNetworks(1)
+	nets, _ := e.st.ListNetworks(t.Context(), 1)
 	var saved store.Network
 	for _, x := range nets {
 		if x.Name == "libera" {
@@ -167,7 +167,7 @@ func TestAllowedHostsBlockSignIn(t *testing.T) {
 	e := newEnv(t)
 	u := e.user("ivy", store.RoleUser)
 	u.AllowedHosts = []string{"10.0.0.0/8"}
-	e.st.UpdateUser(u)
+	e.st.UpdateUser(t.Context(), u)
 	if code, out := e.anon().do("POST", "/auth/password", map[string]string{"username": "ivy", "password": "ivy-password"}); code != 403 {
 		t.Fatalf("sign-in from outside the allowed hosts: %d %v", code, out)
 	}

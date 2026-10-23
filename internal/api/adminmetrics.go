@@ -194,8 +194,8 @@ func (s *Server) handleAdminMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The busiest networks, with their owners' and networks' names.
-	users, _ := s.st().ListUsers()
-	nets, _ := s.st().AllNetworks()
+	users, _ := s.st().ListUsers(context.Background())
+	nets, _ := s.st().AllNetworks(context.Background())
 	uname := map[string]string{}
 	for _, u := range users {
 		uname[strconv.FormatInt(u.ID, 10)] = u.Username

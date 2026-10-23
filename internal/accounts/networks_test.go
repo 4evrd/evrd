@@ -184,7 +184,7 @@ func TestCheckNetworkName(t *testing.T) {
 	s, st := newService(t, config.Limits{})
 	alice, _ := s.Create(CreateInput{Username: "alice"})
 	bob, _ := s.Create(CreateInput{Username: "bob"})
-	libera, err := st.CreateNetwork(store.Network{UserID: alice.ID, Name: "Libera", Nick: "alice", Host: "irc.libera.chat"})
+	libera, err := st.CreateNetwork(t.Context(), store.Network{UserID: alice.ID, Name: "Libera", Nick: "alice", Host: "irc.libera.chat"})
 	if err != nil {
 		t.Fatal(err)
 	}

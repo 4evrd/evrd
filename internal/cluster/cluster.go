@@ -106,7 +106,7 @@ func (c *Cluster) HeldCount() int {
 
 // Owner is the node holding the user's lease.
 func (c *Cluster) Owner(userID int64) (store.Node, error) {
-	n, _, ok, err := c.st.LeaseOwner(userID, c.now())
+	n, _, ok, err := c.st.LeaseOwner(context.Background(), userID, c.now())
 	if err != nil {
 		return store.Node{}, err
 	}
@@ -182,7 +182,7 @@ func (c *Cluster) Drain() {
 	now := c.now()
 	for uid := range held {
 		c.hooks.Lose(uid)
-		if err := c.st.ReleaseLease(uid, c.self.ID, now); err != nil {
+		if err := c.st.ReleaseLease(context.Background(), uid, c.self.ID, now); err != nil {
 			c.log.Warn("release lease", "user", uid, "err", err)
 		}
 	}
@@ -190,7 +190,7 @@ func (c *Cluster) Drain() {
 	// their next tick rather than once our heartbeat goes stale.
 	gone := c.self
 	gone.HeartbeatAt = time.Unix(0, 0)
-	if err := c.st.UpsertNode(gone); err != nil {
+	if err := c.st.UpsertNode(context.Background(), gone); err != nil {
 		c.log.Warn("leave the cluster", "err", err)
 	}
 	if len(held) > 0 {
@@ -206,21 +206,21 @@ func (c *Cluster) Tick() {
 	}
 	self := c.self
 	self.HeartbeatAt = now
-	err := c.st.UpsertNode(self)
+	err := c.st.UpsertNode(context.Background(), self)
 	var nodes []store.Node
 	var users []store.User
 	if err == nil {
-		nodes, err = c.st.LiveNodes(now.Add(-c.liveFor()))
+		nodes, err = c.st.LiveNodes(context.Background(), now.Add(-c.liveFor()))
 	}
 	if err == nil {
-		users, err = c.st.ListUsers()
+		users, err = c.st.ListUsers(context.Background())
 	}
 	if err == nil {
-		err = c.st.RenewLeases(self.ID, now.Add(c.ttl), now)
+		err = c.st.RenewLeases(context.Background(), self.ID, now.Add(c.ttl), now)
 	}
 	var stillHeld []int64
 	if err == nil {
-		stillHeld, err = c.st.HeldLeases(self.ID, now)
+		stillHeld, err = c.st.HeldLeases(context.Background(), self.ID, now)
 	}
 	if err != nil {
 		c.fence(now, err)
@@ -255,7 +255,7 @@ func (c *Cluster) Tick() {
 		mine := c.Owns(u.ID)
 		switch {
 		case owner.ID == self.ID && !mine:
-			ok, err := c.st.AcquireLease(u.ID, self.ID, now.Add(c.ttl), now)
+			ok, err := c.st.AcquireLease(context.Background(), u.ID, self.ID, now.Add(c.ttl), now)
 			if err != nil {
 				c.log.Warn("acquire lease", "user", u.Username, "err", err)
 				continue
@@ -277,7 +277,7 @@ func (c *Cluster) Tick() {
 	}
 	if c.Leader() {
 		// Forget nodes gone for an hour (old deploys), so the table stays small.
-		if err := c.st.DeleteNodesBefore(now.Add(-time.Hour)); err != nil {
+		if err := c.st.DeleteNodesBefore(context.Background(), now.Add(-time.Hour)); err != nil {
 			c.log.Warn("drop old nodes", "err", err)
 		}
 	}
@@ -296,7 +296,7 @@ func (c *Cluster) lose(uid int64, release bool) {
 	c.mu.Unlock()
 	c.hooks.Lose(uid) // stop first, so the next owner never overlaps us
 	if release {
-		if err := c.st.ReleaseLease(uid, c.self.ID, c.now()); err != nil {
+		if err := c.st.ReleaseLease(context.Background(), uid, c.self.ID, c.now()); err != nil {
 			c.log.Warn("release lease", "user", uid, "err", err)
 		}
 	}

@@ -26,41 +26,41 @@ func (f *failing) fail(settings, save, nodeConf error) {
 	f.mu.Unlock()
 }
 
-func (f *failing) Settings() ([]store.Setting, error) {
+func (f *failing) Settings(ctx context.Context) ([]store.Setting, error) {
 	f.mu.Lock()
 	err := f.settings
 	f.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	return f.Store.Settings()
+	return f.Store.Settings(ctx)
 }
 
-func (f *failing) SaveSettings(set map[string]string, del []string, by string) error {
+func (f *failing) SaveSettings(ctx context.Context, set map[string]string, del []string, by string) error {
 	f.mu.Lock()
 	err := f.save
 	f.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	return f.Store.SaveSettings(set, del, by)
+	return f.Store.SaveSettings(ctx, set, del, by)
 }
 
-func (f *failing) SetNodeConf(c store.NodeConf) error {
+func (f *failing) SetNodeConf(ctx context.Context, c store.NodeConf) error {
 	f.mu.Lock()
 	err := f.nodeConf
 	f.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	return f.Store.SetNodeConf(c)
+	return f.Store.SetNodeConf(ctx, c)
 }
 
-func (f *failing) NodeConfs() ([]store.NodeConf, error) {
+func (f *failing) NodeConfs(ctx context.Context) ([]store.NodeConf, error) {
 	if f.nodeConfs != nil {
 		return nil, f.nodeConfs
 	}
-	return f.Store.NodeConfs()
+	return f.Store.NodeConfs(ctx)
 }
 
 func TestRunFollowsOtherNodes(t *testing.T) {
@@ -126,7 +126,7 @@ func TestRunSurvivesStoreErrors(t *testing.T) {
 	go func() { m.Run(ctx); close(done) }()
 	time.Sleep(40 * time.Millisecond)
 	f.fail(nil, nil, nil)
-	st.SaveSettings(map[string]string{"max_clients": "6"}, nil, "other")
+	st.SaveSettings(context.Background(), map[string]string{"max_clients": "6"}, nil, "other")
 	deadline := time.Now().Add(5 * time.Second)
 	for m.Config().Limits.MaxClients != 6 {
 		if time.Now().After(deadline) {
@@ -148,13 +148,13 @@ func TestNewErrors(t *testing.T) {
 	// A value in the database that no longer validates fails startup
 	// loudly rather than being half-applied.
 	f.fail(nil, nil, nil)
-	st.SaveSettings(map[string]string{"max_clients": "many"}, nil, "old")
+	st.SaveSettings(t.Context(), map[string]string{"max_clients": "many"}, nil, "old")
 	if _, err := New(f, load(t, path), "n1", quiet); err == nil || !strings.Contains(err.Error(), "max_clients") {
 		t.Errorf("a bad stored value: %v", err)
 	}
 	// Keys this version doesn't know are ignored, and NodeConfs failing
 	// isn't fatal.
-	st.SaveSettings(map[string]string{"from_the_future": "1"}, []string{"max_clients"}, "new")
+	st.SaveSettings(t.Context(), map[string]string{"from_the_future": "1"}, []string{"max_clients"}, "new")
 	f.nodeConfs = errors.New("no table")
 	m, err := New(f, load(t, path), "n1", quiet)
 	if err != nil {

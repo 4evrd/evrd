@@ -246,7 +246,7 @@ func TestOIDCSignIn(t *testing.T) {
 	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/" {
 		t.Fatalf("callback: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
-	u, err := st.UserBySubject("logto-1")
+	u, err := st.UserBySubject(t.Context(), "logto-1")
 	if err != nil || u.Username != "alice" || u.Email != "alice@example.org" || u.LastLoginAt == nil {
 		t.Fatalf("provisioned: %v %+v", err, u)
 	}
@@ -254,7 +254,7 @@ func TestOIDCSignIn(t *testing.T) {
 	if !c.Secure || !c.HttpOnly {
 		t.Fatalf("cookie: %+v", c)
 	}
-	sess, err := st.SessionByID(Hash(c.Value))
+	sess, err := st.SessionByID(t.Context(), Hash(c.Value))
 	if err != nil || sess.UserID != u.ID || sess.Method != "oidc" || sess.IDToken == "" || sess.IP != "198.51.100.7" {
 		t.Fatalf("session: %v %+v", err, sess)
 	}
@@ -272,7 +272,7 @@ func TestOIDCSignIn(t *testing.T) {
 		next.Query().Get("client_id") != testClientID || next.Query().Get("post_logout_redirect_uri") != testPublic+"/" {
 		t.Fatalf("logout redirect: %q", body.Redirect)
 	}
-	if _, err := st.SessionByID(sess.ID); err == nil {
+	if _, err := st.SessionByID(t.Context(), sess.ID); err == nil {
 		t.Fatal("the session outlived sign-out")
 	}
 }
@@ -282,8 +282,8 @@ func TestOIDCAdminRoleFromToken(t *testing.T) {
 	m, st, _ := newOIDCManager(t, p, config.Auth{OIDCAutoCreate: true, OIDCAdminRole: "evrd-admin"})
 	signIn(t, m, p, map[string]any{"sub": "a", "username": "alice", "roles": []string{"evrd-admin"}})
 	signIn(t, m, p, map[string]any{"sub": "b", "username": "bob", "roles": []string{"other"}})
-	a, _ := st.UserBySubject("a")
-	b, _ := st.UserBySubject("b")
+	a, _ := st.UserBySubject(t.Context(), "a")
+	b, _ := st.UserBySubject(t.Context(), "b")
 	if !a.IsAdmin() || b.IsAdmin() {
 		t.Fatalf("roles: alice %s, bob %s", a.Role, b.Role)
 	}
@@ -371,16 +371,16 @@ func TestOIDCCallbackRefusals(t *testing.T) {
 		}, "bad_username"},
 		{"suspended", config.Auth{OIDCAutoCreate: true}, func(m *Manager, st store.Store) *httptest.ResponseRecorder {
 			signIn(t, m, p, good)
-			u, _ := st.UserBySubject("s1")
+			u, _ := st.UserBySubject(t.Context(), "s1")
 			u.Suspended = true
-			st.UpdateUser(u)
+			st.UpdateUser(t.Context(), u)
 			return signIn(t, m, p, good)
 		}, "suspended"},
 		{"address not allowed", config.Auth{OIDCAutoCreate: true}, func(m *Manager, st store.Store) *httptest.ResponseRecorder {
 			signIn(t, m, p, good)
-			u, _ := st.UserBySubject("s1")
+			u, _ := st.UserBySubject(t.Context(), "s1")
 			u.AllowedHosts = []string{"10.0.0.0/8"}
-			st.UpdateUser(u)
+			st.UpdateUser(t.Context(), u)
 			return signIn(t, m, p, good)
 		}, "host_denied"},
 	} {

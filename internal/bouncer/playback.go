@@ -7,6 +7,7 @@ package bouncer
 // the web app both go through here.
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"time"
@@ -26,7 +27,7 @@ type Playback struct {
 // Playback loads a network's playback settings for u. except is an IRC
 // client not to count as on the network (the one asking, as it attaches).
 func (b *Bouncer) Playback(n store.Network, u store.User, except string) (Playback, error) {
-	bps, err := b.store.BufferPlaybacks(n.ID)
+	bps, err := b.store.BufferPlaybacks(context.Background(), n.ID)
 	p := Playback{Buffers: bps, User: u}
 	if at := bps[""].ClearedAt; at != nil {
 		p.LastOn = *at
@@ -113,20 +114,20 @@ func (b *Bouncer) Waiting(p Playback, networkID int64, name string) int {
 
 // UpdatePlayback changes buffers' playback settings ("" is the network's).
 func (b *Bouncer) UpdatePlayback(networkID int64, buffers []string, f func(*store.BufferPlayback)) error {
-	return b.store.UpdateBufferPlayback(networkID, buffers, f)
+	return b.store.UpdateBufferPlayback(context.Background(), networkID, buffers, f)
 }
 
 // ClearBuffers starts buffers' playback over from now.
 func (b *Bouncer) ClearBuffers(networkID int64, buffers []string) error {
 	now := time.Now()
-	return b.store.UpdateBufferPlayback(networkID, buffers, func(bp *store.BufferPlayback) { bp.ClearedAt = &now })
+	return b.store.UpdateBufferPlayback(context.Background(), networkID, buffers, func(bp *store.BufferPlayback) { bp.ClearedAt = &now })
 }
 
 // MarkOnNetwork records that an IRC client is (or was, until now) on a
 // network, so its auto-clearing buffers start over from here.
 func (b *Bouncer) MarkOnNetwork(networkID int64) error {
 	now := time.Now()
-	return b.store.UpdateBufferPlayback(networkID, []string{""}, func(bp *store.BufferPlayback) { bp.ClearedAt = &now })
+	return b.store.UpdateBufferPlayback(context.Background(), networkID, []string{""}, func(bp *store.BufferPlayback) { bp.ClearedAt = &now })
 }
 
 // BufferNames is a network's buffers: those with history, and channels

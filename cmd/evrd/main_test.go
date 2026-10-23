@@ -280,7 +280,7 @@ func setupUser(t *testing.T, dir string) {
 	}
 	host, port, _ := net.SplitHostPort(testirc.Start(t))
 	p, _ := strconv.Atoi(port)
-	if _, err := st.CreateNetwork(store.Network{UserID: u.ID, Name: "testnet", Host: host, Port: p, Nick: "alice", Channels: []string{"#evrd"}}); err != nil {
+	if _, err := st.CreateNetwork(t.Context(), store.Network{UserID: u.ID, Name: "testnet", Host: host, Port: p, Nick: "alice", Channels: []string{"#evrd"}}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -450,7 +450,7 @@ func TestServes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = st.SaveSettings(map[string]string{"irc_host": "irc.changed", "metrics_url": "http://metrics.invalid", "network_directory": dirs[1]}, nil, "test")
+	err = st.SaveSettings(ctx, map[string]string{"irc_host": "irc.changed", "metrics_url": "http://metrics.invalid", "network_directory": dirs[1]}, nil, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +463,7 @@ func TestServes(t *testing.T) {
 	}
 	// ...the directory too: read from the new file, and a copy stored
 	for {
-		if c, _ := st.Cached("network-directory"); strings.Contains(c, dirs[1]) {
+		if c, _ := st.Cached(ctx, "network-directory"); strings.Contains(c, dirs[1]) {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -579,7 +579,7 @@ func TestStartupErrors(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer st.Close()
-			if err := st.SaveSettings(map[string]string{"max_networks": "lots"}, nil, "test"); err != nil {
+			if err := st.SaveSettings(t.Context(), map[string]string{"max_networks": "lots"}, nil, "test"); err != nil {
 				t.Fatal(err)
 			}
 			return nil

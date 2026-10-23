@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"os"
 
@@ -17,7 +18,7 @@ func (s *Server) SetSettings(m *settings.Manager) { s.settings = m }
 func (s *Server) SetCerts(m *certs.Manager) { s.certs = m }
 
 func (s *Server) settingsDTO() map[string]any {
-	confs, _ := s.st().NodeConfs()
+	confs, _ := s.st().NodeConfs(context.Background())
 	nodes := []map[string]any{}
 	for _, c := range confs {
 		nodes = append(nodes, map[string]any{"node": c.NodeID, "path": c.Path, "wroteAt": unixT(c.WroteAt), "error": c.Error})

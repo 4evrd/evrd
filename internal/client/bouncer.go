@@ -10,6 +10,7 @@ package client
 // https://codeberg.org/emersion/soju/src/branch/master/doc/ext/bouncer-networks.md
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -81,7 +82,7 @@ func (se *session) bouncerCommand(p []string) {
 
 // netByID finds one of the user's networks by its netid, failing for sub.
 func (se *session) netByID(sub, id string) (store.Network, bool) {
-	nets, _ := se.srv.b.Store().ListNetworks(se.uid)
+	nets, _ := se.srv.b.Store().ListNetworks(context.Background(), se.uid)
 	for _, n := range nets {
 		if strconv.FormatInt(n.ID, 10) == id {
 			return n, true
@@ -124,7 +125,7 @@ func (se *session) networkAttrs(n store.Network) map[string]string {
 // networks is every network's attributes, by netid.
 func (se *session) bouncerNetworks() map[string]map[string]string {
 	out := map[string]map[string]string{}
-	nets, _ := se.srv.b.Store().ListNetworks(se.uid)
+	nets, _ := se.srv.b.Store().ListNetworks(context.Background(), se.uid)
 	for _, n := range nets {
 		out[strconv.FormatInt(n.ID, 10)] = se.networkAttrs(n)
 	}
@@ -252,7 +253,7 @@ func (se *session) applyAttrs(n *store.Network, attrs map[string]string, sub, id
 		se.bouncerFail("INVALID_ATTRIBUTE", sub, id, "*", err.Error())
 		return false
 	}
-	nets, _ := se.srv.b.Store().ListNetworks(se.uid)
+	nets, _ := se.srv.b.Store().ListNetworks(context.Background(), se.uid)
 	for _, o := range nets {
 		if o.ID != n.ID && strings.EqualFold(o.Name, n.Name) {
 			se.bouncerFail("INVALID_ATTRIBUTE", sub, id, "name", "You already have a network called "+n.Name)
@@ -270,7 +271,7 @@ func (se *session) addNetwork(attrs map[string]string) {
 		se.bouncerFail("NEED_ATTRIBUTE", sub, "*", "host", "A host is needed")
 		return
 	}
-	u, err := se.srv.b.Store().UserByID(se.uid)
+	u, err := se.srv.b.Store().UserByID(context.Background(), se.uid)
 	if err != nil {
 		se.bouncerFail("UNKNOWN_ERROR", sub, "*", err.Error())
 		return
@@ -287,7 +288,7 @@ func (se *session) addNetwork(attrs map[string]string) {
 		se.bouncerFail("UNKNOWN_ERROR", sub, "*", err.Error())
 		return
 	}
-	n, err = se.srv.b.Store().CreateNetwork(n)
+	n, err = se.srv.b.Store().CreateNetwork(context.Background(), n)
 	if err != nil {
 		se.bouncerFail("UNKNOWN_ERROR", sub, "*", err.Error())
 		return
@@ -308,7 +309,7 @@ func (se *session) changeNetwork(id string, attrs map[string]string) {
 	if !se.applyAttrs(&n, attrs, sub, id) {
 		return
 	}
-	if err := se.srv.b.Store().UpdateNetwork(n); err != nil {
+	if err := se.srv.b.Store().UpdateNetwork(context.Background(), n); err != nil {
 		se.bouncerFail("UNKNOWN_ERROR", sub, id, err.Error())
 		return
 	}

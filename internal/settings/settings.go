@@ -45,7 +45,7 @@ type Manager struct {
 // New loads the database's settings over base.
 func New(st store.Store, base *config.Config, nodeID string, log *slog.Logger) (*Manager, error) {
 	m := &Manager{st: st, base: base, nodeID: nodeID, log: log, managed: map[string]bool{}}
-	if confs, err := st.NodeConfs(); err == nil {
+	if confs, err := st.NodeConfs(context.Background()); err == nil {
 		for _, c := range confs {
 			if c.NodeID == nodeID && c.Path == base.Path {
 				for _, k := range c.Keys {
@@ -96,7 +96,7 @@ func (m *Manager) Run(ctx context.Context) {
 // reload reads the settings; on a change it rebuilds the config, runs the
 // hooks and writes the config file if that's on.
 func (m *Manager) reload(first bool) (bool, error) {
-	rows, err := m.st.Settings()
+	rows, err := m.st.Settings(context.Background())
 	if err != nil {
 		return false, err
 	}
@@ -169,7 +169,7 @@ func (m *Manager) writeConf(values map[string]string) {
 		rec.Keys = append(rec.Keys, k)
 	}
 	m.mu.Unlock()
-	if err := m.st.SetNodeConf(rec); err != nil {
+	if err := m.st.SetNodeConf(context.Background(), rec); err != nil {
 		m.log.Warn("record config write", "err", err)
 	}
 }
@@ -211,7 +211,7 @@ func (m *Manager) Save(set map[string]string, del []string, by string) error {
 	if err := c.CheckSignIn(); err != nil {
 		return err
 	}
-	if err := m.st.SaveSettings(set, del, by); err != nil {
+	if err := m.st.SaveSettings(context.Background(), set, del, by); err != nil {
 		return err
 	}
 	_, err = m.reload(false)

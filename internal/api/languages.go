@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -140,7 +141,7 @@ func packDTO(code, name, messages string, updated int64) map[string]any {
 
 // handleLanguages lists the server's packs. Public: the sign-in page uses it.
 func (s *Server) handleLanguages(w http.ResponseWriter, r *http.Request) {
-	list, err := s.st().LanguagePacks()
+	list, err := s.st().LanguagePacks(r.Context())
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -154,7 +155,7 @@ func (s *Server) handleLanguages(w http.ResponseWriter, r *http.Request) {
 
 // handleLanguage is one server pack with its messages. Public.
 func (s *Server) handleLanguage(w http.ResponseWriter, r *http.Request) {
-	p, err := s.st().LanguagePack(r.PathValue("code"))
+	p, err := s.st().LanguagePack(r.Context(), r.PathValue("code"))
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -172,12 +173,12 @@ func (s *Server) handlePutLanguage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	admin := auth.User(r).Username
-	if err := s.st().PutLanguagePack(store.LanguagePack{Code: p.Code, Name: p.Name, Messages: messages, UpdatedBy: admin}); err != nil {
+	if err := s.st().PutLanguagePack(r.Context(), store.LanguagePack{Code: p.Code, Name: p.Name, Messages: messages, UpdatedBy: admin}); err != nil {
 		s.fail(w, err)
 		return
 	}
 	s.log.Info("language pack saved", "admin", admin, "code", p.Code, "messages", len(p.Messages))
-	saved, err := s.st().LanguagePack(p.Code)
+	saved, err := s.st().LanguagePack(r.Context(), p.Code)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -187,7 +188,7 @@ func (s *Server) handlePutLanguage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDeleteLanguage(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
-	if err := s.st().DeleteLanguagePack(code); err != nil {
+	if err := s.st().DeleteLanguagePack(r.Context(), code); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -199,7 +200,7 @@ func (s *Server) handleDeleteLanguage(w http.ResponseWriter, r *http.Request) {
 
 // myPackDTO is what /api/me says about the user's own pack (nil: none).
 func (s *Server) myPackDTO(userID int64) any {
-	p, err := s.st().UserLanguagePack(userID)
+	p, err := s.st().UserLanguagePack(context.Background(), userID)
 	if err != nil {
 		return nil
 	}
@@ -209,7 +210,7 @@ func (s *Server) myPackDTO(userID int64) any {
 // handleMyLanguagePack is the user's own pack with its messages; 404 when
 // they have none.
 func (s *Server) handleMyLanguagePack(w http.ResponseWriter, r *http.Request) {
-	p, err := s.st().UserLanguagePack(auth.User(r).ID)
+	p, err := s.st().UserLanguagePack(r.Context(), auth.User(r).ID)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -223,7 +224,7 @@ func (s *Server) handlePutMyLanguagePack(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	id := auth.User(r).ID
-	if err := s.st().PutUserLanguagePack(store.UserLanguagePack{UserID: id, Code: p.Code, Name: p.Name, Messages: messages}); err != nil {
+	if err := s.st().PutUserLanguagePack(r.Context(), store.UserLanguagePack{UserID: id, Code: p.Code, Name: p.Name, Messages: messages}); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -231,7 +232,7 @@ func (s *Server) handlePutMyLanguagePack(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleDeleteMyLanguagePack(w http.ResponseWriter, r *http.Request) {
-	if err := s.st().DeleteUserLanguagePack(auth.User(r).ID); err != nil {
+	if err := s.st().DeleteUserLanguagePack(r.Context(), auth.User(r).ID); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -244,10 +245,10 @@ func (s *Server) languageAllowed(u store.User, code string) bool {
 	if slices.Contains(Languages, code) {
 		return true
 	}
-	packs, _ := s.st().LanguagePacks()
+	packs, _ := s.st().LanguagePacks(context.Background())
 	if slices.ContainsFunc(packs, func(p store.LanguagePack) bool { return p.Code == code }) {
 		return true
 	}
-	p, err := s.st().UserLanguagePack(u.ID)
+	p, err := s.st().UserLanguagePack(context.Background(), u.ID)
 	return err == nil && p.Code == code
 }

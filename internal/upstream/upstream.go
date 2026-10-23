@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	"reflect"
+
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/irc"
 	"github.com/4evrd/evrd/internal/irctls"
@@ -37,7 +39,6 @@ import (
 	"github.com/4evrd/evrd/internal/modules"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/telemetry"
-	"reflect"
 )
 
 // Status is the lifecycle state of an upstream connection.

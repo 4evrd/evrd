@@ -41,8 +41,8 @@ func TestUnreadAndMarkRead(t *testing.T) {
 	}
 	defer hist.Close()
 	b := New(st, hist, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	u, _ := st.CreateUser(store.User{Username: "alice"})
-	n, _ := st.CreateNetwork(store.Network{UserID: u.ID, Name: "net"})
+	u, _ := st.CreateUser(t.Context(), store.User{Username: "alice"})
+	n, _ := st.CreateNetwork(t.Context(), store.Network{UserID: u.ID, Name: "net"})
 	b.initReads(n)
 
 	now := time.Now()
@@ -81,7 +81,7 @@ func TestUnreadAndMarkRead(t *testing.T) {
 	if s := get("#go"); s.Unread != 0 || s.ReadAt.IsZero() {
 		t.Fatalf("#go after mark: %+v", s)
 	}
-	markers, _ := st.ReadMarkers(n.ID)
+	markers, _ := st.ReadMarkers(t.Context(), n.ID)
 	if _, ok := markers["#go"]; !ok {
 		t.Fatalf("read marker not stored: %v", markers)
 	}
@@ -99,8 +99,8 @@ func TestBuffersHideTheNameless(t *testing.T) {
 	}
 	defer hist.Close()
 	b := New(st, hist, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	u, _ := st.CreateUser(store.User{Username: "alice"})
-	n, _ := st.CreateNetwork(store.Network{UserID: u.ID, Name: "net"})
+	u, _ := st.CreateUser(t.Context(), store.User{Username: "alice"})
+	n, _ := st.CreateNetwork(t.Context(), store.Network{UserID: u.ID, Name: "net"})
 
 	// what older versions filed prefix-less server notices under
 	now := time.Now()

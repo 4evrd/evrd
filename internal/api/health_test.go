@@ -101,7 +101,7 @@ func TestNetworkHealth(t *testing.T) {
 		{UserID: gil.ID, At: now.Add(-time.Minute), Kind: "attached", Title: "irssi attached"},
 		{UserID: gil.ID, NetworkID: nid, At: now.Add(-3 * 24 * time.Hour), Kind: "netsplit", Title: "three days ago"},
 	} {
-		if err := e.st.AddUserEvent(ev); err != nil {
+		if err := e.st.AddUserEvent(t.Context(), ev); err != nil {
 			t.Fatal(err)
 		}
 	}

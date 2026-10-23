@@ -106,7 +106,7 @@ func TestStream(t *testing.T) {
 	}
 
 	// A *status command sees the network as it is now.
-	if err := e.st.UpdateNetwork(func() store.Network { n, _ := e.st.NetworkByID(id); n.Name = "renamed"; return n }()); err != nil {
+	if err := e.st.UpdateNetwork(t.Context(), func() store.Network { n, _ := e.st.NetworkByID(t.Context(), id); n.Name = "renamed"; return n }()); err != nil {
 		t.Fatal(err)
 	}
 	ws.WriteJSON(map[string]string{"status": "listnetworks"})

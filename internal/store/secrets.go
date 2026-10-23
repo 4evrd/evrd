@@ -277,7 +277,8 @@ func (secretJSONSerializer) Value(_ context.Context, _ *schema.Field, _ reflect.
 // that isn't
 // encrypted under the current key (plaintext from before a key was set, or an
 // old key's). It reports how many rows it rewrote.
-func (s *gormStore) EncryptSecrets() (int, error) {
+func (s *gormStore) EncryptSecrets(ctx context.Context) (int, error) {
+	db := s.db.DB.WithContext(ctx)
 	var rows []struct {
 		ID          int64
 		Password    string
@@ -285,7 +286,7 @@ func (s *gormStore) EncryptSecrets() (int, error) {
 		AuthCommand string
 		Modules     string
 	}
-	if err := s.db.Table("networks").Select("id", "password", "coalesce(servers, '') as servers",
+	if err := db.Table("networks").Select("id", "password", "coalesce(servers, '') as servers",
 		"coalesce(auth_command, '') as auth_command", "coalesce(modules, '') as modules").Scan(&rows).Error; err != nil {
 		return 0, err
 	}
@@ -302,10 +303,10 @@ func (s *gormStore) EncryptSecrets() (int, error) {
 			continue
 		}
 		var net Network
-		if err := s.db.First(&net, r.ID).Error; err != nil {
+		if err := db.First(&net, r.ID).Error; err != nil {
 			return n, err
 		}
-		if err := s.db.Model(&Network{ID: net.ID}).Select("password", "servers", "auth_command", "modules").Updates(&net).Error; err != nil {
+		if err := db.Model(&Network{ID: net.ID}).Select("password", "servers", "auth_command", "modules").Updates(&net).Error; err != nil {
 			return n, err
 		}
 		n++
@@ -317,7 +318,7 @@ func (s *gormStore) EncryptSecrets() (int, error) {
 		Key   string
 		Value string
 	}
-	if err := s.db.Table("settings").Select("key", "value").Scan(&srows).Error; err != nil {
+	if err := db.Table("settings").Select("key", "value").Scan(&srows).Error; err != nil {
 		return n, err
 	}
 	for _, r := range srows {
@@ -325,10 +326,10 @@ func (s *gormStore) EncryptSecrets() (int, error) {
 			continue
 		}
 		var st Setting
-		if err := s.db.First(&st, "key = ?", r.Key).Error; err != nil {
+		if err := db.First(&st, "key = ?", r.Key).Error; err != nil {
 			return n, err
 		}
-		if err := s.db.Save(&st).Error; err != nil {
+		if err := db.Save(&st).Error; err != nil {
 			return n, err
 		}
 		n++
@@ -339,7 +340,7 @@ func (s *gormStore) EncryptSecrets() (int, error) {
 		Key  string
 		Data string
 	}
-	if err := s.db.Table("cert_cache_entries").Select("key", "data").Scan(&crows).Error; err != nil {
+	if err := db.Table("cert_cache_entries").Select("key", "data").Scan(&crows).Error; err != nil {
 		return n, err
 	}
 	for _, r := range crows {
@@ -347,10 +348,10 @@ func (s *gormStore) EncryptSecrets() (int, error) {
 			continue
 		}
 		var e CertCacheEntry
-		if err := s.db.First(&e, "key = ?", r.Key).Error; err != nil {
+		if err := db.First(&e, "key = ?", r.Key).Error; err != nil {
 			return n, err
 		}
-		if err := s.db.Save(&e).Error; err != nil {
+		if err := db.Save(&e).Error; err != nil {
 			return n, err
 		}
 		n++

@@ -133,7 +133,7 @@ func TestForwardingToTheOwner(t *testing.T) {
 	// the client's caps and address travel with it
 	u := r.user
 	u.AllowedHosts = []string{"127.0.0.1"}
-	r.st.UpdateUser(u)
+	r.st.UpdateUser(t.Context(), u)
 	front := r.frontNode(&fakeCluster{self: "front", owner: store.Node{ID: "owner", IRCAddr: internal}}, secret)
 	c := dialUntil(t, func() (net.Conn, error) { return net.Dial("tcp", front) })
 	ic := &ircClient{t: t, c: c, sc: bufio.NewScanner(c)}
@@ -164,7 +164,7 @@ func TestForwardedAddressIsChecked(t *testing.T) {
 	go r.srv.ListenInternal(r.ctx, internal)
 	u := r.user
 	u.AllowedHosts = []string{"10.0.0.0/8"}
-	r.st.UpdateUser(u)
+	r.st.UpdateUser(t.Context(), u)
 
 	// the original address counts, not the forwarding node's
 	c := dialUntil(t, func() (net.Conn, error) { return net.Dial("tcp", internal) })

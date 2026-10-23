@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/4evrd/evrd/internal/realip"
 	"net"
 	"net/netip"
 	"net/url"
@@ -17,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/4evrd/evrd/internal/realip"
 )
 
 // Config is evrd's runtime configuration.

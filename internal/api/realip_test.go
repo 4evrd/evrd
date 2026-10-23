@@ -39,7 +39,7 @@ func TestAllowedHostsCantBeForged(t *testing.T) {
 	})
 	u := e.user("fay", store.RoleUser)
 	u.AllowedHosts = []string{"10.0.0.0/8"}
-	if err := e.st.UpdateUser(u); err != nil {
+	if err := e.st.UpdateUser(t.Context(), u); err != nil {
 		t.Fatal(err)
 	}
 	if code := signIn(t, e, "fay", map[string]string{"X-Forwarded-For": "10.1.1.1"}); code == 200 {
@@ -54,7 +54,7 @@ func TestATrustedProxysAddressIsBelieved(t *testing.T) {
 	e := newEnv(t) // default: the local host is the trusted proxy
 	u := e.user("fay", store.RoleUser)
 	u.AllowedHosts = []string{"10.0.0.0/8"}
-	e.st.UpdateUser(u)
+	e.st.UpdateUser(t.Context(), u)
 	if code := signIn(t, e, "fay", map[string]string{"X-Forwarded-For": "10.1.1.1"}); code != 200 {
 		t.Fatalf("through the local proxy: %d", code)
 	}

@@ -4,6 +4,7 @@ package client
 
 import (
 	"cmp"
+	"context"
 	"path"
 	"slices"
 	"strconv"
@@ -16,7 +17,7 @@ import (
 // account is the user as of now (a web *status session has none loaded).
 func (se *session) account() store.User {
 	if se.acct.ID == 0 {
-		if u, err := se.srv.b.Store().UserByID(se.uid); err == nil {
+		if u, err := se.srv.b.Store().UserByID(context.Background(), se.uid); err == nil {
 			se.acct = u
 		}
 	}

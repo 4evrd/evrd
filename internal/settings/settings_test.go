@@ -105,7 +105,7 @@ func TestWriteConf(t *testing.T) {
 	if !strings.Contains(string(b), "# mine\nsettings_write_conf yes\nmax_networks 9\n") || !strings.Contains(string(b), "bindhost 192.0.2.1 192.0.2.2") {
 		t.Fatalf("file:\n%s", b)
 	}
-	confs, _ := st.NodeConfs()
+	confs, _ := st.NodeConfs(t.Context())
 	if len(confs) != 1 || confs[0].Error != "" || confs[0].NodeID != "n1" {
 		t.Fatalf("node status: %+v", confs)
 	}
@@ -137,7 +137,7 @@ func TestWriteConf(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = n2b
-	confs, _ = st.NodeConfs()
+	confs, _ = st.NodeConfs(t.Context())
 	var bad bool
 	for _, c := range confs {
 		bad = bad || (c.NodeID == "n2" && c.Error != "")

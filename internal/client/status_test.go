@@ -189,7 +189,7 @@ func TestStatusSetEverySetting(t *testing.T) {
 	} {
 		ic.status(c.cmd, c.want)
 	}
-	n, _ := r.st.NetworkByID(two.ID)
+	n, _ := r.st.NetworkByID(t.Context(), two.ID)
 	if n.AltNick != "bob_" || n.SASLUser != "bobby" || n.Encoding != "latin1" || !n.TrustAllCerts || n.TrustPKI ||
 		!n.TLS || n.FloodRate != 5 || n.FloodBurst != 20 || n.JoinDelay != 3 || n.Username != "bobident" ||
 		n.Realname != "Bob B" || n.Host != "irc.example.net" || n.Nick != "bobby" || n.Name != "second" {
@@ -207,7 +207,7 @@ func TestStatusSetEverySetting(t *testing.T) {
 	for _, c := range []string{"altnick", "sasluser", "encoding", "ident", "realname"} {
 		ic.status("set second "+c+" -", "Saved "+c+" = (cleared) on second.")
 	}
-	n, _ = r.st.NetworkByID(two.ID)
+	n, _ = r.st.NetworkByID(t.Context(), two.ID)
 	if n.AltNick != "" || n.SASLUser != "" || n.Encoding != "" || n.Username != "" || n.Realname != "" {
 		t.Fatalf("not cleared: %+v", n)
 	}
@@ -233,7 +233,7 @@ func TestStatusSetServicesLogin(t *testing.T) {
 	} {
 		ic.status(c.cmd, c.want)
 	}
-	n, _ := r.st.NetworkByID(two.ID)
+	n, _ := r.st.NetworkByID(t.Context(), two.ID)
 	if n.AuthMethod != store.AuthCommand || n.ServicesNick != "NickServ@services.dal.net" || n.IdentifyArgs != "password" ||
 		n.IdentifyOn != "prompt" || n.GhostCmd != "regain" || !n.JoinAfterAuth || n.AuthTimeout != 30 ||
 		!strings.HasPrefix(n.AuthCommand, "/msg X@") {
@@ -244,7 +244,7 @@ func TestStatusSetServicesLogin(t *testing.T) {
 	ic.expect("authcommand /msg X@channels.undernet.org LOGIN %account% %password%")
 	ic.status("set two ghost off", "Saved ghost = off on two.")
 	ic.status("set two identifyargs auto", "Saved identifyargs = auto on two.")
-	n, _ = r.st.NetworkByID(two.ID)
+	n, _ = r.st.NetworkByID(t.Context(), two.ID)
 	if n.GhostCmd != "" || n.IdentifyArgs != "" {
 		t.Fatalf("not cleared: %+v", n)
 	}
@@ -403,9 +403,9 @@ func TestStatusZNCOddsAndEnds(t *testing.T) {
 	// admins only
 	ic.status("listusers", "Admins only.")
 	ic.status("listallusernetworks", "Admins only.")
-	u, _ := r.st.UserByUsername("alice")
+	u, _ := r.st.UserByUsername(t.Context(), "alice")
 	u.Role = store.RoleAdmin
-	r.st.UpdateUser(u)
+	r.st.UpdateUser(t.Context(), u)
 	other := r.attached()
 	other.status("listusers", "alice")
 	other.status("listusers", "1 user.")

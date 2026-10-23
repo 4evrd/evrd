@@ -84,7 +84,7 @@ func TestProvisionRefusesSuspended(t *testing.T) {
 	m, st, _ := newManager(t, config.Auth{OIDCAutoCreate: true})
 	u, _ := m.provision(Claims{Subject: "s1", Username: "alice"})
 	u.Suspended = true
-	st.UpdateUser(u)
+	st.UpdateUser(t.Context(), u)
 	if _, code := m.provision(Claims{Subject: "s1", Username: "alice"}); code != "suspended" {
 		t.Fatalf("got %q, want suspended", code)
 	}
@@ -105,7 +105,7 @@ func TestProvisionClaimsAnAccountMadeForIt(t *testing.T) {
 	if code != "" || u.ID != made.ID {
 		t.Fatalf("claim: %q %+v", code, u)
 	}
-	got, _ := st.UserByID(made.ID)
+	got, _ := st.UserByID(t.Context(), made.ID)
 	if got.SSOClaimable || got.OIDCSubject == nil || *got.OIDCSubject != "s1" {
 		t.Fatalf("after claim: %+v", got)
 	}

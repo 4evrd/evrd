@@ -140,9 +140,9 @@ func TestSSOAccountsKeepProviderFields(t *testing.T) {
 	u := e.user("sam", store.RoleUser)
 	c := e.login("sam")
 	sub := "sso|sam"
-	u, _ = e.st.UserByID(u.ID)
+	u, _ = e.st.UserByID(t.Context(), u.ID)
 	u.OIDCSubject, u.PasswordHash, u.Email = &sub, "", "sam@idp.example"
-	if err := e.st.UpdateUser(u); err != nil {
+	if err := e.st.UpdateUser(t.Context(), u); err != nil {
 		t.Fatal(err)
 	}
 	if code, out := c.do("POST", "/api/me/password", map[string]string{"current": "", "next": "something-long"}); code != 409 {
@@ -177,7 +177,7 @@ func TestDeleteMe(t *testing.T) {
 	if code, _ := c.do("GET", "/api/me", nil); code != 401 {
 		t.Fatal("deleted account still signed in")
 	}
-	if _, err := e.st.UserByUsername("alice"); err == nil {
+	if _, err := e.st.UserByUsername(t.Context(), "alice"); err == nil {
 		t.Fatal("account still in the database")
 	}
 	if code, _ := e.anon().do("POST", "/auth/password", map[string]string{"username": "alice", "password": "alice-password"}); code == 200 {

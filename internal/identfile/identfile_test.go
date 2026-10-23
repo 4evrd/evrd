@@ -69,8 +69,8 @@ type src struct {
 	nets  []store.Network
 }
 
-func (s *src) ListUsers() ([]store.User, error)      { return s.users, nil }
-func (s *src) AllNetworks() ([]store.Network, error) { return s.nets, nil }
+func (s *src) ListUsers(context.Context) ([]store.User, error)      { return s.users, nil }
+func (s *src) AllNetworks(context.Context) ([]store.Network, error) { return s.nets, nil }
 
 func TestUpdateWritesOnChange(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".oidentd.conf")

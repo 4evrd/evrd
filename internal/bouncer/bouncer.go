@@ -131,7 +131,7 @@ func (b *Bouncer) History() history.Store { return b.history }
 func (b *Bouncer) DeleteNetwork(userID, networkID int64) error {
 	b.Disconnect(networkID)
 	b.dropReads(networkID)
-	if err := b.store.DeleteNetwork(userID, networkID); err != nil {
+	if err := b.store.DeleteNetwork(context.Background(), userID, networkID); err != nil {
 		return err
 	}
 	b.netlog.drop(networkID)
@@ -142,11 +142,11 @@ func (b *Bouncer) DeleteNetwork(userID, networkID int64) error {
 // networks and their history.
 func (b *Bouncer) DeleteUser(userID int64) error {
 	b.StopUser(userID)
-	nets, err := b.store.ListNetworks(userID)
+	nets, err := b.store.ListNetworks(context.Background(), userID)
 	if err != nil {
 		return err
 	}
-	if err := b.store.DeleteUser(userID); err != nil {
+	if err := b.store.DeleteUser(context.Background(), userID); err != nil {
 		return err
 	}
 	for _, n := range nets {
@@ -168,7 +168,7 @@ func (b *Bouncer) Start(ctx context.Context) error {
 		return nil
 	}
 
-	nets, err := b.store.AllEnabledNetworks()
+	nets, err := b.store.AllEnabledNetworks(ctx)
 	if err != nil {
 		return err
 	}
@@ -196,11 +196,11 @@ func (b *Bouncer) JumpServer(networkID int64, i int) error {
 }
 
 func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
-	n, err := b.store.NetworkByID(networkID)
+	n, err := b.store.NetworkByID(context.Background(), networkID)
 	if err != nil {
 		return err
 	}
-	u, err := b.store.UserByID(n.UserID)
+	u, err := b.store.UserByID(context.Background(), n.UserID)
 	if err != nil {
 		return err
 	} else if u.Suspended {
@@ -248,7 +248,7 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 		Idle:        func() bool { return b.idle(n.UserID) },
 		Version:     version.Version,
 		OnChannels: func(channels []string) {
-			if err := b.store.SetNetworkChannels(networkID, channels); err != nil {
+			if err := b.store.SetNetworkChannels(context.Background(), networkID, channels); err != nil {
 				b.log.Warn("save channels", "network", n.Name, "err", err)
 			}
 		},
@@ -269,7 +269,7 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 	b.log.Info("connecting network", "network", n.Name, "host", n.Host)
 	b.logNote(networkID, "Switched on")
 
-	return b.store.SetNetworkEnabled(networkID, true)
+	return b.store.SetNetworkEnabled(context.Background(), networkID, true)
 }
 
 // Disconnect stops (and marks disabled) a network's connection.
@@ -282,7 +282,7 @@ func (b *Bouncer) Disconnect(networkID int64) error {
 		e.cancel()
 		b.logNote(networkID, "Switched off")
 	}
-	return b.store.SetNetworkEnabled(networkID, false)
+	return b.store.SetNetworkEnabled(context.Background(), networkID, false)
 }
 
 // Reconfigure pushes settings that apply without reconnecting (quit
@@ -293,7 +293,7 @@ func (b *Bouncer) Reconfigure(n store.Network) {
 	if !ok {
 		return
 	}
-	u, err := b.store.UserByID(n.UserID)
+	u, err := b.store.UserByID(context.Background(), n.UserID)
 	if err != nil {
 		return
 	}
@@ -303,7 +303,7 @@ func (b *Bouncer) Reconfigure(n store.Network) {
 // ReconfigureUser pushes a user's settings (quit message, CTCP replies) to
 // all their running networks.
 func (b *Bouncer) ReconfigureUser(userID int64) {
-	nets, err := b.store.ListNetworks(userID)
+	nets, err := b.store.ListNetworks(context.Background(), userID)
 	if err != nil {
 		return
 	}
@@ -316,9 +316,9 @@ func (b *Bouncer) ReconfigureUser(userID int64) {
 // or not) and saves them.
 func (b *Bouncer) SetChannelSettings(networkID int64, ch string, f func(*store.ChannelSettings)) error {
 	if conn, ok := b.ConnFor(networkID); ok {
-		return b.store.SetNetworkChannelSettings(networkID, conn.SetChannelSettings(ch, f))
+		return b.store.SetNetworkChannelSettings(context.Background(), networkID, conn.SetChannelSettings(ch, f))
 	}
-	n, err := b.store.NetworkByID(networkID)
+	n, err := b.store.NetworkByID(context.Background(), networkID)
 	if err != nil {
 		return err
 	}
@@ -333,7 +333,7 @@ func (b *Bouncer) SetChannelSettings(networkID int64, ch string, f func(*store.C
 	} else {
 		m[strings.ToLower(ch)] = cs
 	}
-	return b.store.SetNetworkChannelSettings(networkID, m)
+	return b.store.SetNetworkChannelSettings(context.Background(), networkID, m)
 }
 
 // idle reports whether a user has no client attached (IRC or web).
@@ -389,7 +389,7 @@ func (b *Bouncer) ResumeUser(userID int64) {
 	if !b.Owns(userID) {
 		return // the owner, if any, starts them
 	}
-	nets, err := b.store.ListNetworks(userID)
+	nets, err := b.store.ListNetworks(context.Background(), userID)
 	if err != nil {
 		return
 	}
@@ -519,7 +519,7 @@ func (b *Bouncer) PruneLoop(ctx context.Context, interval time.Duration, backlog
 }
 
 func (b *Bouncer) prune(backlog func(store.User) int, leader bool) {
-	users, err := b.store.ListUsers()
+	users, err := b.store.ListUsers(context.Background())
 	if err != nil {
 		b.log.Warn("prune: list users", "err", err)
 		return
@@ -529,7 +529,7 @@ func (b *Bouncer) prune(backlog func(store.User) int, leader bool) {
 		if keep <= 0 || !b.Owns(u.ID) {
 			continue
 		}
-		nets, err := b.store.ListNetworks(u.ID)
+		nets, err := b.store.ListNetworks(context.Background(), u.ID)
 		if err != nil {
 			continue
 		}
@@ -543,13 +543,13 @@ func (b *Bouncer) prune(backlog func(store.User) int, leader bool) {
 		return
 	}
 	b.dropOrphanHistory(users)
-	if err := b.store.PruneUserEvents(time.Now().AddDate(0, 0, -30)); err != nil {
+	if err := b.store.PruneUserEvents(context.Background(), time.Now().AddDate(0, 0, -30)); err != nil {
 		b.log.Warn("prune activity feed", "err", err)
 	}
-	if err := b.store.DeleteExpiredSessions(time.Now()); err != nil {
+	if err := b.store.DeleteExpiredSessions(context.Background(), time.Now()); err != nil {
 		b.log.Warn("expire sessions", "err", err)
 	}
-	if err := b.store.DeleteOrphanLeases(); err != nil {
+	if err := b.store.DeleteOrphanLeases(context.Background()); err != nil {
 		b.log.Warn("drop leases of deleted users", "err", err)
 	}
 }
@@ -558,7 +558,7 @@ func (b *Bouncer) prune(backlog func(store.User) int, leader bool) {
 func (b *Bouncer) dropOrphanHistory(users []store.User) {
 	exists := map[int64]bool{}
 	for _, u := range users {
-		nets, err := b.store.ListNetworks(u.ID)
+		nets, err := b.store.ListNetworks(context.Background(), u.ID)
 		if err != nil {
 			return // can't tell what exists; don't delete anything
 		}
