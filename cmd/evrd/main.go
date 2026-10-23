@@ -459,7 +459,8 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 
 	if err := srv.ListenAndServe(ctx, cfg.API); err != nil {
 		log.Error("api server", "err", err)
-		return 1
+		failed.Store(true)
+		stop()
 	}
 	// Shutting down: hand this node's users to the others before closing the
 	// stores underneath them.

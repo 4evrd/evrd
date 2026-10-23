@@ -67,6 +67,8 @@ func TestPassThroughAndTranslation(t *testing.T) {
 	r := newRigCaps(t, everyLinkCap)
 	full := r.full()
 	plain := r.attached()
+	// its channel's names and topic, asked for after 376, before reading on
+	plain.until(" 332 ")
 	sim := func(l string) { full.send("SIMULATE " + l) }
 	both := func(l, wantFull, wantPlain string) {
 		t.Helper()
