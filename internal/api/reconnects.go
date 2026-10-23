@@ -49,7 +49,7 @@ func (s *Server) handleAdminUserReconnects(w http.ResponseWriter, r *http.Reques
 // dropped, connection attempts that failed, minutes offline, the hours it
 // happened in, and the live state with the last error; then the events.
 func (s *Server) reconnectsOf(ctx context.Context, userID int64) (map[string]any, error) {
-	nets, err := s.st().ListNetworks(ctx, userID)
+	nets, err := s.acc.ListNetworks(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (s *Server) reconnectsOf(ctx context.Context, userID int64) (map[string]any
 		return a > b
 	})
 
-	evs, err := s.st().UserEvents(ctx, userID, now.Add(-24*time.Hour), 500)
+	evs, err := s.b.UserEvents(ctx, userID, now.Add(-24*time.Hour), 500)
 	if err != nil {
 		return nil, err
 	}

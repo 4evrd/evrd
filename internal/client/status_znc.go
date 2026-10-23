@@ -363,7 +363,7 @@ func (se *session) setUserBindHost(host string) {
 		return
 	}
 	u.BindHost = host
-	if err := se.srv.b.Store().UpdateUser(context.Background(), u); err != nil {
+	if err := se.srv.acc.UpdateUser(context.Background(), u); err != nil {
 		se.statusf("Couldn't save: %v", err)
 		return
 	}
@@ -399,12 +399,12 @@ func (se *session) cmdListUsers([]string) {
 	if !se.admin() {
 		return
 	}
-	users, err := se.srv.b.Store().ListUsers(context.Background())
+	users, err := se.srv.acc.ListUsers(context.Background())
 	if err != nil {
 		se.statusf("Couldn't list users: %v", err)
 		return
 	}
-	nets, _ := se.srv.b.Store().AllNetworks(context.Background())
+	nets, _ := se.srv.acc.AllNetworks(context.Background())
 	count := map[int64]int{}
 	for _, n := range nets {
 		count[n.UserID]++
@@ -424,7 +424,7 @@ func (se *session) cmdListAllUserNetworks([]string) {
 	if !se.admin() {
 		return
 	}
-	users, err := se.srv.b.Store().ListUsers(context.Background())
+	users, err := se.srv.acc.ListUsers(context.Background())
 	if err != nil {
 		se.statusf("Couldn't list users: %v", err)
 		return
@@ -433,7 +433,7 @@ func (se *session) cmdListAllUserNetworks([]string) {
 	for _, u := range users {
 		names[u.ID] = u.Username
 	}
-	nets, err := se.srv.b.Store().AllNetworks(context.Background())
+	nets, err := se.srv.acc.AllNetworks(context.Background())
 	if err != nil {
 		se.statusf("Couldn't list networks: %v", err)
 		return

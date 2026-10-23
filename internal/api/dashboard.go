@@ -57,7 +57,7 @@ func (s *Server) handleMyEvents(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	evs, err := s.st().UserEvents(r.Context(), auth.User(r).ID, time.Now().AddDate(0, 0, -30), limit)
+	evs, err := s.b.UserEvents(r.Context(), auth.User(r).ID, time.Now().AddDate(0, 0, -30), limit)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -103,7 +103,7 @@ func (s *Server) handleAdminUserOverview(w http.ResponseWriter, r *http.Request)
 	}
 	ov["usage"] = map[string]any{"networks": len(ov["networks"].([]map[string]any))}
 	ov["sessions"] = s.sessionsDTO(u.ID, "")
-	cps, _ := s.st().ListClientPasswords(r.Context(), u.ID)
+	cps, _ := s.acc.ListClientPasswords(r.Context(), u.ID)
 	pws := make([]map[string]any, 0, len(cps))
 	for _, c := range cps {
 		pws = append(pws, map[string]any{"name": c.Name, "createdAt": c.CreatedAt.Unix(), "lastUsedAt": unix(c.LastUsedAt)})
@@ -117,7 +117,7 @@ func (s *Server) handleAdminUserOverview(w http.ResponseWriter, r *http.Request)
 func (s *Server) overviewOf(ctx context.Context, u store.User) (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	nets, err := s.st().ListNetworks(ctx, u.ID)
+	nets, err := s.acc.ListNetworks(ctx, u.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +215,7 @@ func (s *Server) overviewOf(ctx context.Context, u store.User) (map[string]any, 
 		health["offlineMin24h"] = traffic.offlineMin
 	}
 
-	evs, _ := s.st().UserEvents(ctx, u.ID, now.Add(-24*time.Hour), 20)
+	evs, _ := s.b.UserEvents(ctx, u.ID, now.Add(-24*time.Hour), 20)
 	return map[string]any{
 		"networks": netsOut,
 		"clients":  s.clientsDTO(u.ID),
@@ -388,19 +388,19 @@ func hourSlots(se metricsq.Series, start time.Time) []float64 {
 func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
-	users, err := s.st().ListUsers(ctx)
+	users, err := s.acc.ListUsers(ctx)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	allNets, err := s.st().AllNetworks(ctx)
+	allNets, err := s.acc.AllNetworks(ctx)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
 	now := time.Now()
 	live := s.clusterUsage(ctx)
-	leases, _ := s.st().Leases(ctx, now)
+	leases, _ := s.state.Leases(ctx, now)
 	owner := map[int64]string{}
 	for _, l := range leases {
 		owner[l.UserID] = l.NodeID
@@ -548,7 +548,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	nodeList := []store.Node{}
 	if s.cl != nil {
 		nodeList = s.cl.Nodes()
-	} else if live, err := s.st().LiveNodes(ctx, now.Add(-2*time.Minute)); err == nil {
+	} else if live, err := s.state.LiveNodes(ctx, now.Add(-2*time.Minute)); err == nil {
 		// Not clustered: still one node, heartbeating and holding everyone.
 		nodeList = live
 	}
@@ -609,7 +609,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 
 // storageHealth checks the account database and the history store.
 func (s *Server) storageHealth() map[string]any {
-	accounts := map[string]any{"kind": dbKind(s.cfg().DB), "addr": dbAddr(s.cfg().DB), "up": s.st().Ping(context.Background()) == nil}
+	accounts := map[string]any{"kind": dbKind(s.cfg().DB), "addr": dbAddr(s.cfg().DB), "up": s.b.Ping(context.Background()) == nil}
 	hist := map[string]any{"kind": dbKind(s.cfg().History), "addr": dbAddr(s.cfg().History), "up": s.b.History().Ping() == nil}
 	if p, ok := s.b.History().(interface{ Pending() int64 }); ok {
 		hist["queue"] = p.Pending()

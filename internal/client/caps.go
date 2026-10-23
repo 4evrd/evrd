@@ -92,7 +92,7 @@ func (se *session) regLink() *upstream.Conn {
 	if !se.srv.b.Owns(u.ID) || network == "" && se.bindID == "" && se.caps["soju.im/bouncer-networks"] {
 		return nil // another node's, or a bouncer connection
 	}
-	nets, _ := se.srv.b.Store().ListNetworks(context.Background(), u.ID)
+	nets, _ := se.srv.acc.ListNetworks(context.Background(), u.ID)
 	var n store.Network
 	ok := false
 	switch {

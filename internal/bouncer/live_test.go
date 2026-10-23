@@ -154,8 +154,11 @@ func TestStartConnectsEnabledNetworks(t *testing.T) {
 	if l := r.b.NetworkLog(on.ID); !logHas(l, "Switched on") {
 		t.Fatalf("network log: %+v", l)
 	}
-	if r.b.Store() != r.st || r.b.History() != r.hist {
-		t.Fatal("Store/History don't expose the bouncer's stores")
+	if r.b.History() != r.hist {
+		t.Fatal("History doesn't expose the bouncer's history")
+	}
+	if r.b.Ping(t.Context()) != nil {
+		t.Fatal("Ping: the account database isn't reachable")
 	}
 }
 
