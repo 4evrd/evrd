@@ -289,8 +289,8 @@ func TestJumpAndNetworkManagement(t *testing.T) {
 	// the message and the server's JOIN, once both are saved
 	eventually(t, "#two history saved", func() bool { m, _ := r.hist.Recent(n.ID, "#two", 10); return len(m) == 2 })
 	ic.send("PRIVMSG *status :playback #two")
-	ic.expect("] hi two") // playback carries a timestamp for clients without server-time
-	ic.expect("Replayed 2 line(s) of #two")
+	ic.expect("] hi two")                   // playback carries a timestamp for clients without server-time
+	ic.expect("Replayed 1 line(s) of #two") // the JOIN isn't replayed to a plain client
 }
 
 func TestChannelEventsAreSavedAndReplayed(t *testing.T) {
@@ -310,8 +310,8 @@ func TestChannelEventsAreSavedAndReplayed(t *testing.T) {
 	}
 	n := r.network("one")
 	want := []string{
-		"alice_one joined", "ann joined", "bob is now known as robert", "ann changed the topic to: new topic",
-		"robert quit (gone)", "ann set mode +o ann", "ann kicked alice_one (bye)",
+		"join alice_one", "join ann", "nick bob robert", "topic ann new topic",
+		"quit robert gone", "mode ann +o ann", "kick ann alice_one bye",
 	}
 	eventually(t, "events saved", func() bool {
 		msgs, _ := r.hist.Recent(n.ID, "#one", 50)
@@ -319,7 +319,7 @@ func TestChannelEventsAreSavedAndReplayed(t *testing.T) {
 	})
 	msgs, _ := r.hist.Recent(n.ID, "#one", 50)
 	for i, m := range msgs {
-		if got := describe(m); got != want[i] {
+		if got := strings.Join(strings.Fields(m.Kind+" "+m.Sender+" "+m.Extra+" "+m.Text), " "); got != want[i] {
 			t.Errorf("event %d: got %q, want %q", i, got, want[i])
 		}
 	}
@@ -328,9 +328,12 @@ func TestChannelEventsAreSavedAndReplayed(t *testing.T) {
 		t.Fatalf("kick dropped the saved channel: %v", ch)
 	}
 
+	// replayed only to clients that take events as such (see
+	// TestPlaybackInBatches); a plain client gets none
 	again := r.attach("alice/one:alice-password", "server-time")
-	again.expect("@time=")
-	again.expect(":*buffextras!buffextras@evrd PRIVMSG #one :bob is now known as robert")
+	if seen := again.until("\x01VERSION\x01"); anyHas(seen, "robert") || anyHas(seen, "new topic") {
+		t.Fatalf("events in a plain client's backlog: %q", seen)
+	}
 }
 
 func TestStatusShowAndSet(t *testing.T) {

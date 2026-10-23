@@ -115,8 +115,8 @@ func TestPlaybackInBatches(t *testing.T) {
 	}
 	hello := chat(r.hist, n.ID, "#one")[0]
 
-	// batch, server-time and message-tags: the backlog in a batch, events
-	// from *buffextras
+	// batch, server-time and message-tags: the backlog in a batch, without
+	// the events
 	ic := r.attach("alice/one:alice-password", "batch", "server-time", "message-tags")
 	seen := ic.until("BATCH -")
 	open := ""
@@ -133,8 +133,8 @@ func TestPlaybackInBatches(t *testing.T) {
 	if !anyHas(seen, want) {
 		t.Fatalf("no %q in %q", want, seen)
 	}
-	if !anyHas(seen, ";batch="+ref+";msgid=") || !anyHas(seen, ":*buffextras!buffextras@evrd PRIVMSG #one :ann kicked bob (bye)") {
-		t.Fatalf("events: %q", seen)
+	if anyHas(seen, "KICK #one") || anyHas(seen, "new topic") || anyHas(seen, "caroline") || anyHas(seen, "buffextras") {
+		t.Fatalf("events without event-playback: %q", seen)
 	}
 
 	// with event-playback, the events as they happened
@@ -153,18 +153,23 @@ func TestPlaybackInBatches(t *testing.T) {
 			t.Errorf("no %q in %q", want, seen)
 		}
 	}
-	if anyHas(seen, "buffextras") || anyHas(seen, "msgid=") {
-		t.Errorf("buffextras or msgid without message-tags: %q", seen)
+	if anyHas(seen, "msgid=") {
+		t.Errorf("msgid without message-tags: %q", seen)
 	}
 
-	// none of the caps: exactly as before
+	// none of the caps: the chat, as plain lines, and no events
 	plain := r.attach("alice/one:alice-password")
-	seen = plain.until("ann kicked bob (bye)")
+	seen = plain.until("\x01VERSION\x01") // asked once the backlog is out
 	if anyHas(seen, "BATCH") || anyHas(seen, "msgid=") || anyHas(seen, "@time=") {
 		t.Fatalf("a plain client got IRCv3: %q", seen)
 	}
 	if !anyHas(seen, ":bob!bob@one PRIVMSG #one :") || !anyHas(seen, "] hello") {
 		t.Fatalf("plain playback: %q", seen)
+	}
+	for _, ev := range []string{"kick", "KICK #one", "new topic", "+o carol", "caroline", "gone", "erin", "buffextras"} {
+		if anyHas(seen, ev) {
+			t.Errorf("a plain client got an event (%s): %q", ev, seen)
+		}
 	}
 
 	// draft/chathistory: no playback; the client asks

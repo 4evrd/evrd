@@ -20,10 +20,11 @@ channel list, `/nick` changes your nick upstream, and your own notices and
 offers the [IRCv3](#ircv3) capabilities below.
 
 Channel events — joins, parts, quits, kicks, nick changes, topics and modes —
-are saved with the messages. On replay they come from `*buffextras` as plain
-text (`bob is now known as robert`), like ZNC's buffextras module, so they
-never confuse a client's nick list. A client that asks for
-`draft/event-playback` gets them as the real lines instead (see [IRCv3](#ircv3)).
+are saved with the messages (the web chat shows them). Backlog replays them
+only to a client that asks for `draft/event-playback`, as the real lines in a
+history batch (see [IRCv3](#ircv3)); other clients get just the chat, so
+replay never confuses their nick lists. Either way the backlog's line count
+counts only what's replayed.
 
 The web chat understands `/join`, `/part`, `/msg`, `/query`, `/me`, `/notice`,
 `/nick`, `/topic`, `/mode`, `/kick`, `/close`, `/quote` and `/help`, and runs
@@ -143,7 +144,7 @@ tag, for clients with `message-tags`). Not supported: `draft/metadata-2`
 
 | client asks for | on attach | live lines |
 |---|---|---|
-| nothing | backlog as plain lines, timestamps in the text, events from `*buffextras` | as the server sent them, without its tags |
+| nothing | backlog as plain lines, timestamps in the text, without channel events | as the server sent them, without its tags |
 | `server-time` | backlog tagged `@time` | your own lines and saved ones tagged `@time` |
 | `batch` (+ `server-time`) | each buffer's backlog in a `BATCH +ref chathistory <buffer>` | the network's batches (netsplits…) |
 | … + `draft/event-playback` | events in the batch as `JOIN`, `PART`, `QUIT`, `KICK`, `NICK`, `TOPIC`, `MODE` | |

@@ -81,7 +81,7 @@ test('typing indicators go through evrd to clients that asked for message-tags',
   } finally { plain.close() }
 })
 
-test('backlog comes as a history batch with real events, *buffextras for plain clients', async () => {
+test('backlog comes as a history batch with real events, without events for plain clients', async () => {
   // while this user's IRC clients are away: a line, then the other user leaves
   peer.send(`PRIVMSG ${chan} :while you were out`)
   peer.send(`PART ${chan} :off for lunch`)
@@ -98,13 +98,14 @@ test('backlog comes as a history batch with real events, *buffextras for plain c
     expect(irc.lines.some((l) => l.includes('*buffextras'))).toBe(false)
   }).toPass({ timeout: 20000 })
 
-  // a client without the caps: the same events, as *buffextras lines
+  // a client without the caps: the line, but not the PART
   const plain = await IRC.connect({ user: me.name, network: 'Dev', password: me.password })
   try {
     // (no server-time: evrd puts the time in front)
     await plain.waitFor(/PRIVMSG \S+ :\[[\d:]+\] while you were out$/)
-    await plain.waitFor(/^:\*buffextras!\S+ PRIVMSG \S+ :\[[\d:]+\] them\S* left \(off for lunch\)$/)
+    await plain.waitFor(/\x01VERSION\x01$/) // asked once the backlog is out
     expect(plain.lines.some((l) => l.includes('BATCH'))).toBe(false)
+    expect(plain.lines.some((l) => l.includes('off for lunch') || l.includes('*buffextras'))).toBe(false)
   } finally { plain.close() }
 })
 

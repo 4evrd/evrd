@@ -314,7 +314,7 @@ func TestFormat(t *testing.T) {
 		{msg("notice", "bob", "hey"), ":bob!bob@net NOTICE #c :hey"},
 		{msg("action", "bob", "waves"), ":bob!bob@net PRIVMSG #c :\x01ACTION waves\x01"},
 		{msg("", "", "server says"), ":*!*@net PRIVMSG #c :server says"},
-		{msg("part", "bob", ""), ":*buffextras!buffextras@evrd PRIVMSG #c :bob left"},
+		{msg("part", "bob", ""), ""}, // events only in an event-playback batch
 	} {
 		if got := se.format(c.m); got != c.want {
 			t.Errorf("format %+v: got %q, want %q", c.m, got, c.want)
@@ -329,23 +329,6 @@ func TestFormat(t *testing.T) {
 	se.acct.PrependTimestamp = true
 	if got := se.formatAs(msg("message", "bob", "hi"), false); got != ":bob!bob@net PRIVMSG #c :hi" {
 		t.Errorf("live line: %q", got)
-	}
-}
-
-func TestDescribe(t *testing.T) {
-	for _, c := range []struct {
-		m    history.Message
-		want string
-	}{
-		{history.Message{Kind: "part", Sender: "bob", Text: "later"}, "bob left (later)"},
-		{history.Message{Kind: "part", Sender: "bob"}, "bob left"},
-		{history.Message{Kind: "quit", Sender: "bob"}, "bob quit"},
-		{history.Message{Kind: "kick", Sender: "op", Extra: "bob"}, "op kicked bob"},
-		{history.Message{Kind: "invite", Sender: "bob", Text: "#c"}, "bob invite #c"},
-	} {
-		if got := describe(c.m); got != c.want {
-			t.Errorf("describe %+v: got %q, want %q", c.m, got, c.want)
-		}
 	}
 }
 
