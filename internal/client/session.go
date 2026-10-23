@@ -382,9 +382,9 @@ func (se *session) unsubscribe() {
 func (se *session) welcome() {
 	n := se.unick
 	if se.up == nil {
-		se.send(fmt.Sprintf(":%s 001 %s :Welcome to evrd — a bouncer connection, on no network", serverName, n))
+		se.send(fmt.Sprintf(":%s 001 %s :Welcome to evrd - a bouncer connection, on no network", serverName, n))
 	} else {
-		se.send(fmt.Sprintf(":%s 001 %s :Welcome to evrd — attached to %s", serverName, n, se.net.Name))
+		se.send(fmt.Sprintf(":%s 001 %s :Welcome to evrd - attached to %s", serverName, n, se.net.Name))
 	}
 	se.send(fmt.Sprintf(":%s 002 %s :Your host is %s", serverName, n, serverName))
 	se.send(fmt.Sprintf(":%s 003 %s :evrd bouncer", serverName, n))
@@ -688,7 +688,7 @@ func (se *session) detach(chans []string) {
 			continue
 		}
 		se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Detached = true })
-		se.send(fmt.Sprintf(":%s!%s@%s PART %s :Detached — /join %s to come back", se.unick, se.unick, serverName, ch, ch))
+		se.send(fmt.Sprintf(":%s!%s@%s PART %s :Detached - /join %s to come back", se.unick, se.unick, serverName, ch, ch))
 	}
 }
 
@@ -992,7 +992,7 @@ func (se *session) send(line string) {
 
 func (se *session) numeric(code, trailing string) {
 	n := orElse(se.unick, orElse(se.nick, "*"))
-	se.send(fmt.Sprintf(":%s %s %s %s", serverName, code, n, trailing))
+	se.send(fmt.Sprintf(":%s %s %s %s", serverName, code, n, ircText(trailing)))
 }
 
 // clientIP is the client's address (the original one, if forwarded).

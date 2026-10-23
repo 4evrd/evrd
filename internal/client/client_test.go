@@ -147,9 +147,11 @@ func (r *rig) attach(pass string, caps ...string) *ircClient {
 
 func (ic *ircClient) send(line string) { fmt.Fprintf(ic.c, "%s\r\n", line) }
 
-// expect reads until a line contains want, failing after a timeout.
+// expect reads until a line contains want, failing after a timeout. want
+// is evrd's text as written; over IRC it comes in ASCII (ircText).
 func (ic *ircClient) expect(want string) string {
 	ic.t.Helper()
+	want = ircText(want)
 	ic.c.SetReadDeadline(time.Now().Add(3 * time.Second))
 	var seen []string
 	for ic.sc.Scan() {

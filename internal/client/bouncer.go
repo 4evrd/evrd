@@ -24,7 +24,7 @@ import (
 // bouncerFail sends FAIL BOUNCER code sub [context…] :text.
 func (se *session) bouncerFail(code, sub string, args ...string) {
 	text := args[len(args)-1]
-	args = append(args[:len(args)-1:len(args)-1], ":"+text)
+	args = append(args[:len(args)-1:len(args)-1], ":"+ircText(text))
 	se.send(fmt.Sprintf(":%s FAIL BOUNCER %s %s %s", serverName, code, sub, strings.Join(args, " ")))
 }
 
