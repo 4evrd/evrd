@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -41,11 +42,11 @@ type flakyStore struct {
 	down bool
 }
 
-func (f *flakyStore) UpsertNode(n store.Node) error {
+func (f *flakyStore) UpsertNode(ctx context.Context, n store.Node) error {
 	if f.down {
 		return fmt.Errorf("db down")
 	}
-	return f.Store.UpsertNode(n)
+	return f.Store.UpsertNode(ctx, n)
 }
 
 func setup(t *testing.T, users int) (store.Store, *fakeClock) {
@@ -56,7 +57,7 @@ func setup(t *testing.T, users int) (store.Store, *fakeClock) {
 	}
 	t.Cleanup(func() { st.Close() })
 	for i := 0; i < users; i++ {
-		st.CreateUser(store.User{Username: fmt.Sprintf("u%d", i)})
+		st.CreateUser(t.Context(), store.User{Username: fmt.Sprintf("u%d", i)})
 	}
 	return st, &fakeClock{t: time.Unix(1_800_000_000, 0)}
 }
@@ -165,16 +166,16 @@ func TestSuspendedAndDeletedUsersAreStopped(t *testing.T) {
 	st, clock := setup(t, 3)
 	a := newNode(st, clock, "a")
 	tick(clock, a)
-	u, _ := st.UserByID(2)
+	u, _ := st.UserByID(t.Context(), 2)
 	u.Suspended = true
-	st.UpdateUser(u)
-	st.DeleteUser(3)
+	st.UpdateUser(t.Context(), u)
+	st.DeleteUser(t.Context(), 3)
 	tick(clock, a)
 	if !a.has(1) || a.has(2) || a.has(3) {
 		t.Fatalf("running: %v", a.running)
 	}
 	u.Suspended = false
-	st.UpdateUser(u)
+	st.UpdateUser(t.Context(), u)
 	tick(clock, a)
 	if !a.has(2) {
 		t.Fatal("unsuspended user didn't come back")
@@ -231,10 +232,10 @@ func TestPlaceIsStable(t *testing.T) {
 
 func TestLeaderForgetsLongGoneNodes(t *testing.T) {
 	st, clock := setup(t, 1)
-	st.UpsertNode(store.Node{ID: "old", HeartbeatAt: clock.now().Add(-2 * time.Hour)})
+	st.UpsertNode(t.Context(), store.Node{ID: "old", HeartbeatAt: clock.now().Add(-2 * time.Hour)})
 	a := newNode(st, clock, "a")
 	tick(clock, a)
-	nodes, _ := st.LiveNodes(clock.now().Add(-3 * time.Hour))
+	nodes, _ := st.LiveNodes(t.Context(), clock.now().Add(-3*time.Hour))
 	if len(nodes) != 1 || nodes[0].ID != "a" {
 		t.Fatalf("nodes: %v", nodes)
 	}

@@ -8,6 +8,7 @@ package client
 // the client moved to another network.
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"sort"
@@ -91,7 +92,7 @@ func (se *session) regLink() *upstream.Conn {
 	if !se.srv.b.Owns(u.ID) || network == "" && se.bindID == "" && se.caps["soju.im/bouncer-networks"] {
 		return nil // another node's, or a bouncer connection
 	}
-	nets, _ := se.srv.b.Store().ListNetworks(u.ID)
+	nets, _ := se.srv.b.Store().ListNetworks(context.Background(), u.ID)
 	var n store.Network
 	ok := false
 	switch {

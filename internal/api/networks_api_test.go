@@ -178,7 +178,7 @@ func TestMessagesAndBuffersOffline(t *testing.T) {
 	if code, _ := c.do("POST", path+"/read", nil); code != 204 {
 		t.Fatalf("mark all read: %d", code)
 	}
-	marks, _ := e.st.ReadMarkers(id)
+	marks, _ := e.st.ReadMarkers(t.Context(), id)
 	if marks["zed"].IsZero() || marks["#a"].IsZero() {
 		t.Fatalf("read markers: %v", marks)
 	}

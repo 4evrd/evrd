@@ -49,11 +49,11 @@ func TestProvisionUser(t *testing.T) {
 	if len(nets) != 2 || nets[0].(map[string]any)["status"] != "created" {
 		t.Fatalf("networks: %v", nets)
 	}
-	u, err := e.st.UserByUsername("bob")
+	u, err := e.st.UserByUsername(t.Context(), "bob")
 	if err != nil || u.PasswordHash != "" || u.OIDCSubject != nil || !u.SSOClaimable || u.Email != "bob@example.org" {
 		t.Fatalf("account: %+v %v", u, err)
 	}
-	list, _ := e.st.ListNetworks(u.ID)
+	list, _ := e.st.ListNetworks(t.Context(), u.ID)
 	if len(list) != 2 || list[0].SASLUser != "bob" || list[0].Password != "sasl-pass" || len(list[0].Channels) != 2 {
 		t.Fatalf("stored networks: %+v", list)
 	}
@@ -63,7 +63,7 @@ func TestProvisionUser(t *testing.T) {
 	if code != 200 || out["created"] != false || out["networks"].([]any)[1].(map[string]any)["status"] != "exists" {
 		t.Fatalf("repeat: %d %v", code, out)
 	}
-	if list, _ := e.st.ListNetworks(u.ID); len(list) != 2 {
+	if list, _ := e.st.ListNetworks(t.Context(), u.ID); len(list) != 2 {
 		t.Fatalf("repeat duplicated networks: %d", len(list))
 	}
 
@@ -74,7 +74,7 @@ func TestProvisionUser(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("connect repeat: %d %v", code, out)
 	}
-	if list, _ := e.st.ListNetworks(u.ID); !list[0].Enabled {
+	if list, _ := e.st.ListNetworks(t.Context(), u.ID); !list[0].Enabled {
 		t.Fatalf("connect didn't enable %s", list[0].Name)
 	}
 }

@@ -164,7 +164,7 @@ func TestPersonalLanguagePack(t *testing.T) {
 	if code, _ := admin.do("DELETE", userPath(alice), nil); code != 200 && code != 204 {
 		t.Fatalf("delete alice: %d", code)
 	}
-	if _, err := e.st.UserLanguagePack(alice.ID); err != store.ErrNotFound {
+	if _, err := e.st.UserLanguagePack(t.Context(), alice.ID); err != store.ErrNotFound {
 		t.Fatalf("pack survived its user: %v", err)
 	}
 }

@@ -53,15 +53,15 @@ func TestAttachRefusals(t *testing.T) {
 	ic.expect("No networks configured")
 
 	// a suspended account
-	u, _ := r.st.UserByUsername("bob")
+	u, _ := r.st.UserByUsername(t.Context(), "bob")
 	u.Suspended = true
-	r.st.UpdateUser(u)
+	r.st.UpdateUser(t.Context(), u)
 	r.attach("bob:bob-password").expect("465 alice :This account is suspended")
 
 	// signing in from a host the account doesn't allow
 	a := r.user
 	a.AllowedHosts = []string{"192.0.2.0/24"}
-	r.st.UpdateUser(a)
+	r.st.UpdateUser(t.Context(), a)
 	r.attach("alice:alice-password").expect("Signing in from 127.0.0.1 isn't allowed for this account")
 }
 
@@ -107,13 +107,13 @@ func TestSignInFailuresAreLogged(t *testing.T) {
 	logged("without a password", "pass_sent=true")
 
 	sam.Suspended = true
-	r.st.UpdateUser(sam)
+	r.st.UpdateUser(t.Context(), sam)
 	r.attach("sam:" + secret).expect("This account is suspended")
 	logged("user=sam", "reason=suspended")
 
 	a := r.user
 	a.AllowedHosts = []string{"192.0.2.0/24"}
-	r.st.UpdateUser(a)
+	r.st.UpdateUser(t.Context(), a)
 	r.attach("alice:alice-password").expect("isn't allowed")
 	logged("user=alice", "reason=host_denied")
 
@@ -138,7 +138,7 @@ func TestClientLimit(t *testing.T) {
 	one := 1
 	u := r.user
 	u.MaxClients = &one
-	r.st.UpdateUser(u)
+	r.st.UpdateUser(t.Context(), u)
 	first := r.attach("alice/one:alice-password")
 	first.expect(" 376 ")
 	r.attach("alice/one:alice-password").expect("Too many clients attached (limit 1)")

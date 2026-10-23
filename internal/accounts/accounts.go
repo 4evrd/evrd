@@ -4,6 +4,7 @@
 package accounts
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base32"
 	"errors"
@@ -191,7 +192,7 @@ func (s *Service) Create(in CreateInput) (store.User, error) {
 	if err != nil {
 		return store.User{}, err
 	}
-	if _, err := s.st.UserByUsername(name); err == nil {
+	if _, err := s.st.UserByUsername(context.Background(), name); err == nil {
 		return store.User{}, ErrUsernameTaken
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return store.User{}, err
@@ -214,7 +215,7 @@ func (s *Service) Create(in CreateInput) (store.User, error) {
 		sub := in.Subject
 		u.OIDCSubject = &sub
 	}
-	return s.st.CreateUser(u)
+	return s.st.CreateUser(context.Background(), u)
 }
 
 // SetPassword replaces a user's local password (and clears a pending
@@ -225,7 +226,7 @@ func (s *Service) SetPassword(u *store.User, pw string) error {
 		return err
 	}
 	u.PasswordHash, u.MustChangePassword = h, false
-	return s.st.UpdateUser(*u)
+	return s.st.UpdateUser(context.Background(), *u)
 }
 
 // SetTemporaryPassword gives a user a password they must change at their
@@ -241,7 +242,7 @@ func (s *Service) SetTemporaryPassword(u *store.User, pw string) (string, error)
 		return "", err
 	}
 	u.MustChangePassword = true
-	return pw, s.st.UpdateUser(*u)
+	return pw, s.st.UpdateUser(context.Background(), *u)
 }
 
 // RandomPassword is a readable random password (xxxxx-xxxxx-xxxxx-xxxxx).
@@ -271,7 +272,7 @@ func (s *Service) ChangePassword(u *store.User, current, next string) error {
 
 // PasswordLogin checks a username and local password for the web sign-in.
 func (s *Service) PasswordLogin(username, password string) (store.User, error) {
-	u, err := s.st.UserByUsername(strings.ToLower(strings.TrimSpace(username)))
+	u, err := s.st.UserByUsername(context.Background(), strings.ToLower(strings.TrimSpace(username)))
 	if err != nil {
 		// Spend the same time as a real check so usernames can't be probed.
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
@@ -292,7 +293,7 @@ var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("evrd-timing-dummy"), bcry
 // local password, or one of their client passwords. It also returns the
 // client password's name ("" for the account password).
 func (s *Service) IRCLogin(username, secret string) (store.User, string, error) {
-	u, err := s.st.UserByUsername(strings.ToLower(username))
+	u, err := s.st.UserByUsername(context.Background(), strings.ToLower(username))
 	if err != nil {
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(secret))
 		return store.User{}, "", ErrInvalidCredentials
@@ -300,13 +301,13 @@ func (s *Service) IRCLogin(username, secret string) (store.User, string, error) 
 	device := ""
 	ok := u.PasswordHash != "" && bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(secret)) == nil
 	if !ok {
-		cps, err := s.st.ListClientPasswords(u.ID)
+		cps, err := s.st.ListClientPasswords(context.Background(), u.ID)
 		if err != nil {
 			return store.User{}, "", err
 		}
 		for _, cp := range cps {
 			if bcrypt.CompareHashAndPassword([]byte(cp.Hash), []byte(secret)) == nil {
-				_ = s.st.TouchClientPassword(cp.ID, s.now())
+				_ = s.st.TouchClientPassword(context.Background(), cp.ID, s.now())
 				ok, device = true, cp.Name
 				break
 			}
@@ -346,7 +347,7 @@ func (s *Service) NewClientPassword(userID int64, name string) (store.ClientPass
 	if err != nil {
 		return store.ClientPassword{}, "", err
 	}
-	cp, err := s.st.CreateClientPassword(store.ClientPassword{UserID: userID, Name: name, Hash: string(h)})
+	cp, err := s.st.CreateClientPassword(context.Background(), store.ClientPassword{UserID: userID, Name: name, Hash: string(h)})
 	return cp, secret, err
 }
 
@@ -356,7 +357,7 @@ func (s *Service) CanCreateNetwork(u store.User) error {
 	if max == 0 {
 		return nil
 	}
-	n, err := s.st.CountNetworks(u.ID)
+	n, err := s.st.CountNetworks(context.Background(), u.ID)
 	if err != nil {
 		return err
 	}
@@ -372,7 +373,7 @@ func (s *Service) GuardAdminChange(before store.User, stillAdmin bool) error {
 	if !before.IsAdmin() || stillAdmin {
 		return nil
 	}
-	n, err := s.st.CountAdmins()
+	n, err := s.st.CountAdmins(context.Background())
 	if err != nil {
 		return err
 	}

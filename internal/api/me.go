@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -17,7 +18,7 @@ var Languages = []string{"en", "it", "es", "tr", "de", "id", "ja"}
 // userDTO is what a user sees about their own account (and what an admin
 // sees, plus the overrides from adminUserDTO).
 func (s *Server) userDTO(u store.User) map[string]any {
-	nets, _ := s.st().CountNetworks(u.ID)
+	nets, _ := s.st().CountNetworks(context.Background(), u.ID)
 	return map[string]any{
 		"id": u.ID, "username": u.Username, "email": u.Email, "role": u.Role,
 		"suspended": u.Suspended, "suspendedReason": u.SuspendedReason,
@@ -40,7 +41,7 @@ func (s *Server) otherAdmins(u store.User) []string {
 	if !u.IsAdmin() {
 		return []string{}
 	}
-	users, err := s.st().ListUsers()
+	users, err := s.st().ListUsers(context.Background())
 	if err != nil {
 		return []string{}
 	}
@@ -129,7 +130,7 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	if in.AutoAway != nil {
 		u.AutoAway = *in.AutoAway
 	}
-	if err := s.st().UpdateUser(u); err != nil {
+	if err := s.st().UpdateUser(r.Context(), u); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -157,7 +158,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Sign out everywhere else: whoever knew the old password is out.
-	_ = s.st().DeleteUserSessions(u.ID, auth.SessionOf(r).ID)
+	_ = s.st().DeleteUserSessions(r.Context(), u.ID, auth.SessionOf(r).ID)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -192,7 +193,7 @@ func (s *Server) deleteUser(u store.User) {
 // --- sessions ------------------------------------------------------------
 
 func (s *Server) sessionsDTO(userID int64, current string) []map[string]any {
-	list, _ := s.st().ListSessions(userID)
+	list, _ := s.st().ListSessions(context.Background(), userID)
 	out := make([]map[string]any, 0, len(list))
 	for _, x := range list {
 		out = append(out, map[string]any{
@@ -209,7 +210,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRevokeSession(w http.ResponseWriter, r *http.Request) {
-	if err := s.st().DeleteSession(auth.User(r).ID, r.PathValue("id")); err != nil {
+	if err := s.st().DeleteSession(r.Context(), auth.User(r).ID, r.PathValue("id")); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -217,7 +218,7 @@ func (s *Server) handleRevokeSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRevokeOtherSessions(w http.ResponseWriter, r *http.Request) {
-	if err := s.st().DeleteUserSessions(auth.User(r).ID, auth.SessionOf(r).ID); err != nil {
+	if err := s.st().DeleteUserSessions(r.Context(), auth.User(r).ID, auth.SessionOf(r).ID); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -227,7 +228,7 @@ func (s *Server) handleRevokeOtherSessions(w http.ResponseWriter, r *http.Reques
 // --- IRC client passwords ------------------------------------------------
 
 func (s *Server) handleListClientPasswords(w http.ResponseWriter, r *http.Request) {
-	list, err := s.st().ListClientPasswords(auth.User(r).ID)
+	list, err := s.st().ListClientPasswords(r.Context(), auth.User(r).ID)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -259,7 +260,7 @@ func (s *Server) handleCreateClientPassword(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleDeleteClientPassword(w http.ResponseWriter, r *http.Request) {
-	if err := s.st().DeleteClientPassword(auth.User(r).ID, pathID(r)); err != nil {
+	if err := s.st().DeleteClientPassword(r.Context(), auth.User(r).ID, pathID(r)); err != nil {
 		s.fail(w, err)
 		return
 	}

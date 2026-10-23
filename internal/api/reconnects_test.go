@@ -70,7 +70,7 @@ func TestReconnects(t *testing.T) {
 		{UserID: fay.ID, At: now.Add(-time.Minute), Kind: "attached", Title: "irssi attached"},
 		{UserID: fay.ID, NetworkID: nid, At: now.Add(-48 * time.Hour), Kind: "disconnected", Title: "long ago"},
 	} {
-		if err := e.st.AddUserEvent(ev); err != nil {
+		if err := e.st.AddUserEvent(t.Context(), ev); err != nil {
 			t.Fatal(err)
 		}
 	}

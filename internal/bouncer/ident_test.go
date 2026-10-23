@@ -81,7 +81,7 @@ func identRig(t *testing.T, sockets map[string]fakeSocket) *liveRig {
 func (r *liveRig) identNet(host, ident string) store.Network {
 	r.t.Helper()
 	u := r.user(ident, nil)
-	n, err := r.st.CreateNetwork(store.Network{UserID: u.ID, Name: host, Host: host, Port: 6667, Nick: ident + "_", Username: ident})
+	n, err := r.st.CreateNetwork(context.Background(), store.Network{UserID: u.ID, Name: host, Host: host, Port: 6667, Nick: ident + "_", Username: ident})
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -248,7 +248,7 @@ func TestIdentdAnswersTheServer(t *testing.T) {
 	_, port, _ := net.SplitHostPort(ircln.Addr().String())
 	var p int
 	fmt.Sscan(port, &p)
-	n, err := r.st.CreateNetwork(store.Network{UserID: u.ID, Name: "net", Host: "127.0.0.1", Port: p, Nick: "alice", Username: "al!ce~x"})
+	n, err := r.st.CreateNetwork(context.Background(), store.Network{UserID: u.ID, Name: "net", Host: "127.0.0.1", Port: p, Nick: "alice", Username: "al!ce~x"})
 	if err != nil {
 		t.Fatal(err)
 	}

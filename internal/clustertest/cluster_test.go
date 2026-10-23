@@ -173,7 +173,7 @@ func (e *env) user(name, role, ircd string) store.User {
 	}
 	host, port, _ := net.SplitHostPort(ircd)
 	p, _ := strconv.Atoi(port)
-	e.st.CreateNetwork(store.Network{UserID: u.ID, Name: "net", Host: host, Port: p, Nick: name, Channels: []string{"#c"}, Enabled: true})
+	e.st.CreateNetwork(context.Background(), store.Network{UserID: u.ID, Name: "net", Host: host, Port: p, Nick: name, Channels: []string{"#c"}, Enabled: true})
 	return u
 }
 
@@ -319,7 +319,7 @@ func TestWebRequestsAreServedByTheOwner(t *testing.T) {
 	u, _ := e.pickUsers(ircd)
 	owner, other := e.ownerAndOther(u.ID)
 	eventually(t, "owner connected the network", func() bool {
-		nets, _ := e.st.ListNetworks(u.ID)
+		nets, _ := e.st.ListNetworks(t.Context(), u.ID)
 		return owner.b.Status(nets[0].ID) == "connected"
 	})
 
@@ -442,7 +442,7 @@ func TestAdminActionsReachTheOwner(t *testing.T) {
 	b.do("PATCH", fmt.Sprintf("/api/admin/users/%d", u.ID), map[string]any{"suspended": false})
 	e.tick()
 	again, _ := e.ownerAndOther(u.ID)
-	nets, _ := e.st.ListNetworks(u.ID)
+	nets, _ := e.st.ListNetworks(t.Context(), u.ID)
 	eventually(t, "unsuspended user reconnects on its owner", func() bool { return again.b.Status(nets[0].ID) == "connected" })
 
 	// The overview adds up every node.
@@ -481,7 +481,7 @@ func TestDrainMovesUsersToTheOtherNode(t *testing.T) {
 	if !other.cl.Owns(u.ID) {
 		t.Fatal("the user didn't move")
 	}
-	nets, _ := e.st.ListNetworks(u.ID)
+	nets, _ := e.st.ListNetworks(t.Context(), u.ID)
 	eventually(t, "the new owner connected the network", func() bool { return other.b.Status(nets[0].ID) == "connected" })
 	// Clients reconnect and land on the new owner.
 	dialIRC(t, owner.irc, u.Username+":"+u.Username+"-password").expect("Welcome to evrd")

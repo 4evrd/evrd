@@ -96,7 +96,7 @@ func TestAdminUpdateUser(t *testing.T) {
 	if code != 200 || out["email"] != "a@example.org" {
 		t.Fatalf("update: %d %v", code, out)
 	}
-	if u, _ := e.st.UserByID(alice.ID); !u.DenySetBindHost || u.QuitMsg != "later" {
+	if u, _ := e.st.UserByID(t.Context(), alice.ID); !u.DenySetBindHost || u.QuitMsg != "later" {
 		t.Fatalf("stored: %+v", u)
 	}
 
@@ -118,7 +118,7 @@ func TestAdminUpdateUser(t *testing.T) {
 	if code, out := admin.do("PATCH", userPath(alice), map[string]any{"role": "admin"}); code != 200 || out["role"] != "admin" {
 		t.Fatalf("promote: %d %v", code, out)
 	}
-	root, _ := e.st.UserByUsername("root")
+	root, _ := e.st.UserByUsername(t.Context(), "root")
 	if code, out := admin.do("PATCH", userPath(root), map[string]any{"role": "user"}); code != 200 || out["role"] != "user" {
 		t.Fatalf("step down: %d %v", code, out)
 	}
@@ -196,7 +196,7 @@ func TestAdminDeleteUserGuards(t *testing.T) {
 	if code, _ := admin.do("DELETE", userPath(root2), nil); code != 204 {
 		t.Fatalf("delete another admin: %d", code)
 	}
-	if _, err := e.st.UserByID(root2.ID); err == nil {
+	if _, err := e.st.UserByID(t.Context(), root2.ID); err == nil {
 		t.Fatal("still there")
 	}
 }

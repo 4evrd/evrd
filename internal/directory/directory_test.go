@@ -39,7 +39,7 @@ type memCache struct {
 	err  error
 }
 
-func (m *memCache) Cached(k string) (string, error) {
+func (m *memCache) Cached(_ context.Context, k string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.err != nil {
@@ -52,7 +52,7 @@ func (m *memCache) Cached(k string) (string, error) {
 	return v, nil
 }
 
-func (m *memCache) PutCached(k, v string) error {
+func (m *memCache) PutCached(_ context.Context, k, v string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.data == nil {
@@ -320,7 +320,7 @@ func TestRun(t *testing.T) {
 	if hits.Load() < 1 {
 		t.Fatal("no request")
 	}
-	if _, err := cache.Cached(cacheKey); err != nil {
+	if _, err := cache.Cached(context.Background(), cacheKey); err != nil {
 		t.Fatal("not stored", err)
 	}
 }

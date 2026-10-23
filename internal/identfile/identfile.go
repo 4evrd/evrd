@@ -32,8 +32,8 @@ const Interval = time.Minute
 
 // Source is what the file is made from (the store implements it).
 type Source interface {
-	ListUsers() ([]store.User, error)
-	AllNetworks() ([]store.Network, error)
+	ListUsers(ctx context.Context) ([]store.User, error)
+	AllNetworks(ctx context.Context) ([]store.Network, error)
 }
 
 // Writer keeps the file at Path up to date.
@@ -74,11 +74,11 @@ func (w *Writer) Run(ctx context.Context) {
 
 // Update writes the file if what it should say has changed.
 func (w *Writer) Update(ctx context.Context) error {
-	users, err := w.src.ListUsers()
+	users, err := w.src.ListUsers(ctx)
 	if err != nil {
 		return err
 	}
-	nets, err := w.src.AllNetworks()
+	nets, err := w.src.AllNetworks(ctx)
 	if err != nil {
 		return err
 	}

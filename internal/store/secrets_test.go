@@ -12,7 +12,7 @@ import (
 func rawSecrets(t *testing.T, st Store, id int64) (string, string) {
 	t.Helper()
 	var row struct{ Password, Servers string }
-	st.(*gormStore).db.Table("networks").Select("password", "servers").Where("id = ?", id).Scan(&row)
+	st.(*gormStore).db.DB.Table("networks").Select("password", "servers").Where("id = ?", id).Scan(&row)
 	return row.Password, row.Servers
 }
 
@@ -28,8 +28,8 @@ func TestNetworkSecretsAreEncryptedAtRest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	u, _ := st.CreateUser(User{Username: "alice"})
-	n, err := st.CreateNetwork(Network{UserID: u.ID, Name: "libera", Nick: "a", Host: "h", Password: "sasl-secret",
+	u, _ := st.CreateUser(t.Context(), User{Username: "alice"})
+	n, err := st.CreateNetwork(t.Context(), Network{UserID: u.ID, Name: "libera", Nick: "a", Host: "h", Password: "sasl-secret",
 		Servers: []Server{{Host: "h", Port: 6697, Password: "server-secret"}}})
 	if err != nil {
 		t.Fatal(err)
@@ -44,23 +44,23 @@ func TestNetworkSecretsAreEncryptedAtRest(t *testing.T) {
 		t.Fatal(err)
 	}
 	st, _ = Open(path)
-	if c, err := st.EncryptSecrets(); err != nil || c != 1 {
+	if c, err := st.EncryptSecrets(t.Context()); err != nil || c != 1 {
 		t.Fatalf("EncryptSecrets: %d %v", c, err)
 	}
 	pw, servers := rawSecrets(t, st, n.ID)
 	if !strings.HasPrefix(pw, "enc:v1:") || strings.Contains(pw, "sasl-secret") || strings.Contains(servers, "server-secret") {
 		t.Fatalf("not encrypted: %q %q", pw, servers)
 	}
-	if c, _ := st.EncryptSecrets(); c != 0 {
+	if c, _ := st.EncryptSecrets(t.Context()); c != 0 {
 		t.Fatal("already-encrypted secrets were rewritten")
 	}
-	got, _ := st.NetworkByID(n.ID)
+	got, _ := st.NetworkByID(t.Context(), n.ID)
 	if got.Password != "sasl-secret" || got.Servers[0].Password != "server-secret" {
 		t.Fatalf("decrypted: %q %+v", got.Password, got.Servers)
 	}
 	// New writes are encrypted too.
 	got.Password = "changed"
-	st.UpdateNetwork(got)
+	st.UpdateNetwork(t.Context(), got)
 	if pw, _ := rawSecrets(t, st, n.ID); strings.Contains(pw, "changed") {
 		t.Fatal("an update stored plaintext")
 	}
@@ -69,13 +69,13 @@ func TestNetworkSecretsAreEncryptedAtRest(t *testing.T) {
 	// Rotating: the new key, with the old one still accepted.
 	SetSecretKeys(key2, key1)
 	st, _ = Open(path)
-	if c, _ := st.EncryptSecrets(); c != 1 {
+	if c, _ := st.EncryptSecrets(t.Context()); c != 1 {
 		t.Fatal("rotation didn't re-encrypt")
 	}
 	st.Close()
 	SetSecretKeys(key2) // the old key can go now
 	st, _ = Open(path)
-	if got, err := st.NetworkByID(n.ID); err != nil || got.Password != "changed" {
+	if got, err := st.NetworkByID(t.Context(), n.ID); err != nil || got.Password != "changed" {
 		t.Fatalf("after rotation: %q %v", got.Password, err)
 	}
 	st.Close()
@@ -84,7 +84,7 @@ func TestNetworkSecretsAreEncryptedAtRest(t *testing.T) {
 	SetSecretKeys(key1)
 	st, _ = Open(path)
 	defer st.Close()
-	if _, err := st.NetworkByID(n.ID); !errors.Is(err, ErrSecretKey) {
+	if _, err := st.NetworkByID(t.Context(), n.ID); !errors.Is(err, ErrSecretKey) {
 		t.Fatalf("wrong key: %v", err)
 	}
 }
@@ -102,19 +102,19 @@ func TestSettingsAreReencrypted(t *testing.T) {
 	path := "sqlite:" + filepath.Join(t.TempDir(), "evrd.db")
 	SetSecretKeys(old)
 	st, _ := Open(path)
-	st.SaveSettings(map[string]string{"oidc_client_secret": "shh"}, nil, "root")
+	st.SaveSettings(t.Context(), map[string]string{"oidc_client_secret": "shh"}, nil, "root")
 	st.Close()
 
 	SetSecretKeys(nu, old) // rotate
 	st, _ = Open(path)
-	if c, err := st.EncryptSecrets(); err != nil || c != 1 {
+	if c, err := st.EncryptSecrets(t.Context()); err != nil || c != 1 {
 		t.Fatalf("EncryptSecrets: %d %v", c, err)
 	}
 	st.Close()
 	SetSecretKeys(nu) // the old key is gone
 	st, _ = Open(path)
 	defer st.Close()
-	rows, err := st.Settings()
+	rows, err := st.Settings(t.Context())
 	if err != nil || len(rows) != 1 || rows[0].Value != "shh" {
 		t.Fatalf("after rotation: %+v %v", rows, err)
 	}
@@ -223,40 +223,40 @@ func TestCurrent(t *testing.T) {
 
 func TestSerializersScan(t *testing.T) {
 	st := open(t)
-	db := st.(*gormStore).db
-	n, err := st.CreateNetwork(Network{UserID: 1, Name: "x", Password: "pw", Servers: []Server{{Host: "h", Password: "sp"}}})
+	db := st.(*gormStore).db.DB
+	n, err := st.CreateNetwork(t.Context(), Network{UserID: 1, Name: "x", Password: "pw", Servers: []Server{{Host: "h", Password: "sp"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// NULL columns read as empty.
 	db.Exec("UPDATE networks SET password = NULL, servers = NULL WHERE id = ?", n.ID)
-	got, err := st.NetworkByID(n.ID)
+	got, err := st.NetworkByID(t.Context(), n.ID)
 	if err != nil || got.Password != "" || got.Servers != nil {
 		t.Fatalf("NULL: %+v %v", got, err)
 	}
 	// Stored as blobs ([]byte from the driver) they read the same.
 	db.Exec("UPDATE networks SET password = CAST('pw' AS BLOB), servers = CAST(? AS BLOB) WHERE id = ?", `[{"host":"h","port":1,"tls":false,"password":"sp"}]`, n.ID)
-	got, err = st.NetworkByID(n.ID)
+	got, err = st.NetworkByID(t.Context(), n.ID)
 	if err != nil || got.Password != "pw" || len(got.Servers) != 1 || got.Servers[0].Password != "sp" {
 		t.Fatalf("blobs: %+v %v", got, err)
 	}
 	// An empty server list.
 	db.Exec("UPDATE networks SET servers = '' WHERE id = ?", n.ID)
-	if got, err := st.NetworkByID(n.ID); err != nil || len(got.Servers) != 0 {
+	if got, err := st.NetworkByID(t.Context(), n.ID); err != nil || len(got.Servers) != 0 {
 		t.Fatalf("empty servers: %+v %v", got.Servers, err)
 	}
 	// Servers that aren't a JSON list are an error, not an empty list.
 	db.Exec("UPDATE networks SET servers = 42 WHERE id = ?", n.ID)
-	if _, err := st.NetworkByID(n.ID); err == nil {
+	if _, err := st.NetworkByID(t.Context(), n.ID); err == nil {
 		t.Fatal("numeric servers were accepted")
 	}
 	db.Exec("UPDATE networks SET servers = '[{' WHERE id = ?", n.ID)
-	if _, err := st.NetworkByID(n.ID); err == nil {
+	if _, err := st.NetworkByID(t.Context(), n.ID); err == nil {
 		t.Fatal("damaged servers JSON was accepted")
 	}
 	// A server password sealed under an unknown key is ErrSecretKey.
 	db.Exec("UPDATE networks SET servers = ? WHERE id = ?", `[{"host":"h","password":"enc:v1:00000000:AAAA"}]`, n.ID)
-	if _, err := st.NetworkByID(n.ID); !errors.Is(err, ErrSecretKey) {
+	if _, err := st.NetworkByID(t.Context(), n.ID); !errors.Is(err, ErrSecretKey) {
 		t.Fatalf("server password under an unknown key: %v", err)
 	}
 }
@@ -270,13 +270,13 @@ func TestEncryptSecretsCoversServersSettingsAndCerts(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Only a server password is secret here; another network has no secrets.
-	n, _ := st.CreateNetwork(Network{UserID: 1, Name: "x", Servers: []Server{{Host: "h", Password: "server-secret"}},
+	n, _ := st.CreateNetwork(t.Context(), Network{UserID: 1, Name: "x", Servers: []Server{{Host: "h", Password: "server-secret"}},
 		AuthCommand: "PRIVMSG x@channels.undernet.org :login %account% %password%",
 		Modules:     map[string]ModuleConfig{"perform": {Enabled: true, Settings: map[string]string{"commands": "OPER me oper-secret"}}}})
-	st.CreateNetwork(Network{UserID: 1, Name: "plain", Servers: []Server{{Host: "h"}}})
-	st.PutCertCache("acme", "PRIVATE KEY")
-	st.SaveSettings(map[string]string{"s": "v", "empty": ""}, nil, "root")
-	if c, _ := st.EncryptSecrets(); c != 0 {
+	st.CreateNetwork(t.Context(), Network{UserID: 1, Name: "plain", Servers: []Server{{Host: "h"}}})
+	st.PutCertCache(t.Context(), "acme", "PRIVATE KEY")
+	st.SaveSettings(t.Context(), map[string]string{"s": "v", "empty": ""}, nil, "root")
+	if c, _ := st.EncryptSecrets(t.Context()); c != 0 {
 		t.Fatalf("rewrote %d rows without a key", c)
 	}
 	st.Close()
@@ -284,10 +284,10 @@ func TestEncryptSecretsCoversServersSettingsAndCerts(t *testing.T) {
 	SetSecretKeys(bytes.Repeat([]byte{7}, 32))
 	st, _ = Open(path)
 	defer st.Close()
-	if c, err := st.EncryptSecrets(); err != nil || c != 3 {
+	if c, err := st.EncryptSecrets(t.Context()); err != nil || c != 3 {
 		t.Fatalf("EncryptSecrets: %d %v", c, err)
 	}
-	db := st.(*gormStore).db
+	db := st.(*gormStore).db.DB
 	_, servers := rawSecrets(t, st, n.ID)
 	var data, value string
 	db.Table("cert_cache_entries").Select("data").Where("key = ?", "acme").Scan(&data)
@@ -302,31 +302,31 @@ func TestEncryptSecretsCoversServersSettingsAndCerts(t *testing.T) {
 	if !strings.HasPrefix(mods, secretPrefix) || strings.Contains(mods, "oper-secret") || !strings.HasPrefix(authCmd, secretPrefix) {
 		t.Fatalf("modules / auth command not encrypted: %q %q", mods, authCmd)
 	}
-	if got, _ := st.NetworkByID(n.ID); got.Modules["perform"].Settings["commands"] != "OPER me oper-secret" || !got.Modules["perform"].Enabled ||
+	if got, _ := st.NetworkByID(t.Context(), n.ID); got.Modules["perform"].Settings["commands"] != "OPER me oper-secret" || !got.Modules["perform"].Enabled ||
 		got.AuthCommand != "PRIVMSG x@channels.undernet.org :login %account% %password%" {
 		t.Fatalf("modules / auth command after encryption: %+v %q", got.Modules, got.AuthCommand)
 	}
-	if got, _ := st.CertCache("acme"); got != "PRIVATE KEY" {
+	if got, _ := st.CertCache(t.Context(), "acme"); got != "PRIVATE KEY" {
 		t.Fatalf("cert after encryption: %q", got)
 	}
-	if got, _ := st.NetworkByID(n.ID); got.Servers[0].Password != "server-secret" {
+	if got, _ := st.NetworkByID(t.Context(), n.ID); got.Servers[0].Password != "server-secret" {
 		t.Fatalf("server password after encryption: %+v", got.Servers)
 	}
-	if c, _ := st.EncryptSecrets(); c != 0 {
+	if c, _ := st.EncryptSecrets(t.Context()); c != 0 {
 		t.Fatalf("second run rewrote %d", c)
 	}
 
 	// A secret no key opens stops the rewrite with an error.
 	db.Exec("UPDATE cert_cache_entries SET data = 'enc:v1:00000000:AAAA'")
-	if _, err := st.EncryptSecrets(); !errors.Is(err, ErrSecretKey) {
+	if _, err := st.EncryptSecrets(t.Context()); !errors.Is(err, ErrSecretKey) {
 		t.Fatalf("cert under an unknown key: %v", err)
 	}
 	db.Exec("UPDATE settings SET value = 'enc:v1:00000000:AAAA' WHERE key = 's'")
-	if _, err := st.EncryptSecrets(); !errors.Is(err, ErrSecretKey) {
+	if _, err := st.EncryptSecrets(t.Context()); !errors.Is(err, ErrSecretKey) {
 		t.Fatalf("setting under an unknown key: %v", err)
 	}
 	db.Exec("UPDATE networks SET password = 'enc:v1:00000000:AAAA' WHERE id = ?", n.ID)
-	if _, err := st.EncryptSecrets(); !errors.Is(err, ErrSecretKey) {
+	if _, err := st.EncryptSecrets(t.Context()); !errors.Is(err, ErrSecretKey) {
 		t.Fatalf("network under an unknown key: %v", err)
 	}
 }
@@ -341,43 +341,43 @@ func TestModulesAreEncrypted(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	db := st.(*gormStore).db
+	db := st.(*gormStore).db.DB
 	raw := func(id int64) (mods string) {
 		db.Table("networks").Select("coalesce(modules, '')").Where("id = ?", id).Scan(&mods)
 		return
 	}
 
-	empty, _ := st.CreateNetwork(Network{UserID: 1, Name: "empty"})
+	empty, _ := st.CreateNetwork(t.Context(), Network{UserID: 1, Name: "empty"})
 	if raw(empty.ID) != "" {
 		t.Fatalf("empty modules stored as %q", raw(empty.ID))
 	}
-	if got, _ := st.NetworkByID(empty.ID); len(got.Modules) != 0 {
+	if got, _ := st.NetworkByID(t.Context(), empty.ID); len(got.Modules) != 0 {
 		t.Fatalf("empty modules read back as %v", got.Modules)
 	}
 
-	n, _ := st.CreateNetwork(Network{UserID: 1, Name: "old"})
+	n, _ := st.CreateNetwork(t.Context(), Network{UserID: 1, Name: "old"})
 	db.Exec(`UPDATE networks SET modules = '{"perform":{"enabled":true,"settings":{"commands":"PRIVMSG NickServ :IDENTIFY pw"}}}' WHERE id = ?`, n.ID)
-	got, err := st.NetworkByID(n.ID)
+	got, err := st.NetworkByID(t.Context(), n.ID)
 	if err != nil || got.Modules["perform"].Settings["commands"] != "PRIVMSG NickServ :IDENTIFY pw" {
 		t.Fatalf("plain JSON from before: %v %v", got.Modules, err)
 	}
-	if err := st.UpdateNetwork(got); err != nil {
+	if err := st.UpdateNetwork(t.Context(), got); err != nil {
 		t.Fatal(err)
 	}
 	if m := raw(n.ID); !strings.HasPrefix(m, secretPrefix) || strings.Contains(m, "IDENTIFY") {
 		t.Fatalf("saved again, still readable: %q", m)
 	}
-	if got, _ := st.NetworkByID(n.ID); got.Modules["perform"].Settings["commands"] != "PRIVMSG NickServ :IDENTIFY pw" {
+	if got, _ := st.NetworkByID(t.Context(), n.ID); got.Modules["perform"].Settings["commands"] != "PRIVMSG NickServ :IDENTIFY pw" {
 		t.Fatalf("after sealing: %v", got.Modules)
 	}
 
 	// a key that doesn't open them, and JSON that doesn't parse, are errors
 	db.Exec("UPDATE networks SET modules = 'enc:v1:00000000:AAAA' WHERE id = ?", n.ID)
-	if _, err := st.NetworkByID(n.ID); !errors.Is(err, ErrSecretKey) {
+	if _, err := st.NetworkByID(t.Context(), n.ID); !errors.Is(err, ErrSecretKey) {
 		t.Fatalf("unknown key: %v", err)
 	}
 	db.Exec("UPDATE networks SET modules = '{not json' WHERE id = ?", n.ID)
-	if _, err := st.NetworkByID(n.ID); err == nil {
+	if _, err := st.NetworkByID(t.Context(), n.ID); err == nil {
 		t.Fatal("broken JSON read without an error")
 	}
 }

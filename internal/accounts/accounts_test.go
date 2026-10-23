@@ -88,7 +88,7 @@ func TestCreate(t *testing.T) {
 	if !u.MustChangePassword || u.PasswordHash == "" || u.PasswordHash == "correct horse" {
 		t.Fatalf("password: must-change %v hash %q", u.MustChangePassword, u.PasswordHash)
 	}
-	if got, err := st.UserBySubject("sub-1"); err != nil || got.ID != u.ID {
+	if got, err := st.UserBySubject(t.Context(), "sub-1"); err != nil || got.ID != u.ID {
 		t.Fatalf("subject link: %v %+v", err, got)
 	}
 
@@ -112,7 +112,7 @@ func TestCreate(t *testing.T) {
 			t.Errorf("%s: got %v", tc.name, err)
 		}
 	}
-	if users, _ := st.ListUsers(); len(users) != 2 {
+	if users, _ := st.ListUsers(t.Context()); len(users) != 2 {
 		t.Fatalf("refused creates stored users: %d", len(users))
 	}
 }
@@ -138,7 +138,7 @@ func TestPasswordLogin(t *testing.T) {
 	}
 
 	u.Suspended = true
-	st.UpdateUser(u)
+	st.UpdateUser(t.Context(), u)
 	if _, err := s.PasswordLogin("alice", "correct horse"); !errors.Is(err, ErrSuspended) {
 		t.Fatalf("suspended: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestSetAndChangePassword(t *testing.T) {
 	if err := s.ChangePassword(&u, "first password", "second password"); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := st.UserByID(u.ID)
+	got, _ := st.UserByID(t.Context(), u.ID)
 	if got.MustChangePassword {
 		t.Fatal("changing the password clears must-change")
 	}
@@ -187,7 +187,7 @@ func TestSetTemporaryPassword(t *testing.T) {
 	if err != nil || pw != "chosen by admin" {
 		t.Fatalf("given: %q %v", pw, err)
 	}
-	if got, _ := st.UserByID(u.ID); !got.MustChangePassword {
+	if got, _ := st.UserByID(t.Context(), u.ID); !got.MustChangePassword {
 		t.Fatal("a temporary password must be changed")
 	}
 	if _, err := s.PasswordLogin("alice", "chosen by admin"); err != nil {
@@ -201,7 +201,7 @@ func TestSetTemporaryPassword(t *testing.T) {
 	if _, err := s.PasswordLogin("alice", gen); err != nil {
 		t.Fatalf("generated password works: %v", err)
 	}
-	if got, _ := st.UserByID(u.ID); !got.MustChangePassword {
+	if got, _ := st.UserByID(t.Context(), u.ID); !got.MustChangePassword {
 		t.Fatal("a generated password must be changed")
 	}
 
@@ -260,7 +260,7 @@ func TestIRCLoginAndClientPasswords(t *testing.T) {
 	if err != nil || got.ID != u.ID || dev != "laptop" {
 		t.Fatalf("client password: %v %q", err, dev)
 	}
-	cps, _ := st.ListClientPasswords(u.ID)
+	cps, _ := st.ListClientPasswords(t.Context(), u.ID)
 	for _, c := range cps {
 		used := c.LastUsedAt != nil && c.LastUsedAt.Equal(at)
 		if used != (c.Name == "laptop") {
@@ -291,7 +291,7 @@ func TestIRCLoginAndClientPasswords(t *testing.T) {
 	}
 
 	u.Suspended = true
-	st.UpdateUser(u)
+	st.UpdateUser(t.Context(), u)
 	for _, pw := range []string{"account password", secret} {
 		if _, _, err := s.IRCLogin("alice", pw); !errors.Is(err, ErrSuspended) {
 			t.Errorf("suspended (%q): %v", pw, err)
@@ -321,7 +321,7 @@ func TestCanCreateNetwork(t *testing.T) {
 		if err := s.CanCreateNetwork(u); err != nil {
 			t.Fatalf("network %d: %v", i+1, err)
 		}
-		if _, err := st.CreateNetwork(store.Network{UserID: u.ID, Name: name, Nick: "alice", Host: "irc.example.org"}); err != nil {
+		if _, err := st.CreateNetwork(t.Context(), store.Network{UserID: u.ID, Name: name, Nick: "alice", Host: "irc.example.org"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -359,7 +359,7 @@ func TestGuardAdminChange(t *testing.T) {
 	}
 	// A suspended admin doesn't count as the other one.
 	b.Suspended = true
-	st.UpdateUser(b)
+	st.UpdateUser(t.Context(), b)
 	if err := s.GuardAdminChange(a, false); !errors.Is(err, ErrLastAdmin) {
 		t.Fatalf("other admin suspended: %v", err)
 	}

@@ -109,15 +109,15 @@ func TestServerAndFingerprintCommands(t *testing.T) {
 
 func TestPlaybackOnlyNewWithAutoClear(t *testing.T) {
 	r := newRig(t)
-	u, _ := r.st.UserByUsername("alice")
+	u, _ := r.st.UserByUsername(t.Context(), "alice")
 	u.AutoClearChanBuffer = true
 	u.PrependTimestamp = false
-	r.st.UpdateUser(u)
+	r.st.UpdateUser(t.Context(), u)
 	now := time.Now()
 	n := r.network("one")
 	// an IRC client was last on one 10 minutes ago
 	last := now.Add(-10 * time.Minute)
-	r.st.UpdateBufferPlayback(n.ID, []string{""}, func(bp *store.BufferPlayback) { bp.ClearedAt = &last })
+	r.st.UpdateBufferPlayback(t.Context(), n.ID, []string{""}, func(bp *store.BufferPlayback) { bp.ClearedAt = &last })
 	r.hist.Add(history.Message{NetworkID: n.ID, Target: "#one", Sender: "bob", Kind: "message", Text: "old news", Time: now.Add(-20 * time.Minute)})
 	r.hist.Add(history.Message{NetworkID: n.ID, Target: "#one", Sender: "bob", Kind: "message", Text: "fresh news", Time: now.Add(-5 * time.Minute)})
 
@@ -129,9 +129,9 @@ func TestPlaybackOnlyNewWithAutoClear(t *testing.T) {
 
 func TestPlaybackTimestampsWithoutServerTime(t *testing.T) {
 	r := newRig(t)
-	u, _ := r.st.UserByUsername("alice")
+	u, _ := r.st.UserByUsername(t.Context(), "alice")
 	u.TimestampFormat, u.AppendTimestamp, u.Timezone = "<%H>", true, "UTC"
-	r.st.UpdateUser(u)
+	r.st.UpdateUser(t.Context(), u)
 	n := r.network("one")
 	at := time.Date(2026, 1, 2, 7, 0, 0, 0, time.UTC)
 	r.hist.Add(history.Message{NetworkID: n.ID, Target: "#one", Sender: "bob", Kind: "message", Text: "hello", Time: at})

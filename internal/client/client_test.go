@@ -108,7 +108,7 @@ func newRigCaps(t *testing.T, caps string) *rig {
 	var p int
 	fmt.Sscan(port, &p)
 	for _, name := range []string{"one", "two"} {
-		st.CreateNetwork(store.Network{UserID: u.ID, Name: name, Host: host, Port: p, Nick: "alice_" + name, Channels: []string{"#" + name}})
+		st.CreateNetwork(context.Background(), store.Network{UserID: u.ID, Name: name, Host: host, Port: p, Nick: "alice_" + name, Channels: []string{"#" + name}})
 	}
 	for i := 0; i < 50; i++ { // wait for the listener
 		if c, err := net.Dial("tcp", addr); err == nil {
@@ -166,7 +166,7 @@ func (ic *ircClient) expect(want string) string {
 }
 
 func (r *rig) network(name string) store.Network {
-	nets, _ := r.st.ListNetworks(1)
+	nets, _ := r.st.ListNetworks(context.Background(), 1)
 	n, _ := findNetwork(nets, name)
 	return n
 }

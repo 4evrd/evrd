@@ -74,7 +74,7 @@ func (r *liveRig) user(name string, f func(*store.User)) store.User {
 	if f != nil {
 		f(&u)
 	}
-	u, err := r.st.CreateUser(u)
+	u, err := r.st.CreateUser(context.Background(), u)
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func (r *liveRig) user(name string, f func(*store.User)) store.User {
 
 func (r *liveRig) network(u store.User, name string, enabled bool) store.Network {
 	r.t.Helper()
-	n, err := r.st.CreateNetwork(store.Network{
+	n, err := r.st.CreateNetwork(context.Background(), store.Network{
 		UserID: u.ID, Name: name, Host: r.host, Port: r.port, Nick: u.Username + "_" + name,
 		Channels: []string{"#" + name}, Enabled: enabled,
 	})
@@ -145,7 +145,7 @@ func TestStartConnectsEnabledNetworks(t *testing.T) {
 	}
 	// connecting reaches the activity feed
 	eventually(t, "connected event", func() bool {
-		evs, _ := r.st.UserEvents(alice.ID, time.Time{}, 10)
+		evs, _ := r.st.UserEvents(t.Context(), alice.ID, time.Time{}, 10)
 		return slices.ContainsFunc(evs, func(e store.UserEvent) bool {
 			return e.Kind == "connected" && e.Title == "Connected to on" && e.NetworkID == on.ID
 		})
@@ -172,7 +172,7 @@ func TestConnectDisconnectReconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.connected(n.ID)
-	if got, _ := r.st.NetworkByID(n.ID); !got.Enabled {
+	if got, _ := r.st.NetworkByID(t.Context(), n.ID); !got.Enabled {
 		t.Fatal("connect didn't switch the network on")
 	}
 	first, _ := r.b.ConnFor(n.ID)
@@ -205,7 +205,7 @@ func TestConnectDisconnectReconnect(t *testing.T) {
 	if _, ok := r.b.ConnFor(n.ID); ok || r.b.Status(n.ID) != upstream.StatusDisconnected {
 		t.Fatal("still running after disconnect")
 	}
-	if got, _ := r.st.NetworkByID(n.ID); got.Enabled {
+	if got, _ := r.st.NetworkByID(t.Context(), n.ID); got.Enabled {
 		t.Fatal("disconnect left the network switched on")
 	}
 	// Reconnect leaves a stopped network down.
@@ -270,7 +270,7 @@ func TestDialerGetsTheBindHost(t *testing.T) {
 	r := newLiveRig(t)
 	alice := r.user("alice", func(u *store.User) { u.BindHost = "192.0.2.1" })
 	n := r.network(alice, "net", false)
-	m, _ := r.st.CreateNetwork(store.Network{UserID: alice.ID, Name: "own", Host: r.host, Port: r.port, Nick: "a", BindHost: "192.0.2.9"})
+	m, _ := r.st.CreateNetwork(t.Context(), store.Network{UserID: alice.ID, Name: "own", Host: r.host, Port: r.port, Nick: "a", BindHost: "192.0.2.9"})
 	type call struct {
 		user int64
 		bind string
@@ -306,7 +306,7 @@ func TestLinesUpdateUnreadAndChannels(t *testing.T) {
 	n := r.network(alice, "net", true)
 	// read up to an hour ago; one unread line in #net since then, one before
 	ago := time.Now().Add(-time.Hour)
-	r.st.SetReadMarker(n.ID, "#net", ago)
+	r.st.SetReadMarker(t.Context(), n.ID, "#net", ago)
 	r.hist.Add(history.Message{NetworkID: n.ID, Target: "#net", Sender: "bob", Kind: "message", Text: "old", Time: ago.Add(-time.Minute)})
 	r.hist.Add(history.Message{NetworkID: n.ID, Target: "#net", Sender: "bob", Kind: "message", Text: "alice_net: new", Time: ago.Add(time.Minute)})
 	r.hist.Add(history.Message{NetworkID: n.ID, Target: "#net", Sender: "alice_net", Kind: "message", Text: "mine", Time: ago.Add(2 * time.Minute)})
@@ -329,7 +329,7 @@ func TestLinesUpdateUnreadAndChannels(t *testing.T) {
 	if s := buf("#quiet"); s.Unread != 0 {
 		t.Fatalf("#quiet from history: %+v", s)
 	}
-	if markers, _ := r.st.ReadMarkers(n.ID); markers["#quiet"].IsZero() {
+	if markers, _ := r.st.ReadMarkers(t.Context(), n.ID); markers["#quiet"].IsZero() {
 		t.Fatal("no read marker saved for a buffer without one")
 	}
 
@@ -344,7 +344,7 @@ func TestLinesUpdateUnreadAndChannels(t *testing.T) {
 	c, _ := r.b.ConnFor(n.ID)
 	c.SendRaw("JOIN #more")
 	eventually(t, "channel saved", func() bool {
-		got, _ := r.st.NetworkByID(n.ID)
+		got, _ := r.st.NetworkByID(t.Context(), n.ID)
 		return slices.Contains(got.Channels, "#more")
 	})
 
@@ -357,7 +357,7 @@ func TestLinesUpdateUnreadAndChannels(t *testing.T) {
 			t.Fatalf("after mark all: %+v", s)
 		}
 	}
-	markers, _ := r.st.ReadMarkers(n.ID)
+	markers, _ := r.st.ReadMarkers(t.Context(), n.ID)
 	if !markers["bob"].After(ago) || !markers["#net"].After(ago) {
 		t.Fatalf("markers not moved: %v", markers)
 	}
@@ -373,14 +373,14 @@ func TestMarkReadOfANetworkNotRunningHere(t *testing.T) {
 	if err := r.b.MarkRead(n.ID, ""); err != nil {
 		t.Fatal(err)
 	}
-	markers, _ := r.st.ReadMarkers(n.ID)
+	markers, _ := r.st.ReadMarkers(t.Context(), n.ID)
 	if markers["#a"].IsZero() || markers["carol"].IsZero() {
 		t.Fatalf("mark all from history: %v", markers)
 	}
 	if err := r.b.MarkRead(n.ID, "#Elsewhere"); err != nil {
 		t.Fatal(err)
 	}
-	if markers, _ := r.st.ReadMarkers(n.ID); markers["#elsewhere"].IsZero() {
+	if markers, _ := r.st.ReadMarkers(t.Context(), n.ID); markers["#elsewhere"].IsZero() {
 		t.Fatalf("mark one unknown buffer: %v", markers)
 	}
 	// not running here: names and markers come from the stores
@@ -440,7 +440,7 @@ func TestClientsAndClientLimit(t *testing.T) {
 	if list[0].Kind != "irc" || list[0].Software != "HexChat" || list[0].Device != "laptop" || list[2].Kind != "web" || list[0].Since.IsZero() {
 		t.Fatalf("client info: %+v", list)
 	}
-	if u, _ := r.st.UserByID(alice.ID); u.LastSeenAt == nil {
+	if u, _ := r.st.UserByID(t.Context(), alice.ID); u.LastSeenAt == nil {
 		t.Fatal("attaching didn't touch last seen")
 	}
 
@@ -505,9 +505,9 @@ func TestAutoAway(t *testing.T) {
 	})
 
 	// turning auto-away off brings the user back
-	u, _ := r.st.UserByID(alice.ID)
+	u, _ := r.st.UserByID(t.Context(), alice.ID)
 	u.AutoAway = false
-	r.st.UpdateUser(u)
+	r.st.UpdateUser(t.Context(), u)
 	r.b.RefreshAway(alice.ID)
 	eventually(t, "back after turning it off", func() bool { return backs() == 2 })
 }
@@ -540,7 +540,7 @@ func TestStopUserDropsConnections(t *testing.T) {
 		t.Fatal("bob's network was stopped")
 	}
 	// networks stay enabled so the next owner resumes them
-	if got, _ := r.st.NetworkByID(a.ID); !got.Enabled {
+	if got, _ := r.st.NetworkByID(t.Context(), a.ID); !got.Enabled {
 		t.Fatal("StopUser switched the network off")
 	}
 	r.b.ResumeUser(alice.ID)
@@ -556,9 +556,9 @@ func TestReconfigurePushesSettings(t *testing.T) {
 	r.connected(n.ID)
 
 	// a user-wide quit message reaches running networks
-	u, _ := r.st.UserByID(alice.ID)
+	u, _ := r.st.UserByID(t.Context(), alice.ID)
 	u.QuitMsg = "user quit"
-	r.st.UpdateUser(u)
+	r.st.UpdateUser(t.Context(), u)
 	r.b.ReconfigureUser(alice.ID)
 	r.b.Reconfigure(idle) // not running: nothing to do
 	r.b.Disconnect(n.ID)
@@ -568,7 +568,7 @@ func TestReconfigurePushesSettings(t *testing.T) {
 	r.b.Connect(n.ID)
 	r.connected(n.ID)
 	n.QuitMsg = "net quit"
-	r.st.UpdateNetwork(n)
+	r.st.UpdateNetwork(t.Context(), n)
 	r.b.Reconfigure(n)
 	r.b.Disconnect(n.ID)
 	eventually(t, "network quit message", func() bool { return r.irc.Has("QUIT :net quit") })
@@ -590,7 +590,7 @@ func TestSetChannelSettings(t *testing.T) {
 	if !c.ChannelSettings("#net").Detached {
 		t.Fatal("not applied to the connection")
 	}
-	if got, _ := r.st.NetworkByID(n.ID); !got.Channel("#net").Detached {
+	if got, _ := r.st.NetworkByID(t.Context(), n.ID); !got.Channel("#net").Detached {
 		t.Fatalf("not saved: %+v", got.ChannelSettings)
 	}
 
@@ -598,14 +598,14 @@ func TestSetChannelSettings(t *testing.T) {
 	if err := r.b.SetChannelSettings(off.ID, "#Off", func(cs *store.ChannelSettings) { cs.Key = "sekrit" }); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := r.st.NetworkByID(off.ID); got.Channel("#off").Key != "sekrit" {
+	if got, _ := r.st.NetworkByID(t.Context(), off.ID); got.Channel("#off").Key != "sekrit" {
 		t.Fatalf("not saved: %+v", got.ChannelSettings)
 	}
 	// back to defaults: the entry goes
 	if err := r.b.SetChannelSettings(off.ID, "#off", func(cs *store.ChannelSettings) { cs.Key = "" }); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := r.st.NetworkByID(off.ID); len(got.ChannelSettings) != 0 {
+	if got, _ := r.st.NetworkByID(t.Context(), off.ID); len(got.ChannelSettings) != 0 {
 		t.Fatalf("default settings kept: %+v", got.ChannelSettings)
 	}
 	if err := r.b.SetChannelSettings(999, "#x", func(*store.ChannelSettings) {}); err == nil {
@@ -651,8 +651,8 @@ func TestPruneTrimsBacklogAndHousekeeps(t *testing.T) {
 	}
 	// history of a network that's gone
 	r.hist.Add(history.Message{NetworkID: 4242, Target: "#gone", Text: "x", Time: now})
-	r.st.AddUserEvent(store.UserEvent{UserID: alice.ID, At: now.AddDate(0, 0, -40), Kind: "old", Title: "old"})
-	r.st.AddUserEvent(store.UserEvent{UserID: alice.ID, At: now, Kind: "new", Title: "new"})
+	r.st.AddUserEvent(t.Context(), store.UserEvent{UserID: alice.ID, At: now.AddDate(0, 0, -40), Kind: "old", Title: "old"})
+	r.st.AddUserEvent(t.Context(), store.UserEvent{UserID: alice.ID, At: now, Kind: "new", Title: "new"})
 	count := func(id int64) int { m, _ := r.hist.Recent(id, "#x", 50); return len(m) }
 
 	// alice keeps 2 lines, bob everything; the other node's user is left alone
@@ -681,7 +681,7 @@ func TestPruneTrimsBacklogAndHousekeeps(t *testing.T) {
 	if ids, _ := r.hist.Networks(); slices.Contains(ids, 4242) {
 		t.Fatal("orphan history kept")
 	}
-	evs, _ := r.st.UserEvents(alice.ID, time.Time{}, 10)
+	evs, _ := r.st.UserEvents(t.Context(), alice.ID, time.Time{}, 10)
 	if len(evs) != 1 || evs[0].Kind != "new" {
 		t.Fatalf("activity feed: %+v", evs)
 	}
