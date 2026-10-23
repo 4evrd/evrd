@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -97,7 +98,11 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 	}
 	if sb := (sandbox.Config{Chroot: cfg.Chroot, User: cfg.User}); sb.Enabled() {
 		// Ports below 1024 need root: bind every port first.
-		addrs := append([]string{cfg.API, cfg.HTTPSListen, cfg.HTTPListen, cfg.Cluster.InternalListen, cfg.Cluster.InternalIRCListen, cfg.IdentdListen}, cfg.Listen...)
+		ircAddrs := cfg.Listen
+		if linksSocket != "" && !cfg.KeepClientsOut {
+			ircAddrs = notHeld(parent, links.NewClient(linksSocket), ircAddrs)
+		}
+		addrs := append([]string{cfg.API, cfg.HTTPSListen, cfg.HTTPListen, cfg.Cluster.InternalListen, cfg.Cluster.InternalIRCListen, cfg.IdentdListen}, ircAddrs...)
 		if err := listen.Prebind(addrs...); err != nil {
 			log.Error("listen", "err", err)
 			return 1
@@ -498,4 +503,24 @@ func redact(dsn string) string {
 		return u.Redacted()
 	}
 	return dsn
+}
+
+// notHeld is the IRC listeners the connection holder doesn't have yet. The
+// ones it kept while evrd was away are its to accept on: binding them again
+// would fail (address already in use), and the IRC server takes them back
+// from it instead. All of them when the holder can't say.
+func notHeld(ctx context.Context, holder *links.Client, listeners []string) []string {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	held, err := holder.Listeners(ctx)
+	if err != nil {
+		return listeners
+	}
+	var out []string
+	for _, l := range listeners {
+		if !slices.ContainsFunc(held, func(h links.Listener) bool { return listen.Addr(h.Addr) == listen.Addr(l) }) {
+			out = append(out, l)
+		}
+	}
+	return out
 }
