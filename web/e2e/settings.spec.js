@@ -52,6 +52,12 @@ test('an admin changes server settings; they apply live and can be reset', async
     await expect(host.getByRole('textbox')).toHaveValue('localhost')
     await expect(host.getByText('evrd.conf', { exact: true })).toBeVisible()
 
+    // IPv6 first is on by default, as a switch under Connections
+    const v6 = page.getByTestId('setting-prefer_ipv6')
+    await expect(v6).toContainText('Try IPv6 first')
+    await expect(v6.getByText('Default', { exact: true })).toBeVisible()
+    await expect(v6.getByRole('switch')).toHaveAttribute('aria-checked', 'true')
+
     // startup settings are shown, not editable
     await expect(page.getByRole('heading', { name: /Startup/ })).toBeVisible()
     await expect(page.locator('.kv', { hasText: 'secret_key' })).toContainText('set')

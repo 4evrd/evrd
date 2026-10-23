@@ -293,6 +293,8 @@ type Outbound struct {
 	// ConnectRate is the most connects per second to one server host (0 =
 	// unlimited), so failovers and netsplit recoveries reconnect gradually.
 	ConnectRate float64
+	// PreferIPv6 tries a server's IPv6 addresses before its IPv4 ones.
+	PreferIPv6 bool
 	// Bind lists source addresses to spread users over; Prefix6 gives each
 	// user an IPv6 address of their own. Per node (EVRD_UPSTREAM_BIND,
 	// EVRD_UPSTREAM_PREFIX6).
@@ -366,7 +368,7 @@ func Default() *Config {
 			OIDCAutoCreate: true,
 		},
 		Limits:   Limits{MaxNetworks: 0, MaxClients: 0, BacklogLines: 2000},
-		Outbound: Outbound{ConnectRate: 5},
+		Outbound: Outbound{ConnectRate: 5, PreferIPv6: true},
 		Metrics:  Metrics{Interval: 15 * time.Second},
 
 		NetworkDirectory: DefaultNetworkDirectory,
@@ -605,6 +607,8 @@ func (c *Config) set(key, val string) error {
 		c.Cluster.LeaseTTL, err = time.ParseDuration(val)
 	case "connect_rate":
 		c.Outbound.ConnectRate, err = strconv.ParseFloat(val, 64)
+	case "prefer_ipv6":
+		c.Outbound.PreferIPv6, err = parseBool(val)
 	case "network_directory":
 		c.NetworkDirectory = directorySource(val)
 	case "ident_file":

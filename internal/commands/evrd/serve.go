@@ -252,7 +252,7 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		cl.SetLeaseTTL(cc.LeaseTTL)
 	}
 	b.SetOwnership(cl.Owns)
-	ob, err := outbound.New(outbound.Config{Rate: cfg.Outbound.ConnectRate, Bind: cfg.Outbound.Bind, Prefix6: cfg.Outbound.Prefix6})
+	ob, err := outbound.New(outbound.Config{Rate: cfg.Outbound.ConnectRate, Bind: cfg.Outbound.Bind, Prefix6: cfg.Outbound.Prefix6, IPv4First: !cfg.Outbound.PreferIPv6})
 	if err != nil {
 		log.Error("outbound", "err", err)
 		return 1
@@ -393,6 +393,7 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		acc.SetBindHosts(live.Outbound.BindHosts)
 		am.SetConfig(live.Auth)
 		ob.SetRate(live.Outbound.ConnectRate)
+		ob.SetIPv4First(!live.Outbound.PreferIPv6)
 		b.SetModulesOff(live.ModulesOff)
 		if err := certMgr.Apply(&live); err != nil {
 			log.Warn("tls", "err", err)
