@@ -21,6 +21,12 @@ concurrency:
 permissions:
   contents: read
 
+# bash -eo pipefail: a step fails when any command in a pipe does (go test
+# | tee would otherwise pass whatever the tests did).
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # Pull requests: commit messages follow Conventional Commits (they decide
   # the next version).
@@ -172,7 +178,7 @@ jobs:
       - name: Unit tests, with coverage
         run: |
           pnpm test:coverage 2>&1 | tee coverage.txt
-          { echo "### Web unit test coverage"; echo; echo '```'; grep -E "^(ℹ|#) " coverage.txt | grep -E "file|---|\.js|all files" | sed -E 's/^(ℹ|#) //'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          { echo "### Web unit test coverage"; echo; echo '```'; { grep -E "^(ℹ|#) " coverage.txt | grep -E "file|---|\.js|all files" | sed -E 's/^(ℹ|#) //' || true; }; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         with:
           name: coverage-web
