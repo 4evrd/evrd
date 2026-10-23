@@ -25,6 +25,7 @@ import (
 	"sort"
 
 	"github.com/4evrd/evrd/internal/accounts"
+	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/sandbox"
@@ -189,9 +190,10 @@ func (c *ctl) userCmd(cfg *config.Config, args []string) error {
 	}
 	defer st.Close()
 	acc := accounts.New(st, cfg.Limits)
+	sessions := auth.NewSessionService(st)
 
 	find := func(name string) (store.User, error) {
-		u, err := st.UserByUsername(context.Background(), name)
+		u, err := acc.UserByUsername(context.Background(), name)
 		if errors.Is(err, store.ErrNotFound) {
 			return u, fmt.Errorf("no user %q", name)
 		}
@@ -232,7 +234,7 @@ func (c *ctl) userCmd(cfg *config.Config, args []string) error {
 		fmt.Fprintf(c.stdout, "created %s %q (id %d)\n", u.Role, u.Username, u.ID)
 
 	case "list":
-		users, err := st.ListUsers(context.Background())
+		users, err := acc.ListUsers(context.Background())
 		if err != nil {
 			return fmt.Errorf("list users: %v", err)
 		}
@@ -266,7 +268,7 @@ func (c *ctl) userCmd(cfg *config.Config, args []string) error {
 		if err := acc.SetPassword(&u, args[2]); err != nil {
 			return err
 		}
-		_ = st.DeleteUserSessions(context.Background(), u.ID, "")
+		_ = sessions.DeleteUserSessions(context.Background(), u.ID, "")
 		fmt.Fprintf(c.stdout, "password set for %q (web sessions signed out)\n", u.Username)
 
 	case "role":
@@ -284,7 +286,7 @@ func (c *ctl) userCmd(cfg *config.Config, args []string) error {
 			return err
 		}
 		u.Role = args[2]
-		if err := st.UpdateUser(context.Background(), u); err != nil {
+		if err := acc.UpdateUser(context.Background(), u); err != nil {
 			return err
 		}
 		fmt.Fprintf(c.stdout, "%q is now %s\n", u.Username, u.Role)
@@ -304,10 +306,10 @@ func (c *ctl) userCmd(cfg *config.Config, args []string) error {
 		if len(args) == 3 {
 			u.SuspendedReason = args[2]
 		}
-		if err := st.UpdateUser(context.Background(), u); err != nil {
+		if err := acc.UpdateUser(context.Background(), u); err != nil {
 			return err
 		}
-		_ = st.DeleteUserSessions(context.Background(), u.ID, "")
+		_ = sessions.DeleteUserSessions(context.Background(), u.ID, "")
 		fmt.Fprintf(c.stdout, "suspended %q\n", u.Username)
 
 	case "unsuspend":
@@ -319,7 +321,7 @@ func (c *ctl) userCmd(cfg *config.Config, args []string) error {
 			return err
 		}
 		u.Suspended, u.SuspendedReason = false, ""
-		if err := st.UpdateUser(context.Background(), u); err != nil {
+		if err := acc.UpdateUser(context.Background(), u); err != nil {
 			return err
 		}
 		fmt.Fprintf(c.stdout, "unsuspended %q\n", u.Username)
@@ -335,7 +337,7 @@ func (c *ctl) userCmd(cfg *config.Config, args []string) error {
 		if err := acc.GuardAdminChange(u, false); err != nil {
 			return err
 		}
-		if err := st.DeleteUser(context.Background(), u.ID); err != nil {
+		if err := acc.DeleteUser(context.Background(), u.ID); err != nil {
 			return err
 		}
 		fmt.Fprintf(c.stdout, "deleted %q (id %d)\n", u.Username, u.ID)
@@ -430,11 +432,12 @@ func (c *ctl) importZNC(cfg *config.Config, args []string) error {
 		return fmt.Errorf("open store: %v", err)
 	}
 	defer st.Close()
-	u, err := st.UserByUsername(context.Background(), fs.Arg(0))
+	acc := accounts.New(st, cfg.Limits)
+	u, err := acc.UserByUsername(context.Background(), fs.Arg(0))
 	if err != nil {
 		return fmt.Errorf("user %q: %v", fs.Arg(0), err)
 	}
-	nets, err := st.ListNetworks(context.Background(), u.ID)
+	nets, err := acc.ListNetworks(context.Background(), u.ID)
 	if err != nil {
 		return fmt.Errorf("networks: %v", err)
 	}
@@ -502,7 +505,7 @@ func (c *ctl) importZNC(cfg *config.Config, args []string) error {
 		// keep it: the prune would cut every buffer back to the limit
 		zero := 0
 		u.BacklogLines = &zero
-		if err := st.UpdateUser(context.Background(), u); err != nil {
+		if err := acc.UpdateUser(context.Background(), u); err != nil {
 			return fmt.Errorf("set %s's backlog to unlimited: %v", u.Username, err)
 		}
 		fmt.Fprintf(c.stdout, "%s now keeps all history (backlog unlimited; change it under Admin → Users)\n", u.Username)

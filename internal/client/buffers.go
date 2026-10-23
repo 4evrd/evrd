@@ -17,7 +17,7 @@ import (
 // account is the user as of now (a web *status session has none loaded).
 func (se *session) account() store.User {
 	if se.acct.ID == 0 {
-		if u, err := se.srv.b.Store().UserByID(context.Background(), se.uid); err == nil {
+		if u, err := se.srv.acc.UserByID(context.Background(), se.uid); err == nil {
 			se.acct = u
 		}
 	}

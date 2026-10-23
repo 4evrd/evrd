@@ -30,8 +30,10 @@ import (
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/certs"
+	"github.com/4evrd/evrd/internal/cluster"
 	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/directory"
+	"github.com/4evrd/evrd/internal/languages"
 	"github.com/4evrd/evrd/internal/listen"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/settings"
@@ -53,6 +55,8 @@ type Server struct {
 	metrics atomic.Pointer[metricsq.Client] // nil: dashboards show no charts
 	acc     *accounts.Service
 	auth    *auth.Manager
+	langs   languages.ServiceImpl
+	state   cluster.StateServiceImpl
 	cfgp    atomic.Pointer[config.Config]
 	// settings, when set, edits the server settings (Admin → Settings).
 	settings *settings.Manager
@@ -63,16 +67,23 @@ type Server struct {
 	up       websocket.Upgrader
 }
 
-func NewServer(b *bouncer.Bouncer, acc *accounts.Service, am *auth.Manager, cfg *config.Config, status StatusRunner, log *slog.Logger) *Server {
+// Services are what the API works through, besides the bouncer: handlers
+// never reach the repositories themselves.
+type Services struct {
+	Accounts  *accounts.Service
+	Auth      *auth.Manager
+	Languages languages.ServiceImpl
+	Cluster   cluster.StateServiceImpl // nodes and leases (with or without a cluster)
+}
+
+func NewServer(b *bouncer.Bouncer, svc Services, cfg *config.Config, status StatusRunner, log *slog.Logger) *Server {
 	s := &Server{
-		b: b, acc: acc, auth: am, status: status, log: log,
+		b: b, acc: svc.Accounts, auth: svc.Auth, langs: svc.Languages, state: svc.Cluster, status: status, log: log,
 		up: websocket.Upgrader{CheckOrigin: auth.CheckWebSocketOrigin},
 	}
 	s.cfgp.Store(cfg)
 	return s
 }
-
-func (s *Server) st() store.Store { return s.b.Store() }
 
 // ListenAndServe runs the API until ctx is cancelled.
 func (s *Server) ListenAndServe(ctx context.Context, addr string) error {

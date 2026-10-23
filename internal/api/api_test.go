@@ -17,8 +17,10 @@ import (
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/cluster"
 	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/languages"
 	"github.com/4evrd/evrd/internal/settings"
 	"github.com/4evrd/evrd/internal/store"
 )
@@ -63,7 +65,7 @@ func newEnvOn(t *testing.T, st store.Store, mutate ...func(*config.Config)) *env
 	}
 	t.Cleanup(func() { hist.Close() })
 	b := bouncer.New(st, hist, log)
-	api := NewServer(b, acc, am, cfg, nil, log)
+	api := NewServer(b, Services{Accounts: acc, Auth: am, Languages: languages.New(st), Cluster: cluster.NewStateService(st)}, cfg, nil, log)
 	sm, err := settings.New(st, cfg, "test", log)
 	if err != nil {
 		t.Fatal(err)

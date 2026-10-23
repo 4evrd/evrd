@@ -121,8 +121,14 @@ func (b *Bouncer) SetOwnership(owns func(userID int64) bool) { b.owns = owns }
 // Owns reports whether this node runs the user.
 func (b *Bouncer) Owns(userID int64) bool { return b.owns == nil || b.owns(userID) }
 
-// Store exposes the account database to callers (the API).
-func (b *Bouncer) Store() store.Store { return b.store }
+// UserEvents is a user's activity feed: the newest events since since,
+// newest first.
+func (b *Bouncer) UserEvents(ctx context.Context, userID int64, since time.Time, limit int) ([]store.UserEvent, error) {
+	return b.store.UserEvents(ctx, userID, since, limit)
+}
+
+// Ping checks the account database is reachable.
+func (b *Bouncer) Ping(ctx context.Context) error { return b.store.Ping(ctx) }
 
 // History exposes the chat history store.
 func (b *Bouncer) History() history.Store { return b.history }
