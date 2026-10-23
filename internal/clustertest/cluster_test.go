@@ -28,13 +28,13 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/4evrd/evrd/internal/accounts"
-	"github.com/4evrd/evrd/internal/api"
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/client"
 	"github.com/4evrd/evrd/internal/cluster"
 	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/history"
+	evrdhttp "github.com/4evrd/evrd/internal/http"
 	"github.com/4evrd/evrd/internal/languages"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/testirc"
@@ -133,7 +133,7 @@ func newEnv(t *testing.T) *env {
 		go ircSrv.ListenInternal(ctx, ircInternal)
 		go ircSrv.ListenAndServe(ctx, []string{"irc+insecure://" + ircPublic})
 
-		apiSrv := api.NewServer(n.b, api.Services{Accounts: acc, Auth: am, Languages: languages.New(st), Cluster: cluster.NewStateService(st)}, cfg, ircSrv, log)
+		apiSrv := evrdhttp.New(n.b, evrdhttp.Services{Accounts: acc, Auth: am, Languages: languages.New(st), Cluster: cluster.NewStateService(st)}, cfg, ircSrv, log)
 		apiSrv.SetCluster(n.cl, secret)
 		internalHTTP.Config.Handler = apiSrv.InternalHandler()
 		internalHTTP.Start()

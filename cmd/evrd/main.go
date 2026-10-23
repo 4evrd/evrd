@@ -19,7 +19,6 @@ import (
 	_ "time/tzdata" // time zones for playback timestamps, even in images without tzdata
 
 	"github.com/4evrd/evrd/internal/accounts"
-	"github.com/4evrd/evrd/internal/api"
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/certs"
@@ -28,6 +27,7 @@ import (
 	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/history"
+	evrdhttp "github.com/4evrd/evrd/internal/http"
 	"github.com/4evrd/evrd/internal/identd"
 	"github.com/4evrd/evrd/internal/identfile"
 	"github.com/4evrd/evrd/internal/languages"
@@ -354,7 +354,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 
 	// Downstream IRC listener for native clients (Hexchat, irssi, …).
 	irc := client.NewServer(b, acc, log, cfg.TLSCert, cfg.TLSKey)
-	srv := api.NewServer(b, api.Services{
+	srv := evrdhttp.New(b, evrdhttp.Services{
 		Accounts:  acc,
 		Auth:      am,
 		Languages: languages.New(st),

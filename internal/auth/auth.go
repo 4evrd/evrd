@@ -576,45 +576,6 @@ func (m *Manager) endSessionURL(idToken string) string {
 
 // --- request hygiene -----------------------------------------------------
 
-// SameOrigin refuses cross-site state-changing requests (CSRF), on top of the
-// SameSite=Lax cookie.
-func SameOrigin(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet, http.MethodHead, http.MethodOptions:
-		default:
-			if !sameOrigin(r) {
-				writeErr(w, http.StatusForbidden, "cross-site request refused")
-				return
-			}
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// CheckWebSocketOrigin is the upgrader's origin check: a browser opening a
-// socket from another site must not ride the session cookie.
-func CheckWebSocketOrigin(r *http.Request) bool { return sameOrigin(r) }
-
-func sameOrigin(r *http.Request) bool {
-	if site := r.Header.Get("Sec-Fetch-Site"); site != "" {
-		return site == "same-origin" || site == "none"
-	}
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return true // not a browser cross-site request
-	}
-	u, err := url.Parse(origin)
-	if err != nil {
-		return false
-	}
-	host := r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Host
-	}
-	return strings.EqualFold(u.Host, host)
-}
-
 // ClientIP is the browser's address: from the forwarding node on a
 // forwarded request, else X-Forwarded-For only from a trusted proxy (see
 // realip).
