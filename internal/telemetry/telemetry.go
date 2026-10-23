@@ -1,6 +1,8 @@
 // Package telemetry exports evrd's metrics with OpenTelemetry (OTLP over
 // HTTP), e.g. straight into VictoriaMetrics at
-// http://victoriametrics:8428/opentelemetry/v1/metrics.
+// http://victoriametrics:8428/opentelemetry/v1/metrics, and its traces (spans
+// on the web API and the services behind it) to a trace store such as Jaeger
+// or Tempo.
 //
 // The instruments are package variables, so any package can record without
 // plumbing: until Setup installs a provider (or when no endpoint is
@@ -24,9 +26,12 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 // Config is where and how often to export.
@@ -34,35 +39,25 @@ type Config struct {
 	// Endpoint is the full OTLP/HTTP metrics URL; empty turns export off.
 	Endpoint string
 	Interval time.Duration // default 15s
-	NodeID   string
-	Version  string
+	// TracesEndpoint is the full OTLP/HTTP traces URL; empty turns tracing
+	// off (spans are then no-ops).
+	TracesEndpoint string
+	NodeID         string
+	Version        string
 }
 
 // Setup starts exporting. The returned shutdown flushes and stops it.
 func Setup(ctx context.Context, cfg Config) (shutdown func(context.Context) error, err error) {
-	if cfg.Endpoint == "" {
-		return func(context.Context) error { return nil }, nil
+	var stops []func(context.Context) error
+	shutdown = func(ctx context.Context) error {
+		var errs []error
+		for _, stop := range stops {
+			errs = append(errs, stop(ctx))
+		}
+		return errors.Join(errs...)
 	}
-	if cfg.Interval <= 0 {
-		cfg.Interval = 15 * time.Second
-	}
-	// Credentials in the URL (https://user:pass@host/…) become basic auth:
-	// the exporter ignores them otherwise, and a proxy in front of the
-	// metrics store (like vmwrite behind Traefik) may want them.
-	opts := []otlpmetrichttp.Option{}
-	endpoint := cfg.Endpoint
-	if u, err := url.Parse(endpoint); err == nil && u.User != nil {
-		pass, _ := u.User.Password()
-		opts = append(opts, otlpmetrichttp.WithHeaders(map[string]string{
-			"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(u.User.Username()+":"+pass)),
-		}))
-		u.User = nil
-		endpoint = u.String()
-	}
-	opts = append(opts, otlpmetrichttp.WithEndpointURL(endpoint))
-	exp, err := otlpmetrichttp.New(ctx, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("telemetry: %w", err)
+	if cfg.Endpoint == "" && cfg.TracesEndpoint == "" {
+		return shutdown, nil
 	}
 	// Schemaless, so it merges with the SDK's defaults whatever semantic
 	// conventions version those use.
@@ -74,15 +69,53 @@ func Setup(ctx context.Context, cfg Config) (shutdown func(context.Context) erro
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: %w", err)
 	}
-	mp := sdkmetric.NewMeterProvider(
-		sdkmetric.WithResource(res),
-		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exp, sdkmetric.WithInterval(cfg.Interval))),
-	)
-	otel.SetMeterProvider(mp)
-	if err := runtime.Start(runtime.WithMeterProvider(mp)); err != nil {
-		return nil, fmt.Errorf("telemetry: runtime metrics: %w", err)
+	if cfg.Endpoint != "" {
+		if cfg.Interval <= 0 {
+			cfg.Interval = 15 * time.Second
+		}
+		endpoint, headers := splitAuth(cfg.Endpoint)
+		exp, err := otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpointURL(endpoint), otlpmetrichttp.WithHeaders(headers))
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: %w", err)
+		}
+		mp := sdkmetric.NewMeterProvider(
+			sdkmetric.WithResource(res),
+			sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exp, sdkmetric.WithInterval(cfg.Interval))),
+		)
+		otel.SetMeterProvider(mp)
+		stops = append(stops, mp.Shutdown)
+		if err := runtime.Start(runtime.WithMeterProvider(mp)); err != nil {
+			return nil, fmt.Errorf("telemetry: runtime metrics: %w", err)
+		}
 	}
-	return mp.Shutdown, nil
+	if cfg.TracesEndpoint != "" {
+		endpoint, headers := splitAuth(cfg.TracesEndpoint)
+		exp, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(endpoint), otlptracehttp.WithHeaders(headers))
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: %w", err)
+		}
+		tp := sdktrace.NewTracerProvider(sdktrace.WithResource(res), sdktrace.WithBatcher(exp))
+		otel.SetTracerProvider(tp)
+		otel.SetTextMapPropagator(propagation.TraceContext{})
+		stops = append(stops, tp.Shutdown)
+	}
+	return shutdown, nil
+}
+
+// splitAuth turns credentials in an endpoint URL (https://user:pass@host/…)
+// into basic auth: the exporters ignore them otherwise, and a proxy in front
+// of the store (like vmwrite behind Traefik) may want them.
+func splitAuth(endpoint string) (string, map[string]string) {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.User == nil {
+		return endpoint, nil
+	}
+	pass, _ := u.User.Password()
+	headers := map[string]string{
+		"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(u.User.Username()+":"+pass)),
+	}
+	u.User = nil
+	return u.String(), headers
 }
 
 var meter = otel.Meter("github.com/4evrd/evrd")

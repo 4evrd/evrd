@@ -41,6 +41,7 @@ are stored in the database and win over the file (see below).
 | `bindhost` | — | local addresses users may choose to connect from (repeatable) |
 | `upstream_bind`, `upstream_prefix6` (`EVRD_UPSTREAM_BIND`, `EVRD_UPSTREAM_PREFIX6`) | — | spread users over source addresses; see [clustering](clustering.md#source-addresses-and-connect-pacing) |
 | `otel_endpoint` (`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`), `otel_interval`, `metrics_url` (`EVRD_METRICS_URL`) | —, `15s`, — | metrics; see [Metrics](#metrics) |
+| `otel_traces_endpoint` (`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`) | — | OTLP/HTTP traces URL (e.g. `http://jaeger:4318/v1/traces`): spans for web API requests and the services behind them |
 | `settings_write_conf` | `no` | write settings changed in the web app back into this file |
 | `node_id`, `internal_listen`, `internal_url`, `internal_irc_listen`, `internal_irc_addr`, `cluster_secret`, `cluster_lease` | — | running several nodes; see [clustering](clustering.md) |
 

@@ -28,7 +28,7 @@ var PollInterval = 5 * time.Second
 
 // Manager holds the effective config.
 type Manager struct {
-	st     store.Store
+	st     Repository
 	base   *config.Config // the file (or defaults), without the environment
 	nodeID string
 	log    *slog.Logger
@@ -42,8 +42,16 @@ type Manager struct {
 	managed map[string]bool // keys last written to the file
 }
 
+// Repository is where settings live: the admin UI's, and what each node
+// wrote to its config file.
+type Repository interface {
+	store.SettingRepositoryImpl
+	SetNodeConf(ctx context.Context, c store.NodeConf) error
+	NodeConfs(ctx context.Context) ([]store.NodeConf, error)
+}
+
 // New loads the database's settings over base.
-func New(st store.Store, base *config.Config, nodeID string, log *slog.Logger) (*Manager, error) {
+func New(st Repository, base *config.Config, nodeID string, log *slog.Logger) (*Manager, error) {
 	m := &Manager{st: st, base: base, nodeID: nodeID, log: log, managed: map[string]bool{}}
 	if confs, err := st.NodeConfs(context.Background()); err == nil {
 		for _, c := range confs {

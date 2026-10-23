@@ -251,6 +251,9 @@ type Metrics struct {
 	// http://victoriametrics:8428/opentelemetry/v1/metrics. Empty: no export.
 	OTLPEndpoint string
 	Interval     time.Duration
+	// TracesEndpoint is the OTLP/HTTP traces URL, e.g.
+	// http://jaeger:4318/v1/traces. Empty: no tracing.
+	TracesEndpoint string
 	// QueryURL is the Prometheus-compatible query API, e.g.
 	// http://victoriametrics:8428. Empty: dashboards show no charts.
 	QueryURL string
@@ -487,6 +490,7 @@ func (c *Config) ApplyEnv() error {
 		"EVRD_INTERNAL_IRC_ADDR":  &c.Cluster.InternalIRCAddr,
 		// the standard OpenTelemetry variable
 		"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": &c.Metrics.OTLPEndpoint,
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT":  &c.Metrics.TracesEndpoint,
 		"EVRD_METRICS_URL":                    &c.Metrics.QueryURL,
 	} {
 		if v := os.Getenv(env); v != "" {
@@ -618,6 +622,8 @@ func (c *Config) set(key, val string) error {
 		c.Outbound.Prefix6, err = netip.ParsePrefix(val)
 	case "otel_endpoint":
 		c.Metrics.OTLPEndpoint = val
+	case "otel_traces_endpoint":
+		c.Metrics.TracesEndpoint = val
 	case "otel_interval":
 		c.Metrics.Interval, err = time.ParseDuration(val)
 	case "metrics_url":

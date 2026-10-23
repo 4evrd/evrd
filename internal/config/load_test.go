@@ -73,6 +73,7 @@ upstream_bind 192.0.2.5 2001:db8::1
 upstream_prefix6 2001:db8:1::/48
 otel_endpoint http://vm:8428/otlp
 otel_interval 1m
+otel_traces_endpoint http://jaeger:4318/v1/traces
 metrics_url http://vm:8428/
 max_networks 4
 max_clients 5
@@ -135,6 +136,7 @@ backlog_lines 600
 	check("upstream_prefix6", c.Outbound.Prefix6, netip.MustParsePrefix("2001:db8:1::/48"))
 	check("otel_endpoint", c.Metrics.OTLPEndpoint, "http://vm:8428/otlp")
 	check("otel_interval", c.Metrics.Interval, time.Minute)
+	check("otel_traces_endpoint", c.Metrics.TracesEndpoint, "http://jaeger:4318/v1/traces")
 	check("metrics_url", c.Metrics.QueryURL, "http://vm:8428")
 	check("max_networks", c.Limits.MaxNetworks, 4)
 	check("max_clients", c.Limits.MaxClients, 5)

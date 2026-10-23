@@ -45,12 +45,36 @@ const cookieName = "evrd_session"
 // touchEvery bounds how often a session's last-seen time is written.
 const touchEvery = time.Minute
 
+// AuthServiceImpl is web sign-in: the sign-in and sign-out handlers, the
+// middleware that finds who's asking, and their sessions.
+type AuthServiceImpl interface {
+	SessionServiceImpl
+
+	SetConfig(a config.Auth)
+	Current(r *http.Request) (store.User, store.Session, bool)
+	Forwarded(secret string, next http.Handler) http.Handler
+	RequireUser(next http.HandlerFunc) http.HandlerFunc
+	RequireAdmin(next http.HandlerFunc) http.HandlerFunc
+	PasswordLogin(w http.ResponseWriter, r *http.Request)
+	OIDCLogin(w http.ResponseWriter, r *http.Request)
+	Callback(w http.ResponseWriter, r *http.Request)
+	Logout(w http.ResponseWriter, r *http.Request)
+	ClientIP(r *http.Request) string
+}
+
+// Repository is what sign-in keeps its records in.
+type Repository interface {
+	store.UserRepositoryImpl
+	store.SessionRepositoryImpl
+}
+
 // Manager owns sign-in, sessions and the request middleware.
 type Manager struct {
 	SessionServiceImpl // listing sessions and signing out
 
-	st    store.Store
-	acc   *accounts.Service
+	users store.UserRepositoryImpl
+	sess  store.SessionRepositoryImpl
+	acc   accounts.AccountServiceImpl
 	cmu   sync.Mutex // guards cfg (SetConfig)
 	cfg   config.Auth
 	pub   string // public URL
@@ -90,10 +114,11 @@ type pendingLogin struct {
 
 // New builds the manager, discovering the OIDC provider when one is
 // configured.
-func New(ctx context.Context, st store.Store, acc *accounts.Service, cfg config.Auth, publicURL string, log *slog.Logger) (*Manager, error) {
+func New(ctx context.Context, repo Repository, acc accounts.AccountServiceImpl, cfg config.Auth, publicURL string, log *slog.Logger) (*Manager, error) {
 	m := &Manager{
-		SessionServiceImpl: NewSessionService(st),
-		st:                 st,
+		SessionServiceImpl: NewSessionService(repo),
+		users:              repo,
+		sess:               repo,
 		acc:                acc,
 		cfg:                cfg,
 		pub:                publicURL,
@@ -150,7 +175,7 @@ func randToken() string {
 func (m *Manager) startSession(w http.ResponseWriter, r *http.Request, u store.User, method, idToken string) error {
 	token := randToken()
 	now := m.now()
-	err := m.st.CreateSession(r.Context(), store.Session{
+	err := m.sess.CreateSession(r.Context(), store.Session{
 		ID: Hash(token), UserID: u.ID, Method: method, IDToken: idToken,
 		IP: m.ClientIP(r), UserAgent: truncate(r.UserAgent(), 255),
 		CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(m.conf().SessionTTL),
@@ -159,7 +184,7 @@ func (m *Manager) startSession(w http.ResponseWriter, r *http.Request, u store.U
 		return err
 	}
 	u.LastLoginAt = &now
-	_ = m.st.UpdateUser(r.Context(), u)
+	_ = m.users.UpdateUser(r.Context(), u)
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: token, Path: "/",
 		HttpOnly: true, Secure: m.conf().CookieSecure, SameSite: http.SameSiteLaxMode,
@@ -182,17 +207,17 @@ func (m *Manager) Current(r *http.Request) (store.User, store.Session, bool) {
 	if err != nil || c.Value == "" {
 		return store.User{}, store.Session{}, false
 	}
-	sess, err := m.st.SessionByID(r.Context(), Hash(c.Value))
+	sess, err := m.sess.SessionByID(r.Context(), Hash(c.Value))
 	now := m.now()
 	if err != nil || now.After(sess.ExpiresAt) {
 		return store.User{}, store.Session{}, false
 	}
-	u, err := m.st.UserByID(r.Context(), sess.UserID)
+	u, err := m.users.UserByID(r.Context(), sess.UserID)
 	if err != nil || u.Suspended {
 		return store.User{}, store.Session{}, false
 	}
 	if now.Sub(sess.LastSeenAt) > touchEvery {
-		_ = m.st.TouchSession(r.Context(), sess.ID, now)
+		_ = m.sess.TouchSession(r.Context(), sess.ID, now)
 		sess.LastSeenAt = now
 	}
 	return u, sess, true
@@ -234,13 +259,13 @@ func (m *Manager) Forwarded(secret string, next http.Handler) http.Handler {
 			ctx = context.WithValue(ctx, clientIPKey, ip)
 		}
 		if id, err := strconv.ParseInt(r.Header.Get(HeaderCaller), 10, 64); err == nil {
-			u, err := m.st.UserByID(ctx, id)
+			u, err := m.users.UserByID(ctx, id)
 			if err != nil || u.Suspended {
 				writeErr(w, http.StatusUnauthorized, "sign in first")
 				return
 			}
 			ctx = context.WithValue(ctx, userKey, u)
-			if sess, err := m.st.SessionByID(ctx, r.Header.Get(HeaderSession)); err == nil && sess.UserID == u.ID {
+			if sess, err := m.sess.SessionByID(ctx, r.Header.Get(HeaderSession)); err == nil && sess.UserID == u.ID {
 				ctx = context.WithValue(ctx, sessionKey, sess)
 			}
 		}
@@ -440,7 +465,7 @@ func (m *Manager) Callback(w http.ResponseWriter, r *http.Request) {
 func (m *Manager) provision(c Claims) (store.User, string) {
 	isAdmin := m.conf().OIDCAdminRole != "" && contains(c.Roles, m.conf().OIDCAdminRole)
 
-	u, err := m.st.UserBySubject(context.Background(), c.Subject)
+	u, err := m.users.UserBySubject(context.Background(), c.Subject)
 	switch {
 	case err == nil:
 		// existing, linked account
@@ -458,13 +483,13 @@ func (m *Manager) provision(c Claims) (store.User, string) {
 		if verr != nil {
 			return store.User{}, "bad_username"
 		}
-		existing, err := m.st.UserByUsername(context.Background(), name)
+		existing, err := m.users.UserByUsername(context.Background(), name)
 		switch {
 		case err == nil && existing.OIDCSubject == nil && (m.conf().OIDCLinkExisting || claims(existing, c)):
 			sub := c.Subject
 			existing.OIDCSubject = &sub
 			existing.SSOClaimable = false
-			if err := m.st.UpdateUser(context.Background(), existing); err != nil {
+			if err := m.users.UpdateUser(context.Background(), existing); err != nil {
 				return store.User{}, "server"
 			}
 			m.log.Info("linked sso identity to existing account", "user", name)
@@ -503,7 +528,7 @@ func (m *Manager) provision(c Claims) (store.User, string) {
 		}
 	}
 	if changed {
-		_ = m.st.UpdateUser(context.Background(), u)
+		_ = m.users.UpdateUser(context.Background(), u)
 	}
 	return u, ""
 }
@@ -524,8 +549,8 @@ func (m *Manager) Logout(w http.ResponseWriter, r *http.Request) {
 	next := "/"
 	if c, err := r.Cookie(cookieName); err == nil && c.Value != "" {
 		id := Hash(c.Value)
-		if sess, err := m.st.SessionByID(r.Context(), id); err == nil {
-			_ = m.st.DeleteSession(r.Context(), sess.UserID, id)
+		if sess, err := m.sess.SessionByID(r.Context(), id); err == nil {
+			_ = m.sess.DeleteSession(r.Context(), sess.UserID, id)
 			if sess.Method == "oidc" && m.endSession != "" {
 				next = m.endSessionURL(sess.IDToken)
 			}

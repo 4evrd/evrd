@@ -82,12 +82,51 @@ func HashPassword(pw string) (string, error) {
 	return string(h), err
 }
 
-// Service applies the rules against the store.
+// AccountServiceImpl is users and their limits, passwords and networks, for
+// the web API, the IRC listener and evrctl.
+type AccountServiceImpl interface {
+	NetworkServiceImpl
+
+	SetBindHosts(hosts []string)
+	SetDefaults(l config.Limits)
+	BindHosts() []string
+	CheckBindHost(u store.User, bind string) error
+	Defaults() Limits
+	LimitsFor(u store.User) Limits
+	Create(in CreateInput) (store.User, error)
+	SetPassword(u *store.User, pw string) error
+	SetTemporaryPassword(u *store.User, pw string) (string, error)
+	ChangePassword(u *store.User, current, next string) error
+	PasswordLogin(username, password string) (store.User, error)
+	IRCLogin(username, secret string) (store.User, string, error)
+	NewClientPassword(userID int64, name string) (store.ClientPassword, string, error)
+	CanCreateNetwork(u store.User) error
+	GuardAdminChange(before store.User, stillAdmin bool) error
+	CheckNetworkName(userID int64, name string, exceptID int64) error
+
+	UserByID(ctx context.Context, id int64) (store.User, error)
+	UserByUsername(ctx context.Context, username string) (store.User, error)
+	ListUsers(ctx context.Context) ([]store.User, error)
+	UpdateUser(ctx context.Context, u store.User) error
+	DeleteUser(ctx context.Context, id int64) error
+	ListClientPasswords(ctx context.Context, userID int64) ([]store.ClientPassword, error)
+	DeleteClientPassword(ctx context.Context, userID, id int64) error
+}
+
+// Repository is what the account service keeps its records in.
+type Repository interface {
+	store.UserRepositoryImpl
+	store.ClientPasswordRepositoryImpl
+	store.NetworkRepositoryImpl
+}
+
+// Service applies the rules against the repositories.
 type Service struct {
 	NetworkServiceImpl // users' networks
 
-	st  store.Store
-	now func() time.Time
+	users     store.UserRepositoryImpl
+	passwords store.ClientPasswordRepositoryImpl
+	now       func() time.Time
 
 	mu        sync.RWMutex // settings that can change at runtime
 	defaults  config.Limits
@@ -141,8 +180,10 @@ func (s *Service) CheckBindHost(u store.User, bind string) error {
 	return invalid("%s isn't one of this bouncer's bind hosts (%s)", bind, strings.Join(s.BindHosts(), ", "))
 }
 
-func New(st store.Store, defaults config.Limits) *Service {
-	return &Service{NetworkServiceImpl: NewNetworkService(st), st: st, defaults: defaults, now: time.Now}
+// New is the account service on repo. It's the concrete type, for main and
+// tests; everything else takes an AccountServiceImpl.
+func New(repo Repository, defaults config.Limits) *Service {
+	return &Service{NetworkServiceImpl: NewNetworkService(repo), users: repo, passwords: repo, defaults: defaults, now: time.Now}
 }
 
 // Limits are a user's effective limits; 0 means unlimited.
@@ -194,7 +235,7 @@ func (s *Service) Create(in CreateInput) (store.User, error) {
 	if err != nil {
 		return store.User{}, err
 	}
-	if _, err := s.st.UserByUsername(context.Background(), name); err == nil {
+	if _, err := s.users.UserByUsername(context.Background(), name); err == nil {
 		return store.User{}, ErrUsernameTaken
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return store.User{}, err
@@ -217,7 +258,7 @@ func (s *Service) Create(in CreateInput) (store.User, error) {
 		sub := in.Subject
 		u.OIDCSubject = &sub
 	}
-	return s.st.CreateUser(context.Background(), u)
+	return s.users.CreateUser(context.Background(), u)
 }
 
 // SetPassword replaces a user's local password (and clears a pending
@@ -228,7 +269,7 @@ func (s *Service) SetPassword(u *store.User, pw string) error {
 		return err
 	}
 	u.PasswordHash, u.MustChangePassword = h, false
-	return s.st.UpdateUser(context.Background(), *u)
+	return s.users.UpdateUser(context.Background(), *u)
 }
 
 // SetTemporaryPassword gives a user a password they must change at their
@@ -244,7 +285,7 @@ func (s *Service) SetTemporaryPassword(u *store.User, pw string) (string, error)
 		return "", err
 	}
 	u.MustChangePassword = true
-	return pw, s.st.UpdateUser(context.Background(), *u)
+	return pw, s.users.UpdateUser(context.Background(), *u)
 }
 
 // RandomPassword is a readable random password (xxxxx-xxxxx-xxxxx-xxxxx).
@@ -274,7 +315,7 @@ func (s *Service) ChangePassword(u *store.User, current, next string) error {
 
 // PasswordLogin checks a username and local password for the web sign-in.
 func (s *Service) PasswordLogin(username, password string) (store.User, error) {
-	u, err := s.st.UserByUsername(context.Background(), strings.ToLower(strings.TrimSpace(username)))
+	u, err := s.users.UserByUsername(context.Background(), strings.ToLower(strings.TrimSpace(username)))
 	if err != nil {
 		// Spend the same time as a real check so usernames can't be probed.
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
@@ -295,7 +336,7 @@ var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("evrd-timing-dummy"), bcry
 // local password, or one of their client passwords. It also returns the
 // client password's name ("" for the account password).
 func (s *Service) IRCLogin(username, secret string) (store.User, string, error) {
-	u, err := s.st.UserByUsername(context.Background(), strings.ToLower(username))
+	u, err := s.users.UserByUsername(context.Background(), strings.ToLower(username))
 	if err != nil {
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(secret))
 		return store.User{}, "", ErrInvalidCredentials
@@ -303,13 +344,13 @@ func (s *Service) IRCLogin(username, secret string) (store.User, string, error) 
 	device := ""
 	ok := u.PasswordHash != "" && bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(secret)) == nil
 	if !ok {
-		cps, err := s.st.ListClientPasswords(context.Background(), u.ID)
+		cps, err := s.passwords.ListClientPasswords(context.Background(), u.ID)
 		if err != nil {
 			return store.User{}, "", err
 		}
 		for _, cp := range cps {
 			if bcrypt.CompareHashAndPassword([]byte(cp.Hash), []byte(secret)) == nil {
-				_ = s.st.TouchClientPassword(context.Background(), cp.ID, s.now())
+				_ = s.passwords.TouchClientPassword(context.Background(), cp.ID, s.now())
 				ok, device = true, cp.Name
 				break
 			}
@@ -349,7 +390,7 @@ func (s *Service) NewClientPassword(userID int64, name string) (store.ClientPass
 	if err != nil {
 		return store.ClientPassword{}, "", err
 	}
-	cp, err := s.st.CreateClientPassword(context.Background(), store.ClientPassword{UserID: userID, Name: name, Hash: string(h)})
+	cp, err := s.passwords.CreateClientPassword(context.Background(), store.ClientPassword{UserID: userID, Name: name, Hash: string(h)})
 	return cp, secret, err
 }
 
@@ -359,7 +400,7 @@ func (s *Service) CanCreateNetwork(u store.User) error {
 	if max == 0 {
 		return nil
 	}
-	n, err := s.st.CountNetworks(context.Background(), u.ID)
+	n, err := s.CountNetworks(context.Background(), u.ID)
 	if err != nil {
 		return err
 	}
@@ -375,7 +416,7 @@ func (s *Service) GuardAdminChange(before store.User, stillAdmin bool) error {
 	if !before.IsAdmin() || stillAdmin {
 		return nil
 	}
-	n, err := s.st.CountAdmins(context.Background())
+	n, err := s.users.CountAdmins(context.Background())
 	if err != nil {
 		return err
 	}

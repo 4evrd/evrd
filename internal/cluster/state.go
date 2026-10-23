@@ -4,8 +4,12 @@ import (
 	"context"
 	"time"
 
+	"go.opentelemetry.io/otel"
+
 	"github.com/4evrd/evrd/internal/store"
 )
+
+var tracer = otel.Tracer("evrd/cluster")
 
 // StateServiceImpl reads the cluster's shared state for the admin pages:
 // which nodes are live, who holds which user, and what each node wrote to
@@ -30,13 +34,19 @@ func NewStateService(repo store.ClusterRepositoryImpl) StateServiceImpl {
 }
 
 func (s *StateService) LiveNodes(ctx context.Context, since time.Time) ([]store.Node, error) {
+	ctx, span := tracer.Start(ctx, "StateService.LiveNodes")
+	defer span.End()
 	return s.Repository.LiveNodes(ctx, since)
 }
 
 func (s *StateService) Leases(ctx context.Context, now time.Time) ([]store.UserLease, error) {
+	ctx, span := tracer.Start(ctx, "StateService.Leases")
+	defer span.End()
 	return s.Repository.Leases(ctx, now)
 }
 
 func (s *StateService) NodeConfs(ctx context.Context) ([]store.NodeConf, error) {
+	ctx, span := tracer.Start(ctx, "StateService.NodeConfs")
+	defer span.End()
 	return s.Repository.NodeConfs(ctx)
 }

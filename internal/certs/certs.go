@@ -54,7 +54,7 @@ type Manager struct {
 	log *slog.Logger
 
 	mu     sync.RWMutex
-	st     store.Store
+	st     store.CacheRepositoryImpl
 	source string
 	hosts  []string
 	email  string
@@ -139,7 +139,7 @@ func (m *Manager) loadFilesLocked(certPath, keyPath string) error {
 
 // SetStore gives the Manager the database to keep certificates in. Call it
 // before Apply.
-func (m *Manager) SetStore(st store.Store) {
+func (m *Manager) SetStore(st store.CacheRepositoryImpl) {
 	m.mu.Lock()
 	m.st = st
 	m.mu.Unlock()
@@ -526,7 +526,7 @@ func issuerName(c *x509.Certificate) string {
 // dbCache is autocert's cache, in the database.
 type dbCache struct{ m *Manager }
 
-func (c dbCache) store() store.Store {
+func (c dbCache) store() store.CacheRepositoryImpl {
 	c.m.mu.RLock()
 	defer c.m.mu.RUnlock()
 	return c.m.st
