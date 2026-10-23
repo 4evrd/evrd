@@ -673,7 +673,9 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 // registered, so instead of registering it takes the nick and server
 // options from before, and asks for the channels' members and topics
 // (replies only — nobody sees a JOIN). Lines that arrived meanwhile follow
-// on the stream and go through the normal path.
+// on the stream and go through the normal path. The asking goes on in the
+// background, at the network's flood rate, while the link is read: the
+// holder drops an evrd that stops reading for 30s.
 func (c *Conn) resume(r *links.Resumed) {
 	c.mu.Lock()
 	saved := append([]string(nil), c.saved...)
@@ -689,18 +691,32 @@ func (c *Conn) resume(r *links.Resumed) {
 	for _, l := range r.ISupport {
 		c.handle(irc.Parse(c.codec.decode([]byte(l))))
 	}
-	// the capabilities this connection acknowledged before the restart
-	c.send("CAP LIST")
-	for _, ch := range saved {
-		c.send("NAMES " + ch)
-		c.send("TOPIC " + ch)
-	}
-	if away != "" {
-		c.send("AWAY :" + away)
-	}
-	for _, l := range pending {
-		c.send(l)
-	}
+	c.mu.Lock()
+	w := c.w
+	c.mu.Unlock()
+	go func() {
+		// (not on a later connection, should this one end first)
+		send := func(line string) {
+			c.mu.Lock()
+			same := c.w == w
+			c.mu.Unlock()
+			if same {
+				c.send(line)
+			}
+		}
+		// the capabilities this connection acknowledged before the restart
+		send("CAP LIST")
+		for _, ch := range saved {
+			send("NAMES " + ch)
+			send("TOPIC " + ch)
+		}
+		if away != "" {
+			send("AWAY :" + away)
+		}
+		for _, l := range pending {
+			send(l)
+		}
+	}()
 	c.log.Info("resumed held link", "network", c.net.Name, "nick", r.Nick, "channels", len(saved), "dropped", r.Dropped)
 	if r.Dropped > 0 {
 		c.notify(Event{Kind: "netsplit", Title: c.net.Name + ": lines missed while evrd restarted",
