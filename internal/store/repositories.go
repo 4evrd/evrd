@@ -39,7 +39,6 @@ type SessionRepositoryImpl interface {
 
 // ClientPasswordRepositoryImpl keeps IRC client passwords.
 type ClientPasswordRepositoryImpl interface {
-	// IRC client passwords
 	CreateClientPassword(ctx context.Context, c ClientPassword) (ClientPassword, error)
 	ListClientPasswords(ctx context.Context, userID int64) ([]ClientPassword, error)
 	DeleteClientPassword(ctx context.Context, userID, id int64) error
@@ -122,8 +121,6 @@ type ClusterRepositoryImpl interface {
 // SettingRepositoryImpl keeps settings changed in the admin UI. SaveSettings
 // sets and deletes keys in one go.
 type SettingRepositoryImpl interface {
-	// Settings changed in the admin UI. SaveSettings sets and deletes keys
-	// in one go.
 	Settings(ctx context.Context) ([]Setting, error)
 	SaveSettings(ctx context.Context, set map[string]string, del []string, by string) error
 }
@@ -132,13 +129,9 @@ type SettingRepositoryImpl interface {
 // CertCacheEntry) and fetched documents (see CacheEntry). CertCache and
 // Cached return ErrNotFound for a missing key.
 type CacheRepositoryImpl interface {
-	// TLS certificates evrd gets or makes (see CertCacheEntry). CertCache
-	// returns ErrNotFound for a missing key.
 	CertCache(ctx context.Context, key string) (string, error)
 	PutCertCache(ctx context.Context, key, data string) error
 	DeleteCertCache(ctx context.Context, key string) error
-	// Fetched documents (see CacheEntry). Cached returns ErrNotFound for a
-	// missing key.
 	Cached(ctx context.Context, key string) (string, error)
 	PutCached(ctx context.Context, key, data string) error
 }
@@ -147,9 +140,6 @@ type CacheRepositoryImpl interface {
 // LanguagePack). LanguagePacks leaves out the messages; LanguagePack and
 // UserLanguagePack return ErrNotFound when there's none.
 type LanguagePackRepositoryImpl interface {
-	// Translations of the web app (see LanguagePack). LanguagePacks leaves
-	// out the messages; LanguagePack and UserLanguagePack return ErrNotFound
-	// when there's none.
 	LanguagePacks(ctx context.Context) ([]LanguagePack, error)
 	LanguagePack(ctx context.Context, code string) (LanguagePack, error)
 	PutLanguagePack(ctx context.Context, p LanguagePack) error

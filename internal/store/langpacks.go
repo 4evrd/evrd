@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-// LanguagePackRepository keeps translations of the web app (see LanguagePackRepositoryImpl).
+// LanguagePackRepository is the LanguagePackRepositoryImpl on the SQL database.
 type LanguagePackRepository struct{ db *DB }
 
-// NewLanguagePackRepository is the translations of the web app repository on db.
+// NewLanguagePackRepository makes a LanguagePackRepository on db.
 func NewLanguagePackRepository(db *DB) LanguagePackRepositoryImpl {
 	return &LanguagePackRepository{db: db}
 }

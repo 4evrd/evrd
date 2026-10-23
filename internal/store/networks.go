@@ -6,10 +6,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// NetworkRepository keeps users' IRC networks and their channels (see NetworkRepositoryImpl).
+// NetworkRepository is the NetworkRepositoryImpl on the SQL database.
 type NetworkRepository struct{ db *DB }
 
-// NewNetworkRepository is the users' IRC networks and their channels repository on db.
+// NewNetworkRepository makes a NetworkRepository on db.
 func NewNetworkRepository(db *DB) NetworkRepositoryImpl { return &NetworkRepository{db: db} }
 
 func (r *NetworkRepository) ListNetworks(ctx context.Context, userID int64) ([]Network, error) {

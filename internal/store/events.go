@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-// UserEventRepository keeps users' activity feeds (see UserEventRepositoryImpl).
+// UserEventRepository is the UserEventRepositoryImpl on the SQL database.
 type UserEventRepository struct{ db *DB }
 
-// NewUserEventRepository is the users' activity feeds repository on db.
+// NewUserEventRepository makes a UserEventRepository on db.
 func NewUserEventRepository(db *DB) UserEventRepositoryImpl { return &UserEventRepository{db: db} }
 
 func (r *UserEventRepository) AddUserEvent(ctx context.Context, e UserEvent) error {

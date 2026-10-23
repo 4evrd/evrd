@@ -7,10 +7,10 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// BufferPlaybackRepository keeps per-buffer playback settings (see BufferPlaybackRepositoryImpl).
+// BufferPlaybackRepository is the BufferPlaybackRepositoryImpl on the SQL database.
 type BufferPlaybackRepository struct{ db *DB }
 
-// NewBufferPlaybackRepository is the per-buffer playback settings repository on db.
+// NewBufferPlaybackRepository makes a BufferPlaybackRepository on db.
 func NewBufferPlaybackRepository(db *DB) BufferPlaybackRepositoryImpl {
 	return &BufferPlaybackRepository{db: db}
 }
