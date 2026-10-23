@@ -37,7 +37,7 @@ func TestBouncerConnection(t *testing.T) {
 	r := newRig(t)
 	one, two := r.netID("one"), r.netID("two")
 	ic := r.bouncerConn(r.addr, "alice", networksCaps)
-	ic.expect(" 001 alice :Welcome to evrd — a bouncer connection, on no network")
+	ic.expect(" 001 alice :Welcome to evrd - a bouncer connection, on no network")
 	ic.expect(" 005 alice BOUNCER_NETID :are supported")
 	// the networks, at once (notify)
 	ic.expect("BATCH +1 soju.im/bouncer-networks")
@@ -57,7 +57,7 @@ func TestBouncerConnection(t *testing.T) {
 	// a bound connection: the network's state changes, and the bouncer
 	// connection hears it
 	bound := r.bouncerConn(r.addr, "alice", []string{"soju.im/bouncer-networks"}, "BOUNCER BIND "+two)
-	bound.expect(" 001 alice_two :Welcome to evrd — attached to two")
+	bound.expect(" 001 alice_two :Welcome to evrd - attached to two")
 	bound.expect(" 005 alice_two BOUNCER_NETID=" + two + " :are supported")
 	bound.expect("JOIN #two")
 	ic.expect("BOUNCER NETWORK " + two + " state=connected")

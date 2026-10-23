@@ -91,10 +91,10 @@ test('buffers: setbuffer, clearbuffer, playbuffer and playback', async () => {
   const a = await attach('A')
   for (let i = 1; i <= 5; i++) talk.send(`PRIVMSG ${chan} :line ${i}`)
   await a.waitFor(/:line 5$/)
-  await cmd(a, 'buffers', new RegExp(`${esc(chan)}\\s+50 lines · keeps`))
+  await cmd(a, 'buffers', new RegExp(`${esc(chan)}\\s+50 lines - keeps`))
   await cmd(a, `setbuffer ${chan} 2`, `${chan} plays back 2 lines.`)
   await cmd(a, 'setbuffer * 7', 'Buffers on A play back 7 lines')
-  await cmd(a, `showchan ${chan}`, 'buffer: plays back 2 lines · keeps its buffer')
+  await cmd(a, `showchan ${chan}`, 'buffer: plays back 2 lines - keeps its buffer')
   a.close()
   await a.closed()
   await new Promise((r) => setTimeout(r, 500))
@@ -128,7 +128,7 @@ test('channels: detach, attach, disable, enable, nicks, topics, showchan', async
   await talk.waitFor(/:status e2e topic$/)
   await cmd(a, `listnicks ${chan}`, them.name)
   await cmd(a, 'topics', 'status e2e topic')
-  await cmd(a, `showchan ${chan}`, new RegExp(`${esc(chan)} on A — joined, 2 nicks`))
+  await cmd(a, `showchan ${chan}`, new RegExp(`${esc(chan)} on A - joined, 2 nicks`))
   await cmd(a, 'channels', chan)
 
   // detach hides it, attach brings it back with what was missed
@@ -149,7 +149,7 @@ test('channels: detach, attach, disable, enable, nicks, topics, showchan', async
   await parted
   const n = await me.api.get(`/api/networks/${netA.id}`)
   expect(n.channels.map((c) => c.toLowerCase())).toContain(chan.toLowerCase())
-  await cmd(a, `showchan ${chan}`, 'saved, not joined · disabled')
+  await cmd(a, `showchan ${chan}`, 'saved, not joined - disabled')
   const joined = talk.next(new RegExp(`^:${esc(me.name)}!\\S+ JOIN :?${esc(chan)}`, 'i'))
   await cmd(a, `enablechan ${chan}`, `Enabled ${chan}: joining it.`)
   await joined

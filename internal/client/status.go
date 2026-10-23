@@ -40,7 +40,7 @@ func init() {
 		{"jump", "[server|network]", "Reconnect to the next server (or the one named); a network name switches to that network.", (*session).cmdJump},
 		{"connect", "[network]", "Connect a network (default: this one).", (*session).cmdConnect},
 		{"disconnect", "[network]", "Disconnect a network (default: this one). evrd stops reconnecting it.", (*session).cmdDisconnect},
-		{"addnetwork", "<name> <host> [[+]port] [nick] | <id>", "Add a network. +port means TLS (default +6697). With just an id, one from the directory.", (*session).cmdAddNetwork},
+		{"addnetwork", "<name> <host> [[+]port] [nick] or <id>", "Add a network. +port means TLS (default +6697). With just an id, one from the directory.", (*session).cmdAddNetwork},
 		{"directory", "[search]", "Public networks you can add by id (addnetwork <id>).", (*session).cmdDirectory},
 		{"delnetwork", "<network>", "Remove a network and its saved history.", (*session).cmdDelNetwork},
 		{"show", "[network]", "A network's settings (default: this one).", (*session).cmdShow},
@@ -138,14 +138,20 @@ func (se *session) statusf(format string, a ...any) {
 		se.web(fmt.Sprintf(format, a...))
 		return
 	}
-	se.send(fmt.Sprintf(":%s!status@%s PRIVMSG %s :%s", statusNick, serverName, se.unick, fmt.Sprintf(format, a...)))
+	se.send(fmt.Sprintf(":%s!status@%s PRIVMSG %s :%s", statusNick, serverName, se.unick, ircText(fmt.Sprintf(format, a...))))
 }
 
 func (se *session) cmdHelp([]string) {
 	se.statusf("evrd commands — /msg %s <command> or /znc <command>:", statusNick)
 	rows := [][]string{{"Command", "Arguments", "Description"}}
 	for _, c := range statusCmds {
-		rows = append(rows, []string{strings.ToUpper(c.name), c.args, c.help})
+		row := []string{strings.ToUpper(c.name), c.args, c.help}
+		if se.web == nil {
+			for i := range row {
+				row[i] = ircText(row[i]) // before padding, so the columns line up
+			}
+		}
+		rows = append(rows, row)
 	}
 	for _, l := range markdownTable(rows) {
 		se.statusf("%s", l)

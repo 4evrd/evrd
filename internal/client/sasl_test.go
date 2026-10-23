@@ -49,7 +49,7 @@ func TestSASLPlainSignIn(t *testing.T) {
 	ic.send("AUTHENTICATE PLAIN")
 	ic.expect(" 907 alice ")
 	ic.send("CAP END")
-	ic.expect(" 001 alice_two :Welcome to evrd — attached to two")
+	ic.expect(" 001 alice_two :Welcome to evrd - attached to two")
 	ic.send("AUTHENTICATE PLAIN")
 	ic.expect(" 907 alice_two ")
 

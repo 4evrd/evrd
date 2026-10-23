@@ -20,7 +20,7 @@ import (
 
 // AwayMessage is set on every network while auto-away is on and no client
 // is attached.
-const AwayMessage = "Away — evrd is keeping my seat"
+const AwayMessage = "Away - evrd is keeping my seat"
 
 // --- attached clients ----------------------------------------------------
 

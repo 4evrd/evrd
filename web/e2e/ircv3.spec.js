@@ -145,7 +145,7 @@ test("the network's capabilities are offered while registering and pass through"
 test('SASL sign-in, bouncer networks and BIND, as Goguma does', async () => {
   irc = await IRC.connect({ user: me.name, password: me.password, sasl: true, caps: ['soju.im/bouncer-networks', 'soju.im/bouncer-networks-notify', 'batch'] })
   await irc.waitFor(/ 903 /)
-  await irc.waitFor(/ 001 \S+ :Welcome to evrd — a bouncer connection/)
+  await irc.waitFor(/ 001 \S+ :Welcome to evrd - a bouncer connection/)
   const id = (await irc.waitFor(/BOUNCER NETWORK \d+ \S*name=Dev/)).match(/NETWORK (\d+)/)[1]
 
   // one connection per network
