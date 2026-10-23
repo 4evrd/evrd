@@ -190,7 +190,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	defer st.Close()
-	if n, err := st.EncryptSecrets(); err != nil {
+	if n, err := st.EncryptSecrets(context.Background()); err != nil {
 		log.Error("encrypt saved secrets", "err", err)
 		return 1
 	} else if n > 0 {
@@ -223,7 +223,7 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	defer hist.Close()
 	// History used to live in the SQL database: move any left there, once.
-	n, err := st.MigrateLegacyMessages(func(m store.LegacyMessage) error {
+	n, err := st.MigrateLegacyMessages(context.Background(), func(m store.LegacyMessage) error {
 		return hist.Add(history.Message{
 			NetworkID: m.NetworkID, Target: m.Target, Sender: m.Sender,
 			Kind: m.Kind, Text: m.Text, Extra: m.Extra, Time: m.Time,

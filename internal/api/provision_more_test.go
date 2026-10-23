@@ -54,13 +54,13 @@ func TestProvisionValidation(t *testing.T) {
 		t.Fatalf("results: %v", nets)
 	}
 	// Per-user network limits don't apply to provisioning.
-	u, _ := e.st.UserByUsername("bob")
+	u, _ := e.st.UserByUsername(t.Context(), "bob")
 	for _, name := range []string{"two", "three"} {
 		if _, out := e.provision("bob", map[string]any{"networks": []map[string]any{{"name": name, "host": "irc.example.org"}}}); out["networks"].([]any)[0].(map[string]any)["status"] != "created" {
 			t.Fatalf("%s: %v", name, out)
 		}
 	}
-	if list, _ := e.st.ListNetworks(u.ID); len(list) != 3 {
+	if list, _ := e.st.ListNetworks(t.Context(), u.ID); len(list) != 3 {
 		t.Fatalf("networks: %d", len(list))
 	}
 }
@@ -83,9 +83,9 @@ func TestProvisionConnect(t *testing.T) {
 	irc.expect("USER ")
 
 	// A suspended account's networks can't be connected: said per network.
-	u, _ := e.st.UserByUsername("bob")
+	u, _ := e.st.UserByUsername(t.Context(), "bob")
 	u.Suspended = true
-	e.st.UpdateUser(u)
+	e.st.UpdateUser(t.Context(), u)
 	e.api.b.StopUser(u.ID)
 	_, out = e.provision("bob", map[string]any{"connect": true, "networks": []map[string]any{{"name": "fake"}}})
 	if n := out["networks"].([]any)[0].(map[string]any); n["status"] != "exists" || n["error"] != "not connected: "+bouncer.ErrSuspended.Error() {
@@ -103,7 +103,7 @@ func TestProvisionConnectOnAnotherNode(t *testing.T) {
 	if n["status"] != "created" || n["error"] != nil {
 		t.Fatalf("result: %v", n)
 	}
-	got, _ := e.st.NetworkByID(int64(n["id"].(float64)))
+	got, _ := e.st.NetworkByID(t.Context(), int64(n["id"].(float64)))
 	if !got.Enabled {
 		t.Fatal("not enabled for the owner to connect")
 	}
@@ -130,8 +130,8 @@ func TestProvisionBindHost(t *testing.T) {
 	if r := out["networks"].([]any)[0].(map[string]any); r["status"] != "exists" || r["error"] != nil {
 		t.Fatalf("setting it later: %v", r)
 	}
-	u, _ := e.st.UserByUsername("bob")
-	list, _ := e.st.ListNetworks(u.ID)
+	u, _ := e.st.UserByUsername(t.Context(), "bob")
+	list, _ := e.st.ListNetworks(t.Context(), u.ID)
 	for _, n := range list {
 		if n.BindHost != "bob.example.org" {
 			t.Fatalf("%s: bind host %q", n.Name, n.BindHost)

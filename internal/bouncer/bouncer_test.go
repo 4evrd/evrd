@@ -24,11 +24,11 @@ func TestHistoryFollowsNetworksAndUsers(t *testing.T) {
 	defer hist.Close()
 	b := New(st, hist, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	alice, _ := st.CreateUser(store.User{Username: "alice"})
-	bob, _ := st.CreateUser(store.User{Username: "bob"})
-	a1, _ := st.CreateNetwork(store.Network{UserID: alice.ID, Name: "a1"})
-	a2, _ := st.CreateNetwork(store.Network{UserID: alice.ID, Name: "a2"})
-	b1, _ := st.CreateNetwork(store.Network{UserID: bob.ID, Name: "b1"})
+	alice, _ := st.CreateUser(t.Context(), store.User{Username: "alice"})
+	bob, _ := st.CreateUser(t.Context(), store.User{Username: "bob"})
+	a1, _ := st.CreateNetwork(t.Context(), store.Network{UserID: alice.ID, Name: "a1"})
+	a2, _ := st.CreateNetwork(t.Context(), store.Network{UserID: alice.ID, Name: "a2"})
+	b1, _ := st.CreateNetwork(t.Context(), store.Network{UserID: bob.ID, Name: "b1"})
 	for _, n := range []store.Network{a1, a2, b1} {
 		hist.Add(history.Message{NetworkID: n.ID, Target: "#x", Text: "hi", Time: time.Now()})
 	}
@@ -38,8 +38,8 @@ func TestHistoryFollowsNetworksAndUsers(t *testing.T) {
 		t.Fatalf("delete network: err=%v history left=%v", err, has(a1.ID))
 	}
 	// Deleted behind evrd's back (as evrctl does): housekeeping drops it.
-	st.DeleteNetwork(bob.ID, b1.ID)
-	users, _ := st.ListUsers()
+	st.DeleteNetwork(t.Context(), bob.ID, b1.ID)
+	users, _ := st.ListUsers(t.Context())
 	b.dropOrphanHistory(users)
 	if has(b1.ID) || !has(a2.ID) {
 		t.Fatalf("orphan cleanup: b1 left=%v a2 kept=%v", has(b1.ID), has(a2.ID))

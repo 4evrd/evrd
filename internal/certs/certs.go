@@ -352,7 +352,7 @@ func (m *Manager) selfSignedLocked() error {
 		return nil
 	}
 	if m.st != nil {
-		if data, err := m.st.CertCache(key); err == nil {
+		if data, err := m.st.CertCache(context.Background(), key); err == nil {
 			if cert, err := parsePEM([]byte(data)); err == nil && time.Now().Before(cert.Leaf.NotAfter.Add(-30*24*time.Hour)) {
 				m.self, m.selfFor = cert, key
 				return nil
@@ -368,7 +368,7 @@ func (m *Manager) selfSignedLocked() error {
 		return err
 	}
 	if m.st != nil {
-		if err := m.st.PutCertCache(key, string(data)); err != nil {
+		if err := m.st.PutCertCache(context.Background(), key, string(data)); err != nil {
 			m.log.Warn("save the self-signed certificate", "err", err)
 		}
 	}
@@ -497,7 +497,7 @@ func (m *Manager) Report() Report {
 				// autocert keys ECDSA certificates by the bare name, RSA
 				// ones (for clients without ECDSA) with "+rsa"
 				for _, k := range []string{h, h + "+rsa"} {
-					if data, err := m.st.CertCache(k); err == nil {
+					if data, err := m.st.CertCache(context.Background(), k); err == nil {
 						if c, err := parsePEM([]byte(data)); err == nil {
 							s = describe(h, c)
 							break
@@ -537,7 +537,7 @@ func (c dbCache) Get(_ context.Context, key string) ([]byte, error) {
 	if st == nil {
 		return nil, autocert.ErrCacheMiss
 	}
-	data, err := st.CertCache(key)
+	data, err := st.CertCache(context.Background(), key)
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, autocert.ErrCacheMiss
 	}
@@ -549,7 +549,7 @@ func (c dbCache) Put(_ context.Context, key string, data []byte) error {
 	if st == nil {
 		return errors.New("no database")
 	}
-	return st.PutCertCache(key, string(data))
+	return st.PutCertCache(context.Background(), key, string(data))
 }
 
 func (c dbCache) Delete(_ context.Context, key string) error {
@@ -557,5 +557,5 @@ func (c dbCache) Delete(_ context.Context, key string) error {
 	if st == nil {
 		return nil
 	}
-	return st.DeleteCertCache(key)
+	return st.DeleteCertCache(context.Background(), key)
 }

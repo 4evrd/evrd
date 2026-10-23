@@ -145,19 +145,19 @@ func TestUsers(t *testing.T) {
 	user("", "add", "-h").want(t, 0, "", "-admin")
 
 	st, acc := open()
-	u, err := st.UserByUsername("root")
+	u, err := st.UserByUsername(t.Context(), "root")
 	if err != nil || u.Role != store.RoleAdmin || u.Email != "root@example.org" {
 		t.Fatalf("root: %+v %v", u, err)
 	}
 	if _, _, err := acc.IRCLogin("bob", "bob-password"); err != nil {
 		t.Fatalf("bob's password from stdin: %v", err)
 	}
-	if c, _ := st.UserByUsername("carol"); c.PasswordHash != "" {
+	if c, _ := st.UserByUsername(t.Context(), "carol"); c.PasswordHash != "" {
 		t.Fatal("carol has a password")
 	}
 
 	// passwd
-	if err := st.CreateSession(store.Session{ID: "s1", UserID: 2, ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+	if err := st.CreateSession(t.Context(), store.Session{ID: "s1", UserID: 2, ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	r = user("", "passwd", "bob", "new-bob-password")
@@ -167,7 +167,7 @@ func TestUsers(t *testing.T) {
 	if _, _, err := acc.IRCLogin("bob", "new-bob-password"); err != nil {
 		t.Fatalf("new password: %v", err)
 	}
-	if ss, _ := st.ListSessions(2); len(ss) != 0 {
+	if ss, _ := st.ListSessions(t.Context(), 2); len(ss) != 0 {
 		t.Fatalf("sessions kept: %+v", ss)
 	}
 	user("", "passwd", "bob", "short").fails(t, "use at least 10 characters")
@@ -181,17 +181,17 @@ func TestUsers(t *testing.T) {
 	user("", "role", "bob", "owner").fails(t, "role must be user or admin")
 	user("", "role", "nobody", "user").fails(t, "no user \"nobody\"")
 	user("", "role", "bob").fails(t, "usage: evrctl user role <name> user|admin")
-	if u, _ := st.UserByUsername("root"); u.Role != store.RoleUser {
+	if u, _ := st.UserByUsername(t.Context(), "root"); u.Role != store.RoleUser {
 		t.Fatalf("root's role %q", u.Role)
 	}
 
 	// suspend, unsuspend
-	st.CreateSession(store.Session{ID: "s2", UserID: 1, ExpiresAt: time.Now().Add(time.Hour)})
+	st.CreateSession(t.Context(), store.Session{ID: "s2", UserID: 1, ExpiresAt: time.Now().Add(time.Hour)})
 	user("", "suspend", "root", "testing").want(t, 0, "suspended \"root\"\n", "")
-	if u, _ := st.UserByUsername("root"); !u.Suspended || u.SuspendedReason != "testing" {
+	if u, _ := st.UserByUsername(t.Context(), "root"); !u.Suspended || u.SuspendedReason != "testing" {
 		t.Fatalf("root: suspended %v (%q)", u.Suspended, u.SuspendedReason)
 	}
-	if ss, _ := st.ListSessions(1); len(ss) != 0 {
+	if ss, _ := st.ListSessions(t.Context(), 1); len(ss) != 0 {
 		t.Fatalf("sessions kept: %+v", ss)
 	}
 	user("", "suspend", "bob").fails(t, "this is the last admin — make someone else an admin first")
@@ -201,13 +201,13 @@ func TestUsers(t *testing.T) {
 
 	// list: sign-in method, status and last sign-in
 	sub := "sso-subject"
-	sso, err := st.CreateUser(store.User{Username: "erin", Role: store.RoleUser, OIDCSubject: &sub})
+	sso, err := st.CreateUser(t.Context(), store.User{Username: "erin", Role: store.RoleUser, OIDCSubject: &sub})
 	if err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 5, 4, 3, 2, 1, 0, time.Local)
 	sso.LastLoginAt = &at
-	if err := st.UpdateUser(sso); err != nil {
+	if err := st.UpdateUser(t.Context(), sso); err != nil {
 		t.Fatal(err)
 	}
 	r = user("", "list")
@@ -232,21 +232,21 @@ func TestUsers(t *testing.T) {
 	}
 
 	user("", "unsuspend", "root").want(t, 0, "unsuspended \"root\"\n", "")
-	if u, _ := st.UserByUsername("root"); u.Suspended || u.SuspendedReason != "" {
+	if u, _ := st.UserByUsername(t.Context(), "root"); u.Suspended || u.SuspendedReason != "" {
 		t.Fatalf("root still suspended: %+v", u)
 	}
 	user("", "unsuspend", "nobody").fails(t, "no user \"nobody\"")
 	user("", "unsuspend").fails(t, "usage: evrctl user unsuspend <name>")
 
 	// delete
-	if _, err := st.CreateNetwork(store.Network{UserID: 3, Name: "libera"}); err != nil {
+	if _, err := st.CreateNetwork(t.Context(), store.Network{UserID: 3, Name: "libera"}); err != nil {
 		t.Fatal(err)
 	}
 	user("", "delete", "carol").want(t, 0, "deleted \"carol\" (id 3)\n", "")
-	if _, err := st.UserByUsername("carol"); err != store.ErrNotFound {
+	if _, err := st.UserByUsername(t.Context(), "carol"); err != store.ErrNotFound {
 		t.Fatalf("carol: %v", err)
 	}
-	if ns, _ := st.ListNetworks(3); len(ns) != 0 {
+	if ns, _ := st.ListNetworks(t.Context(), 3); len(ns) != 0 {
 		t.Fatalf("carol's networks kept: %+v", ns)
 	}
 	user("", "delete", "bob").fails(t, "this is the last admin — make someone else an admin first")
@@ -351,8 +351,8 @@ func TestImportZNCCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	u, _ := st.CreateUser(store.User{Username: "alice"})
-	n, _ := st.CreateNetwork(store.Network{UserID: u.ID, Name: "libera"})
+	u, _ := st.CreateUser(t.Context(), store.User{Username: "alice"})
+	n, _ := st.CreateNetwork(t.Context(), store.Network{UserID: u.ID, Name: "libera"})
 	st.Close()
 
 	znc := filepath.Join(dir, "znc")

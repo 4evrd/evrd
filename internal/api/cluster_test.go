@@ -251,7 +251,7 @@ func TestForwardedRequestHeaders(t *testing.T) {
 		t.Fatalf("forwarded: %d %v", code, out)
 	}
 	r := <-got
-	sessions, _ := e.st.ListSessions(alice.ID)
+	sessions, _ := e.st.ListSessions(t.Context(), alice.ID)
 	switch {
 	case r.URL.Path != "/api/me" || r.URL.RawQuery != "x=1":
 		t.Errorf("path: %s", r.URL)

@@ -73,17 +73,17 @@ func TestPasswordLogin(t *testing.T) {
 	if !c.HttpOnly || c.Secure || c.SameSite != http.SameSiteLaxMode || c.Path != "/" || !c.Expires.Equal(start.Add(time.Hour)) {
 		t.Fatalf("cookie: %+v", c)
 	}
-	sess, err := st.SessionByID(Hash(c.Value))
+	sess, err := st.SessionByID(t.Context(), Hash(c.Value))
 	if err != nil {
 		t.Fatalf("the session is stored by the token's hash: %v", err)
 	}
-	if _, err := st.SessionByID(c.Value); err == nil {
+	if _, err := st.SessionByID(t.Context(), c.Value); err == nil {
 		t.Fatal("the raw token is stored")
 	}
 	if sess.UserID != u.ID || sess.Method != "password" || sess.IP != "203.0.113.9" || len(sess.UserAgent) != 255 || !sess.ExpiresAt.Equal(start.Add(time.Hour)) {
 		t.Fatalf("session: %+v", sess)
 	}
-	if got, _ := st.UserByID(u.ID); got.LastLoginAt == nil || !got.LastLoginAt.Equal(start) {
+	if got, _ := st.UserByID(t.Context(), u.ID); got.LastLoginAt == nil || !got.LastLoginAt.Equal(start) {
 		t.Fatalf("last login: %v", got.LastLoginAt)
 	}
 
@@ -107,15 +107,15 @@ func TestPasswordLogin(t *testing.T) {
 		t.Fatalf("bad body: %d", rec.Code)
 	}
 
-	u, _ = st.UserByID(u.ID)
+	u, _ = st.UserByID(t.Context(), u.ID)
 	u.AllowedHosts = []string{"10.0.0.0/8"}
-	st.UpdateUser(u)
+	st.UpdateUser(t.Context(), u)
 	if rec := passwordLogin(m, "alice", testPassword); rec.Code != http.StatusForbidden || len(rec.Result().Cookies()) != 0 {
 		t.Fatalf("from a denied address: %d %s", rec.Code, rec.Body)
 	}
 
 	u.AllowedHosts, u.Suspended = nil, true
-	st.UpdateUser(u)
+	st.UpdateUser(t.Context(), u)
 	if rec := passwordLogin(m, "alice", testPassword); rec.Code != http.StatusForbidden || errorOf(rec) != "this account is suspended" {
 		t.Fatalf("suspended: %d %s", rec.Code, rec.Body)
 	}
@@ -215,32 +215,32 @@ func TestCurrentSession(t *testing.T) {
 	// Last seen is written at most once a minute.
 	now = start.Add(30 * time.Second)
 	m.Current(req(c))
-	if s, _ := st.SessionByID(sess.ID); !s.LastSeenAt.Equal(start) {
+	if s, _ := st.SessionByID(t.Context(), sess.ID); !s.LastSeenAt.Equal(start) {
 		t.Fatalf("touched too soon: %v", s.LastSeenAt)
 	}
 	now = start.Add(2 * time.Minute)
 	if _, s, _ := m.Current(req(c)); !s.LastSeenAt.Equal(now) {
 		t.Fatalf("returned last seen: %v", s.LastSeenAt)
 	}
-	if s, _ := st.SessionByID(sess.ID); !s.LastSeenAt.Equal(now) {
+	if s, _ := st.SessionByID(t.Context(), sess.ID); !s.LastSeenAt.Equal(now) {
 		t.Fatalf("stored last seen: %v", s.LastSeenAt)
 	}
 
 	// Suspending the account ends its sessions' access at once.
 	u.Suspended = true
-	st.UpdateUser(u)
+	st.UpdateUser(t.Context(), u)
 	if _, _, ok := m.Current(req(c)); ok {
 		t.Fatal("a suspended user's session still works")
 	}
 	u.Suspended = false
-	st.UpdateUser(u)
+	st.UpdateUser(t.Context(), u)
 
 	now = start.Add(time.Hour + time.Second)
 	if _, _, ok := m.Current(req(c)); ok {
 		t.Fatal("an expired session still works")
 	}
 	now = start
-	st.DeleteSession(u.ID, sess.ID)
+	st.DeleteSession(t.Context(), u.ID, sess.ID)
 	if _, _, ok := m.Current(req(c)); ok {
 		t.Fatal("a revoked session still works")
 	}
@@ -286,7 +286,7 @@ func TestRequireUserAndAdmin(t *testing.T) {
 			t.Errorf("%s: session %q", tc.name, seenSess.ID)
 		}
 	}
-	if u, _ := st.UserByUsername("user"); u.IsAdmin() {
+	if u, _ := st.UserByUsername(t.Context(), "user"); u.IsAdmin() {
 		t.Fatal("setup")
 	}
 }
@@ -345,7 +345,7 @@ func TestForwarded(t *testing.T) {
 
 	// A suspension on another node counts here too.
 	bob.Suspended = true
-	st.UpdateUser(bob)
+	st.UpdateUser(t.Context(), bob)
 	if code := send(h, map[string]string{HeaderSecret: secret, HeaderCaller: id(bob)}); code != http.StatusUnauthorized {
 		t.Fatalf("suspended caller: %d", code)
 	}
@@ -379,7 +379,7 @@ func TestLogout(t *testing.T) {
 	if next != "/" || cleared.Value != "" || cleared.MaxAge >= 0 || !cleared.Secure {
 		t.Fatalf("logout: %q %+v", next, cleared)
 	}
-	if _, err := st.SessionByID(Hash(c.Value)); err == nil {
+	if _, err := st.SessionByID(t.Context(), Hash(c.Value)); err == nil {
 		t.Fatal("the session wasn't deleted")
 	}
 	if _, _, ok := m.Current(withCookie(httptest.NewRequest(http.MethodGet, "/", nil), other)); !ok {

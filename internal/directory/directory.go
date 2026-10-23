@@ -23,8 +23,8 @@ const cacheKey = "network-directory"
 
 // Cache keeps the last good copy (the store implements it).
 type Cache interface {
-	Cached(key string) (string, error)
-	PutCached(key, data string) error
+	Cached(ctx context.Context, key string) (string, error)
+	PutCached(ctx context.Context, key, data string) error
 }
 
 // Status is how the directory is doing, for Admin → Settings.
@@ -170,7 +170,7 @@ func (d *Directory) Load() {
 	if d.cache == nil {
 		return
 	}
-	raw, err := d.cache.Cached(cacheKey)
+	raw, err := d.cache.Cached(context.Background(), cacheKey)
 	if err != nil {
 		if !errors.Is(err, store.ErrNotFound) {
 			d.log.Warn("network directory: read the stored copy", "err", err)
@@ -244,7 +244,7 @@ func (d *Directory) Refresh(ctx context.Context) error {
 	}
 	if d.cache != nil {
 		if b, err := json.Marshal(d.saved); err == nil {
-			if err := d.cache.PutCached(cacheKey, string(b)); err != nil {
+			if err := d.cache.PutCached(ctx, cacheKey, string(b)); err != nil {
 				d.log.Warn("network directory: store a copy", "err", err)
 			}
 		}

@@ -23,8 +23,8 @@ func TestMarkReadAtOnlyMovesForward(t *testing.T) {
 	}
 	defer hist.Close()
 	b := New(st, hist, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	u, _ := st.CreateUser(store.User{Username: "alice"})
-	n, _ := st.CreateNetwork(store.Network{UserID: u.ID, Name: "net", Nick: "alice"})
+	u, _ := st.CreateUser(t.Context(), store.User{Username: "alice"})
+	n, _ := st.CreateNetwork(t.Context(), store.Network{UserID: u.ID, Name: "net", Nick: "alice"})
 	b.initReads(n)
 
 	base := time.Now().Add(-time.Hour).Truncate(time.Millisecond)

@@ -17,7 +17,7 @@ import (
 )
 
 func (s *Server) handleListNetworks(w http.ResponseWriter, r *http.Request) {
-	nets, err := s.st().ListNetworks(auth.User(r).ID)
+	nets, err := s.st().ListNetworks(r.Context(), auth.User(r).ID)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -211,7 +211,7 @@ func (s *Server) handleCreateNetwork(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	n, err := s.st().CreateNetwork(n)
+	n, err := s.st().CreateNetwork(r.Context(), n)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -245,7 +245,7 @@ func (s *Server) handleUpdateNetwork(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	if err := s.st().UpdateNetwork(n); err != nil {
+	if err := s.st().UpdateNetwork(r.Context(), n); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -565,7 +565,7 @@ func (s *Server) webStatus(r *http.Request, n store.Network, text string, replie
 		reply("*status isn't available here.")
 		return
 	}
-	if fresh, err := s.st().NetworkByID(n.ID); err == nil {
+	if fresh, err := s.st().NetworkByID(r.Context(), n.ID); err == nil {
 		n = fresh
 	}
 	s.status.WebStatus(auth.User(r).ID, n, text, reply)
@@ -574,7 +574,7 @@ func (s *Server) webStatus(r *http.Request, n store.Network, text string, replie
 // ownedNetwork loads the {id} network if it belongs to the signed-in user,
 // answering 404 itself otherwise.
 func (s *Server) ownedNetwork(w http.ResponseWriter, r *http.Request) (store.Network, bool) {
-	n, err := s.st().NetworkByID(pathID(r))
+	n, err := s.st().NetworkByID(r.Context(), pathID(r))
 	if err != nil || n.UserID != auth.User(r).ID {
 		writeErr(w, http.StatusNotFound, "not found")
 		return store.Network{}, false

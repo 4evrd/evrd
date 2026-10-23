@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -28,7 +29,7 @@ func (r *rig) left(ic *ircClient, name string) {
 	before := time.Now()
 	ic.c.Close()
 	eventually(r.t, "left "+name, func() bool {
-		bps, _ := r.st.BufferPlaybacks(r.network(name).ID)
+		bps, _ := r.st.BufferPlaybacks(context.Background(), r.network(name).ID)
 		at := bps[""].ClearedAt
 		return at != nil && !at.Before(before)
 	})

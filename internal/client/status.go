@@ -5,13 +5,15 @@ package client
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
-	"github.com/4evrd/evrd/internal/modules"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/4evrd/evrd/internal/modules"
 
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/directory"
@@ -207,7 +209,7 @@ func markdownTable(rows [][]string) []string {
 
 // networks loads the user's networks, reporting a failure itself.
 func (se *session) networks() ([]store.Network, bool) {
-	nets, err := se.srv.b.Store().ListNetworks(se.uid)
+	nets, err := se.srv.b.Store().ListNetworks(context.Background(), se.uid)
 	if err != nil {
 		se.statusf("Couldn't load your networks: %v", err)
 		return nil, false
@@ -218,7 +220,7 @@ func (se *session) networks() ([]store.Network, bool) {
 // network resolves a name argument, defaulting to the current network.
 func (se *session) network(args []string) (store.Network, bool) {
 	if len(args) == 0 {
-		n, err := se.srv.b.Store().NetworkByID(se.net.ID)
+		n, err := se.srv.b.Store().NetworkByID(context.Background(), se.net.ID)
 		if err != nil {
 			se.statusf("This network no longer exists.")
 			return store.Network{}, false
@@ -297,7 +299,7 @@ func (se *session) cmdAddNetwork(args []string) {
 		se.statusf("Usage: addnetwork <name> <host> [[+]port] [nick] — e.g. addnetwork libera irc.libera.chat +6697 — or addnetwork <id> for a network in the directory")
 		return
 	}
-	u, err := se.srv.b.Store().UserByID(se.uid)
+	u, err := se.srv.b.Store().UserByID(context.Background(), se.uid)
 	if err != nil {
 		se.statusf("Couldn't load your account: %v", err)
 		return
@@ -350,7 +352,7 @@ func (se *session) cmdAddNetwork(args []string) {
 		}
 		return
 	}
-	n, err = se.srv.b.Store().CreateNetwork(n)
+	n, err = se.srv.b.Store().CreateNetwork(context.Background(), n)
 	if err != nil {
 		se.statusf("Couldn't add it: %v", err)
 		return
@@ -558,7 +560,7 @@ func (se *session) cmdSet(args []string) {
 		text(&n.Encoding)
 	case "bindhost":
 		text(&n.BindHost)
-		u, err := se.srv.b.Store().UserByID(se.uid)
+		u, err := se.srv.b.Store().UserByID(context.Background(), se.uid)
 		if err == nil {
 			err = se.srv.acc.CheckBindHost(u, n.BindHost)
 		}
@@ -626,7 +628,7 @@ func (se *session) cmdSet(args []string) {
 		se.statusf("%s.", capitalize(err.Error()))
 		return
 	}
-	if err := se.srv.b.Store().UpdateNetwork(n); err != nil {
+	if err := se.srv.b.Store().UpdateNetwork(context.Background(), n); err != nil {
 		se.statusf("Couldn't save: %v", err)
 		return
 	}
@@ -690,13 +692,13 @@ func (se *session) cmdPlayback(args []string) {
 }
 
 func (se *session) cmdInfo([]string) {
-	u, err := se.srv.b.Store().UserByID(se.uid)
+	u, err := se.srv.b.Store().UserByID(context.Background(), se.uid)
 	if err != nil {
 		se.statusf("Couldn't load your account: %v", err)
 		return
 	}
 	lim := se.srv.acc.LimitsFor(u)
-	nets, _ := se.srv.b.Store().CountNetworks(u.ID)
+	nets, _ := se.srv.b.Store().CountNetworks(context.Background(), u.ID)
 	of := func(n int) string {
 		if n == 0 {
 			return "unlimited"
@@ -734,7 +736,7 @@ func (se *session) saveNetwork(before, n store.Network, done string) {
 		se.statusf("%s.", capitalize(err.Error()))
 		return
 	}
-	if err := se.srv.b.Store().UpdateNetwork(n); err != nil {
+	if err := se.srv.b.Store().UpdateNetwork(context.Background(), n); err != nil {
 		se.statusf("Couldn't save: %v", err)
 		return
 	}

@@ -17,39 +17,39 @@ type brokenStore struct {
 	owner, release, acquire, deleteNodes, upsert error
 }
 
-func (b *brokenStore) LeaseOwner(uid int64, now time.Time) (store.Node, store.UserLease, bool, error) {
+func (b *brokenStore) LeaseOwner(ctx context.Context, uid int64, now time.Time) (store.Node, store.UserLease, bool, error) {
 	if b.owner != nil {
 		return store.Node{}, store.UserLease{}, false, b.owner
 	}
-	return b.Store.LeaseOwner(uid, now)
+	return b.Store.LeaseOwner(ctx, uid, now)
 }
 
-func (b *brokenStore) ReleaseLease(uid int64, node string, now time.Time) error {
+func (b *brokenStore) ReleaseLease(ctx context.Context, uid int64, node string, now time.Time) error {
 	if b.release != nil {
 		return b.release
 	}
-	return b.Store.ReleaseLease(uid, node, now)
+	return b.Store.ReleaseLease(ctx, uid, node, now)
 }
 
-func (b *brokenStore) AcquireLease(uid int64, node string, until, now time.Time) (bool, error) {
+func (b *brokenStore) AcquireLease(ctx context.Context, uid int64, node string, until, now time.Time) (bool, error) {
 	if b.acquire != nil {
 		return false, b.acquire
 	}
-	return b.Store.AcquireLease(uid, node, until, now)
+	return b.Store.AcquireLease(ctx, uid, node, until, now)
 }
 
-func (b *brokenStore) DeleteNodesBefore(t time.Time) error {
+func (b *brokenStore) DeleteNodesBefore(ctx context.Context, t time.Time) error {
 	if b.deleteNodes != nil {
 		return b.deleteNodes
 	}
-	return b.Store.DeleteNodesBefore(t)
+	return b.Store.DeleteNodesBefore(ctx, t)
 }
 
-func (b *brokenStore) UpsertNode(n store.Node) error {
+func (b *brokenStore) UpsertNode(ctx context.Context, n store.Node) error {
 	if b.upsert != nil {
 		return b.upsert
 	}
-	return b.Store.UpsertNode(n)
+	return b.Store.UpsertNode(ctx, n)
 }
 
 func TestAccessors(t *testing.T) {
@@ -168,8 +168,8 @@ func TestALostLeaseStopsTheUser(t *testing.T) {
 	a := newNode(st, clock, "a")
 	tick(clock, a)
 	// Someone expires a's lease behind its back (a manual edit, say).
-	st.ReleaseLease(1, "a", clock.now().Add(-time.Second))
-	if ok, _ := st.AcquireLease(1, "b", clock.now().Add(time.Hour), clock.now()); !ok {
+	st.ReleaseLease(t.Context(), 1, "a", clock.now().Add(-time.Second))
+	if ok, _ := st.AcquireLease(t.Context(), 1, "b", clock.now().Add(time.Hour), clock.now()); !ok {
 		t.Fatal("setup: b couldn't take the lease")
 	}
 	tick(clock, a)
@@ -205,9 +205,9 @@ func TestLoseWithAFailingRelease(t *testing.T) {
 	a := newNode(bs, clock, "a")
 	tick(clock, a)
 	bs.release = errors.New("db down")
-	u, _ := st.UserByID(1)
+	u, _ := st.UserByID(t.Context(), 1)
 	u.Suspended = true
-	st.UpdateUser(u)
+	st.UpdateUser(t.Context(), u)
 	tick(clock, a)
 	if a.has(1) {
 		t.Fatal("a suspended user still runs when the release fails")

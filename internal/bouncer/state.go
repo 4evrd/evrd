@@ -5,6 +5,7 @@ package bouncer
 // activity feed, presence (last seen, auto-away).
 
 import (
+	"context"
 	"slices"
 	"sort"
 	"strconv"
@@ -109,7 +110,7 @@ func (b *Bouncer) Attached(userID int64) int {
 // --- presence --------------------------------------------------------------
 
 func (b *Bouncer) seen(userID int64) {
-	if err := b.store.TouchUserSeen(userID, time.Now()); err != nil {
+	if err := b.store.TouchUserSeen(context.Background(), userID, time.Now()); err != nil {
 		b.log.Warn("touch last seen", "user", userID, "err", err)
 	}
 }
@@ -117,7 +118,7 @@ func (b *Bouncer) seen(userID int64) {
 // refreshAway applies auto-away: away on every network while the user has
 // auto-away on and nothing attached, back as soon as something attaches.
 func (b *Bouncer) refreshAway(userID int64) {
-	u, err := b.store.UserByID(userID)
+	u, err := b.store.UserByID(context.Background(), userID)
 	if err != nil {
 		return
 	}
@@ -151,7 +152,7 @@ func (b *Bouncer) AddEvent(userID int64, kind, title, detail string) {
 // addNetworkEvent records an entry about one of the user's networks.
 func (b *Bouncer) addNetworkEvent(userID, networkID int64, kind, title, detail string) {
 	e := store.UserEvent{UserID: userID, NetworkID: networkID, At: time.Now(), Kind: kind, Title: title, Detail: detail}
-	if err := b.store.AddUserEvent(e); err != nil {
+	if err := b.store.AddUserEvent(context.Background(), e); err != nil {
 		b.log.Warn("record user event", "user", userID, "err", err)
 	}
 }
@@ -182,7 +183,7 @@ func (b *Bouncer) initReads(n store.Network) {
 	if done {
 		return
 	}
-	markers, err := b.store.ReadMarkers(n.ID)
+	markers, err := b.store.ReadMarkers(context.Background(), n.ID)
 	if err != nil {
 		b.log.Warn("load read markers", "network", n.ID, "err", err)
 		markers = map[string]time.Time{}
@@ -196,7 +197,7 @@ func (b *Bouncer) initReads(n store.Network) {
 		readAt, ok := markers[key]
 		if !ok {
 			readAt = now
-			_ = b.store.SetReadMarker(n.ID, key, now)
+			_ = b.store.SetReadMarker(context.Background(), n.ID, key, now)
 		}
 		st.ReadAt = readAt
 		msgs, _ := b.history.Recent(n.ID, name, 500)
@@ -251,7 +252,7 @@ func (b *Bouncer) observe(n store.Network, me string, m history.Message) {
 	}
 	b.rmu.Unlock()
 	if mark {
-		_ = b.store.SetReadMarker(n.ID, key, m.Time)
+		_ = b.store.SetReadMarker(context.Background(), n.ID, key, m.Time)
 	}
 }
 
@@ -269,7 +270,7 @@ func (b *Bouncer) Buffers(networkID int64) []BufferState {
 	if nr == nil {
 		// Not running here: just the names, from history.
 		names, _ := b.history.Buffers(networkID)
-		markers, _ := b.store.ReadMarkers(networkID)
+		markers, _ := b.store.ReadMarkers(context.Background(), networkID)
 		for _, name := range names {
 			out = append(out, BufferState{Name: name, ReadAt: markers[strings.ToLower(name)]})
 		}
@@ -311,7 +312,7 @@ func (b *Bouncer) MarkRead(networkID int64, buffer string) error {
 		}
 	}
 	for _, k := range keys {
-		if err := b.store.SetReadMarker(networkID, k, now); err != nil {
+		if err := b.store.SetReadMarker(context.Background(), networkID, k, now); err != nil {
 			return err
 		}
 	}
@@ -321,27 +322,27 @@ func (b *Bouncer) MarkRead(networkID int64, buffer string) error {
 // ReadMarkers is how far each of a network's buffers is read, by
 // lowercased name.
 func (b *Bouncer) ReadMarkers(networkID int64) (map[string]time.Time, error) {
-	return b.store.ReadMarkers(networkID)
+	return b.store.ReadMarkers(context.Background(), networkID)
 }
 
 // MarkReadAt moves a buffer's read marker forward to at — never back — and
 // returns where it is now (IRCv3 read-marker). The unread counts follow.
 func (b *Bouncer) MarkReadAt(networkID int64, buffer string, at time.Time) (time.Time, error) {
 	key := strings.ToLower(buffer)
-	markers, err := b.store.ReadMarkers(networkID)
+	markers, err := b.store.ReadMarkers(context.Background(), networkID)
 	if err != nil {
 		return time.Time{}, err
 	}
 	if cur := markers[key]; !at.After(cur) {
 		return cur, nil
 	}
-	if err := b.store.SetReadMarker(networkID, key, at); err != nil {
+	if err := b.store.SetReadMarker(context.Background(), networkID, key, at); err != nil {
 		return time.Time{}, err
 	}
 	me := ""
 	if c, ok := b.ConnFor(networkID); ok {
 		me = c.Nick()
-	} else if n, err := b.store.NetworkByID(networkID); err == nil {
+	} else if n, err := b.store.NetworkByID(context.Background(), networkID); err == nil {
 		me = n.Nick
 	}
 	msgs, _ := b.history.Recent(networkID, buffer, 500)

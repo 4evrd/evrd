@@ -260,7 +260,7 @@ func TestSelfSignedNearExpiryIsReplaced(t *testing.T) {
 	k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	tmpl := &x509.Certificate{SerialNumber: big.NewInt(99), Subject: pkix.Name{CommonName: "bnc.example.org"},
 		DNSNames: []string{"bnc.example.org"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(7 * 24 * time.Hour)}
-	st.PutCertCache(key, string(pemOf(t, k, tmpl, "PKCS8")))
+	st.PutCertCache(t.Context(), key, string(pemOf(t, k, tmpl, "PKCS8")))
 	m2 := newManager(st)
 	if err := m2.Apply(conf(nil)); err != nil {
 		t.Fatal(err)
@@ -269,7 +269,7 @@ func TestSelfSignedNearExpiryIsReplaced(t *testing.T) {
 	if got.SerialNumber.Cmp(big.NewInt(99)) == 0 {
 		t.Fatal("served a certificate about to expire")
 	}
-	data, _ := st.CertCache(key)
+	data, _ := st.CertCache(t.Context(), key)
 	if saved, err := parsePEM([]byte(data)); err != nil || saved.Leaf.SerialNumber.Cmp(got.SerialNumber) != 0 {
 		t.Fatal("the new certificate wasn't saved")
 	}
@@ -489,7 +489,7 @@ func TestACMEFromTheCache(t *testing.T) {
 	// by another node); bnc.example.org's isn't, and the CA can't be reached.
 	ec, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	ircPEM := pemOf(t, ec, leafTmpl("irc.example.org"), "EC")
-	st.PutCertCache("irc.example.org", string(ircPEM))
+	st.PutCertCache(t.Context(), "irc.example.org", string(ircPEM))
 
 	got, err := m.GetCertificate(ecdsaHello("irc.example.org"))
 	if err != nil || got.Leaf.DNSNames[0] != "irc.example.org" {
@@ -520,7 +520,7 @@ func TestACMEFromTheCache(t *testing.T) {
 	// reached), the report finds it under "+rsa", and a success clears the
 	// error.
 	rk, _ := rsa.GenerateKey(rand.Reader, 2048)
-	st.PutCertCache("bnc.example.org+rsa", string(pemOf(t, rk, leafTmpl("bnc.example.org"), "PKCS1")))
+	st.PutCertCache(t.Context(), "bnc.example.org+rsa", string(pemOf(t, rk, leafTmpl("bnc.example.org"), "PKCS1")))
 	if c, err := m.GetCertificate(&tls.ClientHelloInfo{ServerName: "bnc.example.org"}); err != nil || c.Leaf.DNSNames[0] != "bnc.example.org" {
 		t.Fatalf("RSA from the cache: %v", err)
 	}
@@ -544,7 +544,7 @@ func TestPrefetch(t *testing.T) {
 		t.Fatal(err)
 	}
 	ec, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	st.PutCertCache("irc.example.org", string(pemOf(t, ec, leafTmpl("irc.example.org"), "EC")))
+	st.PutCertCache(t.Context(), "irc.example.org", string(pemOf(t, ec, leafTmpl("irc.example.org"), "EC")))
 	m.prefetch()
 	out := logs.String()
 	if !strings.Contains(out, "get certificate") || !strings.Contains(out, "host=bnc.example.org") || strings.Contains(out, "host=irc.example.org") {
@@ -601,7 +601,7 @@ func TestHTTPHandlerAnswersACMEChallenges(t *testing.T) {
 	}
 	h := m.HTTPHandler(":8443")
 	// a token autocert left in the cache for the CA to fetch
-	st.PutCertCache("tok123+http-01", "tok123.thumbprint")
+	st.PutCertCache(t.Context(), "tok123+http-01", "tok123.thumbprint")
 	if rec := get(h, "http://bnc.example.org/.well-known/acme-challenge/tok123"); rec.Code != 200 || rec.Body.String() != "tok123.thumbprint" {
 		t.Fatalf("challenge: %d %q", rec.Code, rec.Body)
 	}

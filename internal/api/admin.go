@@ -20,12 +20,12 @@ func (s *Server) adminUserDTO(u store.User) map[string]any {
 }
 
 func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := s.st().ListUsers()
+	users, err := s.st().ListUsers(r.Context())
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	counts, _ := s.st().NetworkCounts()
+	counts, _ := s.st().NetworkCounts(r.Context())
 	live := s.clusterUsage(r.Context())
 	out := make([]map[string]any, 0, len(users))
 	for _, u := range users {
@@ -66,7 +66,7 @@ func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
 
 // adminTarget loads the {id} user, answering 404 itself.
 func (s *Server) adminTarget(w http.ResponseWriter, r *http.Request) (store.User, bool) {
-	u, err := s.st().UserByID(pathID(r))
+	u, err := s.st().UserByID(r.Context(), pathID(r))
 	if err != nil {
 		s.fail(w, err)
 		return store.User{}, false
@@ -79,7 +79,7 @@ func (s *Server) handleAdminGetUser(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	nets, _ := s.st().ListNetworks(u.ID)
+	nets, _ := s.st().ListNetworks(r.Context(), u.ID)
 	netsOut := make([]map[string]any, 0, len(nets))
 	for _, n := range nets {
 		netsOut = append(netsOut, s.networkDTO(n))
@@ -87,7 +87,7 @@ func (s *Server) handleAdminGetUser(w http.ResponseWriter, r *http.Request) {
 	d := s.adminUserDTO(u)
 	d["networks"] = netsOut
 	d["sessions"] = s.sessionsDTO(u.ID, "")
-	cps, _ := s.st().ListClientPasswords(u.ID)
+	cps, _ := s.st().ListClientPasswords(r.Context(), u.ID)
 	d["clientPasswords"] = len(cps)
 	writeJSON(w, http.StatusOK, d)
 }
@@ -165,14 +165,14 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	if in.DenySetBindHost != nil {
 		u.DenySetBindHost = *in.DenySetBindHost
 	}
-	if err := s.st().UpdateUser(u); err != nil {
+	if err := s.st().UpdateUser(r.Context(), u); err != nil {
 		s.fail(w, err)
 		return
 	}
 	switch {
 	case u.Suspended && !before.Suspended:
 		// Cut them off everywhere: web sessions, IRC clients, upstreams.
-		_ = s.st().DeleteUserSessions(u.ID, "")
+		_ = s.st().DeleteUserSessions(r.Context(), u.ID, "")
 		s.b.StopUser(u.ID)
 		s.log.Info("suspended user", "admin", me.Username, "user", u.Username)
 	case !u.Suspended && before.Suspended:
@@ -203,7 +203,7 @@ func (s *Server) handleAdminSetPassword(w http.ResponseWriter, r *http.Request) 
 	if u.ID == auth.User(r).ID {
 		keep = auth.SessionOf(r).ID
 	}
-	_ = s.st().DeleteUserSessions(u.ID, keep)
+	_ = s.st().DeleteUserSessions(r.Context(), u.ID, keep)
 	s.log.Info("admin set a temporary password", "admin", auth.User(r).Username, "user", u.Username)
 	out := map[string]any{"ok": true}
 	if in.Password == "" {
@@ -221,7 +221,7 @@ func (s *Server) handleAdminRevokeSessions(w http.ResponseWriter, r *http.Reques
 	if u.ID == auth.User(r).ID {
 		keep = auth.SessionOf(r).ID
 	}
-	if err := s.st().DeleteUserSessions(u.ID, keep); err != nil {
+	if err := s.st().DeleteUserSessions(r.Context(), u.ID, keep); err != nil {
 		s.fail(w, err)
 		return
 	}

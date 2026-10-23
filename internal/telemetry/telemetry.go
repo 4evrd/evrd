@@ -131,6 +131,18 @@ var (
 		}
 		return h
 	}()
+
+	// DBDuration is database query latency, by table, operation (create,
+	// query, update, delete, row, raw) and result.
+	DBDuration = func() metric.Float64Histogram {
+		h, err := meter.Float64Histogram("evrd.db.duration",
+			metric.WithDescription("Database query duration"), metric.WithUnit("s"),
+			metric.WithExplicitBucketBoundaries(0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1))
+		if err != nil {
+			panic(err)
+		}
+		return h
+	}()
 )
 
 // Link is one upstream connection's state, for the per-network gauges.

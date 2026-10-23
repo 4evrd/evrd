@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/subtle"
 	"errors"
 	"net/http"
@@ -65,7 +66,7 @@ func (s *Server) handleProvisionUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	created := false
-	u, err := s.st().UserByUsername(name)
+	u, err := s.st().UserByUsername(r.Context(), name)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		u, err = s.acc.Create(accounts.CreateInput{Username: name, Email: in.Email, Role: store.RoleUser, SSOClaimable: true})
@@ -80,7 +81,7 @@ func (s *Server) handleProvisionUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := s.st().ListNetworks(u.ID)
+	existing, err := s.st().ListNetworks(r.Context(), u.ID)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -121,7 +122,7 @@ func (s *Server) handleProvisionUser(w http.ResponseWriter, r *http.Request) {
 			out = append(out, res)
 			continue
 		}
-		n, err := s.st().CreateNetwork(n)
+		n, err := s.st().CreateNetwork(r.Context(), n)
 		if err != nil {
 			res.Status, res.Error = "failed", err.Error()
 			out = append(out, res)
@@ -150,13 +151,13 @@ func asAdmin(u store.User) store.User {
 // provisionBindHost sets an existing network's bind host, reconnecting it
 // if it's up so it takes effect.
 func (s *Server) provisionBindHost(id int64, bind string) error {
-	n, err := s.st().NetworkByID(id)
+	n, err := s.st().NetworkByID(context.Background(), id)
 	bind = strings.TrimSpace(bind)
 	if err != nil || n.BindHost == bind {
 		return err
 	}
 	n.BindHost = bind
-	if err := s.st().UpdateNetwork(n); err != nil {
+	if err := s.st().UpdateNetwork(context.Background(), n); err != nil {
 		return err
 	}
 	if s.b.Status(id) != "disconnected" {
@@ -170,7 +171,7 @@ func (s *Server) provisionBindHost(id int64, bind string) error {
 func (s *Server) provisionConnect(id int64) string {
 	err := s.b.Connect(id)
 	if errors.Is(err, bouncer.ErrNotOwner) {
-		_ = s.st().SetNetworkEnabled(id, true)
+		_ = s.st().SetNetworkEnabled(context.Background(), id, true)
 		return ""
 	}
 	if err != nil {

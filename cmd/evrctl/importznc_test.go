@@ -22,8 +22,8 @@ func TestImportZNC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	u, _ := st.CreateUser(store.User{Username: "akadmin"})
-	n, _ := st.CreateNetwork(store.Network{UserID: u.ID, Name: "libera"})
+	u, _ := st.CreateUser(t.Context(), store.User{Username: "akadmin"})
+	n, _ := st.CreateNetwork(t.Context(), store.Network{UserID: u.ID, Name: "libera"})
 	st.Close()
 
 	znc := filepath.Join(dir, "znc", "users", "admin")
@@ -55,7 +55,7 @@ func TestImportZNC(t *testing.T) {
 	}
 	st, _ = store.Open(cfg.DB)
 	defer st.Close()
-	u, _ = st.UserByUsername("akadmin")
+	u, _ = st.UserByUsername(t.Context(), "akadmin")
 	if u.BacklogLines == nil || *u.BacklogLines != 0 {
 		t.Fatalf("backlog not unlimited: %v", u.BacklogLines)
 	}

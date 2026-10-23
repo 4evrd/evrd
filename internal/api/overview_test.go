@@ -172,9 +172,9 @@ func TestAdminOverviewAttention(t *testing.T) {
 	ic := e.login("idle")
 	e.liveNetwork(ic, "fake")
 	old := time.Now().Add(-20 * 24 * time.Hour)
-	iu, _ := e.st.UserByID(idle.ID)
+	iu, _ := e.st.UserByID(t.Context(), idle.ID)
 	iu.LastSeenAt = &old
-	e.st.UpdateUser(iu)
+	e.st.UpdateUser(t.Context(), iu)
 
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")
 	closed := ln.Addr().(*net.TCPAddr).Port
