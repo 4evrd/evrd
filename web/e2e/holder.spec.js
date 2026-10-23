@@ -150,3 +150,19 @@ test('restarting evrd keeps its IRC clients connected', async () => {
     await watcher.cleanup()
   }
 })
+
+// The admin overview names the holder evrd-solo uses, and that it keeps the
+// IRC clients.
+test('the admin overview reports the connection holder', async () => {
+  const name = uniq('hadm')
+  const password = `${name}-secret-pw`
+  execSync(`${SOLO_EVRCTL} user add -admin ${name} ${password}`, { stdio: 'ignore' })
+  const solo = await session(name, password, SOLO_URL)
+  try {
+    const ov = await retry(() => solo.get('/api/admin/overview'))
+    expect(ov.holder).toMatchObject({ configured: true, reachable: true, protocol: 2, holdsClients: true })
+    expect(ov.holder.build).toBe(ov.version)
+  } finally {
+    await solo.dispose()
+  }
+})

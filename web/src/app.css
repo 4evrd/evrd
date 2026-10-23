@@ -241,6 +241,7 @@ button { cursor: pointer; }
 .health-card > * { min-width: 0; }
 .health-card .who { font-family: var(--font-mono); font-size: var(--fs-sm); }
 .health-card .sub { font-size: var(--fs-xs); color: var(--muted); }
+.health-card .version { font-family: var(--font-mono); color: var(--faint); }
 
 .workspace { min-width: 0; display: flex; flex-direction: column; }
 .topbar {

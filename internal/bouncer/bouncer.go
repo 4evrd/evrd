@@ -61,6 +61,10 @@ type Bouncer struct {
 	// links, when set, is the connection holder upstream connections live in.
 	links       *links.Client
 	resumeAfter <-chan struct{}
+
+	holderMu sync.Mutex
+	holder   HolderStatus // as last asked (Holder)
+	holderAt time.Time
 }
 
 // SetDialer sets how upstream connections are opened (pacing, source
@@ -76,6 +80,35 @@ func (b *Bouncer) SetLinks(l *links.Client) { b.links = l }
 // ResumeAfter holds back picking up the holder's links until ready is
 // closed: the IRC clients it kept come back first (see client.Server).
 func (b *Bouncer) ResumeAfter(ready <-chan struct{}) { b.resumeAfter = ready }
+
+// HolderStatus is the connection holder as evrd sees it.
+type HolderStatus struct {
+	Configured bool   `json:"configured"`
+	Reachable  bool   `json:"reachable"`
+	Protocol   int    `json:"protocol,omitempty"`
+	Build      string `json:"build,omitempty"` // "" for a holder from before it said
+}
+
+// holderTTL is how long Holder's answer is kept.
+const holderTTL = 30 * time.Second
+
+// Holder asks the connection holder about itself, at most every holderTTL.
+func (b *Bouncer) Holder(ctx context.Context) HolderStatus {
+	if b.links == nil {
+		return HolderStatus{}
+	}
+	b.holderMu.Lock()
+	defer b.holderMu.Unlock()
+	if !b.holderAt.IsZero() && time.Since(b.holderAt) < holderTTL {
+		return b.holder
+	}
+	st := HolderStatus{Configured: true}
+	if hi, err := b.links.Hello(ctx); err == nil {
+		st.Reachable, st.Protocol, st.Build = true, hi.Protocol, hi.Build
+	}
+	b.holder, b.holderAt = st, time.Now()
+	return st
+}
 
 func linkID(networkID int64) string { return "n" + strconv.FormatInt(networkID, 10) }
 

@@ -19,6 +19,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/4evrd/evrd/internal/irctls"
+	"github.com/4evrd/evrd/internal/version"
 )
 
 // Holder keeps links (see the package comment).
@@ -137,6 +138,9 @@ func (h *Holder) handle(c *net.UnixConn) {
 		c.Close()
 	case "listen":
 		h.listen(c, w, req, fd)
+	case "hello":
+		writeJSON(w, response{OK: true, Protocol: Version, Build: version.Version})
+		c.Close()
 	case "listeners":
 		writeJSON(w, response{OK: true, Listeners: h.listenerList()})
 		c.Close()

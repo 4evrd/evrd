@@ -39,6 +39,7 @@
   const storageOk = $derived(ov && ov.storage.accounts.up && ov.storage.history.up)
   const queueLevel = (q) => (q > 5000 ? ['bad', t('admin.queueBackedUp')] : q > 500 ? ['warn', t('admin.queueBusy')] : ['', t('admin.queueNormal')])
   const kindName = { postgres: 'PostgreSQL', sqlite: 'SQLite', scylla: 'ScyllaDB', pebble: 'Pebble' }
+  const h = $derived(ov?.holder || {}) // the connection holder
 </script>
 
 <svelte:head><title>{t('admin.pageTitle')}</title></svelte:head>
@@ -187,6 +188,7 @@
         </div>
       </section>
 
+      <div class="side-stack">
       <section class="card tight card-sheen enter" aria-labelledby="st-h">
         <div class="section-head" style="margin-bottom:var(--s3)">
           <h2 id="st-h" class="caps">{t('admin.storage')}</h2>
@@ -201,6 +203,22 @@
           {/if}
         </div>
       </section>
+
+      <section class="card tight card-sheen enter" aria-labelledby="sw-h" data-testid="software">
+        <div class="section-head" style="margin-bottom:var(--s3)"><h2 id="sw-h" class="caps">{t('admin.software')}</h2></div>
+        <div class="kv-list">
+          <div class="kv"><div class="od-field"><span class="k">{t('admin.evrdVersion')}</span><span class="v mono" data-testid="sw-evrd">{ov.version}</span></div></div>
+          <div class="kv">
+            <div class="od-field"><span class="k">{t('admin.holder')}</span>
+              <span class="v" data-testid="sw-holder">{#if !h.configured}{t('admin.holderNotConfigured')}{:else if !h.reachable}{t('admin.holderUnreachable')}{:else if h.build}{t('admin.holderBuild', { build: h.build, protocol: h.protocol })}{:else}{t('admin.holderProtocol', { protocol: h.protocol })}{/if}</span></div>
+            {#if h.configured && !h.reachable}<span class="chip bad">{t('admin.down')}</span>
+            {:else if h.holdsClients}<span class="chip ok">{t('admin.holderKeepsClients')}</span>
+            {:else if h.configured}<span class="chip {h.protocol < 2 ? 'warn' : ''}">{t('admin.holderLinksOnly')}</span>{/if}
+          </div>
+        </div>
+        {#if h.reachable && h.protocol < 2}<p class="desc" style="margin-top:var(--s3);font-size:var(--fs-xs)">{t('admin.holderOld')}</p>{/if}
+      </section>
+      </div>
     </div>
   {/if}
 {/if}

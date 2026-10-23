@@ -208,6 +208,11 @@ test('bouncer overview: tiles, placement, upstreams and storage', async ({ page 
     await expect(page.locator('.kv', { hasText: 'Accounts' }).last()).toContainText('PostgreSQL')
     await expect(page.locator('.kv', { hasText: 'Chat history' })).toContainText('ScyllaDB')
     await expect(page.locator('.kv', { hasText: 'Networks per user' })).toContainText('∞')
+    // the software: evrd's version, and no holder on the clustered nodes
+    const { version } = await (await fetch(BASE + '/api/config')).json()
+    await expect(page.getByTestId('sw-evrd')).toHaveText(version)
+    await expect(page.getByTestId('sw-holder')).toHaveText('Not set up (links_socket)')
+    await expect(page.getByTestId('evrd-version')).toHaveText(`evrd ${version}`)
     await node.click()
     await expect(title(page)).toHaveText(u.name)
   } finally { await u.cleanup() }

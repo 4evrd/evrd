@@ -215,6 +215,23 @@ func (c *Client) clientOp(ctx context.Context, req request, fd int) (response, e
 	return resp, fmt.Errorf("links: %s", resp.Error)
 }
 
+// Hello asks the holder which protocol it speaks and which evrd release it's
+// from. A protocol 1 holder doesn't know the request, and nor did protocol
+// 2 ones before hello: their build is unknown. ErrUnavailable if it can't
+// be reached.
+func (c *Client) Hello(ctx context.Context) (HolderInfo, error) {
+	resp, err := c.clientOp(ctx, request{Op: "hello"}, -1)
+	switch {
+	case errors.Is(err, ErrNoClients):
+		return HolderInfo{Protocol: 1}, nil
+	case err != nil && resp.Error == "unknown op":
+		return HolderInfo{Protocol: 2}, nil
+	case err != nil:
+		return HolderInfo{}, err
+	}
+	return HolderInfo{Protocol: resp.Protocol, Build: resp.Build}, nil
+}
+
 // Listeners is the IRC listeners the holder has. ErrNoClients if it's too
 // old to hold clients.
 func (c *Client) Listeners(ctx context.Context) ([]Listener, error) {

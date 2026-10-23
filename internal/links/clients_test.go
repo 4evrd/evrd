@@ -17,6 +17,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/4evrd/evrd/internal/version"
 )
 
 // handOver gives h a fresh listener on 127.0.0.1 and returns its address.
@@ -331,6 +333,26 @@ func TestTLSClients(t *testing.T) {
 	io.WriteString(tc, "NICK tls\r\n")
 	if got := readFrom(t, bufio.NewReader(cc), cc); got != "NICK tls" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestHello(t *testing.T) {
+	ctx := context.Background()
+	cl, _ := serveHolder(t, quietHolder())
+	if hi, err := cl.Hello(ctx); err != nil || hi.Protocol != Version || hi.Build != version.Version {
+		t.Fatalf("hello: %+v, %v", hi, err)
+	}
+	// protocol 1, and protocol 2 from before hello: the build is unknown
+	for answer, want := range map[string]int{`{"error":"bad request or protocol version"}`: 1, `{"error":"unknown op"}`: 2} {
+		if hi, err := fakeHolder(t, answer+"\n").Hello(ctx); err != nil || hi.Protocol != want || hi.Build != "" {
+			t.Errorf("%s: %+v, %v", answer, hi, err)
+		}
+	}
+	if _, err := fakeHolder(t, `{"error":"nope"}`+"\n").Hello(ctx); err == nil {
+		t.Error("an error answer: no error")
+	}
+	if _, err := NewClient(sockPath(t)).Hello(ctx); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("no holder: %v", err)
 	}
 }
 
