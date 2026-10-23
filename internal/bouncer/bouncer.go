@@ -59,7 +59,8 @@ type Bouncer struct {
 	// the node's policy); nil dials directly (ignoring bind hosts).
 	dial func(ctx context.Context, userID int64, bind, host string, port int) (net.Conn, error)
 	// links, when set, is the connection holder upstream connections live in.
-	links *links.Client
+	links       *links.Client
+	resumeAfter <-chan struct{}
 }
 
 // SetDialer sets how upstream connections are opened (pacing, source
@@ -71,6 +72,10 @@ func (b *Bouncer) SetDialer(dial func(ctx context.Context, userID int64, bind, h
 // SetLinks keeps upstream connections in the connection holder, so they
 // survive evrd restarting (see internal/links). Call it before Start.
 func (b *Bouncer) SetLinks(l *links.Client) { b.links = l }
+
+// ResumeAfter holds back picking up the holder's links until ready is
+// closed: the IRC clients it kept come back first (see client.Server).
+func (b *Bouncer) ResumeAfter(ready <-chan struct{}) { b.resumeAfter = ready }
 
 func linkID(networkID int64) string { return "n" + strconv.FormatInt(networkID, 10) }
 
@@ -262,7 +267,7 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 		JumpTo: jumpTo,
 	}
 	if b.links != nil {
-		opts.Links, opts.LinkID = b.links, linkID(networkID)
+		opts.Links, opts.LinkID, opts.ResumeAfter = b.links, linkID(networkID), b.resumeAfter
 		// evrd stopping (not this network): the holder keeps the link
 		opts.Detaching = func() bool { return b.ctx != nil && b.ctx.Err() != nil }
 	}

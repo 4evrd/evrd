@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -30,13 +32,26 @@ type Holder struct {
 	KeepAlive   time.Duration
 	ReadTimeout time.Duration
 
+	// HoldFor is how long a client waits for evrd before it's told to
+	// reconnect; MaxClientBuffer is the most it may send meanwhile.
+	HoldFor         time.Duration
+	MaxClientBuffer int
+
 	mu    sync.Mutex
 	links map[string]*link
+
+	clients   map[string]*heldClient
+	listeners map[string]*heldListener
+	watcher   net.Conn   // evrd's clients stream, told of clients waiting
+	wmu       sync.Mutex // one write to the watcher at a time
+	cert      atomic.Pointer[tls.Certificate]
 }
 
 // NewHolder makes a holder with default limits.
 func NewHolder(log *slog.Logger) *Holder {
-	return &Holder{log: log, MaxBuffer: 4 << 20, KeepAlive: 90 * time.Second, ReadTimeout: 5 * time.Minute, links: map[string]*link{}}
+	return &Holder{log: log, MaxBuffer: 4 << 20, KeepAlive: 90 * time.Second, ReadTimeout: 5 * time.Minute,
+		HoldFor: 2 * time.Minute, MaxClientBuffer: 64 << 10,
+		links: map[string]*link{}, clients: map[string]*heldClient{}, listeners: map[string]*heldListener{}}
 }
 
 type link struct {
@@ -62,10 +77,12 @@ func (h *Holder) Serve(ctx context.Context, ln *net.UnixListener) error {
 		<-ctx.Done()
 		ln.Close()
 	}()
+	go h.expireClients(ctx)
 	for {
 		c, err := ln.AcceptUnix()
 		if err != nil {
 			if ctx.Err() != nil {
+				h.closeClients()
 				h.closeAll()
 				return nil
 			}
@@ -102,7 +119,7 @@ func (h *Holder) handle(c *net.UnixConn) {
 	}
 	var req request
 	w := bufio.NewWriter(c)
-	if err := json.Unmarshal(line, &req); err != nil || req.Version != Version {
+	if err := json.Unmarshal(line, &req); err != nil || req.Version < 1 || req.Version > Version {
 		if fd >= 0 {
 			unix.Close(fd)
 		}
@@ -118,6 +135,17 @@ func (h *Holder) handle(c *net.UnixConn) {
 	case "list":
 		writeJSON(w, response{OK: true, Links: h.list()})
 		c.Close()
+	case "listen":
+		h.listen(c, w, req, fd)
+	case "listeners":
+		writeJSON(w, response{OK: true, Listeners: h.listenerList()})
+		c.Close()
+	case "cert":
+		h.setCert(c, w, req)
+	case "clients":
+		h.watchClients(c, w)
+	case "attach-client":
+		h.attachClient(c, w, req.Client)
 	case "close":
 		h.mu.Lock()
 		l := h.links[req.Link]

@@ -153,6 +153,10 @@ type Conn struct {
 	splits      splitTracker
 	subs        map[chan history.Message]struct{}
 	rawSubs     map[chan Line]struct{}
+	// resync is what a resumed link asked the server about its channels
+	// ("names #chan", "topic #chan"): the answers bring evrd up to date,
+	// and aren't passed to clients, which never asked.
+	resync map[string]bool
 	// line is the ID of the server line being handled, shared by all it
 	// records (a QUIT is filed under each channel); recorded says it
 	// recorded something. Only the reading goroutine uses them.
@@ -180,17 +184,18 @@ type Conn struct {
 	local, remote netip.AddrPort
 
 	// modules (see modules.go): their calls are serialized by modMu
-	modMu     sync.Mutex
-	mods      []modules.Module
-	modCtx    context.Context
-	modCfg    map[string]store.ModuleConfig
-	modsOff   func() map[string]bool
-	idle      func() bool
-	version   string
-	links     Holder
-	linkID    string
-	detaching func() bool
-	tryResume bool // the first connection tries the holder's link first
+	modMu       sync.Mutex
+	mods        []modules.Module
+	modCtx      context.Context
+	modCfg      map[string]store.ModuleConfig
+	modsOff     func() map[string]bool
+	idle        func() bool
+	version     string
+	links       Holder
+	linkID      string
+	detaching   func() bool
+	tryResume   bool // the first connection tries the holder's link first
+	resumeAfter <-chan struct{}
 }
 
 // maxPending caps the lines held for an upstream that isn't registered yet.
@@ -227,6 +232,10 @@ type Options struct {
 	// Detaching reports that evrd itself is stopping: a held connection is
 	// left to the holder then, instead of quitting.
 	Detaching func() bool
+	// ResumeAfter, when set, holds back picking up the holder's link until
+	// it's closed (or a while has passed): IRC clients the holder kept are
+	// back first, so what the network said meanwhile reaches them live.
+	ResumeAfter <-chan struct{}
 	// JumpTo, when set, starts at that server (an index into the server
 	// list) on a new link, not a held one: ZNC's Jump.
 	JumpTo *int
@@ -268,6 +277,8 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		links:        opts.Links,
 		linkID:       opts.LinkID,
 		detaching:    opts.Detaching,
+		resumeAfter:  opts.ResumeAfter,
+		resync:       map[string]bool{},
 		tryResume:    opts.Links != nil && opts.JumpTo == nil,
 		altNick:      orElse(strings.TrimSpace(n.AltNick), strings.TrimSpace(opts.AltNick)),
 		quitMsg:      orElse(n.QuitMsg, opts.QuitMsg),
@@ -453,6 +464,14 @@ func (c *Conn) Run(ctx context.Context) {
 // dialAndServe runs one connection. It reports whether registration
 // completed (the link was up) and why it ended.
 func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
+	if c.links != nil && c.tryResume && c.resumeAfter != nil {
+		// the held clients first (before the dial's own time runs)
+		select {
+		case <-c.resumeAfter:
+		case <-time.After(20 * time.Second):
+		case <-ctx.Done():
+		}
+	}
 	dctxDial, cancelDial := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelDial()
 	// Each attempt moves on to the next server (failover, ZNC-style).
@@ -647,6 +666,9 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 			}
 		}
 		c.line = history.ID{}
+		if c.resyncReply(m) {
+			continue
+		}
 		c.broadcastRaw(out) // full-fidelity feed for attached IRC clients
 	}
 
@@ -688,6 +710,7 @@ func (c *Conn) resume(r *links.Resumed) {
 	}
 	pending := c.pending
 	c.pending = nil
+	c.resync = map[string]bool{}
 	c.mu.Unlock()
 	for _, l := range r.ISupport {
 		c.handle(irc.Parse(c.codec.decode([]byte(l))))
@@ -708,6 +731,10 @@ func (c *Conn) resume(r *links.Resumed) {
 		// the capabilities this connection acknowledged before the restart
 		send("CAP LIST")
 		for _, ch := range saved {
+			c.mu.Lock()
+			c.resync["names "+strings.ToLower(ch)] = true
+			c.resync["topic "+strings.ToLower(ch)] = true
+			c.mu.Unlock()
 			send("NAMES " + ch)
 			send("TOPIC " + ch)
 		}
@@ -1518,6 +1545,34 @@ type Line struct {
 	Text   string
 	ID     history.ID
 	Origin string
+}
+
+// resyncReply reports whether m answers resume's NAMES or TOPIC, noting
+// the end of each answer.
+func (c *Conn) resyncReply(m irc.Message) bool {
+	p := m.Params
+	key, end := "", false
+	switch {
+	case m.Command == "353" && len(p) >= 3: // me = #chan :names
+		key = "names " + strings.ToLower(p[2])
+	case m.Command == "366" && len(p) >= 2:
+		key, end = "names "+strings.ToLower(p[1]), true
+	case m.Command == "332" && len(p) >= 2:
+		key = "topic " + strings.ToLower(p[1])
+	case (m.Command == "333" || m.Command == "331") && len(p) >= 2:
+		key, end = "topic "+strings.ToLower(p[1]), true
+	default:
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.resync[key] {
+		return false
+	}
+	if end {
+		delete(c.resync, key)
+	}
+	return true
 }
 
 // SubscribeRaw returns a channel of raw server lines (verbatim) and an

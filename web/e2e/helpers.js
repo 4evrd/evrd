@@ -81,6 +81,7 @@ export { uniq }
 // The standalone evrd (evrd-solo) whose IRC connections live in the
 // connection holder, and how to run docker compose and evrctl against it.
 export const SOLO_URL = process.env.E2E_SOLO_URL || 'http://localhost:8198'
+export const SOLO_IRC_PORT = +(process.env.E2E_SOLO_IRC_PORT || 6669)
 export const COMPOSE = process.env.E2E_COMPOSE || 'docker compose -f ../docker-compose.dev.yml'
 export const SOLO_EVRCTL = process.env.E2E_SOLO_EVRCTL ||
   `${COMPOSE} exec -T evrd-solo go run ./cmd/evrctl -config deploy/evrd.solo.conf`

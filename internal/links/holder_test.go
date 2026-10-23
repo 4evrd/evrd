@@ -133,7 +133,7 @@ func TestBadRequests(t *testing.T) {
 		t.Fatal("no path")
 	}
 	for _, c := range []struct{ line, want string }{
-		{`{"version":2,"op":"list"}`, "bad request or protocol version"},
+		{`{"version":3,"op":"list"}`, "bad request or protocol version"},
 		{`{"op":"list"}`, "bad request or protocol version"},
 		{`not json`, "bad request or protocol version"},
 		{`{"version":1,"op":"dance"}`, "unknown op"},

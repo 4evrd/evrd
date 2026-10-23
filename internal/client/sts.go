@@ -107,6 +107,9 @@ func (s *Server) trusted() bool {
 
 // secure reports whether the client came over TLS.
 func (se *session) secure() bool {
+	if sc, ok := se.conn.(interface{ Secure() bool }); ok {
+		return sc.Secure()
+	}
 	_, ok := se.conn.(*tls.Conn)
 	return ok
 }

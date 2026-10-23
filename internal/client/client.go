@@ -21,6 +21,7 @@ import (
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/directory"
+	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/listen"
 )
 
@@ -51,6 +52,17 @@ type Server struct {
 	lsWait time.Duration
 
 	sts stsState
+
+	// the connection holder, holding clients (hold.go); nil: none
+	holder      *links.Client
+	readyOnce   sync.Once
+	readyClose  sync.Once
+	readyC      chan struct{}
+	heldMu      sync.Mutex
+	held        map[string]bool // holder clients this evrd serves
+	certMu      sync.Mutex
+	lastCert    []byte // the certificate the holder has (its leaf)
+	certsPushed bool
 }
 
 // SetDirectory gives *status the network directory (addnetwork <id>).
@@ -83,6 +95,10 @@ func NewServer(b *bouncer.Bouncer, acc accounts.AccountServiceImpl, log *slog.Lo
 // ListenAndServe binds each IRC listener URL and serves until ctx is cancelled.
 // Non-IRC schemes (e.g. ws+insecure) are skipped.
 func (s *Server) ListenAndServe(ctx context.Context, listeners []string) error {
+	if s.holder != nil && s.serveHeld(ctx, listeners) {
+		return nil
+	}
+	s.ready() // no clients to wait for
 	for _, l := range listeners {
 		go s.listen(ctx, l)
 	}

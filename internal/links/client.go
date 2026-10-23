@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -47,7 +49,9 @@ func (c *Client) roundTrip(ctx context.Context, req request, fd int) (*net.UnixC
 }
 
 func roundTripOn(ctx context.Context, conn *net.UnixConn, req request, fd int) (*net.UnixConn, *bufio.Reader, response, error) {
-	req.Version = Version
+	if req.Version == 0 {
+		req.Version = linkVersion
+	}
 	b, _ := json.Marshal(req)
 	b = append(b, '\n')
 	var oob []byte
@@ -179,3 +183,166 @@ type stream struct {
 }
 
 func (s *stream) Read(p []byte) (int, error) { return s.r.Read(p) }
+
+// errOldHolder is how a protocol 1 holder refuses a version 2 request.
+const errOldHolder = "bad request or protocol version"
+
+// clientOp makes a protocol 2 request that's answered and done.
+func (c *Client) clientOp(ctx context.Context, req request, fd int) (response, error) {
+	req.Version = Version
+	var conn *net.UnixConn
+	var resp response
+	var err error
+	if fd >= 0 {
+		var hc *net.UnixConn
+		if hc, err = c.dial(ctx); err != nil {
+			return response{}, err
+		}
+		conn, _, resp, err = roundTripOn(ctx, hc, req, fd)
+	} else {
+		conn, _, resp, err = c.roundTrip(ctx, req, -1)
+	}
+	if err != nil {
+		return response{}, err
+	}
+	conn.Close()
+	switch {
+	case resp.OK:
+		return resp, nil
+	case resp.Error == errOldHolder:
+		return resp, ErrNoClients
+	}
+	return resp, fmt.Errorf("links: %s", resp.Error)
+}
+
+// Listeners is the IRC listeners the holder has. ErrNoClients if it's too
+// old to hold clients.
+func (c *Client) Listeners(ctx context.Context) ([]Listener, error) {
+	resp, err := c.clientOp(ctx, request{Op: "listeners"}, -1)
+	return resp.Listeners, err
+}
+
+// Listen hands ln, a listening TCP socket, to the holder, which accepts
+// IRC clients on it from now on (doing TLS if tlsOn). ln is closed either
+// way.
+func (c *Client) Listen(ctx context.Context, ln net.Listener, addr string, tlsOn bool) error {
+	defer ln.Close()
+	sc, ok := ln.(syscall.Conn)
+	if !ok {
+		return errors.New("links: not a socket")
+	}
+	raw, err := sc.SyscallConn()
+	if err != nil {
+		return err
+	}
+	var opErr error
+	if cerr := raw.Control(func(fd uintptr) {
+		_, opErr = c.clientOp(ctx, request{Op: "listen", Addr: addr, TLS: tlsOn}, int(fd))
+	}); cerr != nil {
+		return cerr
+	}
+	return opErr
+}
+
+// SetCert gives the holder the certificate (and key, PEM) for its TLS
+// listeners.
+func (c *Client) SetCert(ctx context.Context, cert, key []byte) error {
+	_, err := c.clientOp(ctx, request{Op: "cert", Cert: string(cert), Key: string(key)}, -1)
+	return err
+}
+
+// Clients streams the clients waiting for evrd: those waiting now, then a
+// HeldClient with an empty Client, then each new one. The channel closes
+// when the holder goes or ctx ends.
+func (c *Client) Clients(ctx context.Context) (<-chan HeldClient, error) {
+	conn, r, resp, err := c.roundTrip(ctx, request{Version: Version, Op: "clients"}, -1)
+	if err != nil {
+		return nil, err
+	}
+	if !resp.OK {
+		conn.Close()
+		if resp.Error == errOldHolder {
+			return nil, ErrNoClients
+		}
+		return nil, fmt.Errorf("links: %s", resp.Error)
+	}
+	ch := make(chan HeldClient)
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	go func() {
+		defer close(ch)
+		defer stop()
+		defer conn.Close()
+		for {
+			line, err := r.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var hc HeldClient
+			if json.Unmarshal(line, &hc) != nil {
+				continue
+			}
+			select {
+			case ch <- hc:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return ch, nil
+}
+
+// AttachClient takes a client the holder has: its stream (starting with
+// what it sent while waiting) and the state evrd last saved for it (nil
+// for a new client). ErrNoClient if it's gone.
+func (c *Client) AttachClient(ctx context.Context, hc HeldClient) (*ClientConn, error) {
+	conn, r, resp, err := c.roundTrip(ctx, request{Version: Version, Op: "attach-client", Client: hc.Client}, -1)
+	if err != nil {
+		return nil, err
+	}
+	if !resp.OK {
+		conn.Close()
+		if resp.Error == ErrNoClient.Error() {
+			return nil, ErrNoClient
+		}
+		return nil, fmt.Errorf("links: %s", resp.Error)
+	}
+	hc.State = resp.State
+	return &ClientConn{stream: &stream{UnixConn: conn, r: r}, Info: hc}, nil
+}
+
+// ClientConn is an IRC client through the holder. It's a net.Conn to the
+// client, with the client's and the listener's addresses.
+type ClientConn struct {
+	*stream
+	Info HeldClient
+}
+
+func (cc *ClientConn) RemoteAddr() net.Addr { return tcpAddr(cc.Info.Addr) }
+func (cc *ClientConn) LocalAddr() net.Addr  { return tcpAddr(cc.Info.Local) }
+
+// Secure reports whether the client came over TLS.
+func (cc *ClientConn) Secure() bool { return cc.Info.TLS }
+
+// SaveState is the control line that saves state for the next evrd; it
+// goes on the stream in order with the client's lines.
+func SaveState(state []byte) string { return "\x00state " + string(state) }
+
+// Close closes the client: the holder writes what came before and hangs up.
+func (cc *ClientConn) Close() error {
+	cc.UnixConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	cc.UnixConn.Write([]byte("\x00close\n"))
+	return cc.UnixConn.Close()
+}
+
+// Detach leaves the client with the holder, for the next evrd (if evrd
+// saved its state).
+func (cc *ClientConn) Detach() error { return cc.UnixConn.Close() }
+
+func tcpAddr(s string) net.Addr {
+	if ap, err := netip.ParseAddrPort(s); err == nil {
+		return net.TCPAddrFromAddrPort(ap)
+	}
+	host, port, _ := net.SplitHostPort(s)
+	p, _ := strconv.Atoi(port)
+	return &net.TCPAddr{IP: net.ParseIP(host), Port: p}
+}

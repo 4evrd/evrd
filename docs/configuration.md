@@ -23,6 +23,7 @@ are stored in the database and win over the file (see below).
 | `ident_file` (`EVRD_IDENT_FILE`) | — | an oidentd user config evrd keeps up to date so networks see users' idents, not evrd's system user; see [Idents](openbsd.md#idents-oidentd) |
 | `identd_listen` (`EVRD_IDENTD_LISTEN`) | — | evrd answers ident queries (RFC 1413) itself, e.g. `:113`; see [Ident](#ident-identd) |
 | `links_socket` (`EVRD_LINKS_SOCKET`) | — | the [connection holder](#connection-holder)'s socket: IRC connections stay up while evrd restarts (one node only) |
+| `hold_clients` | `yes` | with the holder, keep IRC clients connected through evrd restarts too ([connection holder](#connection-holder)) |
 | `provision_token` (`EVRD_PROVISION_TOKEN`) | — | turns on the [provisioning API](#provisioning-api) for tools that create accounts |
 | `db` (`EVRD_DB`) | `sqlite:evrd.db` | accounts and settings: `postgres://user:pass@host/evrd?sslmode=disable` or `sqlite:/path/evrd.db` |
 | `history` (`EVRD_HISTORY`) | `pebble:history` | chat history: `pebble:/var/lib/evrd/history` (one node) or `scylla://host1,host2:9042/evrd` (shared) |
@@ -291,6 +292,19 @@ connections: it answers the servers' pings and buffers what arrives (4 MB per
 network; `-buffer` changes it). The next evrd takes each one back without
 registering or joining again, and replays the buffered lines into history.
 Switching a network off, or deleting it, still quits it.
+
+The holder keeps evrd's IRC clients connected too. evrd hands it the IRC
+listeners (`listen irc…://` and `ircs://`, with the certificate for TLS ones)
+and the holder accepts the clients, so an evrd restart is invisible to them:
+no disconnect, no second welcome, no rejoining. While evrd is away the holder
+answers their pings and keeps what they send (64 KiB each); the next evrd
+picks each one up where the last left it, and what the networks said
+meanwhile reaches them as it's replayed, with its real time. Clients that
+connect while evrd is down wait for it. A client evrd isn't back for within
+2 minutes is told to reconnect. `hold_clients no` turns this off: evrd
+listens itself, and its restarts disconnect clients as before. An older
+holder (protocol 1) holds no clients; evrd then listens itself, and
+restarting the holder brings it in (`evrd-links -version` says which).
 
 Without the holder (not running, or `links_socket` unset), evrd connects
 directly, as before. Restarting the holder itself drops the connections, so it

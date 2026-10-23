@@ -52,6 +52,9 @@ type Config struct {
 	// internal/links): upstream connections live there and survive evrd
 	// restarting. Single node only.
 	LinksSocket string
+	// KeepClientsOut (hold_clients no) keeps IRC clients out of the holder:
+	// evrd listens itself, and its restarts disconnect them.
+	KeepClientsOut bool
 	// ProvisionToken, when set, turns on the provisioning API
 	// (/api/provision/…) for tools that create accounts and their networks,
 	// like a migration from another bouncer. Callers send it as a bearer token.
@@ -536,6 +539,10 @@ func (c *Config) set(key, val string) error {
 		c.HTTPListen = val
 	case "links_socket":
 		c.LinksSocket = val
+	case "hold_clients":
+		var on bool
+		on, err = parseBool(val)
+		c.KeepClientsOut = !on
 	case "provision_token":
 		c.ProvisionToken = val
 	case "web_root":

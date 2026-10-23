@@ -131,6 +131,7 @@ services:
       - links-sock:/run/evrd-links
     ports:
       - "8198:8098" # evrd-solo's API (it uses this network namespace)
+      - "6669:6667" # evrd-solo's IRC: the holder accepts its clients
 
   evrd-solo:
     build:
