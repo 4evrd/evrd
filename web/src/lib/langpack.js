@@ -21,6 +21,14 @@ export function layered(...layers) {
   return Object.assign({}, ...layers.filter(Boolean))
 }
 
+// coverage is how many of en's keys the layers have between them:
+// { have, total }.
+export function coverage(en, ...layers) {
+  const all = layered(...layers)
+  const keys = Object.keys(en || {})
+  return { have: keys.filter((k) => k in all).length, total: keys.length }
+}
+
 // languageList is the languages to offer: the built-in ones, then the
 // server's packs, then the user's own, once per code. A pack for a code
 // that's already there renames it when it has a name.

@@ -115,8 +115,11 @@ func (se *session) networkAttrs(n store.Network) map[string]string {
 		a["state"] = "connecting"
 	}
 	if c, ok := se.srv.b.ConnFor(n.ID); ok && a["state"] != "connected" {
-		if e := c.Health().LastError; e != "" {
-			a["error"] = e
+		if h := c.Health(); h.LastError != "" {
+			a["error"] = h.LastError
+			if !h.LastErrorText.IsZero() {
+				a["error"] = se.printer().Text(h.LastErrorText)
+			}
 		}
 	}
 	return a

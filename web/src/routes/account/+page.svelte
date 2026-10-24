@@ -14,7 +14,8 @@
   import { toast, confirmDialog } from '$lib/ui.svelte.js'
   import { ago, device } from '$lib/format.js'
   import { check } from '$lib/validate.js'
-  import { t, languages, pick as pickLocale, setLocale, setPacks, personalPack, builtin, serverPack, i18n } from '$lib/i18n.svelte.js'
+  import { coverage } from '$lib/langpack.js'
+  import { t, languages, pick as pickLocale, setLocale, setPacks, personalPack, builtinAll, ircBuiltin, serverPack, i18n } from '$lib/i18n.svelte.js'
 
   const me = $derived(session.me)
   const TABS = [['profile', 'account.tabProfile'], ['bouncer', 'account.tabBouncer'], ['security', 'account.tabSecurity'], ['sessions', 'account.tabSessions'], ['danger', 'account.tabDelete']] // [id, message key]
@@ -72,7 +73,19 @@
   async function loadLanguage() {
     const code = dlCode
     const mine = own?.code === code ? await personalPack() : null
-    return { code, name: languages().find((l) => l.code === code)?.name || code, messages: { ...(await builtin(code)), ...(await serverPack(code)), ...mine } }
+    return { code, name: languages().find((l) => l.code === code)?.name || code, messages: { ...(await builtinAll(code)), ...(await serverPack(code)), ...mine } }
+  }
+  // ownIRC: how many of evrd's IRC texts (*status) you have in your own
+  // translation's language: built in, the server's, yours
+  let ownIRC = $state(null)
+  $effect(() => {
+    const p = own
+    ownIRC = null
+    if (p) ircCoverage(p.code).then((c) => { if (own === p) ownIRC = c }).catch(() => {})
+  })
+  async function ircCoverage(code) {
+    const [en, base, server, mine] = await Promise.all([ircBuiltin('en'), ircBuiltin(code), serverPack(code), personalPack()])
+    return coverage(en, base, server, mine)
   }
 
   // sessions
@@ -150,6 +163,7 @@
         <div class="od-stack"><h2>{t('account.ownTranslation')}</h2><p class="desc">{t('account.ownTranslationHelp')} <a href="https://github.com/4evrd/evrd/blob/main/docs/translations.md" target="_blank" rel="noreferrer">{t('packs.guide')}</a></p></div>
         <div class="od-stack" style="--od-gap:12px;align-items:flex-start">
           <p class="desc" data-testid="own-status">{own ? t('account.ownCurrent', { name: own.name, code: own.code, time: ago(own.updatedAt) }) : t('account.ownNone')}</p>
+          {#if ownIRC}<p class="desc" data-testid="own-irc">{t('packs.ircCoverage', { have: ownIRC.have, total: ownIRC.total })}</p>{/if}
           <div class="od-cluster" style="gap:8px">
             <PackUpload id="own-upload" label={own ? t('account.ownReplace') : t('account.ownUpload')} code={own?.code || i18n.locale} save={saveOwn} />
             <PackDownload id="own-template" label={t('packs.template')} ghost />

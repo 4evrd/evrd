@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/store"
 )
@@ -23,9 +24,9 @@ import (
 var linkEventKinds = map[string]bool{"disconnected": true, "failed": true, "connected": true, "netsplit": true}
 
 func (s *Handlers) Reconnects(w http.ResponseWriter, r *http.Request) {
-	out, err := s.reconnectsOf(r.Context(), auth.User(r).ID)
+	out, err := s.reconnectsOf(r.Context(), s.printer(r), auth.User(r).ID)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -37,9 +38,9 @@ func (s *Handlers) AdminUserReconnects(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	out, err := s.reconnectsOf(r.Context(), u.ID)
+	out, err := s.reconnectsOf(r.Context(), s.printer(r), u.ID)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -48,7 +49,20 @@ func (s *Handlers) AdminUserReconnects(w http.ResponseWriter, r *http.Request) {
 // reconnectsOf is a user's last day of link trouble, per network: links
 // dropped, connection attempts that failed, minutes offline, the hours it
 // happened in, and the live state with the last error; then the events.
-func (s *Handlers) reconnectsOf(ctx context.Context, userID int64) (map[string]any, error) {
+// noMetrics is the metrics error when there's no metrics store
+// (metrics_url): said in the reader's language (metricsErr).
+const noMetrics = "metrics aren't configured"
+
+// metricsErr is err to show: noMetrics in p's language; the store's own
+// errors as they are.
+func metricsErr(p *messages.Printer, err string) string {
+	if err == noMetrics {
+		return p.T(messages.Area + "web.noMetrics")
+	}
+	return err
+}
+
+func (s *Handlers) reconnectsOf(ctx context.Context, p *messages.Printer, userID int64) (map[string]any, error) {
 	nets, err := s.acc.ListNetworks(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -61,7 +75,7 @@ func (s *Handlers) reconnectsOf(ctx context.Context, userID int64) (map[string]a
 	netsOut := make([]map[string]any, 0, len(nets))
 	for _, n := range nets {
 		id := strconv.FormatInt(n.ID, 10)
-		d := s.networkDTO(n)
+		d := s.networkDTO(p, n)
 		row := map[string]any{"id": n.ID, "name": n.Name, "enabled": n.Enabled}
 		for _, k := range []string{"status", "lastError", "lastErrorAt", "hint", "attempts", "retryIn", "connectedAt", "server"} {
 			if v, ok := d[k]; ok {
@@ -101,10 +115,10 @@ func (s *Handlers) reconnectsOf(ctx context.Context, userID int64) (map[string]a
 		}
 	}
 	return map[string]any{
-		"available": m.available, "error": m.err,
+		"available": m.available, "error": metricsErr(p, m.err),
 		"start": start.Unix(), "step": 3600,
 		"networks": netsOut,
-		"events":   eventsDTO(link),
+		"events":   eventsDTO(p, link),
 	}, nil
 }
 
@@ -122,7 +136,7 @@ func (s *Handlers) reconnectMetrics(ctx context.Context, userID int64, end time.
 	out := reconnectMetrics{counts: map[string]map[string]int64{}, offline: map[string]int64{}, hourly: map[string][]float64{}}
 	mq := s.metrics.Load()
 	if mq == nil {
-		out.err = "metrics aren't configured"
+		out.err = noMetrics
 		return out
 	}
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)

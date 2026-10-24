@@ -359,7 +359,7 @@ func TestSmallHelpers(t *testing.T) {
 	if s, a := parseListen("127.0.0.1:6667"); s != "tcp" || a != "127.0.0.1:6667" {
 		t.Errorf("parseListen without scheme: %q %q", s, a)
 	}
-	if capitalize("") != "" || plural(1, "line") != "1 line" || onOff(true) != "on" {
+	if capitalize("") != "" || onOff(true) != "on" {
 		t.Error("small helpers")
 	}
 }

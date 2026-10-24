@@ -295,8 +295,12 @@ type UserEvent struct {
 	// events carried it).
 	NetworkID int64 `gorm:"not null;default:0"`
 	Kind      string
-	Title     string
+	Title     string // in English
 	Detail    string
+	// Texts is Title and Detail in words, to show in the reader's language:
+	// JSON {"title": …, "detail": …} of messages.Text ("" for events
+	// recorded before, and ones in English only).
+	Texts string `gorm:"not null;default:''"`
 }
 
 // Node is an evrd process in the cluster, as it advertises itself.

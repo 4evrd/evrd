@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/4evrd/evrd/internal/http/handlers"
 	"github.com/4evrd/evrd/internal/store"
 )
 
@@ -98,6 +99,51 @@ func TestServerLanguagePacks(t *testing.T) {
 	}
 	if code, _ := admin.do("DELETE", "/api/admin/languages/de", nil); code != 404 {
 		t.Fatalf("delete twice: %d", code)
+	}
+}
+
+// evrd's IRC texts: the built-in ones for the web app's templates and
+// checks, and how much of them each language has.
+func TestIRCMessages(t *testing.T) {
+	e := newEnv(t)
+	e.user("root", store.RoleAdmin)
+	admin, anon := e.login("root"), e.anon()
+
+	code, out := anon.do("GET", "/api/irc-messages", nil)
+	total, _ := out["total"].(float64)
+	have, _ := out["languages"].(map[string]any)
+	if code != 200 || total < 100 || have["it"] != total || have["ja"] != total || have["pl"] != nil {
+		t.Fatalf("coverage: %d %v", code, out)
+	}
+	code, out = anon.do("GET", "/api/irc-messages/it", nil)
+	if m, _ := out["messages"].(map[string]any); code != 200 || out["code"] != "it" || m["irc.notOn"] != "Non sei su {channel}." {
+		t.Fatalf("Italian: %d %v", code, out)
+	}
+	if code, _ := anon.do("GET", "/api/irc-messages/pl", nil); code != 404 {
+		t.Fatalf("not built in: %d", code)
+	}
+	// every language the web app has built in has its IRC texts too
+	for _, code := range handlers.Languages {
+		if _, ok := have[code]; !ok {
+			t.Errorf("%s has no built-in IRC texts", code)
+		}
+	}
+	if len(have) != len(handlers.Languages) {
+		t.Errorf("IRC texts for %v, the web app has %v", have, handlers.Languages)
+	}
+
+	// a server pack adds a language's IRC texts at once on this node
+	if code, _ := admin.do("PUT", "/api/admin/languages/pl", pack("pl", "Polski", map[string]any{"irc.adminsOnly": "Tylko dla adminów.", "shell.overview": "Przegląd"})); code != 200 {
+		t.Fatalf("put: %d", code)
+	}
+	if _, out := anon.do("GET", "/api/irc-messages", nil); out["languages"].(map[string]any)["pl"] != float64(1) {
+		t.Fatalf("with a Polish pack: %v", out)
+	}
+	if code, _ := admin.do("DELETE", "/api/admin/languages/pl", nil); code != 204 {
+		t.Fatalf("delete: %d", code)
+	}
+	if _, out := anon.do("GET", "/api/irc-messages", nil); out["languages"].(map[string]any)["pl"] != nil {
+		t.Fatalf("after deleting: %v", out)
 	}
 }
 

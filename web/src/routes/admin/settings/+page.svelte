@@ -14,7 +14,7 @@
   import Msg from '$lib/components/Msg.svelte'
   import PackUpload from '$lib/components/PackUpload.svelte'
   import PackDownload from '$lib/components/PackDownload.svelte'
-  import { t, i18n, LANGUAGES, builtin, serverPack, setPacks, setLocale, pick } from '$lib/i18n.svelte.js'
+  import { t, i18n, LANGUAGES, builtinAll, serverPack, setPacks, setLocale, pick } from '$lib/i18n.svelte.js'
   import { languageList, layered } from '$lib/langpack.js'
 
   const isAdmin = $derived(session.me?.role === 'admin')
@@ -27,13 +27,18 @@
   async function load() {
     try { data = await api.admin.settings(); draft = {}; err = '' } catch (e) { err = e.message }
   }
-  onMount(() => { if (isAdmin) load() })
+  // irc: how many of evrd's IRC texts (*status) each language has
+  let irc = $state(null)
+  async function loadIRC() {
+    try { irc = await api.ircCoverage() } catch { irc = null }
+  }
+  onMount(() => { if (isAdmin) { load(); loadIRC() } })
 
   const groups = $derived.by(() => {
     const out = []
     for (const f of data?.fields || []) {
       let g = out.find((x) => x.name === f.group)
-      if (!g) out.push((g = { name: f.group, fields: [] }))
+      if (!g) out.push((g = { name: f.group, label: f.groupLabel || f.group, fields: [] }))
       g.fields.push(f)
     }
     return out
@@ -96,12 +101,12 @@
   const langs = $derived(languageList(LANGUAGES, i18n.packs).map((l) => ({ ...l, builtin: LANGUAGES.some((b) => b.code === l.code), pack: i18n.packs.find((p) => p.code === l.code) })))
   // current is a language's strings as they are now: built in, then the pack.
   async function current(l) {
-    const own = l.code === 'en' ? {} : await builtin(l.code)
+    const own = l.code === 'en' ? {} : await builtinAll(l.code)
     return { code: l.code, name: l.name, messages: layered(own, await serverPack(l.code)) }
   }
   async function packsChanged() {
     setPacks({ server: await api.languages() })
-    await setLocale(pick(session.me.language))
+    await Promise.all([setLocale(pick(session.me.language)), loadIRC()])
   }
   async function saveLanguage(pack) {
     await api.admin.putLanguage(pack)
@@ -156,7 +161,7 @@
     <div class="sections">
       {#each groups as g}
         <section class="card" aria-labelledby="g-{g.name}">
-          <h2 id="g-{g.name}" class="group-h">{g.name}</h2>
+          <h2 id="g-{g.name}" class="group-h">{g.label}</h2>
           {#if g.name === 'Network directory' && data.directory}
             {@const d = data.directory}
             <div class="rows dir-status" data-testid="directory-status">
@@ -256,6 +261,7 @@
               <span class="od-field">
                 <span class="name">{l.name} <span class="code key">{l.code}</span></span>
                 <span class="sub">{l.builtin ? (l.pack ? t('adminSettings.langBuiltInChanged', { time: ago(l.pack.updatedAt) }) : t('adminSettings.langBuiltIn')) : t('adminSettings.langUploaded', { time: ago(l.pack.updatedAt) })}</span>
+                {#if irc}<span class="sub" data-testid="lang-irc-{l.code}">{t('packs.ircCoverage', { have: irc.languages?.[l.code] ?? 0, total: irc.total })}</span>{/if}
               </span>
               <div class="od-cluster" style="gap:8px">
                 <PackDownload id="lang-dl-{l.code}" label={t('packs.download')} aria={t('adminSettings.langDownload', { name: l.name })} ghost load={() => current(l)} />

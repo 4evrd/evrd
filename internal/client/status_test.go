@@ -14,6 +14,7 @@ import (
 
 	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
 )
@@ -305,7 +306,7 @@ func TestWebStatus(t *testing.T) {
 	r := newRig(t)
 	run := func(n store.Network, cmd string) []string {
 		var out []string
-		r.srv.WebStatus(r.user.ID, n, cmd, func(s string) { out = append(out, s) })
+		r.srv.WebStatus(r.user.ID, "", n, cmd, func(s string) { out = append(out, s) })
 		return out
 	}
 	has := func(lines []string, s string) bool { return anyHas(lines, s) }
@@ -350,7 +351,7 @@ func TestStatusDirectory(t *testing.T) {
 	r := newRig(t)
 	run := func(cmd string) []string {
 		var out []string
-		r.srv.WebStatus(r.user.ID, r.network("one"), cmd, func(s string) { out = append(out, s) })
+		r.srv.WebStatus(r.user.ID, "", r.network("one"), cmd, func(s string) { out = append(out, s) })
 		return out
 	}
 	if out := run("directory"); !anyHas(out, "The network directory is empty here") {
@@ -418,8 +419,8 @@ func TestStatusZNCOddsAndEnds(t *testing.T) {
 		ic.status(alias, "loadmod <module>")
 	}
 	ic.status("listbuffers", "#one")
-	for cmd, why := range notHere {
-		ic.status(cmd, why)
+	for cmd := range notHere {
+		ic.status(cmd, messages.English.T("irc.notHere."+cmd))
 	}
 	ic.status("listnicks", "Usage: listnicks <#channel>")
 	ic.status("showchan", "Usage: showchan <#channel>")

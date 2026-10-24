@@ -11,7 +11,6 @@
 package modules
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,6 +18,7 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/messages"
 )
 
 // Host is what a module can do and see: one network's connection.
@@ -46,7 +46,7 @@ type Host interface {
 	// connection ends first.
 	After(d time.Duration, f func())
 	// Log writes to the network's connection log.
-	Log(text string)
+	Log(t messages.Text)
 	// Reply sends a notice to the user's attached clients, as the module.
 	Reply(text string)
 }
@@ -173,7 +173,7 @@ func Check(cfgs map[string]Config) error {
 	for name, c := range cfgs {
 		info, ok := Get(name)
 		if !ok {
-			return fmt.Errorf("no module %q", name)
+			return messages.Errorf("err.noModule", "module", strconv.Quote(name))
 		}
 		for k, v := range c.Settings {
 			var spec *Setting
@@ -183,11 +183,11 @@ func Check(cfgs map[string]Config) error {
 				}
 			}
 			if spec == nil {
-				return fmt.Errorf("module %s has no setting %q", name, k)
+				return messages.Errorf("err.noModuleSetting", "module", name, "setting", strconv.Quote(k))
 			}
 			if spec.Kind == "number" && strings.TrimSpace(v) != "" {
 				if _, err := strconv.Atoi(strings.TrimSpace(v)); err != nil {
-					return fmt.Errorf("%s: %s must be a whole number", name, spec.Label)
+					return messages.Errorf("err.moduleNumber", "module", name, "setting", spec.Label)
 				}
 			}
 		}

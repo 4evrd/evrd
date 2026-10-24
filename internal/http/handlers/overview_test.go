@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/store"
 )
@@ -139,7 +140,7 @@ func TestMyEvents(t *testing.T) {
 	u := e.user("fay", store.RoleUser)
 	c := e.login("fay")
 	for i := range 3 {
-		e.b.AddEvent(u.ID, "connected", "Connected "+strconv.Itoa(i), "detail")
+		e.b.AddEvent(u.ID, "connected", messages.Raw("Connected "+strconv.Itoa(i)), messages.Raw("detail"))
 	}
 	eventually(t, "events", func() bool {
 		_, out := c.doAny("GET", "/api/me/events", nil)

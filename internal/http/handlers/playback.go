@@ -7,7 +7,6 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -41,7 +40,7 @@ func (s *Handlers) playbackDTO(n store.Network, u store.User) (map[string]any, e
 func (s *Handlers) writePlayback(w http.ResponseWriter, r *http.Request, n store.Network) {
 	out, err := s.playbackDTO(n, auth.User(r))
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -67,7 +66,7 @@ func (s *Handlers) SetPlayback(w http.ResponseWriter, r *http.Request) {
 		AutoClear json.RawMessage `json:"autoClear"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&in); err != nil || len(in.Buffers) == 0 {
-		writeErr(w, http.StatusBadRequest, "send the buffers to change")
+		s.say(w, r, http.StatusBadRequest, "web.noBuffers")
 		return
 	}
 	null := func(raw json.RawMessage) bool { return bytes.Equal(bytes.TrimSpace(raw), []byte("null")) }
@@ -75,7 +74,7 @@ func (s *Handlers) SetPlayback(w http.ResponseWriter, r *http.Request) {
 	if len(in.Lines) > 0 && !null(in.Lines) {
 		var v int
 		if json.Unmarshal(in.Lines, &v) != nil || v < 0 || v > maxPlaybackLines {
-			writeErr(w, http.StatusBadRequest, fmt.Sprintf("lines is a number from 0 to %d", maxPlaybackLines))
+			s.say(w, r, http.StatusBadRequest, "web.lines", "max", maxPlaybackLines)
 			return
 		}
 		lines = &v
@@ -84,18 +83,18 @@ func (s *Handlers) SetPlayback(w http.ResponseWriter, r *http.Request) {
 	if len(in.AutoClear) > 0 && !null(in.AutoClear) {
 		var v bool
 		if json.Unmarshal(in.AutoClear, &v) != nil {
-			writeErr(w, http.StatusBadRequest, "autoClear is true, false or null")
+			s.say(w, r, http.StatusBadRequest, "web.autoClear")
 			return
 		}
 		autoClear = &v
 	}
 	for _, b := range in.Buffers {
 		if len(b) > 255 || strings.ContainsAny(b, " \r\n") {
-			writeErr(w, http.StatusBadRequest, "that isn't a buffer name")
+			s.say(w, r, http.StatusBadRequest, "web.bufferName")
 			return
 		}
 		if b == "" && len(in.AutoClear) > 0 {
-			writeErr(w, http.StatusBadRequest, "auto-clear is set per buffer (or for the account)")
+			s.say(w, r, http.StatusBadRequest, "web.autoClearScope")
 			return
 		}
 	}
@@ -108,7 +107,7 @@ func (s *Handlers) SetPlayback(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.writePlayback(w, r, n)
@@ -131,7 +130,7 @@ func (s *Handlers) ClearPlayback(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(bufs) > 0 {
 		if err := s.b.ClearBuffers(n.ID, bufs); err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 	}

@@ -40,12 +40,12 @@ type provisionedNetwork struct {
 
 func (s *Handlers) ProvisionUser(w http.ResponseWriter, r *http.Request) {
 	var in provisionInput
-	if !decode(w, r, &in) {
+	if !s.decode(w, r, &in) {
 		return
 	}
 	name, err := accounts.NormalizeUsername(r.PathValue("username"))
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	created := false
@@ -54,19 +54,19 @@ func (s *Handlers) ProvisionUser(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, store.ErrNotFound):
 		u, err = s.acc.Create(accounts.CreateInput{Username: name, Email: in.Email, Role: store.RoleUser, SSOClaimable: true})
 		if err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 		created = true
 		s.log.Info("provisioned account", "user", name)
 	case err != nil:
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 
 	existing, err := s.acc.ListNetworks(r.Context(), u.ID)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	have := map[string]int64{}

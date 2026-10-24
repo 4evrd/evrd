@@ -71,30 +71,30 @@ func (s *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		Language        *string            `json:"language"`
 		Settings        *userSettingsInput `json:"settings"`
 	}
-	if !decode(w, r, &in) {
+	if !s.decode(w, r, &in) {
 		return
 	}
 	before := u
 	if in.Settings != nil {
 		if err := in.Settings.apply(&u); err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 		if u.BindHost != before.BindHost {
 			if err := s.acc.CheckBindHost(before, u.BindHost); err != nil {
-				s.fail(w, err)
+				s.fail(w, r, err)
 				return
 			}
 		}
 		if ip := s.clientAddr(r); ip != "" && !accounts.HostAllowed(u, ip) {
-			writeErr(w, http.StatusUnprocessableEntity, "that list doesn't include the address you're using now ("+ip+") — you'd lock yourself out")
+			s.say(w, r, http.StatusUnprocessableEntity, "web.lockout", "address", ip)
 			return
 		}
 	}
 	if in.Email != nil && u.OIDCSubject == nil {
 		e := strings.TrimSpace(*in.Email)
 		if e != "" && !strings.Contains(e, "@") {
-			writeErr(w, http.StatusUnprocessableEntity, "that doesn't look like an email address")
+			s.say(w, r, http.StatusUnprocessableEntity, "web.email")
 			return
 		}
 		u.Email = e
@@ -102,7 +102,7 @@ func (s *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	if in.DefaultNick != nil {
 		nick := strings.TrimSpace(*in.DefaultNick)
 		if strings.ContainsAny(nick, " ,*?!@#:") || utf8.RuneCountInString(nick) > 30 {
-			writeErr(w, http.StatusUnprocessableEntity, "nicks can't contain spaces or , * ? ! @ # : and are at most 30 characters")
+			s.say(w, r, http.StatusUnprocessableEntity, "web.nick")
 			return
 		}
 		u.DefaultNick = nick
@@ -110,7 +110,7 @@ func (s *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	if in.Language != nil {
 		l := strings.TrimSpace(*in.Language)
 		if l != "" && !s.languageAllowed(u, l) {
-			writeErr(w, http.StatusUnprocessableEntity, "that language isn't one the web app has")
+			s.say(w, r, http.StatusUnprocessableEntity, "web.language")
 			return
 		}
 		u.Language = l
@@ -121,7 +121,7 @@ func (s *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	if in.DefaultAltNick != nil {
 		alt := strings.TrimSpace(*in.DefaultAltNick)
 		if strings.ContainsAny(alt, " ,*?!@#:") || utf8.RuneCountInString(alt) > 30 {
-			writeErr(w, http.StatusUnprocessableEntity, "nicks can't contain spaces or , * ? ! @ # : and are at most 30 characters")
+			s.say(w, r, http.StatusUnprocessableEntity, "web.nick")
 			return
 		}
 		u.DefaultAltNick = alt
@@ -131,7 +131,7 @@ func (s *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		u.AutoAway = *in.AutoAway
 	}
 	if err := s.acc.UpdateUser(r.Context(), u); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	if awayChanged {
@@ -146,15 +146,15 @@ func (s *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 func (s *Handlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	u := auth.User(r)
 	if u.OIDCSubject != nil && u.PasswordHash == "" {
-		writeErr(w, http.StatusConflict, "your password is managed by your sign-in provider")
+		s.say(w, r, http.StatusConflict, "web.ssoPassword")
 		return
 	}
 	var in struct{ Current, Next string }
-	if !decode(w, r, &in) {
+	if !s.decode(w, r, &in) {
 		return
 	}
 	if err := s.acc.ChangePassword(&u, in.Current, in.Next); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	// Sign out everywhere else: whoever knew the old password is out.
@@ -167,15 +167,15 @@ func (s *Handlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 func (s *Handlers) DeleteMe(w http.ResponseWriter, r *http.Request) {
 	u := auth.User(r)
 	var in struct{ Confirm string }
-	if !decode(w, r, &in) {
+	if !s.decode(w, r, &in) {
 		return
 	}
 	if in.Confirm != u.Username {
-		writeErr(w, http.StatusUnprocessableEntity, "type your username to confirm")
+		s.say(w, r, http.StatusUnprocessableEntity, "web.confirmDelete")
 		return
 	}
 	if err := s.acc.GuardAdminChange(u, false); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.deleteUser(u)
@@ -211,7 +211,7 @@ func (s *Handlers) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 func (s *Handlers) RevokeSession(w http.ResponseWriter, r *http.Request) {
 	if err := s.auth.DeleteSession(r.Context(), auth.User(r).ID, r.PathValue("id")); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -219,7 +219,7 @@ func (s *Handlers) RevokeSession(w http.ResponseWriter, r *http.Request) {
 
 func (s *Handlers) RevokeOtherSessions(w http.ResponseWriter, r *http.Request) {
 	if err := s.auth.DeleteUserSessions(r.Context(), auth.User(r).ID, auth.SessionOf(r).ID); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -230,7 +230,7 @@ func (s *Handlers) RevokeOtherSessions(w http.ResponseWriter, r *http.Request) {
 func (s *Handlers) ListClientPasswords(w http.ResponseWriter, r *http.Request) {
 	list, err := s.acc.ListClientPasswords(r.Context(), auth.User(r).ID)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	out := make([]map[string]any, 0, len(list))
@@ -246,12 +246,12 @@ func (s *Handlers) ListClientPasswords(w http.ResponseWriter, r *http.Request) {
 // ever shown.
 func (s *Handlers) CreateClientPassword(w http.ResponseWriter, r *http.Request) {
 	var in struct{ Name string }
-	if !decode(w, r, &in) {
+	if !s.decode(w, r, &in) {
 		return
 	}
 	cp, secret, err := s.acc.NewClientPassword(auth.User(r).ID, in.Name)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -261,7 +261,7 @@ func (s *Handlers) CreateClientPassword(w http.ResponseWriter, r *http.Request) 
 
 func (s *Handlers) DeleteClientPassword(w http.ResponseWriter, r *http.Request) {
 	if err := s.acc.DeleteClientPassword(r.Context(), auth.User(r).ID, PathID(r)); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

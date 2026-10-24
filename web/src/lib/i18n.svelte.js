@@ -12,7 +12,7 @@
 
 import { LANGUAGES, pick as pickFrom } from './locale.js'
 import { layered, languageList, pluralLocale } from './langpack.js'
-import { api } from './api.js'
+import { api, setLanguage } from './api.js'
 
 export { LANGUAGES }
 
@@ -49,6 +49,27 @@ function fetchOnce(key, get) {
   return cache.get(key)
 }
 
+// ircBuiltin is a built-in language's IRC texts: what evrd says over IRC
+// (*status), the irc.* keys of a pack. evrd serves them; the app never
+// shows them, only puts them in templates and downloads and checks packs
+// against them. {} for a language without any.
+export async function ircBuiltin(code) {
+  return (await fetchOnce(`irc:${code}`, () => api.ircMessages(code).catch(() => ({ messages: {} })))).messages || {}
+}
+
+// english is every English text a pack can have: the app's and evrd's IRC
+// ones.
+export async function english() {
+  return { ...en, ...(await ircBuiltin('en')) }
+}
+
+// builtinAll is a built-in language's texts, the app's and the IRC ones
+// (like builtin, {} for none).
+export async function builtinAll(code) {
+  const [app, irc] = await Promise.all([builtin(code), ircBuiltin(code)])
+  return { ...app, ...irc }
+}
+
 // serverPack is a server pack's messages, or null.
 export async function serverPack(code) {
   const p = i18n.packs.find((x) => x.code === code)
@@ -81,6 +102,7 @@ export async function setLocale(code) {
   i18n.messages = layered(en, base, server, mine)
   i18n.intl = pluralLocale(code)
   i18n.locale = code
+  setLanguage(code)
   if (typeof document !== 'undefined') document.documentElement.lang = code
 }
 

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/store"
 )
@@ -48,9 +49,9 @@ func (s *Handlers) NetworkHealth(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	out, err := s.healthOf(r.Context(), n, r.URL.Query().Get("range"))
+	out, err := s.healthOf(r.Context(), s.printer(r), n, r.URL.Query().Get("range"))
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -63,9 +64,9 @@ func (s *Handlers) AdminNetworkHealth(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	out, err := s.healthOf(r.Context(), n, r.URL.Query().Get("range"))
+	out, err := s.healthOf(r.Context(), s.printer(r), n, r.URL.Query().Get("range"))
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -74,7 +75,7 @@ func (s *Handlers) AdminNetworkHealth(w http.ResponseWriter, r *http.Request) {
 // healthOf is everything a network's health page shows. The live state
 // needs the owner's node; the series come from the metrics store, and
 // without one (or when it fails) metrics is false with the reason.
-func (s *Handlers) healthOf(ctx context.Context, n store.Network, rangeKey string) (map[string]any, error) {
+func (s *Handlers) healthOf(ctx context.Context, p *messages.Printer, n store.Network, rangeKey string) (map[string]any, error) {
 	key, span, step := healthRange(rangeKey)
 	now := time.Now()
 	// slots end on whole steps (days on UTC midnight); the last is in progress
@@ -93,7 +94,7 @@ func (s *Handlers) healthOf(ctx context.Context, n store.Network, rangeKey strin
 		}
 	}
 
-	d := s.networkDTO(n)
+	d := s.networkDTO(p, n)
 	live := map[string]any{"nick": d["currentNick"]}
 	for _, k := range []string{"status", "server", "lag", "lastError", "lastErrorAt", "hint", "attempts", "retryIn", "connectedAt", "auth"} {
 		if v, ok := d[k]; ok {
@@ -112,7 +113,7 @@ func (s *Handlers) healthOf(ctx context.Context, n store.Network, rangeKey strin
 		},
 		"live":     live,
 		"channels": s.healthChannels(n),
-		"events":   eventsDTO(mine),
+		"events":   eventsDTO(p, mine),
 		"range":    key, "start": start.Unix(), "step": int(step.Seconds()), "points": slots,
 		"now": now.Unix(),
 	}
@@ -120,7 +121,7 @@ func (s *Handlers) healthOf(ctx context.Context, n store.Network, rangeKey strin
 	h := s.healthMetrics(ctx, n, start, step, slots, now)
 	out["metrics"] = h.err == ""
 	if h.err != "" {
-		out["reason"] = h.err
+		out["reason"] = metricsErr(p, h.err)
 		return out, nil
 	}
 	out["series"] = map[string]any{
@@ -140,12 +141,12 @@ func (s *Handlers) adminNetwork(w http.ResponseWriter, r *http.Request) (store.N
 	}
 	nid, err := strconv.ParseInt(r.PathValue("nid"), 10, 64)
 	if err != nil {
-		writeErr(w, http.StatusNotFound, "no such network")
+		s.say(w, r, http.StatusNotFound, "web.noSuchNetwork")
 		return store.Network{}, false
 	}
 	n, err := s.acc.NetworkByID(r.Context(), nid)
 	if err != nil || n.UserID != u.ID {
-		writeErr(w, http.StatusNotFound, "no such network")
+		s.say(w, r, http.StatusNotFound, "web.noSuchNetwork")
 		return store.Network{}, false
 	}
 	return n, true
@@ -208,7 +209,7 @@ type healthMetrics struct {
 func (s *Handlers) healthMetrics(ctx context.Context, n store.Network, start time.Time, step time.Duration, slots int, now time.Time) healthMetrics {
 	mq := s.metrics.Load()
 	if mq == nil {
-		return healthMetrics{err: "metrics aren't configured"}
+		return healthMetrics{err: noMetrics}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()

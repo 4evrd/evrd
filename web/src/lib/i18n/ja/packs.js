@@ -4,6 +4,7 @@ export default {
   'packs.download': 'ダウンロード',
   'packs.formatHint': 'PO は Poedit で、CSV は表計算ソフトで開けます。',
   'packs.guide': 'evrd の翻訳方法',
+  'packs.ircCoverage': 'evrd 自身のメッセージ(IRC、エラー、ログ): {total} 件中 {have} 件翻訳済み',
   'packs.checkTitle': '翻訳の確認',
   'packs.code': '言語コード',
   'packs.codeHelp': 'de や pt-BR など。組み込み言語のコードを使うと、その言語のテキストを変更します。',

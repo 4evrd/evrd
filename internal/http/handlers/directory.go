@@ -31,7 +31,7 @@ func (s *Handlers) Directory(w http.ResponseWriter, r *http.Request) {
 // RefreshDirectory checks the source now (Admin → Settings).
 func (s *Handlers) RefreshDirectory(w http.ResponseWriter, r *http.Request) {
 	if s.dir == nil {
-		writeErr(w, http.StatusNotFound, "the network directory isn't available")
+		s.say(w, r, http.StatusNotFound, "web.noDirectory")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), time.Minute)

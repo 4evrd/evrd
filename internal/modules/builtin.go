@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/messages"
 )
 
 func init() {
@@ -91,7 +92,7 @@ func (p *perform) Registered() {
 		}
 	}
 	if n > 0 {
-		p.h.Log(fmt.Sprintf("perform: sent %d command%s", n, plural(n)))
+		p.h.Log(messages.T("module.log.perform", "count", n))
 	}
 }
 
@@ -142,7 +143,7 @@ func (k *keepnick) check() {
 	if k.waiting || strings.EqualFold(k.h.Nick(), k.h.WantedNick()) {
 		return
 	}
-	k.h.Log("keepnick: " + k.h.WantedNick() + " is taken; trying for it every 30 seconds")
+	k.h.Log(messages.T("module.log.keepnick", "nick", k.h.WantedNick()))
 	k.waiting = true
 	var try func()
 	try = func() {
@@ -183,7 +184,7 @@ func (k *kickrejoin) Line(m irc.Message) {
 		return
 	}
 	ch := m.Params[0]
-	k.h.Log(fmt.Sprintf("kickrejoin: kicked from %s by %s; rejoining in %ds", ch, nickOf(m.Prefix), k.delay))
+	k.h.Log(messages.T("module.log.kickrejoin", "channel", ch, "by", nickOf(m.Prefix), "seconds", k.delay))
 	k.h.After(time.Duration(k.delay)*time.Second, func() {
 		if !k.h.Joined(ch) {
 			k.h.Send("JOIN " + ch)
@@ -222,7 +223,7 @@ func (a *autocycle) Line(m irc.Message) {
 			continue // don't loop if it doesn't work
 		}
 		a.last[key] = time.Now()
-		a.h.Log("autocycle: alone in " + ch + " without ops; cycling it")
+		a.h.Log(messages.T("module.log.autocycle", "channel", ch))
 		a.h.Send("PART " + ch)
 		a.h.Send("JOIN " + ch)
 	}
@@ -378,7 +379,7 @@ func (c *ctcpflood) CTCP(from, command string) bool {
 	if len(c.recent) > c.limit {
 		if !c.flooding {
 			c.flooding = true
-			c.h.Log(fmt.Sprintf("ctcpflood: more than %d CTCPs in %s (latest %s from %s); ignoring them", c.limit, c.window, command, from))
+			c.h.Log(messages.T("module.log.ctcpflood", "limit", c.limit, "window", c.window, "command", command, "from", from))
 		}
 		return true
 	}
@@ -402,7 +403,7 @@ func (q *qauth) Registered() {
 			user = q.h.Nick()
 		}
 		q.h.Send("PRIVMSG Q@CServe.quakenet.org :AUTH " + user + " " + pass)
-		q.h.Log("q: logging in to Q as " + user)
+		q.h.Log(messages.T("module.log.qLogin", "account", user))
 	}
 	if q.hide {
 		q.h.Send("MODE " + q.h.Nick() + " +x")
@@ -411,17 +412,10 @@ func (q *qauth) Registered() {
 
 func (q *qauth) Line(m irc.Message) {
 	if m.Command == "NOTICE" && strings.HasPrefix(strings.ToLower(m.Prefix), "q!") && len(m.Params) > 1 {
-		q.h.Log("q: " + m.Params[len(m.Params)-1])
+		q.h.Log(messages.T("module.log.qSaid", "said", m.Params[len(m.Params)-1]))
 	}
 }
 
 // LoginHandler is implemented by modules that log in themselves (so evrd
 // doesn't identify to NickServ as well).
 type LoginHandler interface{ HandlesLogin() bool }
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
-}

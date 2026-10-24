@@ -6,6 +6,7 @@ package bouncer
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"sort"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/telemetry"
 	"github.com/4evrd/evrd/internal/upstream"
@@ -151,17 +153,42 @@ func (b *Bouncer) RefreshAway(userID int64) { b.refreshAway(userID) }
 
 // --- activity feed -----------------------------------------------------------
 
-// AddEvent records an entry in a user's activity feed.
-func (b *Bouncer) AddEvent(userID int64, kind, title, detail string) {
+// AddEvent records an entry in a user's activity feed: its title and
+// detail in words (internal/messages), shown in the reader's language.
+func (b *Bouncer) AddEvent(userID int64, kind string, title, detail messages.Text) {
 	b.addNetworkEvent(userID, 0, kind, title, detail)
 }
 
+// EventTexts is what UserEvent.Texts holds.
+type EventTexts struct {
+	Title  messages.Text `json:"title,omitzero"`
+	Detail messages.Text `json:"detail,omitzero"`
+}
+
 // addNetworkEvent records an entry about one of the user's networks.
-func (b *Bouncer) addNetworkEvent(userID, networkID int64, kind, title, detail string) {
-	e := store.UserEvent{UserID: userID, NetworkID: networkID, At: time.Now(), Kind: kind, Title: title, Detail: detail}
+func (b *Bouncer) addNetworkEvent(userID, networkID int64, kind string, title, detail messages.Text) {
+	texts, _ := json.Marshal(EventTexts{Title: title, Detail: detail})
+	e := store.UserEvent{UserID: userID, NetworkID: networkID, At: time.Now(), Kind: kind,
+		Title: title.English(), Detail: detail.English(), Texts: string(texts)}
 	if err := b.store.AddUserEvent(context.Background(), e); err != nil {
 		b.log.Warn("record user event", "user", userID, "err", err)
 	}
+}
+
+// EventText is an event's title and detail in p's language.
+func EventText(p *messages.Printer, e store.UserEvent) (title, detail string) {
+	var t EventTexts
+	if e.Texts == "" || json.Unmarshal([]byte(e.Texts), &t) != nil {
+		return e.Title, e.Detail
+	}
+	title, detail = e.Title, e.Detail
+	if !t.Title.IsZero() {
+		title = p.Text(t.Title)
+	}
+	if !t.Detail.IsZero() {
+		detail = p.Text(t.Detail)
+	}
+	return title, detail
 }
 
 // --- unread and mentions -----------------------------------------------------

@@ -33,7 +33,10 @@ The web chat understands `/join`, `/part`, `/msg`, `/query`, `/me`, `/notice`,
 `/msg *status help` lists the bouncer's own commands. ZNC's names work too
 (`ListNetworks`, `JumpNetwork`, `AddNetwork`…), and so does ZNC's raw command:
 `/znc ListNetworks` (or `/quote znc …`) is the same as `/msg *status ListNetworks`.
-Commands are case-insensitive; the web chat takes `/znc …` too.
+Commands are case-insensitive; the web chat takes `/znc …` too. `*status`
+answers in your account's language (*Account → Profile → Language*); the
+command names stay the same in every language. See
+[translations](translations.md#evrds-own-messages).
 
 | command | does |
 |---|---|

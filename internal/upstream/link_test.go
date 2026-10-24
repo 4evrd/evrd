@@ -310,13 +310,36 @@ func TestDescribeErr(t *testing.T) {
 		{&net.DNSError{Name: "irc.invalid", Err: "no such host"}, "can't resolve irc.invalid"},
 		{context.DeadlineExceeded, "connection timed out"},
 		{&net.OpError{Op: "dial", Err: errors.New("connect: connection refused")}, "connection refused"},
-		{&net.OpError{Op: "dial", Err: errors.New("no route to host")}, "can't connect"},
+		{&net.OpError{Op: "dial", Err: errors.New("no route to host")}, "network unreachable"},
+		{&net.OpError{Op: "dial", Err: errors.New("connect: network is unreachable")}, "network unreachable"},
+		{&net.OpError{Op: "dial", Err: errors.New("something odd")}, "can't connect"},
 		{&tls.CertificateVerificationError{Err: x509.UnknownAuthorityError{}}, "TLS certificate rejected"},
+		{errors.New("read tcp 10.0.0.1:5->10.0.0.2:6697: read: connection reset by peer"), "connection reset by the server"},
+		{errors.New("write tcp 10.0.0.1:5->10.0.0.2:6697: write: broken pipe"), "the connection broke"},
+		{errors.New("read tcp 10.0.0.1:5->10.0.0.2:6697: i/o timeout"), "connection timed out"},
+		{errors.New("the server hung up during the TLS handshake"), "the server hung up during the TLS handshake"},
+		{errors.New("untrusted certificate (signed by an unknown authority) — SHA-256 AA:BB"), "untrusted certificate (signed by an unknown authority) — SHA-256 AA:BB"},
+		{errors.New("untrusted certificate (odd) — SHA-256 AA:BB"), "untrusted certificate (odd) — SHA-256 AA:BB"},
+		{errors.New(`the server didn't answer with TLS on this port — it said "NOTICE AUTH" (is it a plain-text port?)`), `the server didn't answer with TLS on this port — it said "NOTICE AUTH" (is it a plain-text port?)`},
+		{errors.New("the server refused the connection: Closing Link"), "the server refused the connection: Closing Link"},
 		{errors.New("something else"), "something else"},
 	} {
 		if got := describeErr(tc.err); got != tc.want {
 			t.Errorf("describeErr(%v) = %q, want %q", tc.err, got, tc.want)
 		}
+	}
+	// the reasons it knows are in words, the rest passed on as they are
+	for err, key := range map[error]string{
+		errors.New("untrusted certificate (expired or not yet valid) — SHA-256 AA:BB"): "irc.reason.untrusted",
+		errors.New("read: connection reset by peer"):                                   "irc.reason.reset",
+		errors.New("Closing Link: K-Lined"):                                            "irc.raw",
+	} {
+		if got := reasonOf(err); got.Key != key {
+			t.Errorf("reasonOf(%v) is %s, want %s", err, got.Key, key)
+		}
+	}
+	if got := reasonOf(errors.New("untrusted certificate (expired or not yet valid) — SHA-256 AA:BB")); got.Sub["why"].Key != "irc.reason.certExpired" {
+		t.Errorf("certificate reason: %+v", got)
 	}
 	if roundDur(10*time.Millisecond) != "a moment" || roundDur(1600*time.Millisecond) != "2s" {
 		t.Error("roundDur")

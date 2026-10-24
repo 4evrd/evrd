@@ -23,6 +23,7 @@ import (
 	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/listen"
+	"github.com/4evrd/evrd/internal/messages"
 )
 
 const serverName = "evrd"
@@ -53,6 +54,8 @@ type Server struct {
 
 	sts stsState
 
+	msgs messages.MessageServiceImpl // *status's texts; nil: English
+
 	// the connection holder, holding clients (hold.go); nil: none
 	holder      *links.Client
 	readyOnce   sync.Once
@@ -64,6 +67,9 @@ type Server struct {
 	lastCert    []byte // the certificate the holder has (its leaf)
 	certsPushed bool
 }
+
+// SetMessages has *status answer in each user's language.
+func (s *Server) SetMessages(m messages.MessageServiceImpl) { s.msgs = m }
 
 // SetDirectory gives *status the network directory (addnetwork <id>).
 func (s *Server) SetDirectory(d *directory.Directory) { s.dir = d }

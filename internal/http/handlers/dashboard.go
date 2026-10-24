@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/bouncer"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
@@ -60,16 +62,17 @@ func (s *Handlers) MyEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	evs, err := s.b.UserEvents(r.Context(), auth.User(r).ID, time.Now().AddDate(0, 0, -30), limit)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, eventsDTO(evs))
+	writeJSON(w, http.StatusOK, eventsDTO(s.printer(r), evs))
 }
 
-func eventsDTO(evs []store.UserEvent) []map[string]any {
+func eventsDTO(p *messages.Printer, evs []store.UserEvent) []map[string]any {
 	out := []map[string]any{}
 	for _, e := range evs {
-		d := map[string]any{"at": e.At.Unix(), "kind": e.Kind, "title": e.Title, "detail": e.Detail}
+		title, detail := bouncer.EventText(p, e)
+		d := map[string]any{"at": e.At.Unix(), "kind": e.Kind, "title": title, "detail": detail}
 		if e.NetworkID != 0 {
 			d["network"] = e.NetworkID
 		}
@@ -82,9 +85,9 @@ func eventsDTO(evs []store.UserEvent) []map[string]any {
 // It runs on the user's owner node (live state) and reads traffic from the
 // metrics store.
 func (s *Handlers) Overview(w http.ResponseWriter, r *http.Request) {
-	ov, err := s.overviewOf(r.Context(), auth.User(r))
+	ov, err := s.overviewOf(r.Context(), s.printer(r), auth.User(r))
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, ov)
@@ -97,9 +100,9 @@ func (s *Handlers) AdminUserOverview(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ov, err := s.overviewOf(r.Context(), u)
+	ov, err := s.overviewOf(r.Context(), s.printer(r), u)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	ov["usage"] = map[string]any{"networks": len(ov["networks"].([]map[string]any))}
@@ -115,7 +118,8 @@ func (s *Handlers) AdminUserOverview(w http.ResponseWriter, r *http.Request) {
 
 // overviewOf is everything a user's overview page shows. It needs the
 // user's live state, so it runs on their owner node.
-func (s *Handlers) overviewOf(ctx context.Context, u store.User) (map[string]any, error) {
+// p is the language to say evrd's own words in.
+func (s *Handlers) overviewOf(ctx context.Context, p *messages.Printer, u store.User) (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	nets, err := s.acc.ListNetworks(ctx, u.ID)
@@ -135,7 +139,7 @@ func (s *Handlers) overviewOf(ctx context.Context, u store.User) (map[string]any
 	netsOut := make([]map[string]any, 0, len(nets))
 	now := time.Now()
 	for _, n := range nets {
-		d := s.networkDTO(n)
+		d := s.networkDTO(p, n)
 		conn, live := s.b.ConnFor(n.ID)
 		if l, ok := d["lag"].(int64); ok {
 			lagSum += l
@@ -220,11 +224,11 @@ func (s *Handlers) overviewOf(ctx context.Context, u store.User) (map[string]any
 	return map[string]any{
 		"networks": netsOut,
 		"clients":  s.clientsDTO(u.ID),
-		"events":   eventsDTO(evs),
+		"events":   eventsDTO(p, evs),
 		"health":   health,
 		"limits":   lim,
 		"traffic": map[string]any{
-			"available": traffic.available, "error": traffic.err,
+			"available": traffic.available, "error": metricsErr(p, traffic.err),
 			"start": traffic.start, "step": 3600, "series": traffic.series, "total24h": int64(math.Round(total)),
 		},
 	}, nil
@@ -286,7 +290,7 @@ func (s *Handlers) userTraffic(ctx context.Context, userID int64, nets []store.N
 	out := userTraffic{perNet: map[int64]float64{}, series: []map[string]any{}}
 	mq := s.metrics.Load()
 	if mq == nil {
-		out.err = "metrics aren't configured"
+		out.err = noMetrics
 		return out
 	}
 	// The rest of the page doesn't wait on a slow metrics store.
@@ -389,14 +393,15 @@ func hourSlots(se metricsq.Series, start time.Time) []float64 {
 func (s *Handlers) AdminOverview(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
+	pr := s.printer(r) // evrd's own words, in the admin's language
 	users, err := s.acc.ListUsers(ctx)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	allNets, err := s.acc.AllNetworks(ctx)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	now := time.Now()
@@ -463,26 +468,28 @@ func (s *Handlers) AdminOverview(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case u.Suspended:
 		case len(down) > 0:
-			p.Issue = strings.Join(down, ", ") + " down"
+			p.Issue = pr.T(messages.Area+"admin.issueDown", "networks", strings.Join(down, ", "))
 		case lim.MaxNetworks > 0 && p.Nets >= lim.MaxNetworks:
-			p.Issue = "at network limit"
+			p.Issue = pr.T(messages.Area + "admin.issueLimit")
 			attention = append(attention, map[string]any{
 				"kind": "limit", "user": u.Username, "userId": u.ID,
-				"title": u.Username + " is at the network limit", "detail": fmt.Sprintf("%d of %d networks", p.Nets, lim.MaxNetworks),
+				"title":  pr.T(messages.Area+"admin.atLimit", "user", u.Username),
+				"detail": pr.T(messages.Area+"admin.atLimitDetail", "count", p.Nets, "max", lim.MaxNetworks),
 			})
 		case inactive:
-			p.Issue = "inactive " + ago(*u.LastSeenAt)
+			p.Issue = pr.T(messages.Area+"admin.issueInactive", "ago", ago(*u.LastSeenAt))
 			if p.Up > 0 {
 				attention = append(attention, map[string]any{
 					"kind": "inactive", "user": u.Username, "userId": u.ID,
-					"title": u.Username + " hasn’t signed in", "detail": fmt.Sprintf("%s · %d network(s) still connected", ago(*u.LastSeenAt), p.Up),
+					"title":  pr.T(messages.Area+"admin.inactive", "user", u.Username),
+					"detail": pr.T(messages.Area+"admin.inactiveDetail", "ago", ago(*u.LastSeenAt), "count", p.Up),
 				})
 			}
 		}
 		if u.Suspended {
 			attention = append(attention, map[string]any{
 				"kind": "suspended", "user": u.Username, "userId": u.ID,
-				"title": u.Username + " is suspended", "detail": orDash(u.SuspendedReason),
+				"title": pr.T(messages.Area+"admin.suspended", "user", u.Username), "detail": orDash(u.SuspendedReason),
 			})
 		}
 		placements = append(placements, p)
@@ -520,7 +527,7 @@ func (s *Handlers) AdminOverview(w http.ResponseWriter, r *http.Request) {
 				row.Up++
 			} else if l.LastError != "" {
 				row.Down = append(row.Down, userName[n.UserID])
-				row.Err = l.LastError
+				row.Err = orText(pr, l.LastErrorText, l.LastError)
 				if row.ErrSince == 0 || (l.LastErrorAt > 0 && l.LastErrorAt < row.ErrSince) {
 					row.ErrSince = l.LastErrorAt
 				}
@@ -532,7 +539,7 @@ func (s *Handlers) AdminOverview(w http.ResponseWriter, r *http.Request) {
 		upList = append(upList, row)
 		if len(row.Down) > 0 {
 			attention = append([]map[string]any{{
-				"kind": "network", "title": row.Name + " unreachable", "host": row.Host,
+				"kind": "network", "title": pr.T(messages.Area+"admin.unreachable", "network", row.Name), "host": row.Host,
 				"detail": strings.Join(row.Down, ", ") + " · " + row.Err, "since": row.ErrSince,
 			}}, attention...)
 		}
@@ -662,17 +669,18 @@ func dbAddr(dsn string) string {
 	return host
 }
 
-func ago(t time.Time) string {
+// ago is how long ago t was, roughly, in words.
+func ago(t time.Time) messages.Text {
 	d := time.Since(t)
 	switch {
 	case d >= 14*24*time.Hour:
-		return fmt.Sprintf("%d weeks", int(d.Hours()/24/7))
+		return messages.T("ago.weeks", "count", int(d.Hours()/24/7))
 	case d >= 48*time.Hour:
-		return fmt.Sprintf("%d days", int(d.Hours()/24))
+		return messages.T("ago.days", "count", int(d.Hours()/24))
 	case d >= time.Hour:
-		return fmt.Sprintf("%d hours", int(d.Hours()))
+		return messages.T("ago.hours", "count", int(d.Hours()))
 	default:
-		return fmt.Sprintf("%d minutes", int(d.Minutes()))
+		return messages.T("ago.minutes", "count", int(d.Minutes()))
 	}
 }
 
@@ -693,6 +701,8 @@ type linkInfo struct {
 	Status      string `json:"status"`
 	LastError   string `json:"lastError,omitempty"`
 	LastErrorAt int64  `json:"lastErrorAt,omitempty"`
+	// LastErrorText is LastError in words, to show in the reader's language.
+	LastErrorText messages.Text `json:"lastErrorText,omitzero"`
 }
 
 // usage is one node's live numbers.
@@ -712,7 +722,7 @@ func (s *Handlers) localUsage() usage {
 	}
 	out := usage{Clients: s.b.ClientsByUser(), Online: map[int64]int{}, Links: []linkInfo{}, Connected: u.ConnectedNetworks, Attached: u.AttachedClients}
 	for _, l := range s.b.LinkStates() {
-		li := linkInfo{Node: node, User: l.UserID, Network: l.NetworkID, Status: string(l.Health.Status), LastError: l.Health.LastError}
+		li := linkInfo{Node: node, User: l.UserID, Network: l.NetworkID, Status: string(l.Health.Status), LastError: l.Health.LastError, LastErrorText: l.Health.LastErrorText}
 		if !l.Health.LastErrorAt.IsZero() {
 			li.LastErrorAt = l.Health.LastErrorAt.Unix()
 		}

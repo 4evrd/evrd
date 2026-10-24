@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/store"
 )
 
@@ -30,20 +32,31 @@ const MinPasswordLen = 10
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrSuspended          = errors.New("account suspended")
-	ErrLastAdmin          = errors.New("this is the last admin — make someone else an admin first")
-	ErrUsernameTaken      = errors.New("that username is taken")
+	ErrLastAdmin          = messages.Errorf("err.lastAdmin")
+	ErrUsernameTaken      = messages.Errorf("err.usernameTaken")
 	// ErrNeedsClientPassword is a failed IRC sign-in to an account with no
 	// password of its own (it signs in with SSO): only client passwords work.
 	ErrNeedsClientPassword = fmt.Errorf("%w: the account signs in with SSO", ErrInvalidCredentials)
 )
 
-// ValidationError is a rule the input broke; Message is safe to show.
-type ValidationError struct{ Message string }
+// ValidationError is a rule the input broke; Message is safe to show, and
+// Text is it in words to put in the reader's language (zero: Message only).
+type ValidationError struct {
+	Message string
+	Text    messages.Text
+}
 
 func (e *ValidationError) Error() string { return e.Message }
 
-func invalid(format string, a ...any) error {
-	return &ValidationError{fmt.Sprintf(format, a...)}
+// MessageText is e in words (messages.Texter); zero for one with only a
+// Message.
+func (e *ValidationError) MessageText() messages.Text { return e.Text }
+
+// invalid is a ValidationError saying irc.err.<key> (internal/messages),
+// with name/value pairs of arguments.
+func invalid(key string, args ...any) error {
+	t := messages.T("err."+key, args...)
+	return &ValidationError{Message: t.English(), Text: t}
 }
 
 var usernameRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{1,31}$`)
@@ -53,7 +66,7 @@ var usernameRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{1,31}$`)
 func NormalizeUsername(s string) (string, error) {
 	s = strings.ToLower(strings.TrimSpace(s))
 	if !usernameRe.MatchString(s) {
-		return "", invalid("usernames are 2–32 characters: a–z, 0–9, - and _, starting with a letter")
+		return "", invalid("usernameRules")
 	}
 	return s, nil
 }
@@ -62,13 +75,13 @@ func NormalizeUsername(s string) (string, error) {
 func CheckPassword(pw string) error {
 	switch {
 	case !utf8.ValidString(pw):
-		return invalid("passwords must be valid text")
+		return invalid("passwordText")
 	case utf8.RuneCountInString(pw) < MinPasswordLen:
-		return invalid("use at least %d characters", MinPasswordLen)
+		return invalid("passwordShort", "min", MinPasswordLen)
 	case len(pw) > 72:
-		return invalid("passwords are limited to 72 bytes")
+		return invalid("passwordLong")
 	case strings.IndexFunc(pw, unicode.IsControl) >= 0:
-		return invalid("passwords can't contain line breaks or control characters")
+		return invalid("passwordControl")
 	}
 	return nil
 }
@@ -168,16 +181,16 @@ func (s *Service) CheckBindHost(u store.User, bind string) error {
 	case bind == "" || u.IsAdmin():
 		return nil
 	case u.DenySetBindHost:
-		return invalid("your bind host is set by an admin")
+		return invalid("bindHostByAdmin")
 	case len(s.BindHosts()) == 0:
-		return invalid("this bouncer doesn't offer bind hosts")
+		return invalid("noBindHosts")
 	}
 	for _, h := range s.BindHosts() {
 		if strings.EqualFold(h, bind) {
 			return nil
 		}
 	}
-	return invalid("%s isn't one of this bouncer's bind hosts (%s)", bind, strings.Join(s.BindHosts(), ", "))
+	return invalid("notABindHost", "host", bind, "hosts", strings.Join(s.BindHosts(), ", "))
 }
 
 // New is the account service on repo. It's the concrete type, for main and
@@ -245,7 +258,7 @@ func (s *Service) Create(in CreateInput) (store.User, error) {
 		role = store.RoleUser
 	}
 	if role != store.RoleUser && role != store.RoleAdmin {
-		return store.User{}, invalid("role must be user or admin")
+		return store.User{}, invalid("role")
 	}
 	u := store.User{Username: name, Email: strings.TrimSpace(in.Email), Role: role, DefaultNick: name, SSOClaimable: in.SSOClaimable}
 	if in.Password != "" {
@@ -373,7 +386,7 @@ func (s *Service) IRCLogin(username, secret string) (store.User, string, error) 
 func (s *Service) NewClientPassword(userID int64, name string) (store.ClientPassword, string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || utf8.RuneCountInString(name) > 64 {
-		return store.ClientPassword{}, "", invalid("give it a name of up to 64 characters, e.g. the client or device")
+		return store.ClientPassword{}, "", invalid("clientPasswordName")
 	}
 	b := make([]byte, 20)
 	if _, err := rand.Read(b); err != nil {
@@ -405,7 +418,7 @@ func (s *Service) CanCreateNetwork(u store.User) error {
 		return err
 	}
 	if n >= int64(max) {
-		return invalid("you've reached your limit of %d networks — remove one first", max)
+		return invalid("networkLimit", "count", max)
 	}
 	return nil
 }
@@ -469,7 +482,7 @@ func NormalizeAllowedHosts(hosts []string) ([]string, error) {
 			continue
 		}
 		if strings.Trim(h, "0123456789abcdefABCDEF.:*?[]-") != "" || !strings.ContainsAny(h, "*?") {
-			return nil, invalid("%q isn't an IP, a CIDR range or a wildcard like 192.168.*", h)
+			return nil, invalid("allowedHost", "host", strconv.Quote(h))
 		}
 		out = append(out, h)
 	}

@@ -1,11 +1,12 @@
 <script>
   // A download button with a menu of translation file formats
   // (langformats.js). load() is the pack to write ({ code, name, messages });
-  // without it, the template: every English key, nothing translated.
+  // without it, the template: every English key (the app's and evrd's IRC
+  // texts), nothing translated.
   import { tick } from 'svelte'
   import Icon from './Icon.svelte'
   import { FORMATS, exportFile } from '$lib/langformats.js'
-  import { en, t } from '$lib/i18n.svelte.js'
+  import { english, t } from '$lib/i18n.svelte.js'
   import { toast } from '$lib/ui.svelte.js'
 
   let { id, label, load = null, small = true, ghost = false, aria = '' } = $props()
@@ -31,7 +32,7 @@
   async function pick(format) {
     hide()
     try {
-      const pack = load ? await load() : null
+      const [pack, en] = await Promise.all([load ? load() : null, english()])
       const file = exportFile(format, pack ? { ...pack, en } : { en, template: true })
       const url = URL.createObjectURL(new Blob([file.text], { type: `${file.mime};charset=utf-8` }))
       const a = Object.assign(document.createElement('a'), { href: url, download: file.filename })

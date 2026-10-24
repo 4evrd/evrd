@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/modules"
 	"github.com/4evrd/evrd/internal/store"
 )
@@ -34,7 +35,7 @@ func (h modHost) Nick() string               { return h.c.Nick() }
 func (h modHost) WantedNick() string         { return h.c.net.Nick }
 func (h modHost) Joined(channel string) bool { return h.c.Joined(channel) }
 func (h modHost) Channels() []string         { return h.c.Channels() }
-func (h modHost) Log(text string)            { h.c.note("evrd", false, text) }
+func (h modHost) Log(t messages.Text)        { h.c.noteT(false, t) }
 func (h modHost) Account() (string, string)  { return h.c.net.SASLUser, h.c.net.Password }
 
 func (h modHost) Members(channel string) []modules.Member {

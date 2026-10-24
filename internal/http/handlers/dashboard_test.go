@@ -21,6 +21,9 @@ func (c *client) doAny(method, path string, body any) (int, any) {
 	}
 	req, _ := http.NewRequest(method, c.e.srv.URL+path, r)
 	req.Header.Set("Content-Type", "application/json")
+	if c.lang != "" {
+		req.Header.Set("X-Evrd-Language", c.lang)
+	}
 	res, err := c.c.Do(req)
 	if err != nil {
 		c.e.t.Fatal(err)

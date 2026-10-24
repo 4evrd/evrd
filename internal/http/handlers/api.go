@@ -30,6 +30,7 @@ import (
 	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/http/middleware"
 	"github.com/4evrd/evrd/internal/languages"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/settings"
 	"github.com/4evrd/evrd/internal/store"
@@ -39,7 +40,8 @@ import (
 // StatusRunner runs a *status command for the web chat (the IRC listener
 // implements it, so both share one set of commands).
 type StatusRunner interface {
-	WebStatus(userID int64, n store.Network, text string, out func(string))
+	// lang is the language to answer in ("": the account's).
+	WebStatus(userID int64, lang string, n store.Network, text string, out func(string))
 }
 
 // Handlers are the API's request handlers.
@@ -52,6 +54,7 @@ type Handlers struct {
 	acc     accounts.AccountServiceImpl
 	auth    auth.AuthServiceImpl
 	langs   languages.LanguageServiceImpl
+	msgs    messages.MessageServiceImpl
 	state   cluster.StateServiceImpl
 	cfgp    atomic.Pointer[config.Config]
 	// settings, when set, edits the server settings (Admin → Settings).
@@ -68,15 +71,20 @@ type Services struct {
 	Accounts  accounts.AccountServiceImpl
 	Auth      auth.AuthServiceImpl
 	Languages languages.LanguageServiceImpl
-	Cluster   cluster.StateServiceImpl // nodes and leases (with or without a cluster)
+	// Messages is evrd's IRC texts; nil: ones on Languages' packs.
+	Messages messages.MessageServiceImpl
+	Cluster  cluster.StateServiceImpl // nodes and leases (with or without a cluster)
 }
 
 // New makes the handlers on b and svc; status, when set, runs *status
 // commands for the web chat.
 func New(b *bouncer.Bouncer, svc Services, cfg *config.Config, status StatusRunner, log *slog.Logger) *Handlers {
 	s := &Handlers{
-		b: b, acc: svc.Accounts, auth: svc.Auth, langs: svc.Languages, state: svc.Cluster, status: status, log: log,
+		b: b, acc: svc.Accounts, auth: svc.Auth, langs: svc.Languages, msgs: svc.Messages, state: svc.Cluster, status: status, log: log,
 		up: websocket.Upgrader{CheckOrigin: middleware.CheckWebSocketOrigin},
+	}
+	if s.msgs == nil {
+		s.msgs = messages.New(svc.Languages)
 	}
 	s.cfgp.Store(cfg)
 	return s
@@ -148,9 +156,9 @@ func ircPorts(listen []string) []portDTO {
 // --- helpers -------------------------------------------------------------
 
 // decode reads a JSON body into v, answering 400 itself on failure.
-func decode(w http.ResponseWriter, r *http.Request, v any) bool {
+func (s *Handlers) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(v); err != nil {
-		writeErr(w, http.StatusBadRequest, "bad request")
+		s.say(w, r, http.StatusBadRequest, "web.badRequest")
 		return false
 	}
 	return true
@@ -158,25 +166,61 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 
 // fail maps an error to a response: validation problems are the caller's
 // fault (422) and their message is shown; anything else is logged and hidden.
-func (s *Handlers) fail(w http.ResponseWriter, err error) {
+func (s *Handlers) fail(w http.ResponseWriter, r *http.Request, err error) {
 	var ve *accounts.ValidationError
+	p := s.printer(r)
 	switch {
 	case errors.As(err, &ve):
-		writeErr(w, http.StatusUnprocessableEntity, ve.Message)
+		writeErr(w, http.StatusUnprocessableEntity, p.Say(ve))
 	case errors.Is(err, accounts.ErrUsernameTaken), errors.Is(err, accounts.ErrLastAdmin):
-		writeErr(w, http.StatusConflict, err.Error())
+		writeErr(w, http.StatusConflict, p.Say(err))
 	case errors.Is(err, accounts.ErrInvalidCredentials):
-		writeErr(w, http.StatusUnprocessableEntity, "that isn't your current password")
+		s.say(w, r, http.StatusUnprocessableEntity, "web.wrongPassword")
 	case errors.Is(err, store.ErrNotFound):
-		writeErr(w, http.StatusNotFound, "not found")
+		s.say(w, r, http.StatusNotFound, "web.notFound")
 	case errors.Is(err, bouncer.ErrSuspended):
-		writeErr(w, http.StatusForbidden, "this account is suspended")
+		s.say(w, r, http.StatusForbidden, "web.suspended")
 	case errors.Is(err, bouncer.ErrNotOwner):
-		writeErr(w, http.StatusServiceUnavailable, middleware.Moving)
+		s.say(w, r, http.StatusServiceUnavailable, "web.moving")
 	default:
 		s.log.Error("api", "err", err)
-		writeErr(w, http.StatusInternalServerError, "something went wrong")
+		s.say(w, r, http.StatusInternalServerError, "web.failed")
 	}
+}
+
+// LanguageHeader is the language the web app is showing, sent with each
+// request so errors come back in it.
+const LanguageHeader = "X-Evrd-Language"
+
+// printer is the language to answer r in: the one the web app shows
+// (LanguageHeader), else the account's, else English; with the signed-in
+// user's own pack.
+func (s *Handlers) printer(r *http.Request) *messages.Printer {
+	u := auth.User(r)
+	if l := requestLanguage(r); l != "" {
+		u.Language = l
+	}
+	return s.msgs.For(r.Context(), u)
+}
+
+// requestLanguage is the language the web app is showing: LanguageHeader,
+// or ?lang= on a WebSocket (which sends no headers of its own); "" for
+// none.
+func requestLanguage(r *http.Request) string {
+	l := r.Header.Get(LanguageHeader)
+	if l == "" {
+		l = r.URL.Query().Get("lang")
+	}
+	if !packCode.MatchString(l) {
+		return ""
+	}
+	return l
+}
+
+// say answers with an error: irc.<key> (internal/messages), with
+// name/value pairs of arguments, in r's language.
+func (s *Handlers) say(w http.ResponseWriter, r *http.Request, code int, key string, args ...any) {
+	writeErr(w, code, s.printer(r).T(messages.Area+key, args...))
 }
 
 // decodeOptional reads a JSON body if there is one.

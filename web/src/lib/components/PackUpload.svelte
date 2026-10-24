@@ -9,7 +9,7 @@
   import Select from './Select.svelte'
   import { FORMATS, FormatError, parseFile } from '$lib/langformats.js'
   import { report } from '$lib/langpack.js'
-  import { en, t, i18n, languages } from '$lib/i18n.svelte.js'
+  import { en, english, t, i18n, languages } from '$lib/i18n.svelte.js'
 
   let { id, label, save, code: preset = '', small = true, primary = false } = $props()
 
@@ -29,13 +29,16 @@
   const existing = $derived(list.find((l) => l.code === code.trim()))
   let saving = $state(false)
   let err = $state('')
+  // all: the English a pack is checked against, evrd's IRC texts included
+  // once they've loaded (picked)
+  let all = $state(en)
 
   const pack = $derived.by(() => {
     if (!file || file.error) return null
     if (mode === 'change') return { code: target, name: list.find((l) => l.code === target)?.name || target, messages: file.messages }
     return { code: code.trim(), name: name.trim(), messages: file.messages }
   })
-  const rep = $derived(pack ? report(pack, en) : null)
+  const rep = $derived(pack ? report(pack, all) : null)
   const blocked = $derived(!rep || rep.errors.length > 0 || (mode === 'new' && !!existing))
   const keys = (list) => list.slice(0, LIST).join(', ') + (list.length > LIST ? ', …' : '')
   const formatLabel = (f) => (f === 'xliff' ? 'XLIFF' : FORMATS.find((x) => x.id === f)?.label || f)
@@ -50,7 +53,8 @@
     if (!f) return
     err = ''
     try {
-      const got = parseFile(f.name, await f.text(), en)
+      all = await english()
+      const got = parseFile(f.name, await f.text(), all)
       file = { ...got, filename: f.name }
       // a language on offer: change it; one evrd doesn't have: add it;
       // the file doesn't say: change the one asked for (or the current)

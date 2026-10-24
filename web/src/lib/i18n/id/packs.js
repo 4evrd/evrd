@@ -4,6 +4,7 @@ export default {
   'packs.download': 'Unduh',
   'packs.formatHint': 'Poedit membuka PO; CSV terbuka di aplikasi spreadsheet.',
   'packs.guide': 'Cara menerjemahkan evrd',
+  'packs.ircCoverage': 'Pesan evrd sendiri (IRC, kesalahan, log): {have} dari {total} diterjemahkan',
   'packs.checkTitle': 'Periksa terjemahan',
   'packs.code': 'Kode bahasa',
   'packs.codeHelp': 'Misalnya de, atau pt-BR. Kode bahasa bawaan akan mengganti teksnya.',
