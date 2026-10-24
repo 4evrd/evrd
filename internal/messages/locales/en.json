@@ -624,6 +624,10 @@
     "irc.settingLabel.ldap_user_filter": "LDAP search: filter",
     "irc.settingHelp.ldap_user_filter": "Finds the user, with {username} in it, e.g. (uid={username}) or (sAMAccountName={username}).",
     "irc.settingLabel.ldap_login": "LDAP: {username} is",
-    "irc.settingHelp.ldap_login": "The evrd user name, or the account's SSO subject (when the provider's subject is the directory's user name)."
+    "irc.settingHelp.ldap_login": "The evrd user name, or the account's SSO subject (when the provider's subject is the directory's user name).",
+    "irc.settingLabel.oidc_roles_claim": "Roles claim",
+    "irc.settingHelp.oidc_roles_claim": "The ID-token claim with the user's roles or groups: roles (Logto), groups (authentik), or a dotted path such as realm_access.roles (Keycloak).",
+    "irc.settingLabel.oidc_scopes": "Extra scopes",
+    "irc.settingHelp.oidc_scopes": "Scopes to ask for besides openid, profile and email, space-separated. Empty: roles when an admin role is set (what Logto needs)."
   }
 }

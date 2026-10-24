@@ -37,6 +37,7 @@ are stored in the database and win over the file (see below).
 | `cookie_secure` | `yes` | HTTPS-only session cookie; `no` only for plain-HTTP testing |
 | `oidc_issuer`, `oidc_client_id`, `oidc_client_secret` (`EVRD_OIDC_CLIENT_SECRET`) | — | single sign-on with any OpenID Connect provider |
 | `oidc_label`, `oidc_auto_create`, `oidc_link_existing`, `oidc_admin_role` | `single sign-on`, `yes`, `no`, — | sign-in button text and account rules for SSO |
+| `oidc_roles_claim`, `oidc_scopes` | `roles`, — | where the roles for `oidc_admin_role` are in the ID token (a claim, or a dotted path), and extra scopes to ask for; see [providers](#oidc-providers) |
 | `sso_irc_password` | `off` | let SSO accounts use their provider password in IRC clients: `password_grant`, `ldap` or `logto`, each with settings of its own; see [SSO passwords in IRC clients](#sso-passwords-in-irc-clients) |
 | `max_networks`, `max_clients`, `backlog_lines` | `0`, `0`, `2000` | per-user defaults (0 = unlimited); admins override per user |
 | `connect_rate` | `5` | most new connections per second to one IRC server host, per node |
@@ -130,7 +131,26 @@ oidc_label        IRCforever account        # text on the sign-in button
 oidc_auto_create  yes   # create accounts on first sign-in
 oidc_link_existing no   # link to an existing local account with the same username
 oidc_admin_role   evrd-admin  # optional: provider role that makes an evrd admin
+oidc_roles_claim  roles       # where those roles are in the ID token
+# oidc_scopes     groups      # extra scopes (default: roles when oidc_admin_role is set)
 ```
+
+### OIDC providers
+
+Any OpenID Connect provider works. The redirect URI is always
+`<public_url>/auth/callback`, the client is a confidential web app (code flow
+with PKCE), and the ID token must be signed with an asymmetric key (RS256,
+ES256…).
+
+| Provider | `oidc_issuer` | Scopes and roles | IRC passwords (`sso_irc_password`) |
+|---|---|---|---|
+| Logto | `https://id.example.org/oidc` | roles come with the `roles` scope (asked for when `oidc_admin_role` is set), in `roles` | `logto` |
+| authentik | `https://auth.example.org/application/o/<slug>/` | groups are in `groups` (in the `profile` scope): `oidc_roles_claim groups`. Pick a **signing key** for the provider — without one it signs with HS256, which evrd doesn't accept | `ldap`, through an LDAP outpost (its password grant takes app passwords, not the user's) |
+| Keycloak | `https://kc.example.org/realms/<realm>` | realm roles: `oidc_roles_claim realm_access.roles`, with *Add to ID token* on for the *realm roles* mapper (client scope `roles`); client roles: `resource_access.<client>.roles` | `password_grant` (turn on *Direct access grants*), or `ldap` if it's backed by one |
+| Others | the provider's issuer, as in its `/.well-known/openid-configuration` | `oidc_roles_claim` names the claim; `oidc_scopes` asks for what puts it in the ID token | see [SSO passwords in IRC clients](#sso-passwords-in-irc-clients) |
+
+The roles claim may hold a list or one space-separated string; a missing one
+(or one of another shape) means no roles.
 
 ### SSO passwords in IRC clients
 

@@ -331,6 +331,53 @@ func TestOIDCAdminRoleFromToken(t *testing.T) {
 	}
 }
 
+func TestOIDCRolesClaim(t *testing.T) {
+	p := newFakeIdP(t)
+	// authentik: groups; Keycloak: realm_access.roles
+	m, st, _ := newOIDCManager(t, p, config.Auth{OIDCAutoCreate: true, OIDCAdminRole: "evrd-admin", OIDCRolesClaim: "groups"})
+	signIn(t, m, p, map[string]any{"sub": "a", "username": "alice", "groups": []string{"staff", "evrd-admin"}, "roles": []string{}})
+	k, sk, _ := newOIDCManager(t, p, config.Auth{OIDCAutoCreate: true, OIDCAdminRole: "evrd-admin", OIDCRolesClaim: "realm_access.roles"})
+	signIn(t, k, p, map[string]any{"sub": "k", "username": "kim", "realm_access": map[string]any{"roles": []string{"evrd-admin"}}})
+	a, _ := st.UserBySubject(t.Context(), "a")
+	kim, _ := sk.UserBySubject(t.Context(), "k")
+	if !a.IsAdmin() || !kim.IsAdmin() {
+		t.Fatalf("groups: %s, realm_access.roles: %s", a.Role, kim.Role)
+	}
+}
+
+func TestRolesIn(t *testing.T) {
+	claims := map[string]any{
+		"roles":         []any{"a", "b", 3},
+		"groups":        "x y",
+		"realm_access":  map[string]any{"roles": []any{"r"}},
+		"not_an_object": "z",
+	}
+	for path, want := range map[string]string{
+		"": "a b", "roles": "a b", "groups": "x y", "realm_access.roles": "r",
+		"not_an_object.roles": "", "missing": "", "realm_access": "",
+	} {
+		if got := strings.Join(RolesIn(claims, path), " "); got != want {
+			t.Errorf("%q: %q, want %q", path, got, want)
+		}
+	}
+}
+
+func TestScopes(t *testing.T) {
+	for _, c := range []struct {
+		a    config.Auth
+		want string
+	}{
+		{config.Auth{}, "openid profile email"},
+		{config.Auth{OIDCAdminRole: "admin"}, "openid profile email roles"}, // as Logto needs
+		{config.Auth{OIDCAdminRole: "admin", OIDCScopes: "groups openid"}, "openid profile email groups"},
+		{config.Auth{OIDCScopes: "offline_access"}, "openid profile email offline_access"},
+	} {
+		if got := strings.Join(Scopes(c.a), " "); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.a, got, c.want)
+		}
+	}
+}
+
 func TestOIDCCallbackRefusals(t *testing.T) {
 	p := newFakeIdP(t)
 	other, _ := rsa.GenerateKey(rand.Reader, 2048)
@@ -401,9 +448,6 @@ func TestOIDCCallbackRefusals(t *testing.T) {
 			c["exp"] = time.Now().Add(-time.Hour).Unix()
 			p.issue("code-1", grant{challenge: q.Get("code_challenge"), claims: c})
 			return callback(m, q.Get("state"), "code-1")
-		}, "provider"},
-		{"bad roles claim", config.Auth{OIDCAutoCreate: true}, func(m *Manager, _ store.Store) *httptest.ResponseRecorder {
-			return signIn(t, m, p, map[string]any{"sub": "s1", "username": "alice", "roles": "not-a-list"})
 		}, "provider"},
 		{"no account", config.Auth{}, func(m *Manager, _ store.Store) *httptest.ResponseRecorder {
 			return signIn(t, m, p, good)

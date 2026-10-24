@@ -334,6 +334,12 @@ type Auth struct {
 	// OIDCAdminRole, when set, makes users holding that provider role evrd
 	// admins (and demotes them when they lose it), synced at each sign-in.
 	OIDCAdminRole string
+	// OIDCRolesClaim is the ID-token claim the roles are in: "roles"
+	// (Logto), "groups" (authentik), or a dotted path (Keycloak's
+	// "realm_access.roles"). OIDCScopes are extra scopes to ask for,
+	// space-separated; empty asks for "roles" when OIDCAdminRole is set.
+	OIDCRolesClaim string
+	OIDCScopes     string
 	// SSOIRCPassword is how an SSO account's provider password is checked
 	// when an IRC client signs in with it: "off", "password_grant" (OAuth2's
 	// resource-owner password grant at the OIDC provider), "ldap" (binding
@@ -417,6 +423,7 @@ func Default() *Config {
 			CookieSecure:     true,
 			OIDCLabel:        "single sign-on",
 			OIDCAutoCreate:   true,
+			OIDCRolesClaim:   "roles",
 			SSOIRCPassword:   "off",
 			SSOPasswordLogin: "username",
 			LDAPUserFilter:   "(uid={username})",
@@ -649,6 +656,10 @@ func (c *Config) set(key, val string) error {
 		c.Auth.OIDCLinkExisting, err = parseBool(val)
 	case "oidc_admin_role":
 		c.Auth.OIDCAdminRole = val
+	case "oidc_roles_claim":
+		c.Auth.OIDCRolesClaim = val
+	case "oidc_scopes":
+		c.Auth.OIDCScopes = val
 	case "sso_irc_password":
 		c.Auth.SSOIRCPassword, err = oneOf(val, SSOPasswordMethods...)
 	case "sso_password_client_id":

@@ -146,6 +146,12 @@ var Specs = []Spec{
 	{Key: "oidc_admin_role", Group: "Single sign-on", Label: "Admin role", Kind: "string",
 		Help: "A provider role that makes the user an evrd admin. Empty: admins are set in evrd.",
 		get:  func(c *Config) string { return c.Auth.OIDCAdminRole }},
+	{Key: "oidc_roles_claim", Group: "Single sign-on", Label: "Roles claim", Kind: "string",
+		Help: "The ID-token claim with the user's roles or groups: roles (Logto), groups (authentik), or a dotted path such as realm_access.roles (Keycloak).",
+		get:  func(c *Config) string { return c.Auth.OIDCRolesClaim }},
+	{Key: "oidc_scopes", Group: "Single sign-on", Label: "Extra scopes", Kind: "string", Restart: true,
+		Help: "Scopes to ask for besides openid, profile and email, space-separated. Empty: roles when an admin role is set (what Logto needs).",
+		get:  func(c *Config) string { return c.Auth.OIDCScopes }},
 
 	{Key: "sso_irc_password", Group: "SSO passwords in IRC", Label: "Check SSO passwords with", Kind: "choice", Options: SSOPasswordMethods,
 		Help: "Lets SSO accounts sign in from IRC clients with their provider password. password_grant asks the OIDC provider (Keycloak, Okta, Auth0, Entra ID…), ldap binds to your directory as the user, logto asks Logto's Management API. Off: SSO accounts use IRC client passwords, which keep working either way.",
@@ -276,6 +282,10 @@ func (c *Config) setEmpty(key string) {
 		c.Auth.OIDCLabel = ""
 	case "oidc_admin_role":
 		c.Auth.OIDCAdminRole = ""
+	case "oidc_roles_claim":
+		c.Auth.OIDCRolesClaim = ""
+	case "oidc_scopes":
+		c.Auth.OIDCScopes = ""
 	case "sso_password_client_id":
 		c.Auth.SSOPasswordClientID = ""
 	case "sso_password_client_secret":

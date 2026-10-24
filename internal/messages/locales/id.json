@@ -612,6 +612,10 @@
     "irc.settingLabel.ldap_user_filter": "Pencarian LDAP: filter",
     "irc.settingHelp.ldap_user_filter": "Menemukan pengguna, dengan {username} di dalamnya, mis. (uid={username}) atau (sAMAccountName={username}).",
     "irc.settingLabel.ldap_login": "LDAP: {username} adalah",
-    "irc.settingHelp.ldap_login": "Nama pengguna evrd, atau subject SSO akun (jika subject penyedia adalah nama pengguna di direktori)."
+    "irc.settingHelp.ldap_login": "Nama pengguna evrd, atau subject SSO akun (jika subject penyedia adalah nama pengguna di direktori).",
+    "irc.settingLabel.oidc_roles_claim": "Klaim peran",
+    "irc.settingHelp.oidc_roles_claim": "Klaim di ID token yang berisi peran atau grup pengguna: roles (Logto), groups (authentik), atau jalur bertitik seperti realm_access.roles (Keycloak).",
+    "irc.settingLabel.oidc_scopes": "Scope tambahan",
+    "irc.settingHelp.oidc_scopes": "Scope yang diminta selain openid, profile dan email, dipisahkan spasi. Kosong: roles jika peran admin diatur (yang dibutuhkan Logto)."
   }
 }

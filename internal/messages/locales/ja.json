@@ -612,6 +612,10 @@
     "irc.settingLabel.ldap_user_filter": "LDAP 検索: フィルター",
     "irc.settingHelp.ldap_user_filter": "{username} を含む、ユーザーを見つけるフィルター。例: (uid={username}) や (sAMAccountName={username})。",
     "irc.settingLabel.ldap_login": "LDAP: {username} の中身",
-    "irc.settingHelp.ldap_login": "evrd のユーザー名か、アカウントの SSO サブジェクト（プロバイダーのサブジェクトがディレクトリのユーザー名の場合）。"
+    "irc.settingHelp.ldap_login": "evrd のユーザー名か、アカウントの SSO サブジェクト（プロバイダーのサブジェクトがディレクトリのユーザー名の場合）。",
+    "irc.settingLabel.oidc_roles_claim": "ロールのクレーム",
+    "irc.settingHelp.oidc_roles_claim": "ユーザーのロールやグループが入った ID トークンのクレーム: roles（Logto）、groups（authentik）、または realm_access.roles（Keycloak）のようなドット区切りのパス。",
+    "irc.settingLabel.oidc_scopes": "追加のスコープ",
+    "irc.settingHelp.oidc_scopes": "openid、profile、email のほかに要求するスコープ（スペース区切り）。空: 管理者ロールが設定されていれば roles（Logto に必要）。"
   }
 }

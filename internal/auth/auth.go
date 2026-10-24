@@ -151,10 +151,7 @@ func New(ctx context.Context, repo Repository, acc accounts.AccountServiceImpl, 
 		EndSession string `json:"end_session_endpoint"`
 	}
 	_ = p.Claims(&meta)
-	scopes := []string{oidc.ScopeOpenID, "profile", "email"}
-	if cfg.OIDCAdminRole != "" {
-		scopes = append(scopes, "roles")
-	}
+	scopes := Scopes(cfg)
 	m.oidc = p
 	m.ssoPasswords.setProvider(p, cfg) // for sso_irc_password password_grant
 	m.verifier = p.Verifier(&oidc.Config{ClientID: cfg.OIDCClientID})
@@ -403,11 +400,59 @@ func (m *Manager) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 
 // Claims are the ID-token fields evrd reads.
 type Claims struct {
-	Subject           string   `json:"sub"`
-	Email             string   `json:"email"`
-	Username          string   `json:"username"`
-	PreferredUsername string   `json:"preferred_username"`
-	Roles             []string `json:"roles"`
+	Subject           string `json:"sub"`
+	Email             string `json:"email"`
+	Username          string `json:"username"`
+	PreferredUsername string `json:"preferred_username"`
+	// Roles are the provider's roles or groups, from oidc_roles_claim.
+	Roles []string `json:"-"`
+}
+
+// Scopes are what evrd asks the provider for: openid, profile and email,
+// and oidc_scopes — or, when that isn't set, roles if oidc_admin_role is
+// (Logto puts roles in the ID token only when asked for them).
+func Scopes(a config.Auth) []string {
+	out := []string{oidc.ScopeOpenID, "profile", "email"}
+	extra := strings.Fields(a.OIDCScopes)
+	if a.OIDCScopes == "" && a.OIDCAdminRole != "" {
+		extra = []string{"roles"}
+	}
+	for _, s := range extra {
+		if !contains(out, s) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// RolesIn are the roles at path in an ID token's claims: a claim name, or a
+// dotted path into nested objects (Keycloak's realm_access.roles), holding a
+// list of strings or one (space-separated) string.
+func RolesIn(claims map[string]any, path string) []string {
+	if path == "" {
+		path = "roles"
+	}
+	var v any = claims
+	for _, part := range strings.Split(path, ".") {
+		m, ok := v.(map[string]any)
+		if !ok {
+			return nil
+		}
+		v = m[part]
+	}
+	switch v := v.(type) {
+	case string:
+		return strings.Fields(v)
+	case []any:
+		var out []string
+		for _, e := range v {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 // Callback handles GET /auth/callback from the provider.
@@ -449,10 +494,12 @@ func (m *Manager) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var c Claims
-	if err := idt.Claims(&c); err != nil {
+	var all map[string]any
+	if err := idt.Claims(&c); err != nil || idt.Claims(&all) != nil {
 		fail("provider")
 		return
 	}
+	c.Roles = RolesIn(all, m.conf().OIDCRolesClaim)
 	u, code := m.provision(c)
 	if code != "" {
 		fail(code)

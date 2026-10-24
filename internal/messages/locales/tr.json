@@ -606,6 +606,10 @@
     "irc.settingLabel.ldap_user_filter": "LDAP araması: filtre",
     "irc.settingHelp.ldap_user_filter": "Kullanıcıyı bulur, içinde {username} ile, örn. (uid={username}) ya da (sAMAccountName={username}).",
     "irc.settingLabel.ldap_login": "LDAP: {username} şudur",
-    "irc.settingHelp.ldap_login": "evrd kullanıcı adı ya da hesabın SSO subject'i (sağlayıcının subject'i dizindeki kullanıcı adıysa)."
+    "irc.settingHelp.ldap_login": "evrd kullanıcı adı ya da hesabın SSO subject'i (sağlayıcının subject'i dizindeki kullanıcı adıysa).",
+    "irc.settingLabel.oidc_roles_claim": "Roller claim'i",
+    "irc.settingHelp.oidc_roles_claim": "Kullanıcının rollerini ya da gruplarını içeren ID token claim'i: roles (Logto), groups (authentik) ya da realm_access.roles gibi noktalı bir yol (Keycloak).",
+    "irc.settingLabel.oidc_scopes": "Ek kapsamlar",
+    "irc.settingHelp.oidc_scopes": "openid, profile ve email dışında istenecek kapsamlar, boşlukla ayrılmış. Boş: bir yönetici rolü ayarlıysa roles (Logto'nun ihtiyacı)."
   }
 }
