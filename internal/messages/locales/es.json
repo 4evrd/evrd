@@ -563,6 +563,8 @@
     "irc.settingHelp.connect_rate": "Como máximo, conexiones nuevas por segundo a un host de servidor, por nodo, para repartir las oleadas de reconexiones. 0 es sin límite.",
     "irc.settingLabel.prefer_ipv6": "Probar primero IPv6",
     "irc.settingHelp.prefer_ipv6": "Conecta con los servidores IRC por IPv6 cuando lo tengan, y por IPv4 si falla. Desactivado: primero IPv4. Con solo direcciones IPv4 en upstream_bind, IPv4 va primero de todas formas.",
+    "irc.settingLabel.client_ping_timeout": "Tiempo de espera de ping de clientes IRC",
+    "irc.settingHelp.client_ping_timeout": "evrd hace ping a un cliente IRC que lleva 90 segundos sin decir nada y lo desconecta si no responde en este tiempo, para que un móvil sin cobertura no se quede colgado. 0 lo desactiva.",
     "irc.settingLabel.bindhost": "Bind hosts",
     "irc.settingHelp.bindhost": "Direcciones locales (o nombres de host) desde las que los usuarios pueden elegir conectarse. Separadas por espacios.",
     "irc.settingLabel.network_directory": "Origen del directorio",

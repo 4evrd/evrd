@@ -336,7 +336,19 @@ before it came back. The reasons:
 
 A device is its IRC client password, or its client software on a network when
 it signed in without one, so give each device its own client password to tell
-them apart. Admins see the day's total by reason on the admin overview; the
+them apart. That also lets a phone that comes back replace its old connection
+at once (*reconnected*) instead of counting toward your client limit until
+evrd notices the old one is gone.
+
+**How evrd notices a client is gone.** A phone that loses signal doesn't
+close its connection; it goes quiet. evrd pings a client that has said
+nothing for 90 seconds and drops it when it doesn't answer within
+`client_ping_timeout` (60 seconds; *stopped answering*). A client that stops
+taking what evrd sends for 30 seconds is let go too (*stopped reading*), so it
+can't hold up the network for your other clients; it gets what it missed when
+it attaches again. On evrd's own IRC ports the kernel also gives up on a dead
+connection sooner: keepalive probes after 30 seconds of silence and, on Linux,
+unacknowledged data after a minute. Admins see the day's total by reason on the admin overview; the
 metrics `evrd.irc.client_disconnects` (by `reason`) and
 `evrd.irc.client_reconnect_gap` (seconds a device was gone) chart it over
 time. Disconnects are kept 30 days.

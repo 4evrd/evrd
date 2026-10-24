@@ -355,7 +355,7 @@ func (se *session) restore(raw []byte) error {
 	se.netsSent, se.marks, se.fromIP = st.NetsSent, st.Marks, st.FromIP
 	att, err := se.srv.b.AttachClient(u.ID, 0,
 		bouncer.ClientInfo{Device: st.Device, Networks: bound, IP: se.clientIP(), Software: st.Software},
-		func() { se.conn.Close() })
+		se.kick)
 	if err != nil {
 		return err
 	}

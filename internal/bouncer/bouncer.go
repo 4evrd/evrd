@@ -13,6 +13,7 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -442,7 +443,7 @@ func (b *Bouncer) StopUser(userID int64) {
 		b.dropReads(e.conn.NetworkID())
 	}
 	for _, c := range kick {
-		c.close()
+		c.close(DropRemoved)
 	}
 }
 
@@ -484,11 +485,31 @@ func (b *Bouncer) Status(networkID int64) upstream.Status {
 }
 
 // AttachClient registers an attached IRC client for a user, refusing it when
-// the user already has max clients (0 = unlimited). close is called to kick
-// the client; Release the attachment when it detaches.
-func (b *Bouncer) AttachClient(userID int64, max int, info ClientInfo, close func()) (*Attachment, error) {
+// the user already has max clients (0 = unlimited). close is called, with
+// why, to kick the client; Release the attachment when it detaches.
+//
+// A device that connects again while its last connection is still
+// attached (a phone that lost signal and came back before evrd noticed)
+// replaces it: the old one is closed as DropReplaced and doesn't count
+// toward max. A device is its client password (ClientInfo.Device) on the
+// same network; clients without one can't be told apart.
+func (b *Bouncer) AttachClient(userID int64, max int, info ClientInfo, close func(reason string)) (*Attachment, error) {
 	b.mu.Lock()
 	set := b.clients[userID]
+	var ghosts []*client
+	for c := range set {
+		if info.Device != "" && c.info.Device == info.Device && slices.Equal(c.info.Networks, info.Networks) {
+			ghosts = append(ghosts, c)
+			delete(set, c)
+		}
+	}
+	if len(ghosts) > 0 {
+		defer func() {
+			for _, c := range ghosts {
+				c.close(DropReplaced)
+			}
+		}()
+	}
 	if max > 0 && len(set) >= max {
 		b.mu.Unlock()
 		return nil, ErrTooManyClients
@@ -508,7 +529,7 @@ func (b *Bouncer) AttachClient(userID int64, max int, info ClientInfo, close fun
 
 // TrackStream registers an open web chat socket, so StopUser can close it
 // and it counts as attached. Release it when the socket closes.
-func (b *Bouncer) TrackStream(userID int64, info ClientInfo, close func()) *Attachment {
+func (b *Bouncer) TrackStream(userID int64, info ClientInfo, close func(reason string)) *Attachment {
 	b.mu.Lock()
 	if b.streams[userID] == nil {
 		b.streams[userID] = map[*client]struct{}{}

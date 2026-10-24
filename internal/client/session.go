@@ -82,7 +82,11 @@ type session struct {
 	// to be noted winning (drops.go).
 	dropMu  sync.Mutex
 	dropped string
-	fromIP  string // the client's address when another node forwarded it
+	// lastRead is when the client last sent a line (unix nanoseconds), and
+	// pinged when evrd asked it whether it's still there (liveness.go).
+	lastRead atomic.Int64
+	pinged   time.Time
+	fromIP   string // the client's address when another node forwarded it
 	// locked is set while the client waits for its second factor (mfa.go):
 	// signed in, on no network, only *status answering.
 	locked *lockedSignIn
@@ -420,7 +424,7 @@ func (se *session) attach() bool {
 
 	att, err := se.srv.b.AttachClient(u.ID, se.srv.acc.LimitsFor(u).MaxClients,
 		bouncer.ClientInfo{Device: device, Networks: bound, IP: se.clientIP()},
-		func() { se.drop(bouncer.DropRemoved); se.conn.Close() })
+		se.kick)
 	if errors.Is(err, bouncer.ErrTooManyClients) {
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("too_many_clients"))
 		now := time.Now()
@@ -716,6 +720,7 @@ func (se *session) jump(n store.Network) error {
 // back to the upstream, until either side closes. Everything runs on this
 // goroutine; the reader only parses lines and hands them over.
 func (se *session) bridge(ctx context.Context) {
+	se.lastRead.Store(time.Now().UnixNano())
 	in := make(chan irc.Message, 16)
 	done := make(chan struct{})
 	defer close(done)
@@ -727,6 +732,7 @@ func (se *session) bridge(ctx context.Context) {
 				se.drop(readDrop(err))
 				return
 			}
+			se.lastRead.Store(time.Now().UnixNano())
 			select {
 			case in <- irc.Parse(line):
 			case <-done:
@@ -769,6 +775,7 @@ func (se *session) bridge(ctx context.Context) {
 				se.send(se.formatAs(m, false))
 			}
 		case <-follow.C:
+			se.checkAlive()
 			if se.locked != nil {
 				se.checkLink() // allowed on the website yet?
 				continue
@@ -924,6 +931,10 @@ func (se *session) dispatch(m irc.Message) {
 		se.markRead(m.Params)
 	case "PING":
 		se.send(fmt.Sprintf(":%s PONG %s :%s", serverName, serverName, lastParam(m)))
+	case "PONG":
+		if lastParam(m) != pingToken {
+			se.passOn(m) // as before: the network's business
+		}
 	case "QUIT":
 		se.drop(bouncer.DropQuit)
 		se.conn.Close()
@@ -1162,8 +1173,7 @@ func (se *session) send(line string) {
 		*se.capture = append(*se.capture, line)
 		return
 	}
-	se.w.WriteString(line + "\r\n")
-	se.w.Flush()
+	se.write(line + "\r\n")
 }
 
 func (se *session) numeric(code, trailing string) {

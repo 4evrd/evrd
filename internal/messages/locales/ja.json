@@ -542,6 +542,8 @@
     "irc.settingHelp.connect_rate": "ノードごとに、1 つのサーバーホストへの 1 秒あたりの新規接続の上限。再接続の集中を分散させます。0 は無制限です。",
     "irc.settingLabel.prefer_ipv6": "IPv6 を先に試す",
     "irc.settingHelp.prefer_ipv6": "IRC サーバーに IPv6 があれば IPv6 で接続し、失敗したら IPv4 で接続します。オフ: IPv4 が先。upstream_bind が IPv4 アドレスだけなら、どちらにしても IPv4 が先になります。",
+    "irc.settingLabel.client_ping_timeout": "IRC クライアントの ping タイムアウト",
+    "irc.settingHelp.client_ping_timeout": "evrd は 90 秒間何も送ってこない IRC クライアントに ping を送り、この時間内に応答がなければ切断します。電波を失ったスマートフォンが残り続けないようにするためです。0 で無効になります。",
     "irc.settingLabel.bindhost": "バインドホスト",
     "irc.settingHelp.bindhost": "ユーザーが接続元として選べるローカルアドレス(またはホスト名)。空白区切り。",
     "irc.settingLabel.network_directory": "ディレクトリの取得元",
