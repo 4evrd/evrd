@@ -83,7 +83,9 @@ Command names, settings and their values (`connect`, `set nick …`, `on`,
 `off`) stay as they are in every language, as do `<arguments>` in usage
 lines' commands — translate the words around them. Lines before an IRC
 client has signed in, and IRC protocol replies (numerics, `FAIL`), are in
-English.
+English. IRC clients get `…`, `—`, `·` and curly quotes as `...`, `-` and
+straight quotes (some show them as garbage otherwise); letters in any
+script pass through as written.
 
 ## Plurals
 

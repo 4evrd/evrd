@@ -183,7 +183,7 @@ test('*status answers in your language, your own translation on top', async () =
     await addNetwork(u.api, { name: 'Dev', nick: u.name })
     c = await IRC.connect({ user: u.name, network: 'Dev', password: u.password })
     await c.waitFor(/ 376 /)
-    await statusSays(c, 'nope', 'Unknown command "nope" — try help.')
+    await statusSays(c, 'nope', 'Unknown command "nope" - try help.') // (evrd's "—" goes out in ASCII)
 
     // the language is read again for each command
     await u.api.patch('/api/me', { language: 'it' })
