@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
-import { ADMIN, ADMIN_PASS, BASE, login, confirm, session, freshUser, choose } from './helpers.js'
+import { ADMIN, ADMIN_PASS, BASE, login, confirm, session, freshUser, choose, addNetwork } from './helpers.js'
+import { IRC } from './irc.js'
 
 // Language packs (docs/translations.md): an admin's for everyone, a user's
 // own on top. Uploaded files go in through the hidden file inputs.
@@ -154,7 +155,52 @@ test('anyone can download a language to edit, in any format', async ({ page }) =
     const pack = JSON.parse(await (await import('node:fs/promises')).readFile(await dl.path(), 'utf8'))
     expect(pack.code).toBe('it')
     expect(pack.messages['account.heading']).toBe('Impostazioni dell’account')
+    // evrd's IRC messages are in the same file
+    expect(pack.messages['irc.notOn']).toBe('Non sei su {channel}.')
   } finally {
     await u.cleanup()
   }
+})
+
+// statusSays sends a *status command and waits for a reply containing text.
+function statusSays(c, cmd, text) {
+  const esc = text.replace(/[#.*+?^${}()|[\]\\]/g, '\\$&')
+  const reply = c.next(new RegExp(`^:\\*status!\\S+ PRIVMSG \\S+ :.*${esc}`))
+  c.send(`PRIVMSG *status :${cmd}`)
+  return reply
+}
+
+test('*status answers in your language, your own translation on top', async () => {
+  const u = await freshUser('ircit')
+  let c
+  try {
+    await addNetwork(u.api, { name: 'Dev', nick: u.name })
+    c = await IRC.connect({ user: u.name, network: 'Dev', password: u.password })
+    await c.waitFor(/ 376 /)
+    await statusSays(c, 'nope', 'Unknown command "nope" — try help.')
+
+    // the language is read again for each command
+    await u.api.patch('/api/me', { language: 'it' })
+    await statusSays(c, 'nope', 'Comando sconosciuto "nope": prova help.')
+    await statusSays(c, 'help', 'Comandi di evrd')
+    await statusSays(c, 'detach #nope', 'Non sei su #nope.')
+
+    // your own translation of one IRC message wins; the rest stays Italian
+    await u.api.call('PUT', '/api/me/language-pack', { code: 'it', name: 'Italiano', messages: { 'irc.notOn': 'Qui non ci sei: {channel}' } })
+    await statusSays(c, 'detach #nope', 'Qui non ci sei: #nope')
+    await statusSays(c, 'nope', 'Comando sconosciuto')
+  } finally {
+    c?.close()
+    await u.cleanup()
+  }
+})
+
+test('the languages list says how many IRC messages each language has', async ({ page }) => {
+  const { total, languages } = await (await fetch(BASE + '/api/irc-messages')).json()
+  expect(total).toBeGreaterThan(100)
+  expect(languages.it).toBe(total)
+  await login(page, ADMIN, ADMIN_PASS)
+  await page.goto('/admin/settings')
+  await expect(page.getByTestId('lang-irc-it')).toHaveText(`IRC messages (*status): ${total} of ${total} translated`)
+  await expect(page.getByTestId('lang-irc-ja')).toHaveText(`IRC messages (*status): ${total} of ${total} translated`)
 })
