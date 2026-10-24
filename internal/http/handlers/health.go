@@ -121,7 +121,7 @@ func (s *Handlers) healthOf(ctx context.Context, p *messages.Printer, n store.Ne
 	h := s.healthMetrics(ctx, n, start, step, slots, now)
 	out["metrics"] = h.err == ""
 	if h.err != "" {
-		out["reason"] = h.err
+		out["reason"] = metricsErr(p, h.err)
 		return out, nil
 	}
 	out["series"] = map[string]any{
@@ -209,7 +209,7 @@ type healthMetrics struct {
 func (s *Handlers) healthMetrics(ctx context.Context, n store.Network, start time.Time, step time.Duration, slots int, now time.Time) healthMetrics {
 	mq := s.metrics.Load()
 	if mq == nil {
-		return healthMetrics{err: "metrics aren't configured"}
+		return healthMetrics{err: noMetrics}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()

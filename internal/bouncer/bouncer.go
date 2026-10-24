@@ -250,7 +250,7 @@ func (b *Bouncer) Connect(networkID int64) error { return b.connect(networkID, n
 // (ZNC's Jump).
 func (b *Bouncer) JumpServer(networkID int64, i int) error {
 	if _, ok := b.ConnFor(networkID); !ok {
-		return errors.New("it isn't connected")
+		return messages.Errorf("err.notConnected")
 	}
 	b.logNote(networkID, messages.T("log.jumping"))
 	b.Disconnect(networkID)

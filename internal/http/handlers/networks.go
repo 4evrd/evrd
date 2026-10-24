@@ -738,11 +738,21 @@ func (s *Handlers) Modules(w http.ResponseWriter, r *http.Request) {
 	for _, n := range s.cfg().ModulesOff {
 		off[strings.ToLower(n)] = true
 	}
+	p := s.printer(r)
 	out := []map[string]any{}
 	for _, m := range modules.All() {
+		settings := make([]modules.Setting, len(m.Settings))
+		for i, st := range m.Settings {
+			settings[i] = st
+			settings[i].Label = tOr(p, "moduleSetting."+m.Name+"."+st.Key, st.Label)
+			if st.Help != "" {
+				settings[i].Help = tOr(p, "moduleHelp."+m.Name+"."+st.Key, st.Help)
+			}
+		}
 		out = append(out, map[string]any{
-			"name": m.Name, "title": m.Title, "description": m.Description, "znc": m.ZNC,
-			"settings": m.Settings, "off": off[m.Name],
+			"name": m.Name, "znc": m.ZNC, "settings": settings, "off": off[m.Name],
+			"title":       tOr(p, "moduleTitle."+m.Name, m.Title),
+			"description": tOr(p, "module."+m.Name, m.Description),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

@@ -97,7 +97,7 @@ func (s *Handlers) AdminMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 	mq := s.metrics.Load()
 	if mq == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"available": false, "error": "metrics aren't configured", "range": key})
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "error": metricsErr(s.printer(r), noMetrics), "range": key})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)

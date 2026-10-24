@@ -36,7 +36,7 @@ The web chat understands `/join`, `/part`, `/msg`, `/query`, `/me`, `/notice`,
 Commands are case-insensitive; the web chat takes `/znc …` too. `*status`
 answers in your account's language (*Account → Profile → Language*); the
 command names stay the same in every language. See
-[translations](translations.md#irc-messages).
+[translations](translations.md#evrds-own-messages).
 
 | command | does |
 |---|---|

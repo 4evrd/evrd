@@ -117,8 +117,9 @@ func (e *env) user(name, role string) store.User {
 
 // client is a browser: a cookie jar, same-origin requests.
 type client struct {
-	e *env
-	c *http.Client
+	e    *env
+	c    *http.Client
+	lang string // the web app's language (X-Evrd-Language), if set
 }
 
 func (e *env) anon() *client {
@@ -144,6 +145,9 @@ func (c *client) do(method, path string, body any) (int, map[string]any) {
 	}
 	req, _ := http.NewRequest(method, c.e.srv.URL+path, r)
 	req.Header.Set("Content-Type", "application/json")
+	if c.lang != "" {
+		req.Header.Set("X-Evrd-Language", c.lang)
+	}
 	res, err := c.c.Do(req)
 	if err != nil {
 		c.e.t.Fatal(err)

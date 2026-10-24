@@ -228,7 +228,7 @@ func (s *Handlers) overviewOf(ctx context.Context, p *messages.Printer, u store.
 		"health":   health,
 		"limits":   lim,
 		"traffic": map[string]any{
-			"available": traffic.available, "error": traffic.err,
+			"available": traffic.available, "error": metricsErr(p, traffic.err),
 			"start": traffic.start, "step": 3600, "series": traffic.series, "total24h": int64(math.Round(total)),
 		},
 	}, nil
@@ -290,7 +290,7 @@ func (s *Handlers) userTraffic(ctx context.Context, userID int64, nets []store.N
 	out := userTraffic{perNet: map[int64]float64{}, series: []map[string]any{}}
 	mq := s.metrics.Load()
 	if mq == nil {
-		out.err = "metrics aren't configured"
+		out.err = noMetrics
 		return out
 	}
 	// The rest of the page doesn't wait on a slow metrics store.

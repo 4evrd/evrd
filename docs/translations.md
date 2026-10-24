@@ -1,8 +1,9 @@
 # Translating evrd
 
 evrd comes in English, German, Indonesian, Italian, Japanese, Spanish and
-Turkish: the web app, and what evrd says to IRC clients (see [IRC
-messages](#irc-messages)). Anyone can add a language or change some of the
+Turkish: the web app, and what evrd itself says — to IRC clients, and in
+errors, connection logs and events on the website (see [evrd's own
+messages](#evrds-own-messages)). Anyone can add a language or change some of the
 text, without touching the code:
 
 - **Admins**, in *Admin → Settings → Languages*, upload a translation for
@@ -64,25 +65,44 @@ a translation whose placeholders differ from English isn't accepted.
 Text is always shown as plain text: HTML in a translation shows as written,
 it isn't interpreted.
 
-## IRC messages
+## evrd's own messages
 
-What evrd says to IRC clients — `*status`'s replies and its `help` — is in
-the same file, as the keys starting with `irc.` (`irc.notOn`,
-`irc.help.connect`…). The template and *Download* include them; a file can
-have only those, only the web app's, or both. Admin → Settings → Languages
-and your own translation say how many of them a language has.
+What evrd itself says is in the same file, as the keys starting with
+`irc.`. The template and *Download* include them; a file can have only
+those, only the web app's, or both. Admin → Settings → Languages and your
+own translation say how many of them a language has. They are:
 
-*status answers in the language picked under *Account → Profile →
+| Keys | What |
+|---|---|
+| `irc.help.*`, `irc.usage.*` and most others | `*status`'s replies, its `help`, the welcome lines and PART reasons IRC clients see |
+| `irc.err.*`, `irc.web.*` | errors: a network's settings, passwords, bind hosts, modules, language packs… — over IRC and on the website |
+| `irc.log.*`, `irc.reason.*`, `irc.rest.*`, `irc.hint.*`, `irc.module.log.*` | a network's connection log, why a connection failed or dropped (timed out, refused, no such host, unreachable, reset, TLS and certificate trouble…), and what to do about it |
+| `irc.event.*`, `irc.admin.*`, `irc.ago.*` | the activity feed and notifications, and the admin overview's “needs attention” |
+| `irc.module*`, `irc.setting*` | the modules' names, descriptions and settings, and Admin → Settings' groups, labels and help |
+
+Over IRC, evrd answers in the language picked under *Account → Profile →
 Language*, with the same order as above: your own translation (for that
 language), the admin's, the built-in one, English. With *the browser's
 language* picked, evrd can't tell which that is, so IRC replies are in
-English. A change shows on the next command; a translation an admin
-uploads reaches every node of a cluster within 30 seconds.
+English. On the website these messages follow the language the app shows,
+browser's language included. A change shows on the next command or page
+load; a translation an admin uploads reaches every node of a cluster
+within 30 seconds.
+
+The connection log and the activity feed keep what evrd said, not the
+sentence, so they read in each viewer's language — an admin helping a user
+sees the user's log in their own. Events from before evrd kept them that
+way stay in English. What IRC servers and services say (their `ERROR`s and
+notices, a refused login's reason) is shown as they sent it; only evrd's
+words around it are translated, and a failure evrd doesn't recognise is
+passed on as it is.
 
 Command names, settings and their values (`connect`, `set nick …`, `on`,
-`off`) stay as they are in every language, as do `<arguments>` in usage
-lines' commands — translate the words around them. Lines before an IRC
-client has signed in, and IRC protocol replies (numerics, `FAIL`), are in
+`off`, `auth sasl`) stay as they are in every language, as do
+`<arguments>` in usage lines' commands — translate the words around them.
+Lines before an IRC client has signed in, IRC protocol replies (numerics,
+`FAIL`, `BOUNCER` errors), what evrd logs for admins on the server, and the
+errors of evrd.conf settings and of the network directory's file are in
 English. IRC clients get `…`, `—`, `·` and curly quotes as `...`, `-` and
 straight quotes (some show them as garbage otherwise); letters in any
 script pass through as written.
@@ -134,11 +154,16 @@ The upload is JSON in evrd's format (above):
 - `PUT /api/admin/languages/{code}`, `DELETE …`: admins only.
 - `GET`, `PUT`, `DELETE /api/me/language-pack`: your own (`GET` is a 404
   when there's none).
-- `GET /api/irc-messages/{code}`: a built-in language's IRC messages
-  (`irc.*`; `en` has every key). Public.
-- `GET /api/irc-messages`: how many IRC messages English has (`total`), and
-  how many each language has, built in or from the admin's translation
+- `GET /api/irc-messages/{code}`: a built-in language's own messages of
+  evrd's (`irc.*`; `en` has every key). Public.
+- `GET /api/irc-messages`: how many of them English has (`total`), and how
+  many each language has, built in or from the admin's translation
   (`languages`). Public.
+
+Every request may say which language to answer in with an
+`X-Evrd-Language: it` header (`?lang=it` on the chat's WebSocket): the web
+app sends the one it shows. Without it, errors, logs and events are in the
+account's language.
 
 Invalid files get a `422` with the reason. A user's own translation is
 deleted with their account.

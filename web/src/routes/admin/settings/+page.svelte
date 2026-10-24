@@ -38,7 +38,7 @@
     const out = []
     for (const f of data?.fields || []) {
       let g = out.find((x) => x.name === f.group)
-      if (!g) out.push((g = { name: f.group, fields: [] }))
+      if (!g) out.push((g = { name: f.group, label: f.groupLabel || f.group, fields: [] }))
       g.fields.push(f)
     }
     return out
@@ -161,7 +161,7 @@
     <div class="sections">
       {#each groups as g}
         <section class="card" aria-labelledby="g-{g.name}">
-          <h2 id="g-{g.name}" class="group-h">{g.name}</h2>
+          <h2 id="g-{g.name}" class="group-h">{g.label}</h2>
           {#if g.name === 'Network directory' && data.directory}
             {@const d = data.directory}
             <div class="rows dir-status" data-testid="directory-status">

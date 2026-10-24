@@ -49,6 +49,19 @@ func (s *Handlers) AdminUserReconnects(w http.ResponseWriter, r *http.Request) {
 // reconnectsOf is a user's last day of link trouble, per network: links
 // dropped, connection attempts that failed, minutes offline, the hours it
 // happened in, and the live state with the last error; then the events.
+// noMetrics is the metrics error when there's no metrics store
+// (metrics_url): said in the reader's language (metricsErr).
+const noMetrics = "metrics aren't configured"
+
+// metricsErr is err to show: noMetrics in p's language; the store's own
+// errors as they are.
+func metricsErr(p *messages.Printer, err string) string {
+	if err == noMetrics {
+		return p.T(messages.Area + "web.noMetrics")
+	}
+	return err
+}
+
 func (s *Handlers) reconnectsOf(ctx context.Context, p *messages.Printer, userID int64) (map[string]any, error) {
 	nets, err := s.acc.ListNetworks(ctx, userID)
 	if err != nil {
@@ -102,7 +115,7 @@ func (s *Handlers) reconnectsOf(ctx context.Context, p *messages.Printer, userID
 		}
 	}
 	return map[string]any{
-		"available": m.available, "error": m.err,
+		"available": m.available, "error": metricsErr(p, m.err),
 		"start": start.Unix(), "step": 3600,
 		"networks": netsOut,
 		"events":   eventsDTO(p, link),
@@ -123,7 +136,7 @@ func (s *Handlers) reconnectMetrics(ctx context.Context, userID int64, end time.
 	out := reconnectMetrics{counts: map[string]map[string]int64{}, offline: map[string]int64{}, hourly: map[string][]float64{}}
 	mq := s.metrics.Load()
 	if mq == nil {
-		out.err = "metrics aren't configured"
+		out.err = noMetrics
 		return out
 	}
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)

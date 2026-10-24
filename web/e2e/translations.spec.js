@@ -201,12 +201,31 @@ test('*status answers in your language, your own translation on top', async () =
   }
 })
 
+test("evrd's own words on the website are in your language: errors and the connection log", async () => {
+  const u = await freshUser('webit')
+  try {
+    await u.api.patch('/api/me', { language: 'it' })
+    // a validation error from evrd
+    await expect(u.api.post('/api/networks', { name: 'a b', host: 'irc.example.org', nick: u.name }))
+      .rejects.toThrow('una rete ha bisogno di un nome senza spazi, / o :')
+    // the connection log: evrd's entries in Italian, the server's as sent
+    const net = await addNetwork(u.api, { name: 'Dev', nick: u.name })
+    await expect.poll(async () => JSON.stringify(await u.api.get(`/api/networks/${net.id}/log`)), { timeout: 20000 })
+      .toMatch(/Entrato come /)
+    const log = JSON.stringify(await u.api.get(`/api/networks/${net.id}/log`))
+    expect(log).not.toContain('Signed in as')
+    expect(log).toContain('"from":"server"')
+  } finally {
+    await u.cleanup()
+  }
+})
+
 test('the languages list says how many IRC messages each language has', async ({ page }) => {
   const { total, languages } = await (await fetch(BASE + '/api/irc-messages')).json()
   expect(total).toBeGreaterThan(100)
   expect(languages.it).toBe(total)
   await login(page, ADMIN, ADMIN_PASS)
   await page.goto('/admin/settings')
-  await expect(page.getByTestId('lang-irc-it')).toHaveText(`IRC messages (*status): ${total} of ${total} translated`)
-  await expect(page.getByTestId('lang-irc-ja')).toHaveText(`IRC messages (*status): ${total} of ${total} translated`)
+  await expect(page.getByTestId('lang-irc-it')).toHaveText(`evrd's own messages (IRC, errors, logs): ${total} of ${total} translated`)
+  await expect(page.getByTestId('lang-irc-ja')).toHaveText(`evrd's own messages (IRC, errors, logs): ${total} of ${total} translated`)
 })

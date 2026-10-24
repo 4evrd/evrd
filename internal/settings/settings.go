@@ -239,8 +239,10 @@ type Field struct {
 	FileValue string `json:"fileValue"`      // what the file (or default) says
 	InFile    bool   `json:"inFile"`         // the file sets it (else FileValue is the default)
 	Pending   bool   `json:"restartPending"` // changed, waiting for a restart
-	UpdatedBy string `json:"updatedBy,omitempty"`
-	UpdatedAt int64  `json:"updatedAt,omitempty"`
+	// GroupLabel is Group to show (Group stays as it is, for code).
+	GroupLabel string `json:"groupLabel,omitempty"`
+	UpdatedBy  string `json:"updatedBy,omitempty"`
+	UpdatedAt  int64  `json:"updatedAt,omitempty"`
 }
 
 // Fields lists every editable setting with its value and where it comes from.

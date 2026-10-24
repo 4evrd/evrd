@@ -4,7 +4,7 @@ export default {
   'packs.download': 'Herunterladen',
   'packs.formatHint': 'Poedit öffnet PO; CSV öffnet sich in einer Tabellenkalkulation.',
   'packs.guide': 'So übersetzt du evrd',
-  'packs.ircCoverage': 'IRC-Nachrichten (*status): {have} von {total} übersetzt',
+  'packs.ircCoverage': 'Eigene Meldungen von evrd (IRC, Fehler, Protokolle): {have} von {total} übersetzt',
   'packs.checkTitle': 'Übersetzung prüfen',
   'packs.code': 'Sprachcode',
   'packs.codeHelp': 'Etwa de oder pt-BR. Der Code einer eingebauten Sprache ändert deren Texte.',
