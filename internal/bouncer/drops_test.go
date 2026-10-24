@@ -38,7 +38,7 @@ func TestClientDrops(t *testing.T) {
 		p.Since = at(d.on)
 		b.RecordDisconnect(alice.ID, p, "libera", d.reason, at(d.off))
 	}
-	att, err := b.AttachClient(alice.ID, 0, ClientInfo{Device: "Pixel", Software: "Goguma", Networks: []string{"libera"}}, func() {})
+	att, err := b.AttachClient(alice.ID, 0, ClientInfo{Device: "Pixel", Software: "Goguma", Networks: []string{"libera"}}, func(string) {})
 	if err != nil {
 		t.Fatal(err)
 	}

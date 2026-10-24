@@ -401,8 +401,8 @@ func TestClientsAndClientLimit(t *testing.T) {
 
 	closed := map[string]bool{}
 	var mu sync.Mutex
-	closer := func(name string) func() {
-		return func() { mu.Lock(); closed[name] = true; mu.Unlock() }
+	closer := func(name string) func(string) {
+		return func(string) { mu.Lock(); closed[name] = true; mu.Unlock() }
 	}
 	a1, err := r.b.AttachClient(alice.ID, 2, ClientInfo{Device: "laptop", IP: "192.0.2.1"}, closer("a1"))
 	if err != nil {
@@ -482,7 +482,7 @@ func TestAutoAway(t *testing.T) {
 	// nobody attached: away once registered
 	eventually(t, "away", func() bool { return r.irc.Has("AWAY :" + AwayMessage) })
 
-	att, err := r.b.AttachClient(alice.ID, 0, ClientInfo{}, func() {})
+	att, err := r.b.AttachClient(alice.ID, 0, ClientInfo{}, func(string) {})
 	if err != nil {
 		t.Fatal(err)
 	}

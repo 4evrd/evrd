@@ -65,6 +65,7 @@ cluster_secret cs
 cluster_lease 30s
 connect_rate 2.5
 prefer_ipv6 no
+client_ping_timeout 45s
 bindhost 192.0.2.1 192.0.2.2
 bindhost host.example
 settings_write_conf yes
@@ -133,6 +134,7 @@ backlog_lines 600
 	check("cluster_lease", c.Cluster.LeaseTTL, 30*time.Second)
 	check("connect_rate", c.Outbound.ConnectRate, 2.5)
 	check("prefer_ipv6", c.Outbound.PreferIPv6, false)
+	check("client_ping_timeout", c.ClientPingTimeout, 45*time.Second)
 	check("bindhost", strings.Join(c.Outbound.BindHosts, " "), "192.0.2.1 192.0.2.2 host.example")
 	check("settings_write_conf", c.WriteConf, true)
 	check("secret_key", c.Secrets.Key, "k1")
@@ -166,7 +168,7 @@ func TestLoadFileDefaultsAndOldNames(t *testing.T) {
 	if c.History != "pebble:/data/h" {
 		t.Errorf("history_dir: %q", c.History)
 	}
-	if c.DB != "sqlite:evrd.db" || c.Limits.BacklogLines != 2000 || c.Outbound.ConnectRate != 5 || !c.Outbound.PreferIPv6 {
+	if c.DB != "sqlite:evrd.db" || c.Limits.BacklogLines != 2000 || c.Outbound.ConnectRate != 5 || !c.Outbound.PreferIPv6 || c.ClientPingTimeout != time.Minute {
 		t.Errorf("defaults not kept: %q %d %v", c.DB, c.Limits.BacklogLines, c.Outbound.ConnectRate)
 	}
 	if c.Cluster.Enabled() || c.Auth.OIDCEnabled() {
@@ -183,7 +185,7 @@ func TestLoadFileErrors(t *testing.T) {
 	}
 	for _, line := range []string{
 		"nonsense 1", "tls magic", "password_login maybe", "session_ttl soon", "cookie_secure 2",
-		"oidc_auto_create x", "oidc_link_existing x", "cluster_lease x", "connect_rate fast", "prefer_ipv6 maybe",
+		"oidc_auto_create x", "oidc_link_existing x", "cluster_lease x", "connect_rate fast", "prefer_ipv6 maybe", "client_ping_timeout soon",
 		"settings_write_conf x", "upstream_bind not-an-ip", "upstream_prefix6 192.0.2.1",
 		"otel_interval x", "hold_clients x", "max_networks x", "max_clients x", "backlog_lines x",
 	} {

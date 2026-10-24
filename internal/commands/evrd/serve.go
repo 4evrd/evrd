@@ -378,6 +378,7 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 	srv.SetSettings(sm)
 	irc.SetTLSConfig(certMgr.IRCConfig())
 	irc.SetPublicURL(cfg.PublicURL)
+	irc.SetClientPingTimeout(cfg.ClientPingTimeout)
 	irc.SetSTS(cfg.IRCSTS, cfg.IRCHost)
 	srv.SetCerts(certMgr)
 	// The network directory users pick from when adding a network: fetched
@@ -418,6 +419,7 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		am.SetConfig(live.Auth)
 		irc.SetMFAPolicy(mfa.PolicyOf(live.Auth))
 		irc.SetLinkSignInOn(live.LinkSignIn())
+		irc.SetClientPingTimeout(live.ClientPingTimeout)
 		ob.SetRate(live.Outbound.ConnectRate)
 		ob.SetIPv4First(!live.Outbound.PreferIPv6)
 		b.SetModulesOff(live.ModulesOff)

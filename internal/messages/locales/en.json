@@ -547,6 +547,8 @@
     "irc.settingGroup.connections": "Connections",
     "irc.settingLabel.prefer_ipv6": "Try IPv6 first",
     "irc.settingHelp.prefer_ipv6": "Connect to IRC servers over IPv6 when they have it, and over IPv4 if that fails. Off: IPv4 first. With only IPv4 upstream_bind addresses, IPv4 goes first either way.",
+    "irc.settingLabel.client_ping_timeout": "IRC client ping timeout",
+    "irc.settingHelp.client_ping_timeout": "evrd pings an IRC client that has said nothing for 90 seconds and drops it when it doesn't answer within this long, so a phone that lost signal doesn't linger. 0 turns it off.",
     "irc.settingLabel.bindhost": "Bind hosts",
     "irc.settingLabel.network_directory": "Directory source",
     "irc.settingHelp.network_directory": "Where the list of IRC networks users pick from when adding one comes from: an http(s) URL (checked twice a day) or a file. Empty turns the list off.",

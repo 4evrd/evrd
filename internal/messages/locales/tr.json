@@ -536,6 +536,8 @@
     "irc.settingHelp.connect_rate": "Düğüm başına, bir sunucu host'una saniyede en fazla yeni bağlantı; böylece yeniden bağlanma dalgaları yayılır. 0 sınırsızdır.",
     "irc.settingLabel.prefer_ipv6": "Önce IPv6'yı dene",
     "irc.settingHelp.prefer_ipv6": "IRC sunucularına varsa IPv6 üzerinden, başarısız olursa IPv4 üzerinden bağlan. Kapalı: önce IPv4. upstream_bind'de yalnızca IPv4 adresleri varsa IPv4 her durumda önce gelir.",
+    "irc.settingLabel.client_ping_timeout": "IRC istemcisi ping zaman aşımı",
+    "irc.settingHelp.client_ping_timeout": "evrd 90 saniyedir bir şey göndermeyen bir IRC istemcisine ping atar ve bu süre içinde yanıt vermezse bağlantısını keser; böylece sinyali kesilen bir telefon asılı kalmaz. 0 kapatır.",
     "irc.settingLabel.bindhost": "Bind host'lar",
     "irc.settingHelp.bindhost": "Kullanıcıların bağlanmak için seçebileceği yerel adresler (ya da host adları). Boşlukla ayrılmış.",
     "irc.settingLabel.network_directory": "Dizin kaynağı",

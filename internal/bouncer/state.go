@@ -39,7 +39,7 @@ type ClientInfo struct {
 }
 
 type client struct {
-	close func()
+	close func(reason string) // reason: a Drop* constant
 	info  ClientInfo
 }
 

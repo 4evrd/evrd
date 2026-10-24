@@ -542,6 +542,8 @@
     "irc.settingHelp.connect_rate": "Koneksi baru terbanyak per detik ke satu host server, per node, agar gelombang sambung ulang tersebar. 0 berarti tanpa batas.",
     "irc.settingLabel.prefer_ipv6": "Coba IPv6 dulu",
     "irc.settingHelp.prefer_ipv6": "Sambung ke server IRC lewat IPv6 kalau mereka punya, dan lewat IPv4 kalau gagal. Mati: IPv4 dulu. Kalau upstream_bind hanya berisi alamat IPv4, IPv4 tetap didahulukan.",
+    "irc.settingLabel.client_ping_timeout": "Batas waktu ping klien IRC",
+    "irc.settingHelp.client_ping_timeout": "evrd melakukan ping ke klien IRC yang diam selama 90 detik dan memutusnya jika tidak menjawab dalam waktu ini, agar ponsel yang kehilangan sinyal tidak menggantung. 0 mematikannya.",
     "irc.settingLabel.bindhost": "Bind host",
     "irc.settingHelp.bindhost": "Alamat lokal (atau nama host) yang bisa dipilih pengguna untuk tersambung. Dipisah spasi.",
     "irc.settingLabel.network_directory": "Sumber direktori",

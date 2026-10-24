@@ -18,6 +18,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/4evrd/evrd/internal/accounts"
@@ -53,6 +54,11 @@ type Server struct {
 	// lsWait is how long a CAP LS answer waits for the network (lsWait;
 	// tests shorten it).
 	lsWait time.Duration
+	// pingTimeout is client_ping_timeout + 1 (0: the default); pingQuiet
+	// and writeStall shorten liveness.go's waits in tests.
+	pingTimeout atomic.Int64
+	pingQuiet   time.Duration
+	writeStall  time.Duration
 
 	sts stsState
 
@@ -164,6 +170,7 @@ func (s *Server) listen(ctx context.Context, url string) {
 		if err != nil {
 			return
 		}
+		tuneClientConn(conn)
 		go newSession(s, conn).serve(ctx)
 	}
 }

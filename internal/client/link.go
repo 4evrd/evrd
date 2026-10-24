@@ -166,7 +166,7 @@ func (se *session) finishLink(userID int64) {
 		bound = []string{chosen.Name}
 	}
 	att, err := se.srv.b.AttachClient(u.ID, se.srv.acc.LimitsFor(u).MaxClients,
-		bouncer.ClientInfo{Device: linkDevice, Networks: bound, IP: se.clientIP()}, func() { se.conn.Close() })
+		bouncer.ClientInfo{Device: linkDevice, Networks: bound, IP: se.clientIP()}, se.kick)
 	if err != nil {
 		fail(fmt.Sprintf("Too many clients attached (limit %d) — detach one first", se.srv.acc.LimitsFor(u).MaxClients))
 		return

@@ -473,7 +473,7 @@ func (s *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
 	// another node); the web chat reconnects and lands on the new owner.
 	att := s.b.TrackStream(auth.User(r).ID, bouncer.ClientInfo{
 		Software: browserName(r.UserAgent()), Networks: []string{n.Name}, IP: s.clientAddr(r),
-	}, func() { ws.Close() })
+	}, func(string) { ws.Close() })
 	defer att.Release()
 
 	sub, unsub := conn.Subscribe()

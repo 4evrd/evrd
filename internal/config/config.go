@@ -55,6 +55,9 @@ type Config struct {
 	// KeepClientsOut (hold_clients no) keeps IRC clients out of the holder:
 	// evrd listens itself, and its restarts disconnect them.
 	KeepClientsOut bool
+	// ClientPingTimeout is how long evrd waits for an IRC client it pinged
+	// (after 90 quiet seconds) to answer before dropping it; 0 never pings.
+	ClientPingTimeout time.Duration
 	// ProvisionToken, when set, turns on the provisioning API
 	// (/api/provision/…) for tools that create accounts and their networks,
 	// like a migration from another bouncer. Callers send it as a bearer token.
@@ -447,9 +450,10 @@ func Default() *Config {
 			IRCLinkSignIn:    true,
 			IRCRememberDays:  30,
 		},
-		Limits:   Limits{MaxNetworks: 0, MaxClients: 0, BacklogLines: 2000},
-		Outbound: Outbound{ConnectRate: 5, PreferIPv6: true},
-		Metrics:  Metrics{Interval: 15 * time.Second},
+		Limits:            Limits{MaxNetworks: 0, MaxClients: 0, BacklogLines: 2000},
+		Outbound:          Outbound{ConnectRate: 5, PreferIPv6: true},
+		ClientPingTimeout: 60 * time.Second,
+		Metrics:           Metrics{Interval: 15 * time.Second},
 
 		NetworkDirectory: DefaultNetworkDirectory,
 		fromFile:         map[string]bool{},
@@ -653,6 +657,8 @@ func (c *Config) set(key, val string) error {
 		c.Auth.PasswordLogin, err = parseBool(val)
 	case "session_ttl":
 		c.Auth.SessionTTL, err = time.ParseDuration(val)
+	case "client_ping_timeout":
+		c.ClientPingTimeout, err = time.ParseDuration(val)
 	case "trusted_proxies": // repeatable, or several per line
 		var ps []netip.Prefix
 		if ps, err = realip.ParsePrefixes(strings.Fields(val)); err == nil {
