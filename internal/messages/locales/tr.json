@@ -451,6 +451,7 @@
     "irc.web.lockout": "o liste şu anda kullandığın adresi ({address}) içermiyor — kendini dışarıda bırakırsın",
     "irc.web.email": "bu bir e-posta adresine benzemiyor",
     "irc.web.nick": "nick'ler boşluk ya da , * ? ! @ # : içeremez ve en fazla 30 karakter olabilir",
+    "irc.web.autoAwayDelay": "Otomatik uzakta gecikmesi 0 ile {max} dakika arasındadır.",
     "irc.web.language": "web uygulamasında bu dil yok",
     "irc.web.ssoPassword": "parolanı oturum açma sağlayıcın yönetiyor",
     "irc.web.confirmDelete": "onaylamak için kullanıcı adını yaz",

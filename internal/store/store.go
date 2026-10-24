@@ -59,8 +59,11 @@ type User struct {
 	// DenySetBindHost stops the user choosing a bind host (admins set it).
 	DenySetBindHost bool `gorm:"not null;default:false"`
 	// AutoAway marks the user away on every network while no client (IRC or
-	// web) is attached.
-	AutoAway bool `gorm:"not null;default:false"`
+	// web) is attached, AutoAwayDelay seconds after the last one went (0:
+	// at once; nil: DefaultAutoAwayDelay), so a client that drops and comes
+	// back doesn't flap.
+	AutoAway      bool `gorm:"not null;default:false"`
+	AutoAwayDelay *int
 	// Language is the web app's language (a code from the app's list); ""
 	// follows the browser.
 	Language string `gorm:"not null;default:''"`
@@ -469,4 +472,16 @@ type LegacyMessage struct {
 	Text      string
 	Extra     string
 	Time      time.Time
+}
+
+// DefaultAutoAwayDelay is the auto-away delay of a user who didn't pick one,
+// in seconds.
+const DefaultAutoAwayDelay = 120
+
+// AwayDelay is the user's auto-away delay.
+func (u User) AwayDelay() time.Duration {
+	if u.AutoAwayDelay == nil {
+		return DefaultAutoAwayDelay * time.Second
+	}
+	return time.Duration(*u.AutoAwayDelay) * time.Second
 }

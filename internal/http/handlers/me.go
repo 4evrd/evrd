@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/4evrd/evrd/internal/accounts"
@@ -24,7 +25,7 @@ func (s *Handlers) userDTO(u store.User) map[string]any {
 		"suspended": u.Suspended, "suspendedReason": u.SuspendedReason,
 		"hasPassword": u.PasswordHash != "", "sso": u.OIDCSubject != nil,
 		"defaultNick": u.DefaultNick, "defaultAltNick": u.DefaultAltNick, "defaultRealname": u.DefaultRealname,
-		"autoAway": u.AutoAway, "mustChangePassword": u.MustChangePassword, "language": u.Language,
+		"autoAway": u.AutoAway, "autoAwayDelay": int(u.AwayDelay() / time.Second), "mustChangePassword": u.MustChangePassword, "language": u.Language,
 		"createdAt": u.CreatedAt.Unix(), "lastLoginAt": unix(u.LastLoginAt), "lastSeenAt": unix(u.LastSeenAt),
 		"limits":      s.acc.LimitsFor(u),
 		"usage":       map[string]any{"networks": nets, "clients": s.b.Clients(u.ID), "attached": s.b.Attached(u.ID)},
@@ -68,6 +69,7 @@ func (s *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		DefaultRealname *string            `json:"defaultRealname"`
 		DefaultAltNick  *string            `json:"defaultAltNick"`
 		AutoAway        *bool              `json:"autoAway"`
+		AutoAwayDelay   *int               `json:"autoAwayDelay"`
 		Language        *string            `json:"language"`
 		Settings        *userSettingsInput `json:"settings"`
 	}
@@ -129,6 +131,13 @@ func (s *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	awayChanged := in.AutoAway != nil && *in.AutoAway != u.AutoAway
 	if in.AutoAway != nil {
 		u.AutoAway = *in.AutoAway
+	}
+	if in.AutoAwayDelay != nil {
+		if *in.AutoAwayDelay < 0 || *in.AutoAwayDelay > maxAutoAwayDelay {
+			s.say(w, r, http.StatusUnprocessableEntity, "web.autoAwayDelay", "max", maxAutoAwayDelay/60)
+			return
+		}
+		u.AutoAwayDelay = in.AutoAwayDelay
 	}
 	if err := s.acc.UpdateUser(r.Context(), u); err != nil {
 		s.fail(w, r, err)
@@ -268,3 +277,7 @@ func (s *Handlers) DeleteClientPassword(w http.ResponseWriter, r *http.Request) 
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// maxAutoAwayDelay is the longest auto-away delay a user may pick, in
+// seconds.
+const maxAutoAwayDelay = 60 * 60

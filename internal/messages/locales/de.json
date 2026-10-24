@@ -463,6 +463,7 @@
     "irc.web.lockout": "diese Liste enthält nicht die Adresse, die du gerade nutzt ({address}) – du würdest dich aussperren",
     "irc.web.email": "das sieht nicht nach einer E-Mail-Adresse aus",
     "irc.web.nick": "Nicks dürfen keine Leerzeichen oder , * ? ! @ # : enthalten und höchstens 30 Zeichen haben",
+    "irc.web.autoAwayDelay": "Die Verzögerung für automatisches Abwesend liegt zwischen 0 und {max} Minuten.",
     "irc.web.language": "diese Sprache hat die Web-App nicht",
     "irc.web.ssoPassword": "dein Passwort verwaltet dein Anmeldedienst",
     "irc.web.confirmDelete": "gib zur Bestätigung deinen Benutzernamen ein",
