@@ -59,7 +59,6 @@
     "irc.help.listusers": "Admins: every user.",
     "irc.help.listallusernetworks": "Admins: every user's networks.",
     "irc.help.version": "The evrd version.",
-
     "irc.usage.addnetwork": "Usage: addnetwork <name> <host> [[+]port] [nick] — e.g. addnetwork libera irc.libera.chat +6697 — or addnetwork <id> for a network in the directory",
     "irc.usage.delnetwork": "Usage: delnetwork <network>",
     "irc.usage.show": "Usage: show [network]",
@@ -86,24 +85,45 @@
     "irc.usage.clearbuffer": "Usage: clearbuffer <channel|nick>[,…] (wildcards work: clearbuffer #evrd*)",
     "irc.usage.setbuffer": "Usage: setbuffer <channel|nick|*> [lines|-] — * is this network's default; - goes back to the default",
     "irc.usage.autoclear": "Usage: autoclear <channel|nick>[,…] on|off|- — on plays only what's new since a client was last here; - goes back to your account's setting",
-
-    "irc.count.channels": { "one": "{count} channel", "other": "{count} channels" },
-    "irc.count.networks": { "one": "{count} network", "other": "{count} networks" },
-    "irc.count.nicks": { "one": "{count} nick", "other": "{count} nicks" },
-    "irc.count.clients": { "one": "{count} client", "other": "{count} clients" },
-    "irc.count.users": { "one": "{count} user", "other": "{count} users" },
-    "irc.count.buffers": { "one": "{count} buffer", "other": "{count} buffers" },
-    "irc.count.channelBuffers": { "one": "{count} channel buffer", "other": "{count} channel buffers" },
-    "irc.count.queryBuffers": { "one": "{count} query buffer", "other": "{count} query buffers" },
+    "irc.count.channels": {
+      "one": "{count} channel",
+      "other": "{count} channels"
+    },
+    "irc.count.networks": {
+      "one": "{count} network",
+      "other": "{count} networks"
+    },
+    "irc.count.nicks": {
+      "one": "{count} nick",
+      "other": "{count} nicks"
+    },
+    "irc.count.clients": {
+      "one": "{count} client",
+      "other": "{count} clients"
+    },
+    "irc.count.users": {
+      "one": "{count} user",
+      "other": "{count} users"
+    },
+    "irc.count.buffers": {
+      "one": "{count} buffer",
+      "other": "{count} buffers"
+    },
+    "irc.count.channelBuffers": {
+      "one": "{count} channel buffer",
+      "other": "{count} channel buffers"
+    },
+    "irc.count.queryBuffers": {
+      "one": "{count} query buffer",
+      "other": "{count} query buffers"
+    },
     "irc.count.fingerprints": "{count} trusted fingerprint(s)",
-
     "irc.state.connected": "connected",
     "irc.state.connecting": "connecting",
     "irc.state.reconnecting": "reconnecting",
     "irc.state.disconnected": "disconnected",
     "irc.role.user": "user",
     "irc.role.admin": "admin",
-
     "irc.networksFailed": "Couldn't load your networks: {error}",
     "irc.networkGone": "This network no longer exists.",
     "irc.noSuchNetwork": "No network called {network} — see networks.",
@@ -186,7 +206,6 @@
     "irc.module.alias": "Your own commands for IRC clients: /op #chan nick turned into what you define.",
     "irc.module.ctcpflood": "Stops answering CTCP requests (and passing them to clients) while too many arrive at once.",
     "irc.module.q": "Logs in to QuakeNet's Q with the network's account and password (under Authentication) instead of NickServ, and hides your host.",
-
     "irc.notOn": "You're not on {channel}.",
     "irc.attach.notDetached": "{channel} isn't detached.",
     "irc.chan.notSaved": "{channel} isn't one of {network}'s channels.",
@@ -237,7 +256,6 @@
     "irc.users.suspended": "suspended",
     "irc.users.attached": "{count} attached",
     "irc.users.footer": "{users}.",
-
     "irc.buffers.none": "No buffers on {network} yet.",
     "irc.buffers.keeps": "keeps",
     "irc.buffers.autoClears": "auto-clears",
@@ -257,7 +275,6 @@
     "irc.autoclear.bad": "autoclear is on, off or - (your account's setting).",
     "irc.autoclear.on": "{buffer} auto-clears: playback is only what's new.",
     "irc.autoclear.off": "{buffer} keeps its buffer: playback is its last {lines} lines.",
-
     "irc.notHere.reloadmod": "Modules are built into evrd and always current — nothing to reload.",
     "irc.notHere.updatemod": "Modules are built into evrd and always current — nothing to update.",
     "irc.notHere.rehash": "evrd applies settings as they're saved; evrd.conf is read at start (restart evrd to re-read it).",
@@ -272,6 +289,58 @@
     "irc.notHere.addmotd": "evrd has no message of the day of its own.",
     "irc.notHere.clearmotd": "evrd has no message of the day of its own.",
     "irc.notHere.broadcast": "evrd can't broadcast to every user yet.",
-    "irc.notHere.movenetwork": "Networks can't move between users; add it to the other account instead (the web app's import can copy settings)."
+    "irc.notHere.movenetwork": "Networks can't move between users; add it to the other account instead (the web app's import can copy settings).",
+    "irc.err.usernameRules": "usernames are 2–32 characters: a–z, 0–9, - and _, starting with a letter",
+    "irc.err.passwordText": "passwords must be valid text",
+    "irc.err.passwordShort": "use at least {min} characters",
+    "irc.err.passwordLong": "passwords are limited to 72 bytes",
+    "irc.err.passwordControl": "passwords can't contain line breaks or control characters",
+    "irc.err.bindHostByAdmin": "your bind host is set by an admin",
+    "irc.err.noBindHosts": "this bouncer doesn't offer bind hosts",
+    "irc.err.notABindHost": "{host} isn't one of this bouncer's bind hosts ({hosts})",
+    "irc.err.role": "role must be user or admin",
+    "irc.err.clientPasswordName": "give it a name of up to 64 characters, e.g. the client or device",
+    "irc.err.networkLimit": "you've reached your limit of {count} networks — remove one first",
+    "irc.err.allowedHost": "{host} isn't an IP, a CIDR range or a wildcard like 192.168.*",
+    "irc.err.networkName": "a network needs a name without spaces, / or :",
+    "irc.err.networkNameLong": "keep network names to 32 characters",
+    "irc.err.nickNeeded": "a network needs a nick",
+    "irc.err.nickChars": "nicks can't contain spaces or , * ? ! @ # :",
+    "irc.err.altNickChars": "the alternate nick can't contain spaces or , * ? ! @ # :",
+    "irc.err.identChars": "the ident can't contain spaces, @, ! or :",
+    "irc.err.floodRate": "the flood rate is lines per second, 0–100 (0 turns protection off)",
+    "irc.err.floodBurst": "the flood burst is 1–1000 lines",
+    "irc.err.joinDelay": "the join delay is 0–600 seconds",
+    "irc.err.quitMsg": "the quit message must be one line",
+    "irc.err.serverHost": "{host} isn't a server hostname",
+    "irc.err.port": "ports are 1–65535",
+    "irc.err.serverPassword": "server passwords must be one line",
+    "irc.err.serverNeeded": "a network needs a server hostname",
+    "irc.err.serversMax": "keep it to 20 servers",
+    "irc.err.fingerprint": "certificate fingerprints are SHA-256: 64 hex digits (colons optional)",
+    "irc.err.channelName": "{channel} isn't a channel name — channels start with #",
+    "irc.err.channelKey": "channel keys can't contain spaces or commas",
+    "irc.err.loginMethod": "the login method is auto, sasl, nickserv, command or none",
+    "irc.err.servicesNick": "the services nick is one word, like NickServ or NickServ@services.dal.net",
+    "irc.err.identifyArgs": "IDENTIFY takes the account and password, just the password, or (empty) whichever fits",
+    "irc.err.identifyOn": "identify on connect or on prompt",
+    "irc.err.ghost": "free a taken nick with ghost, regain or recover (or not at all)",
+    "irc.err.loginCommandLine": "the login command is one line",
+    "irc.err.loginCommand": "the command login needs a command, like PRIVMSG X@channels.undernet.org :LOGIN %account% %password%",
+    "irc.err.authTimeout": "the login timeout is 0–300 seconds",
+    "irc.err.encoding": "{encoding} isn't an encoding evrd knows (try ISO-8859-1, windows-1252, KOI8-R…)",
+    "irc.err.networkTaken": "you already have a network called {network}",
+    "irc.err.lastAdmin": "this is the last admin — make someone else an admin first",
+    "irc.err.usernameTaken": "that username is taken",
+    "irc.err.noModule": "no module {module}",
+    "irc.err.noModuleSetting": "module {module} has no setting {setting}",
+    "irc.err.moduleNumber": "{module}: {setting} must be a whole number",
+    "irc.welcome.bouncer": "Welcome to evrd - a bouncer connection, on no network",
+    "irc.welcome.network": "Welcome to evrd - attached to {network}",
+    "irc.welcome.motdNetwork": "network {network} ({host}:{port})",
+    "irc.welcome.motdHelp": "/msg {status} help for bouncer commands",
+    "irc.part.jumped": "jumped to {network}",
+    "irc.part.detached": "Detached - /join {channel} to come back",
+    "irc.bouncerConnection": "This is a bouncer connection, on no network: pick one with BOUNCER BIND"
   }
 }

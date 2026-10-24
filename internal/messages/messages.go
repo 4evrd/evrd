@@ -20,6 +20,7 @@ import (
 	"path"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -267,14 +268,20 @@ type Printer struct {
 var English = &Printer{tag: language.English}
 
 // T is key's text with its {name}s filled from args, name/value pairs
-// ("count", 3, "network", "libera"). A key no language has is itself.
+// ("count", 3, "network", "libera"). A Text, or an error that says what it
+// is in words (Texter), is put in p's language too. A key no language has
+// is itself.
 func (p *Printer) T(key string, args ...any) string {
 	if p == nil {
 		p = English
 	}
 	vars := map[string]any{}
 	for i := 0; i+1 < len(args); i += 2 {
-		vars[fmt.Sprint(args[i])] = args[i+1]
+		v := args[i+1]
+		if t, ok := asText(v); ok {
+			v = p.Text(t)
+		}
+		vars[fmt.Sprint(args[i])] = v
 	}
 	return fill(p.pick(key, vars), vars)
 }
@@ -306,9 +313,13 @@ func (c catalog) pick(key string, tag language.Tag, count any) (string, bool) {
 	return e.forms["other"], true
 }
 
-// form is the CLDR plural category of n in the language.
+// form is the CLDR plural category of n (an int, or one as text) in the
+// language.
 func form(tag language.Tag, n any) string {
-	i, _ := n.(int)
+	i, ok := n.(int)
+	if !ok {
+		i, _ = strconv.Atoi(fmt.Sprint(n))
+	}
 	switch plural.Cardinal.MatchPlural(tag, i, 0, 0, 0, 0) {
 	case plural.Zero:
 		return "zero"

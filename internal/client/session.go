@@ -408,9 +408,9 @@ func (se *session) unsubscribe() {
 func (se *session) welcome() {
 	n := se.unick
 	if se.up == nil {
-		se.send(fmt.Sprintf(":%s 001 %s :Welcome to evrd - a bouncer connection, on no network", serverName, n))
+		se.send(fmt.Sprintf(":%s 001 %s :%s", serverName, n, ircText(se.tr("welcome.bouncer"))))
 	} else {
-		se.send(fmt.Sprintf(":%s 001 %s :Welcome to evrd - attached to %s", serverName, n, se.net.Name))
+		se.send(fmt.Sprintf(":%s 001 %s :%s", serverName, n, ircText(se.tr("welcome.network", "network", se.net.Name))))
 	}
 	se.send(fmt.Sprintf(":%s 002 %s :Your host is %s", serverName, n, serverName))
 	se.send(fmt.Sprintf(":%s 003 %s :evrd bouncer", serverName, n))
@@ -418,9 +418,9 @@ func (se *session) welcome() {
 	se.sendISupport()
 	se.send(fmt.Sprintf(":%s 375 %s :- %s message of the day -", serverName, n, serverName))
 	if se.up != nil {
-		se.send(fmt.Sprintf(":%s 372 %s :- network %s (%s:%d)", serverName, n, se.net.Name, se.net.Host, se.net.Port))
+		se.send(fmt.Sprintf(":%s 372 %s :- %s", serverName, n, ircText(se.tr("welcome.motdNetwork", "network", se.net.Name, "host", se.net.Host, "port", se.net.Port))))
 	}
-	se.send(fmt.Sprintf(":%s 372 %s :- /msg *status help for bouncer commands", serverName, n))
+	se.send(fmt.Sprintf(":%s 372 %s :- %s", serverName, n, ircText(se.tr("welcome.motdHelp", "status", statusNick))))
 	se.send(fmt.Sprintf(":%s 376 %s :End of /MOTD command.", serverName, n))
 
 	// If the client registered under a different nick than the upstream's, tell
@@ -551,7 +551,7 @@ func (se *session) jump(n store.Network) error {
 		return err
 	}
 	for _, ch := range old {
-		se.send(fmt.Sprintf(":%s!%s@%s PART %s :jumped to %s", se.unick, se.unick, serverName, ch, n.Name))
+		se.send(fmt.Sprintf(":%s!%s@%s PART %s :%s", se.unick, se.unick, serverName, ch, ircText(se.tr("part.jumped", "network", n.Name))))
 	}
 	if nick := orElse(se.up.Nick(), n.Nick); nick != se.unick {
 		se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, serverName, nick))
@@ -728,7 +728,7 @@ func (se *session) detach(chans []string) {
 			continue
 		}
 		se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Detached = true })
-		se.send(fmt.Sprintf(":%s!%s@%s PART %s :Detached - /join %s to come back", se.unick, se.unick, serverName, ch, ch))
+		se.send(fmt.Sprintf(":%s!%s@%s PART %s :%s", se.unick, se.unick, serverName, ch, ircText(se.tr("part.detached", "channel", ch))))
 	}
 }
 
@@ -756,7 +756,7 @@ func (se *session) handleClient(m irc.Message) {
 // dispatch carries out a client's command.
 func (se *session) dispatch(m irc.Message) {
 	if se.up == nil && !unboundOK[m.Command] {
-		se.send(fmt.Sprintf(":%s NOTICE %s :This is a bouncer connection, on no network: pick one with BOUNCER BIND", serverName, se.unick))
+		se.send(fmt.Sprintf(":%s NOTICE %s :%s", serverName, se.unick, ircText(se.tr("bouncerConnection"))))
 		return
 	}
 	if se.ownNickLine(m) {

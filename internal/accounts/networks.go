@@ -3,6 +3,7 @@ package accounts
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 
 	"golang.org/x/text/encoding"
@@ -21,25 +22,25 @@ func NormalizeNetwork(n *store.Network) error {
 	n.Encoding = strings.TrimSpace(n.Encoding)
 	switch {
 	case n.Name == "" || strings.ContainsAny(n.Name, " /:"):
-		return invalid("a network needs a name without spaces, / or :")
+		return invalid("networkName")
 	case len(n.Name) > 32:
-		return invalid("keep network names to 32 characters")
+		return invalid("networkNameLong")
 	case n.Nick == "":
-		return invalid("a network needs a nick")
+		return invalid("nickNeeded")
 	case !validNick(n.Nick):
-		return invalid("nicks can't contain spaces or , * ? ! @ # :")
+		return invalid("nickChars")
 	case n.AltNick != "" && !validNick(n.AltNick):
-		return invalid("the alternate nick can't contain spaces or , * ? ! @ # :")
+		return invalid("altNickChars")
 	case strings.ContainsAny(n.Username, " @!:"):
-		return invalid("the ident can't contain spaces, @, ! or :")
+		return invalid("identChars")
 	case n.FloodRate < 0 || n.FloodRate > 100:
-		return invalid("the flood rate is lines per second, 0–100 (0 turns protection off)")
+		return invalid("floodRate")
 	case n.FloodRate > 0 && (n.FloodBurst < 1 || n.FloodBurst > 1000):
-		return invalid("the flood burst is 1–1000 lines")
+		return invalid("floodBurst")
 	case n.JoinDelay < 0 || n.JoinDelay > 600:
-		return invalid("the join delay is 0–600 seconds")
+		return invalid("joinDelay")
 	case strings.ContainsAny(n.QuitMsg, "\r\n"):
-		return invalid("the quit message must be one line")
+		return invalid("quitMsg")
 	}
 	if err := normalizeAuth(n); err != nil {
 		return err
@@ -58,10 +59,10 @@ func NormalizeNetwork(n *store.Network) error {
 			continue
 		}
 		if strings.ContainsAny(sv.Host, " /") {
-			return invalid("%q isn't a server hostname", sv.Host)
+			return invalid("serverHost", "host", strconv.Quote(sv.Host))
 		}
 		if sv.Port < 0 || sv.Port > 65535 {
-			return invalid("ports are 1–65535")
+			return invalid("port")
 		}
 		if sv.Port == 0 {
 			sv.Port = 6667
@@ -70,15 +71,15 @@ func NormalizeNetwork(n *store.Network) error {
 			}
 		}
 		if strings.ContainsAny(sv.Password, "\r\n") {
-			return invalid("server passwords must be one line")
+			return invalid("serverPassword")
 		}
 		clean = append(clean, sv)
 	}
 	if len(clean) == 0 {
-		return invalid("a network needs a server hostname")
+		return invalid("serverNeeded")
 	}
 	if len(clean) > 20 {
-		return invalid("keep it to 20 servers")
+		return invalid("serversMax")
 	}
 	n.Servers = clean
 	n.Host, n.Port, n.TLS = clean[0].Host, clean[0].Port, clean[0].TLS
@@ -90,7 +91,7 @@ func NormalizeNetwork(n *store.Network) error {
 			continue
 		}
 		if len(f) != 64 || strings.Trim(f, "0123456789abcdef") != "" {
-			return invalid("certificate fingerprints are SHA-256: 64 hex digits (colons optional)")
+			return invalid("fingerprint")
 		}
 		if !slices.Contains(fps, f) {
 			fps = append(fps, f)
@@ -114,7 +115,7 @@ func NormalizeNetwork(n *store.Network) error {
 			continue
 		}
 		if !strings.ContainsRune("#&+!", rune(ch[0])) || strings.ContainsAny(ch, " ,\x07") {
-			return invalid("%q isn't a channel name — channels start with #", ch)
+			return invalid("channelName", "channel", strconv.Quote(ch))
 		}
 		if slices.ContainsFunc(chans, func(c string) bool { return strings.EqualFold(c, ch) }) {
 			continue
@@ -123,7 +124,7 @@ func NormalizeNetwork(n *store.Network) error {
 		if cs, ok := n.ChannelSettings[strings.ToLower(ch)]; ok {
 			cs.Key = strings.TrimSpace(cs.Key)
 			if strings.ContainsAny(cs.Key, " ,") {
-				return invalid("channel keys can't contain spaces or commas")
+				return invalid("channelKey")
 			}
 			if cs != (store.ChannelSettings{}) {
 				settings[strings.ToLower(ch)] = cs
@@ -153,21 +154,21 @@ func normalizeAuth(n *store.Network) error {
 	}
 	switch {
 	case !slices.Contains([]string{store.AuthAuto, store.AuthSASL, store.AuthNickServ, store.AuthCommand, store.AuthNone}, n.AuthMethod):
-		return invalid("the login method is auto, sasl, nickserv, command or none")
+		return invalid("loginMethod")
 	case strings.ContainsAny(n.ServicesNick, " ,:!\r\n") || len(n.ServicesNick) > 64:
-		return invalid("the services nick is one word, like NickServ or NickServ@services.dal.net")
+		return invalid("servicesNick")
 	case !slices.Contains([]string{"", store.IdentifyAccount, store.IdentifyPassword}, n.IdentifyArgs):
-		return invalid("IDENTIFY takes the account and password, just the password, or (empty) whichever fits")
+		return invalid("identifyArgs")
 	case !slices.Contains([]string{"", store.IdentifyOnPrompt}, n.IdentifyOn):
-		return invalid("identify on connect or on prompt")
+		return invalid("identifyOn")
 	case !slices.Contains([]string{"", "ghost", "regain", "recover"}, n.GhostCmd):
-		return invalid("free a taken nick with ghost, regain or recover (or not at all)")
+		return invalid("ghost")
 	case strings.ContainsAny(n.AuthCommand, "\r\n") || len(n.AuthCommand) > 400:
-		return invalid("the login command is one line")
+		return invalid("loginCommandLine")
 	case n.AuthMethod == store.AuthCommand && n.AuthCommand == "":
-		return invalid("the command login needs a command, like PRIVMSG X@channels.undernet.org :LOGIN %%account%% %%password%%")
+		return invalid("loginCommand")
 	case n.AuthTimeout < 0 || n.AuthTimeout > 300:
-		return invalid("the login timeout is 0–300 seconds")
+		return invalid("authTimeout")
 	}
 	return nil
 }
@@ -184,7 +185,7 @@ func Charset(enc string) (encoding.Encoding, error) {
 	name := strings.TrimPrefix(enc, "^")
 	e, err := htmlindex.Get(name)
 	if err != nil {
-		return nil, invalid("%q isn't an encoding evrd knows (try ISO-8859-1, windows-1252, KOI8-R…)", name)
+		return nil, invalid("encoding", "encoding", strconv.Quote(name))
 	}
 	return e, nil
 }
@@ -198,7 +199,7 @@ func (s *Service) CheckNetworkName(userID int64, name string, exceptID int64) er
 	}
 	for _, n := range nets {
 		if n.ID != exceptID && strings.EqualFold(n.Name, name) {
-			return invalid("you already have a network called %s", n.Name)
+			return invalid("networkTaken", "network", n.Name)
 		}
 	}
 	return nil

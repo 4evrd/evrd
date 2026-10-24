@@ -359,7 +359,7 @@ func (se *session) setUserBindHost(host string) {
 		return
 	}
 	if err := se.srv.acc.CheckBindHost(u, host); err != nil {
-		se.statusf("%s.", capitalize(err.Error()))
+		se.sayErr(err)
 		return
 	}
 	u.BindHost = host

@@ -175,6 +175,13 @@ func (se *session) printer() *messages.Printer {
 	return se.pr
 }
 
+// sayErr sends err from *status as a sentence of its own: in the user's
+// language when it says what it is in words (a validation error, a
+// messages.Error), else as it is.
+func (se *session) sayErr(err error) {
+	se.statusf("%s", messages.Sentence(se.printer().Say(err)))
+}
+
 // state is a network's connection state, in words.
 func (se *session) state(st upstream.Status) string {
 	return se.tr("state." + string(st))
@@ -383,7 +390,7 @@ func (se *session) cmdAddNetwork(args []string) {
 	if err := se.srv.acc.CanCreateNetwork(u); err != nil {
 		var ve *accounts.ValidationError
 		if errors.As(err, &ve) {
-			se.statusf("%s.", capitalize(ve.Message))
+			se.sayErr(ve)
 		} else {
 			se.say("addnetwork.failed", "error", err)
 		}
@@ -603,7 +610,7 @@ func (se *session) cmdSet(args []string) {
 			err = se.srv.acc.CheckBindHost(u, n.BindHost)
 		}
 		if err != nil {
-			se.statusf("%s.", capitalize(err.Error()))
+			se.sayErr(err)
 			return
 		}
 	case "trustallcerts":
@@ -656,14 +663,14 @@ func (se *session) cmdSet(args []string) {
 	if err := accounts.NormalizeNetwork(&n); err != nil {
 		var ve *accounts.ValidationError
 		if errors.As(err, &ve) {
-			se.statusf("%s.", capitalize(ve.Message))
+			se.sayErr(ve)
 		} else {
 			se.say("saveFailed", "error", err)
 		}
 		return
 	}
 	if err := se.srv.acc.CheckNetworkName(se.uid, n.Name, n.ID); err != nil {
-		se.statusf("%s.", capitalize(err.Error()))
+		se.sayErr(err)
 		return
 	}
 	if err := se.srv.acc.UpdateNetwork(context.Background(), n); err != nil {
@@ -764,7 +771,7 @@ func capitalize(s string) string {
 // saveNetwork validates and saves n, reconnecting when needed.
 func (se *session) saveNetwork(before, n store.Network, done string) {
 	if err := accounts.NormalizeNetwork(&n); err != nil {
-		se.statusf("%s.", capitalize(err.Error()))
+		se.sayErr(err)
 		return
 	}
 	if err := se.srv.acc.UpdateNetwork(context.Background(), n); err != nil {
@@ -971,7 +978,7 @@ func (se *session) setModule(name string, f func(*store.ModuleConfig) error, don
 		cfgs[k] = modules.Config{Enabled: v.Enabled, Settings: v.Settings}
 	}
 	if err := modules.Check(cfgs); err != nil {
-		se.statusf("%s.", capitalize(err.Error()))
+		se.sayErr(err)
 		return
 	}
 	n.Modules = mods
