@@ -334,10 +334,67 @@ type Auth struct {
 	// OIDCAdminRole, when set, makes users holding that provider role evrd
 	// admins (and demotes them when they lose it), synced at each sign-in.
 	OIDCAdminRole string
+	// OIDCRolesClaim is the ID-token claim the roles are in: "roles"
+	// (Logto), "groups" (authentik), or a dotted path (Keycloak's
+	// "realm_access.roles"). OIDCScopes are extra scopes to ask for,
+	// space-separated; empty asks for "roles" when OIDCAdminRole is set.
+	OIDCRolesClaim string
+	OIDCScopes     string
+	// SSOIRCPassword is how an SSO account's provider password is checked
+	// when an IRC client signs in with it: "off", "password_grant" (OAuth2's
+	// resource-owner password grant at the OIDC provider), "ldap" (binding
+	// to the directory as the user) or "logto" (Logto's Management API).
+	SSOIRCPassword string
+	// password_grant: the client to ask as (empty: oidc_client_id and its
+	// secret), and what the provider knows the user by: "username" or
+	// "email".
+	SSOPasswordClientID     string
+	SSOPasswordClientSecret string
+	SSOPasswordLogin        string
+	// ldap: the server (ldaps://, or ldap:// with StartTLS unless
+	// LDAPInsecure), and either LDAPUserDN, a DN with {username} in it, or a
+	// search for the user (LDAPBindDN/LDAPBindPassword, LDAPBaseDN,
+	// LDAPUserFilter with {username}). LDAPLogin is what {username} is:
+	// the evrd "username", or the account's SSO "subject".
+	LDAPURL          string
+	LDAPInsecure     bool
+	LDAPUserDN       string
+	LDAPBindDN       string
+	LDAPBindPassword string
+	LDAPBaseDN       string
+	LDAPUserFilter   string
+	LDAPLogin        string
+	// logto: a machine-to-machine app with access to the Management API
+	// (LogtoM2MResource is the API's indicator; empty derives it from the
+	// issuer).
+	LogtoM2MClientID     string
+	LogtoM2MClientSecret string
+	LogtoM2MResource     string
 }
 
 // OIDCEnabled reports whether SSO sign-in is configured.
 func (a Auth) OIDCEnabled() bool { return a.OIDCIssuer != "" }
+
+// SSOPasswordsOverIRC reports whether SSO accounts may use their provider
+// password in IRC clients: oidc_irc_password, with SSO and the Management
+// API app set up.
+func (a Auth) SSOPasswordsOverIRC() bool {
+	if !a.OIDCEnabled() {
+		return false
+	}
+	switch a.SSOIRCPassword {
+	case "password_grant":
+		return a.SSOPasswordClientID != "" || a.OIDCClientID != ""
+	case "ldap":
+		return a.LDAPURL != "" && (a.LDAPUserDN != "" || a.LDAPBaseDN != "")
+	case "logto":
+		return a.LogtoM2MClientID != "" && a.LogtoM2MClientSecret != ""
+	}
+	return false
+}
+
+// SSOPasswordMethods are the ways sso_irc_password can check a password.
+var SSOPasswordMethods = []string{"off", "password_grant", "ldap", "logto"}
 
 // Limits are the server-wide defaults; 0 means unlimited. A user's own
 // override, set by an admin, wins.
@@ -361,11 +418,16 @@ func Default() *Config {
 		IRCHost: "localhost",
 		IRCSTS:  DefaultIRCSTS,
 		Auth: Auth{
-			PasswordLogin:  true,
-			SessionTTL:     30 * 24 * time.Hour,
-			CookieSecure:   true,
-			OIDCLabel:      "single sign-on",
-			OIDCAutoCreate: true,
+			PasswordLogin:    true,
+			SessionTTL:       30 * 24 * time.Hour,
+			CookieSecure:     true,
+			OIDCLabel:        "single sign-on",
+			OIDCAutoCreate:   true,
+			OIDCRolesClaim:   "roles",
+			SSOIRCPassword:   "off",
+			SSOPasswordLogin: "username",
+			LDAPUserFilter:   "(uid={username})",
+			LDAPLogin:        "username",
 		},
 		Limits:   Limits{MaxNetworks: 0, MaxClients: 0, BacklogLines: 2000},
 		Outbound: Outbound{ConnectRate: 5, PreferIPv6: true},
@@ -481,18 +543,21 @@ func (c *Config) ApplyEnv() error {
 		c.Outbound.Prefix6 = p
 	}
 	for env, dst := range map[string]*string{
-		"EVRD_DB":                 &c.DB,
-		"EVRD_HISTORY":            &c.History,
-		"EVRD_OIDC_CLIENT_SECRET": &c.Auth.OIDCClientSecret,
-		"EVRD_CLUSTER_SECRET":     &c.Cluster.Secret,
-		"EVRD_SECRET_KEY":         &c.Secrets.Key,
-		"EVRD_SECRET_KEY_FILE":    &c.Secrets.KeyFile,
-		"EVRD_PROVISION_TOKEN":    &c.ProvisionToken,
-		"EVRD_LINKS_SOCKET":       &c.LinksSocket,
-		"EVRD_IDENTD_LISTEN":      &c.IdentdListen,
-		"EVRD_NODE_ID":            &c.Cluster.NodeID,
-		"EVRD_INTERNAL_URL":       &c.Cluster.InternalURL,
-		"EVRD_INTERNAL_IRC_ADDR":  &c.Cluster.InternalIRCAddr,
+		"EVRD_DB":                         &c.DB,
+		"EVRD_HISTORY":                    &c.History,
+		"EVRD_OIDC_CLIENT_SECRET":         &c.Auth.OIDCClientSecret,
+		"EVRD_LOGTO_M2M_CLIENT_SECRET":    &c.Auth.LogtoM2MClientSecret,
+		"EVRD_SSO_PASSWORD_CLIENT_SECRET": &c.Auth.SSOPasswordClientSecret,
+		"EVRD_LDAP_BIND_PASSWORD":         &c.Auth.LDAPBindPassword,
+		"EVRD_CLUSTER_SECRET":             &c.Cluster.Secret,
+		"EVRD_SECRET_KEY":                 &c.Secrets.Key,
+		"EVRD_SECRET_KEY_FILE":            &c.Secrets.KeyFile,
+		"EVRD_PROVISION_TOKEN":            &c.ProvisionToken,
+		"EVRD_LINKS_SOCKET":               &c.LinksSocket,
+		"EVRD_IDENTD_LISTEN":              &c.IdentdListen,
+		"EVRD_NODE_ID":                    &c.Cluster.NodeID,
+		"EVRD_INTERNAL_URL":               &c.Cluster.InternalURL,
+		"EVRD_INTERNAL_IRC_ADDR":          &c.Cluster.InternalIRCAddr,
 		// the standard OpenTelemetry variable
 		"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": &c.Metrics.OTLPEndpoint,
 		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT":  &c.Metrics.TracesEndpoint,
@@ -591,6 +656,40 @@ func (c *Config) set(key, val string) error {
 		c.Auth.OIDCLinkExisting, err = parseBool(val)
 	case "oidc_admin_role":
 		c.Auth.OIDCAdminRole = val
+	case "oidc_roles_claim":
+		c.Auth.OIDCRolesClaim = val
+	case "oidc_scopes":
+		c.Auth.OIDCScopes = val
+	case "sso_irc_password":
+		c.Auth.SSOIRCPassword, err = oneOf(val, SSOPasswordMethods...)
+	case "sso_password_client_id":
+		c.Auth.SSOPasswordClientID = val
+	case "sso_password_client_secret":
+		c.Auth.SSOPasswordClientSecret = val
+	case "sso_password_login":
+		c.Auth.SSOPasswordLogin, err = oneOf(val, "username", "email")
+	case "ldap_url":
+		c.Auth.LDAPURL = val
+	case "ldap_insecure":
+		c.Auth.LDAPInsecure, err = parseBool(val)
+	case "ldap_user_dn":
+		c.Auth.LDAPUserDN = val
+	case "ldap_bind_dn":
+		c.Auth.LDAPBindDN = val
+	case "ldap_bind_password":
+		c.Auth.LDAPBindPassword = val
+	case "ldap_base_dn":
+		c.Auth.LDAPBaseDN = val
+	case "ldap_user_filter":
+		c.Auth.LDAPUserFilter = val
+	case "ldap_login":
+		c.Auth.LDAPLogin, err = oneOf(val, "username", "subject")
+	case "logto_m2m_client_id":
+		c.Auth.LogtoM2MClientID = val
+	case "logto_m2m_client_secret":
+		c.Auth.LogtoM2MClientSecret = val
+	case "logto_m2m_resource":
+		c.Auth.LogtoM2MResource = val
 	case "node_id":
 		c.Cluster.NodeID = val
 	case "internal_listen":
@@ -673,6 +772,14 @@ func parseBool(v string) (bool, error) {
 		return false, nil
 	}
 	return false, fmt.Errorf("want yes or no, got %q", v)
+}
+
+// oneOf is v if it's one of the choices.
+func oneOf(v string, choices ...string) (string, error) {
+	if slices.Contains(choices, v) {
+		return v, nil
+	}
+	return "", fmt.Errorf("want one of %s, got %q", strings.Join(choices, ", "), v)
 }
 
 // Jail rewrites the local paths (an SQLite db, a Pebble history, web_root)

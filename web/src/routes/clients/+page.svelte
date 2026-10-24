@@ -70,7 +70,12 @@
   <button class="btn btn-primary" type="button" onclick={openNew}><Icon name="key" />{t('clients.newPassword')}</button>
 </div>
 
-{#if !me.hasPassword}
+{#if !me.hasPassword && session.config.ssoIRCPassword}
+  <div class="callout enter" role="note" data-testid="sso-works" style="margin-bottom:var(--s6)">
+    <Icon name="key" />
+    <span class="od-fill"><b>{t('clients.ssoWorksTitle', { sso: session.config.ssoLabel || 'SSO' })}</b> <Msg key="clients.ssoWorks" vars={{}}>{#snippet format()}<span class="code">{me.username}/{firstNet}:<i>{t('clients.passwordWord')}</i></span>{/snippet}</Msg></span>
+  </div>
+{:else if !me.hasPassword}
   <div class="callout warn enter" role="note" data-testid="sso-notice" style="margin-bottom:var(--s6)">
     <Icon name="alert" />
     <span class="od-fill"><b>{t('clients.ssoNoticeTitle', { sso: session.config.ssoLabel || 'SSO' })}</b> <Msg key="clients.ssoNotice" vars={{ sso: session.config.ssoLabel || t('clients.singleSignOn') }}>{#snippet format()}<span class="code">{me.username}/{firstNet}:<i>{t('clients.clientPasswordWord')}</i></span>{/snippet}</Msg></span>
@@ -90,7 +95,7 @@
         <div class="kv"><div class="od-field"><span class="k">{t('clients.port')}</span><span class="v">{ports.map((p) => `${p.port} (${p.tls ? 'TLS' : t('clients.plain')})`).join(' · ') || port.port}</span></div><Copy text={String(port.port)} label={t('clients.copyPort')} /></div>
         <div class="kv"><div class="od-field"><span class="k">{t('clients.serverPassword')}</span><span class="v">{me.username}/<i>{t('clients.networkWord')}</i>:<i>{t('clients.passwordWord')}</i></span></div><Copy text="{me.username}/{firstNet}:" label={t('clients.copyFormat')} /></div>
       </div>
-      <p class="desc" style="margin-top:var(--s4)">{me.hasPassword ? t('clients.useAccountPassword') : t('clients.useClientPassword', { sso: session.config.ssoLabel })} <Msg key={session.nets[0] ? 'clients.leaveOutNamed' : 'clients.leaveOut'} vars={{ network: session.nets[0]?.name }}>{#snippet path()}<span class="code">/network</span>{/snippet}</Msg></p>
+      <p class="desc" style="margin-top:var(--s4)">{me.hasPassword ? t('clients.useAccountPassword') : session.config.ssoIRCPassword ? t('clients.useSsoOrClientPassword', { sso: session.config.ssoLabel || 'SSO' }) : t('clients.useClientPassword', { sso: session.config.ssoLabel })} <Msg key={session.nets[0] ? 'clients.leaveOutNamed' : 'clients.leaveOut'} vars={{ network: session.nets[0]?.name }}>{#snippet path()}<span class="code">/network</span>{/snippet}</Msg></p>
     </section>
 
     <section class="card enter" aria-labelledby="guide-h">

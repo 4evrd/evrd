@@ -97,9 +97,11 @@ func (s *Handlers) Config(w http.ResponseWriter, r *http.Request) {
 		"passwordLogin": s.cfg().Auth.PasswordLogin,
 		"sso":           s.cfg().Auth.OIDCEnabled(),
 		"ssoLabel":      s.cfg().Auth.OIDCLabel,
-		"ircHost":       s.cfg().IRCHost,
-		"ircPorts":      ircPorts(s.cfg().Listen),
-		"ircSelfSigned": s.selfSigned(),
+		// SSO accounts may use their provider password in IRC clients
+		"ssoIRCPassword": s.cfg().Auth.SSOPasswordsOverIRC(),
+		"ircHost":        s.cfg().IRCHost,
+		"ircPorts":       ircPorts(s.cfg().Listen),
+		"ircSelfSigned":  s.selfSigned(),
 		// saved passwords and module settings are encrypted (secret_key set):
 		// the forms mark those fields
 		"secretsEncrypted": store.SecretsEncrypted(),

@@ -37,6 +37,8 @@ are stored in the database and win over the file (see below).
 | `cookie_secure` | `yes` | HTTPS-only session cookie; `no` only for plain-HTTP testing |
 | `oidc_issuer`, `oidc_client_id`, `oidc_client_secret` (`EVRD_OIDC_CLIENT_SECRET`) | — | single sign-on with any OpenID Connect provider |
 | `oidc_label`, `oidc_auto_create`, `oidc_link_existing`, `oidc_admin_role` | `single sign-on`, `yes`, `no`, — | sign-in button text and account rules for SSO |
+| `oidc_roles_claim`, `oidc_scopes` | `roles`, — | where the roles for `oidc_admin_role` are in the ID token (a claim, or a dotted path), and extra scopes to ask for; see [providers](#oidc-providers) |
+| `sso_irc_password` | `off` | let SSO accounts use their provider password in IRC clients: `password_grant`, `ldap` or `logto`, each with settings of its own; see [SSO passwords in IRC clients](#sso-passwords-in-irc-clients) |
 | `max_networks`, `max_clients`, `backlog_lines` | `0`, `0`, `2000` | per-user defaults (0 = unlimited); admins override per user |
 | `connect_rate` | `5` | most new connections per second to one IRC server host, per node |
 | `prefer_ipv6` | `yes` | connect to IRC servers over IPv6 first, falling back to IPv4; `no` tries IPv4 first. With only IPv4 `upstream_bind` addresses, IPv4 goes first either way |
@@ -129,7 +131,123 @@ oidc_label        IRCforever account        # text on the sign-in button
 oidc_auto_create  yes   # create accounts on first sign-in
 oidc_link_existing no   # link to an existing local account with the same username
 oidc_admin_role   evrd-admin  # optional: provider role that makes an evrd admin
+oidc_roles_claim  roles       # where those roles are in the ID token
+# oidc_scopes     groups      # extra scopes (default: roles when oidc_admin_role is set)
 ```
+
+### OIDC providers
+
+Any OpenID Connect provider works. The redirect URI is always
+`<public_url>/auth/callback`, the client is a confidential web app (code flow
+with PKCE), and the ID token must be signed with an asymmetric key (RS256,
+ES256…).
+
+| Provider | `oidc_issuer` | Scopes and roles | IRC passwords (`sso_irc_password`) |
+|---|---|---|---|
+| Logto | `https://id.example.org/oidc` | roles come with the `roles` scope (asked for when `oidc_admin_role` is set), in `roles` | `logto` |
+| authentik | `https://auth.example.org/application/o/<slug>/` | groups are in `groups` (in the `profile` scope): `oidc_roles_claim groups`. Pick a **signing key** for the provider — without one it signs with HS256, which evrd doesn't accept | `ldap`, through an LDAP outpost (its password grant takes app passwords, not the user's) |
+| Keycloak | `https://kc.example.org/realms/<realm>` | realm roles: `oidc_roles_claim realm_access.roles`, with *Add to ID token* on for the *realm roles* mapper (client scope `roles`); client roles: `resource_access.<client>.roles` | `password_grant` (turn on *Direct access grants*), or `ldap` if it's backed by one |
+| Others | the provider's issuer, as in its `/.well-known/openid-configuration` | `oidc_roles_claim` names the claim; `oidc_scopes` asks for what puts it in the ID token | see [SSO passwords in IRC clients](#sso-passwords-in-irc-clients) |
+
+The roles claim may hold a list or one space-separated string; a missing one
+(or one of another shape) means no roles.
+
+### SSO passwords in IRC clients
+
+An IRC client can't go through the provider's sign-in page, and OpenID Connect
+itself can't check a password, so by default an SSO account uses **IRC client
+passwords** there. `sso_irc_password` lets it use its provider password too,
+checked one of three ways. All of these are in *Admin → Settings → SSO
+passwords in IRC* too, and apply at once.
+
+| Your identity provider | `sso_irc_password` | Notes |
+|---|---|---|
+| Keycloak | `password_grant` | turn on *Direct access grants* for the client |
+| Okta | `password_grant` | allow the *Resource Owner Password* grant for the app |
+| Auth0 | `password_grant` | allow the *Password* grant and set a default directory |
+| Microsoft Entra ID | `password_grant` | ROPC: cloud accounts only, not federated ones or ones MFA is enforced for |
+| Dex | `password_grant` | `oauth2.passwordConnector` set |
+| Logto | `logto` | no password grant: evrd asks its Management API |
+| authentik | `ldap` | its password grant only takes app passwords: use an LDAP outpost |
+| FreeIPA, OpenLDAP, Active Directory, LLDAP (behind any OIDC provider) | `ldap` | bind as the user |
+| Google, GitHub, Zitadel, … | — | no way to check a password: IRC client passwords |
+
+**`password_grant`** — OAuth2's resource-owner password grant at the OIDC
+provider's token endpoint (found from `oidc_issuer`), with `scope=openid`. The
+answer's ID token is checked like a web sign-in's, and its subject must be the
+account's: someone else's right password doesn't sign in to this account.
+
+```
+sso_irc_password           password_grant
+# the sign-in client (oidc_client_id) by default; or one of its own:
+# sso_password_client_id     evrd-irc
+# sso_password_client_secret …   (or EVRD_SSO_PASSWORD_CLIENT_SECRET)
+sso_password_login         username    # or email: what the provider knows the user by
+```
+
+**`ldap`** — a bind to the directory as the user. TLS is required: `ldaps://`,
+or `ldap://` with StartTLS (`ldap_insecure yes` sends passwords in the clear;
+only on a trusted local network). The user's DN comes from a template, or a
+search:
+
+```
+sso_irc_password   ldap
+ldap_url           ldaps://ldap.example.org
+# a template…
+ldap_user_dn       uid={username},ou=people,dc=example,dc=org
+# …or a search (as ldap_bind_dn, or anonymous), which must find one entry
+# ldap_bind_dn       cn=evrd,ou=services,dc=example,dc=org
+# ldap_bind_password …   (or EVRD_LDAP_BIND_PASSWORD)
+# ldap_base_dn       ou=people,dc=example,dc=org
+# ldap_user_filter   (&(objectClass=person)(uid={username}))   # AD: (sAMAccountName={username})
+ldap_login         username   # or subject: {username} is the account's SSO subject
+```
+
+`{username}` is escaped (for a DN or a filter), so a user name can't change
+what's bound or searched for, and an empty password is refused before it gets
+to the directory (it would be an anonymous bind). Active Directory's "account
+disabled" and "locked out" are told apart from a wrong password.
+
+**`logto`** — Logto has no password grant, so evrd asks its Management API as a
+machine-to-machine app:
+
+```
+sso_irc_password         logto
+logto_m2m_client_id      <machine-to-machine app id>
+# secret: logto_m2m_client_secret, or the EVRD_LOGTO_M2M_CLIENT_SECRET env var
+# logto_m2m_resource     https://default.logto.app/api   # only if the default is wrong
+```
+
+In Logto, create an application of type **Machine-to-machine** and give it a
+role with access to the **Logto Management API** (*API resources → Logto
+Management API*; the `all` permission). Its ID and secret go above. The
+resource defaults to `https://<tenant>.logto.app/api` for a Logto Cloud issuer
+and `https://default.logto.app/api` for a Logto of your own; set
+`logto_m2m_resource` if yours is different (a custom domain on Logto Cloud).
+evrd looks the user up first: one **suspended in Logto** is refused, and one
+with **no password** there (social sign-in only) is told to set one or use a
+client password.
+
+However it's checked:
+
+- The order is: IRC client password, then the evrd password, then the SSO
+  password. A local account (not linked to SSO) is never sent to the provider.
+- A right password is remembered for 10 minutes (only a keyed hash of it, in
+  memory), so a client reconnecting doesn't ask the provider each time. A wrong
+  one is never remembered.
+- Failed sign-ins count toward the same lockout as the web sign-in: 10 within
+  15 minutes and the account is refused for a while, over IRC and on the web.
+- If the provider can't be reached (or is set up wrong — the server log says
+  how) the sign-in is refused, never let through, with "can't check your SSO
+  password right now"; client passwords keep working. That doesn't count toward
+  the lockout.
+- The activity feed says a client signed in with the SSO password, and how it
+  was checked.
+
+Keep the secrets (`sso_password_client_secret`, `ldap_bind_password`,
+`logto_m2m_client_secret` — Logto's app can read and change every user) in the
+environment variables or *Settings*, where they're stored encrypted when
+`secret_key` is set, not in a world-readable file.
 
 **Limits** (server defaults; admins override per user, 0 = unlimited):
 `max_networks 0` (unlimited by default), `max_clients 0` (attached IRC clients at once; unlimited by default),

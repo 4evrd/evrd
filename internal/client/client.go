@@ -12,6 +12,8 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/store"
 	"log/slog"
 	"net"
 	"strings"
@@ -56,6 +58,8 @@ type Server struct {
 
 	msgs messages.MessageServiceImpl // *status's texts; nil: English
 
+	signIns SignIns // nil: no SSO passwords, no lockout (tests)
+
 	// the connection holder, holding clients (hold.go); nil: none
 	holder      *links.Client
 	readyOnce   sync.Once
@@ -67,6 +71,18 @@ type Server struct {
 	lastCert    []byte // the certificate the holder has (its leaf)
 	certsPushed bool
 }
+
+// SignIns is what IRC sign-in shares with the web's (auth.Manager): the
+// failed sign-in lockout and the SSO password check.
+type SignIns interface {
+	Failures() *auth.FailureLimiter
+	SSOPasswordsOn() bool
+	SSOPasswordMethod() string
+	CheckSSOPassword(ctx context.Context, u store.User, password string) error
+}
+
+// SetSignIns shares the web sign-in's lockout and SSO password check.
+func (s *Server) SetSignIns(si SignIns) { s.signIns = si }
 
 // SetMessages has *status answer in each user's language.
 func (s *Server) SetMessages(m messages.MessageServiceImpl) { s.msgs = m }
