@@ -4,6 +4,7 @@ export default {
   'packs.download': 'İndir',
   'packs.formatHint': 'PO dosyalarını Poedit açar; CSV bir hesap tablosunda açılır.',
   'packs.guide': 'evrd nasıl çevrilir',
+  'packs.ircCoverage': 'IRC mesajları (*status): {total} mesajın {have} tanesi çevrildi',
   'packs.checkTitle': 'Çeviriyi kontrol et',
   'packs.code': 'Dil kodu',
   'packs.codeHelp': 'de ya da pt-BR gibi. Yerleşik bir dilin kodu, o dilin metinlerini değiştirir.',

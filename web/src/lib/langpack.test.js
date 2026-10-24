@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { layered, languageList, problems, report, flatten, isPlural, pluralCategories, pluralLocale, displayName } from './langpack.js'
+import { layered, languageList, problems, report, flatten, isPlural, pluralCategories, pluralLocale, displayName, coverage } from './langpack.js'
 import { LANGUAGES, pick } from './locale.js'
 
 const en = {
@@ -22,6 +22,13 @@ test('layers: personal over server over built-in over English', () => {
   // missing layers are skipped
   assert.equal(layered(en, null, undefined, { 'a.only': 'x' })['a.only'], 'x')
   assert.equal(layered(en, {}, null, null)['a.hello'], 'Hello')
+})
+
+test('coverage: English keys any layer has', () => {
+  const en = { 'irc.a': 'A', 'irc.b': 'B', 'irc.c': { one: '{count} c', other: '{count} cs' } }
+  assert.deepEqual(coverage(en, { 'irc.a': 'a' }, null, { 'irc.c': { other: 'x' }, 'irc.zzz': 'not English' }), { have: 2, total: 3 })
+  assert.deepEqual(coverage(en), { have: 0, total: 3 })
+  assert.deepEqual(coverage({}, { 'irc.a': 'a' }), { have: 0, total: 0 })
 })
 
 test('languages on offer', () => {

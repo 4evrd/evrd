@@ -4,6 +4,7 @@ export default {
   'packs.download': 'Download',
   'packs.formatHint': 'Poedit opens PO; CSV opens in a spreadsheet.',
   'packs.guide': 'How to translate evrd',
+  'packs.ircCoverage': 'IRC messages (*status): {have} of {total} translated',
   'packs.checkTitle': 'Check the translation',
   'packs.code': 'Language code',
   'packs.codeHelp': 'Like de, or pt-BR. A built-in language’s code changes its text.',

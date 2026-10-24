@@ -32,6 +32,10 @@ export const api = {
   // language packs (public: the sign-in page uses them)
   languages: () => req('GET', '/api/languages'),
   language: (code) => req('GET', `/api/languages/${encodeURIComponent(code)}`),
+  // evrd's IRC texts (*status), the irc.* keys of a pack: a built-in
+  // language's, and how many each language has
+  ircMessages: (code) => req('GET', `/api/irc-messages/${encodeURIComponent(code)}`),
+  ircCoverage: () => req('GET', '/api/irc-messages'),
   passwordLogin: (username, password) => req('POST', '/auth/password', { username, password }),
   logout: () => req('POST', '/auth/logout'),
 
