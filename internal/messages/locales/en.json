@@ -676,6 +676,19 @@
     "irc.settingLabel.irc_link_signin": "IRC sign-in by link",
     "irc.settingHelp.irc_link_signin": "An IRC client without a password it can use gets a link to allow it here, after signing in (with SSO and its MFA). Needs the public URL.",
     "irc.settingLabel.irc_remember_days": "Remembered IRC devices last",
-    "irc.settingHelp.irc_remember_days": "Days a device allowed by link and remembered keeps signing in without asking (1–365)."
+    "irc.settingHelp.irc_remember_days": "Days a device allowed by link and remembered keeps signing in without asking (1–365).",
+    "irc.web.importTooBig": "that file is too big to import (the most is {max})",
+    "irc.web.importUnknown": "that isn't an evrd networks file or a ZNC config",
+    "irc.web.importUnreadable": "couldn't read the file: {error}",
+    "irc.web.importNoUser": "the file has no ZNC user {user}",
+    "irc.netfile.serverPassword": "The password for server {host} was saved by another evrd server and can't be read here: set it again.",
+    "irc.netfile.loginPassword": "The services password was saved by another evrd server and can't be read here: set it again under Authentication.",
+    "irc.netfile.loginCommand": "The services login command was saved by another evrd server and can't be read here: set it again under Authentication.",
+    "irc.netfile.channelKey": "The key for {channel} was saved by another evrd server and can't be read here: set it again.",
+    "irc.netfile.moduleSettings": "The {module} module's settings were saved by another evrd server and can't be read here: set them again under Modules.",
+    "irc.netfile.unknownField": "{field} isn't a network setting evrd knows, so it was left out.",
+    "irc.znc.loginPassword": "ZNC's {module} module keeps its password outside the config: set it under Authentication.",
+    "irc.znc.moduleData": "ZNC's {module} module keeps its settings outside the config: turn it on and fill it in under Modules.",
+    "irc.znc.modulesSkipped": "evrd has no module for these, so they were left out: {modules}."
   }
 }

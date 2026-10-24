@@ -358,3 +358,21 @@ func (s *gormStore) EncryptSecrets(ctx context.Context) (int, error) {
 	}
 	return n, nil
 }
+
+// SealSecret encrypts s under the current key, for writing it somewhere
+// other than the database (a networks export). ok is false when no key is
+// set: there's nothing to seal it with, and it mustn't go out as plaintext.
+func SealSecret(s string) (sealed string, ok bool, err error) {
+	if !SecretsEncrypted() {
+		return "", false, nil
+	}
+	sealed, err = sealSecret(s)
+	return sealed, err == nil, err
+}
+
+// OpenSecret decrypts a value SealSecret wrote (ErrSecretKey when it was
+// sealed under a key this server doesn't have); plaintext passes through.
+func OpenSecret(stored string) (string, error) { return openSecret(stored) }
+
+// IsSealed reports whether a value is in SealSecret's form.
+func IsSealed(s string) bool { return strings.HasPrefix(s, secretPrefix) }
