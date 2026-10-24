@@ -294,7 +294,7 @@ jobs:
           E2E_EVRCTL: docker compose -f ../docker-compose.dev.yml -f ../docker-compose.e2e.yml exec -T evrd evrctl -config /src/deploy/evrd.dev.conf
           # the standalone node with the connection holder (holder.spec.js)
           E2E_COMPOSE: docker compose -f ../docker-compose.dev.yml -f ../docker-compose.e2e.yml
-          E2E_SOLO_EVRCTL: docker compose -f ../docker-compose.dev.yml -f ../docker-compose.e2e.yml exec -T evrd-solo evrctl -config /src/deploy/evrd.solo.conf
+          E2E_SOLO_EVRCTL: docker compose -f ../docker-compose.dev.yml -f ../docker-compose.e2e.yml exec -T -u evrd evrd-solo evrctl -config /src/deploy/evrd.solo.conf
         run: pnpm exec playwright test --shard=${{ matrix.shard }}/4 --reporter=github,line
       - name: Stack logs
         if: failure()
