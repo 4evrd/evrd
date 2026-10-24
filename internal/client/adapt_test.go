@@ -66,6 +66,11 @@ func TestLinkCapsComeAndGo(t *testing.T) {
 func TestPassThroughAndTranslation(t *testing.T) {
 	r := newRigCaps(t, everyLinkCap)
 	full := r.full()
+	// the attach burst answers from evrd's state: wait until it has the topic
+	eventually(t, "topic known", func() bool {
+		c, ok := r.b.ConnFor(r.network("one").ID)
+		return ok && c.Topic("#one") != ""
+	})
 	plain := r.attached()
 	// its channel's names and topic, asked for after 376, before reading on
 	plain.until(" 332 ")
