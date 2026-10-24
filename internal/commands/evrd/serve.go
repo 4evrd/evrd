@@ -358,6 +358,7 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 	langs := languages.New(st)
 	msgs := messages.New(langs) // *status in each user's language
 	irc.SetMessages(msgs)
+	irc.SetSignIns(am) // the lockout, and SSO passwords (sso_irc_password)
 	srv := evrdhttp.New(b, evrdhttp.Services{
 		Accounts:  acc,
 		Auth:      am,

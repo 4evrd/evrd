@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/4evrd/evrd/internal/auth"
 	"net"
 	"sort"
 	"strconv"
@@ -242,26 +243,82 @@ func (se *session) register(ctx context.Context) bool {
 	}
 }
 
-// signIn checks a user's secret: the account password or one of their IRC
-// client passwords (the only option for accounts that sign in through SSO).
-// A refusal is logged and comes back as the numeric to answer PASS with and
-// why.
+// signIn checks a user's secret: one of their IRC client passwords, the
+// account password, or (sso_irc_password) their SSO password, checked
+// with the identity provider. Failures count toward the same lockout as
+// the web sign-in. A refusal is logged and comes back as the numeric to
+// answer PASS with and why.
 func (se *session) signIn(username, network, password string) (u store.User, device, code, why string) {
+	key := strings.ToLower(strings.TrimSpace(username))
+	var fails *auth.FailureLimiter
+	if se.srv.signIns != nil {
+		fails = se.srv.signIns.Failures()
+	}
+	if fails != nil && fails.Blocked(key) {
+		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("locked"))
+		se.loginFailed(username, network, "locked")
+		return store.User{}, "", "464", "Too many failed sign-ins — try again in a few minutes"
+	}
 	u, device, err := se.srv.acc.IRCLogin(username, password)
+	if errors.Is(err, accounts.ErrInvalidCredentials) && se.srv.signIns != nil && se.srv.signIns.SSOPasswordsOn() {
+		u, device, err = se.ssoSignIn(username, password, err)
+	}
 	result, reason := "invalid", "invalid"
 	switch {
 	case err == nil:
+		if fails != nil {
+			fails.Reset(key)
+		}
 		return u, device, "", ""
-	case errors.Is(err, accounts.ErrSuspended):
+	case errors.Is(err, accounts.ErrSuspended), errors.Is(err, auth.ErrSSOSuspended):
 		result, reason, code, why = "suspended", "suspended", "465", "This account is suspended"
+	case errors.Is(err, auth.ErrSSOUnavailable):
+		// not the user's fault: no lockout, and they can still use a client password
+		result, reason, code, why = "sso_unavailable", "sso_unavailable", "464", "Can't check your SSO password right now — use an IRC client password from "+se.srv.clientsPage()
+		se.srv.log.Warn("sso password check", "user", username, "err", err)
+		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result(result))
+		se.loginFailed(username, network, reason)
+		return store.User{}, "", code, why
+	case errors.Is(err, auth.ErrSSONoPassword):
+		reason, code, why = "sso_no_password", "464", "Your SSO account has no password — set one with your identity provider, or use an IRC client password from "+se.srv.clientsPage()
 	case errors.Is(err, accounts.ErrNeedsClientPassword):
 		reason, code, why = "sso_needs_client_password", "464", "Invalid credentials — this account signs in with SSO, so use an IRC client password from "+se.srv.clientsPage()
 	default:
 		code, why = "464", "Invalid credentials"
 	}
+	if fails != nil {
+		fails.Add(key)
+	}
 	telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result(result))
 	se.loginFailed(username, network, reason)
 	return store.User{}, "", code, why
+}
+
+// ssoDevice is how a sign-in with the SSO password shows among the user's
+// clients.
+const ssoDevice = "SSO password"
+
+// ssoSignIn tries password as the SSO password of username's account, after
+// it wasn't a client password or the account password (failed: why). An
+// account not linked to the provider keeps failed.
+func (se *session) ssoSignIn(username, password string, failed error) (store.User, string, error) {
+	u, err := se.srv.acc.UserByUsername(context.Background(), strings.ToLower(username))
+	if err != nil || u.OIDCSubject == nil {
+		return store.User{}, "", failed
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := se.srv.signIns.CheckSSOPassword(ctx, u, password); err != nil {
+		if errors.Is(err, auth.ErrSSOWrongPassword) || errors.Is(err, auth.ErrSSONotLinked) {
+			return store.User{}, "", failed
+		}
+		return store.User{}, "", err
+	}
+	if u.Suspended {
+		return store.User{}, "", accounts.ErrSuspended
+	}
+	se.srv.log.Info("irc sign-in with the SSO password", "user", u.Username, "method", se.srv.signIns.SSOPasswordMethod(), "ip", se.clientIP())
+	return u, ssoDevice, nil
 }
 
 // attach authenticates and binds the session to a network, then sends the
@@ -377,7 +434,15 @@ func (se *session) attach() bool {
 				sw = c.Software
 			}
 		}
-		se.srv.b.AddEvent(uid, "attached", messages.T("event.attached", "client", sw), messages.Raw(strings.TrimSpace(username+"/"+netName+" · "+ip)))
+		title := messages.T("event.attached", "client", sw)
+		if device == ssoDevice {
+			method := "password_grant"
+			if se.srv.signIns != nil {
+				method = orElse(se.srv.signIns.SSOPasswordMethod(), method)
+			}
+			title = messages.T("event.attachedSSO", "client", sw, "method", messages.T("ssoMethod."+method))
+		}
+		se.srv.b.AddEvent(uid, "attached", title, messages.Raw(strings.TrimSpace(username+"/"+netName+" · "+ip)))
 	}()
 	return true
 }

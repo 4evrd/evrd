@@ -167,22 +167,22 @@ func TestPasswordLoginLockout(t *testing.T) {
 }
 
 func TestFailureLimiterWindow(t *testing.T) {
-	f := newFailureLimiter(3, time.Minute)
+	f := NewFailureLimiter(3, time.Minute)
 	at := time.Unix(1000, 0)
 	f.now = func() time.Time { return at }
-	f.add("k")
+	f.Add("k")
 	at = at.Add(30 * time.Second)
-	f.add("k")
-	f.add("k")
-	if !f.blocked("k") || f.blocked("other") {
+	f.Add("k")
+	f.Add("k")
+	if !f.Blocked("k") || f.Blocked("other") {
 		t.Fatal("three hits within the window block")
 	}
 	at = at.Add(31 * time.Second) // the first hit slides out
-	if f.blocked("k") {
+	if f.Blocked("k") {
 		t.Fatal("still blocked after the oldest hit expired")
 	}
 	at = at.Add(time.Minute)
-	f.blocked("k")
+	f.Blocked("k")
 	if _, ok := f.hits["k"]; ok {
 		t.Fatal("an expired key is kept")
 	}

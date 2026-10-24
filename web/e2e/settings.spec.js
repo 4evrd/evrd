@@ -118,3 +118,24 @@ test('password sign-in can’t be turned off without single sign-on', async ({ p
   await expect(page.getByTestId('setting-password_login').getByRole('switch')).toBeChecked()
   await (await session(ADMIN, ADMIN_PASS)).dispose()
 })
+
+test('SSO passwords for IRC clients: the method and each one’s settings', async ({ page }) => {
+  await login(page, ADMIN, ADMIN_PASS)
+  await page.goto('/admin/settings')
+  await expect(page.getByRole('heading', { name: 'SSO passwords in IRC' })).toBeVisible()
+  await expect(page.getByTestId('setting-sso_irc_password')).toContainText('Check SSO passwords with')
+  await expect(page.getByTestId('setting-sso_password_client_id')).toContainText('Password grant: client ID')
+  await expect(page.getByTestId('setting-ldap_user_filter')).toContainText('(sAMAccountName={username})')
+  await expect(page.getByTestId('setting-logto_m2m_client_id')).toContainText('Logto: Management API app ID')
+  // secrets: never shown back
+  for (const k of ['sso_password_client_secret', 'ldap_bind_password', 'logto_m2m_client_secret']) {
+    await expect(page.getByTestId(`setting-${k}`).getByRole('textbox')).toHaveValue('')
+  }
+  const a = await session(ADMIN, ADMIN_PASS)
+  const { fields } = await a.get('/api/admin/settings')
+  const method = fields.find((f) => f.key === 'sso_irc_password')
+  expect(method).toMatchObject({ value: 'off', options: ['off', 'password_grant', 'ldap', 'logto'] })
+  // off (and no SSO set up): SSO accounts keep using client passwords in IRC
+  expect((await a.get('/api/config')).ssoIRCPassword).toBe(false)
+  await a.dispose()
+})

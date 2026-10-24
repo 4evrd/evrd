@@ -147,6 +147,49 @@ var Specs = []Spec{
 		Help: "A provider role that makes the user an evrd admin. Empty: admins are set in evrd.",
 		get:  func(c *Config) string { return c.Auth.OIDCAdminRole }},
 
+	{Key: "sso_irc_password", Group: "SSO passwords in IRC", Label: "Check SSO passwords with", Kind: "choice", Options: SSOPasswordMethods,
+		Help: "Lets SSO accounts sign in from IRC clients with their provider password. password_grant asks the OIDC provider (Keycloak, Okta, Auth0, Entra ID…), ldap binds to your directory as the user, logto asks Logto's Management API. Off: SSO accounts use IRC client passwords, which keep working either way.",
+		get:  func(c *Config) string { return c.Auth.SSOIRCPassword }},
+	{Key: "sso_password_client_id", Group: "SSO passwords in IRC", Label: "Password grant: client ID", Kind: "string",
+		Help: "The OIDC client allowed the password grant. Empty: the sign-in client above.",
+		get:  func(c *Config) string { return c.Auth.SSOPasswordClientID }},
+	{Key: "sso_password_client_secret", Group: "SSO passwords in IRC", Label: "Password grant: client secret", Kind: "secret", Env: "EVRD_SSO_PASSWORD_CLIENT_SECRET",
+		get: func(c *Config) string { return c.Auth.SSOPasswordClientSecret }},
+	{Key: "sso_password_login", Group: "SSO passwords in IRC", Label: "Password grant: user name sent", Kind: "choice", Options: []string{"username", "email"},
+		Help: "What the provider knows the user by: their evrd user name, or their email address.",
+		get:  func(c *Config) string { return c.Auth.SSOPasswordLogin }},
+	{Key: "ldap_url", Group: "SSO passwords in IRC", Label: "LDAP server", Kind: "string",
+		Help: "ldaps://ldap.example.org, or ldap://… (evrd starts TLS).",
+		get:  func(c *Config) string { return c.Auth.LDAPURL }},
+	{Key: "ldap_insecure", Group: "SSO passwords in IRC", Label: "LDAP without TLS", Kind: "bool",
+		Help: "Send passwords to an ldap:// server without StartTLS. Only on a trusted local network.",
+		get:  func(c *Config) string { return fmtBool(c.Auth.LDAPInsecure) }},
+	{Key: "ldap_user_dn", Group: "SSO passwords in IRC", Label: "LDAP user DN", Kind: "string",
+		Help: "The user's DN, with {username} in it, e.g. uid={username},ou=people,dc=example,dc=org. Empty: search for it (below).",
+		get:  func(c *Config) string { return c.Auth.LDAPUserDN }},
+	{Key: "ldap_bind_dn", Group: "SSO passwords in IRC", Label: "LDAP search: bind DN", Kind: "string",
+		Help: "Who searches for the user. Empty: an anonymous search.",
+		get:  func(c *Config) string { return c.Auth.LDAPBindDN }},
+	{Key: "ldap_bind_password", Group: "SSO passwords in IRC", Label: "LDAP search: bind password", Kind: "secret", Env: "EVRD_LDAP_BIND_PASSWORD",
+		get: func(c *Config) string { return c.Auth.LDAPBindPassword }},
+	{Key: "ldap_base_dn", Group: "SSO passwords in IRC", Label: "LDAP search: base DN", Kind: "string",
+		Help: "Where to search for the user, e.g. ou=people,dc=example,dc=org.",
+		get:  func(c *Config) string { return c.Auth.LDAPBaseDN }},
+	{Key: "ldap_user_filter", Group: "SSO passwords in IRC", Label: "LDAP search: filter", Kind: "string",
+		Help: "Finds the user, with {username} in it, e.g. (uid={username}) or (sAMAccountName={username}).",
+		get:  func(c *Config) string { return c.Auth.LDAPUserFilter }},
+	{Key: "ldap_login", Group: "SSO passwords in IRC", Label: "LDAP: {username} is", Kind: "choice", Options: []string{"username", "subject"},
+		Help: "The evrd user name, or the account's SSO subject (when the provider's subject is the directory's user name).",
+		get:  func(c *Config) string { return c.Auth.LDAPLogin }},
+	{Key: "logto_m2m_client_id", Group: "SSO passwords in IRC", Label: "Logto: Management API app ID", Kind: "string",
+		Help: "A Logto machine-to-machine app with access to the Logto Management API.",
+		get:  func(c *Config) string { return c.Auth.LogtoM2MClientID }},
+	{Key: "logto_m2m_client_secret", Group: "SSO passwords in IRC", Label: "Logto: Management API app secret", Kind: "secret", Env: "EVRD_LOGTO_M2M_CLIENT_SECRET",
+		get: func(c *Config) string { return c.Auth.LogtoM2MClientSecret }},
+	{Key: "logto_m2m_resource", Group: "SSO passwords in IRC", Label: "Logto: Management API resource", Kind: "string",
+		Help: "The Management API's indicator. Empty: https://<tenant>.logto.app/api for Logto Cloud, https://default.logto.app/api for a Logto of your own.",
+		get:  func(c *Config) string { return c.Auth.LogtoM2MResource }},
+
 	{Key: "otel_endpoint", Group: "Metrics", Label: "OTLP endpoint", Kind: "string", Restart: true, Env: "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
 		Help: "Where metrics are sent, e.g. http://victoriametrics:8428/opentelemetry/v1/metrics. Empty turns export off.",
 		get:  func(c *Config) string { return c.Metrics.OTLPEndpoint }},
@@ -233,6 +276,28 @@ func (c *Config) setEmpty(key string) {
 		c.Auth.OIDCLabel = ""
 	case "oidc_admin_role":
 		c.Auth.OIDCAdminRole = ""
+	case "sso_password_client_id":
+		c.Auth.SSOPasswordClientID = ""
+	case "sso_password_client_secret":
+		c.Auth.SSOPasswordClientSecret = ""
+	case "ldap_url":
+		c.Auth.LDAPURL = ""
+	case "ldap_user_dn":
+		c.Auth.LDAPUserDN = ""
+	case "ldap_bind_dn":
+		c.Auth.LDAPBindDN = ""
+	case "ldap_bind_password":
+		c.Auth.LDAPBindPassword = ""
+	case "ldap_base_dn":
+		c.Auth.LDAPBaseDN = ""
+	case "ldap_user_filter":
+		c.Auth.LDAPUserFilter = ""
+	case "logto_m2m_client_id":
+		c.Auth.LogtoM2MClientID = ""
+	case "logto_m2m_client_secret":
+		c.Auth.LogtoM2MClientSecret = ""
+	case "logto_m2m_resource":
+		c.Auth.LogtoM2MResource = ""
 	case "otel_endpoint":
 		c.Metrics.OTLPEndpoint = ""
 	case "metrics_url":

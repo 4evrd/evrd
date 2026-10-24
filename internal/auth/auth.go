@@ -50,7 +50,12 @@ const touchEvery = time.Minute
 type AuthServiceImpl interface {
 	SessionServiceImpl
 
+	SSOPasswordServiceImpl
+
 	SetConfig(a config.Auth)
+	// Failures is the failed sign-in count per username, shared by the web
+	// and IRC sign-ins (10 in 15 minutes locks the account out for a while).
+	Failures() *FailureLimiter
 	Current(r *http.Request) (store.User, store.Session, bool)
 	Forwarded(secret string, next http.Handler) http.Handler
 	RequireUser(next http.HandlerFunc) http.HandlerFunc
@@ -72,15 +77,16 @@ type Repository interface {
 type Manager struct {
 	SessionServiceImpl // listing sessions and signing out
 
-	users store.UserRepositoryImpl
-	sess  store.SessionRepositoryImpl
-	acc   accounts.AccountServiceImpl
-	cmu   sync.Mutex // guards cfg (SetConfig)
-	cfg   config.Auth
-	pub   string // public URL
-	log   *slog.Logger
-	now   func() time.Time
-	fails *failureLimiter
+	users         store.UserRepositoryImpl
+	sess          store.SessionRepositoryImpl
+	acc           accounts.AccountServiceImpl
+	cmu           sync.Mutex // guards cfg (SetConfig)
+	cfg           config.Auth
+	pub           string // public URL
+	log           *slog.Logger
+	now           func() time.Time
+	fails         *FailureLimiter
+	*ssoPasswords // IRC sign-in with the SSO password
 
 	oidc       *oidc.Provider
 	verifier   *oidc.IDTokenVerifier
@@ -98,7 +104,10 @@ func (m *Manager) SetConfig(a config.Auth) {
 	m.cmu.Lock()
 	m.cfg = a
 	m.cmu.Unlock()
+	m.ssoPasswords.apply(a)
 }
+
+func (m *Manager) Failures() *FailureLimiter { return m.fails }
 
 // conf is the current sign-in config.
 func (m *Manager) conf() config.Auth {
@@ -124,7 +133,8 @@ func New(ctx context.Context, repo Repository, acc accounts.AccountServiceImpl, 
 		pub:                publicURL,
 		log:                log,
 		now:                time.Now,
-		fails:              newFailureLimiter(10, 15*time.Minute),
+		fails:              NewFailureLimiter(10, 15*time.Minute),
+		ssoPasswords:       newSSOPasswords(cfg, nil),
 		pending:            map[string]pendingLogin{},
 	}
 	if !cfg.OIDCEnabled() {
@@ -146,6 +156,7 @@ func New(ctx context.Context, repo Repository, acc accounts.AccountServiceImpl, 
 		scopes = append(scopes, "roles")
 	}
 	m.oidc = p
+	m.ssoPasswords.setProvider(p, cfg) // for sso_irc_password password_grant
 	m.verifier = p.Verifier(&oidc.Config{ClientID: cfg.OIDCClientID})
 	m.endSession = meta.EndSession
 	m.oauth = oauth2.Config{
@@ -338,7 +349,7 @@ func (m *Manager) PasswordLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := strings.ToLower(strings.TrimSpace(in.Username))
-	if m.fails.blocked(key) {
+	if m.fails.Blocked(key) {
 		writeErr(w, http.StatusTooManyRequests, "too many failed attempts — try again in a few minutes")
 		return
 	}
@@ -350,11 +361,11 @@ func (m *Manager) PasswordLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	case err != nil:
 		telemetry.WebLogins.Add(r.Context(), 1, telemetry.Attrs("method", "password", "result", "invalid"))
-		m.fails.add(key)
+		m.fails.Add(key)
 		writeErr(w, http.StatusUnauthorized, "wrong username or password")
 		return
 	}
-	m.fails.reset(key)
+	m.fails.Reset(key)
 	if !accounts.HostAllowed(u, m.ClientIP(r)) {
 		telemetry.WebLogins.Add(r.Context(), 1, telemetry.Attrs("method", "password", "result", "host_denied"))
 		writeErr(w, http.StatusForbidden, "signing in from your address isn't allowed for this account")
@@ -615,8 +626,8 @@ func writeErr(w http.ResponseWriter, code int, msg string) {
 
 // --- failure limiter -----------------------------------------------------
 
-// failureLimiter counts failed sign-ins per key in a sliding window.
-type failureLimiter struct {
+// FailureLimiter counts failed sign-ins per key in a sliding window.
+type FailureLimiter struct {
 	mu     sync.Mutex
 	max    int
 	window time.Duration
@@ -624,11 +635,12 @@ type failureLimiter struct {
 	now    func() time.Time
 }
 
-func newFailureLimiter(max int, window time.Duration) *failureLimiter {
-	return &failureLimiter{max: max, window: window, hits: map[string][]time.Time{}, now: time.Now}
+// NewFailureLimiter blocks a key after max failures within window.
+func NewFailureLimiter(max int, window time.Duration) *FailureLimiter {
+	return &FailureLimiter{max: max, window: window, hits: map[string][]time.Time{}, now: time.Now}
 }
 
-func (f *failureLimiter) recent(key string) []time.Time {
+func (f *FailureLimiter) recent(key string) []time.Time {
 	cut := f.now().Add(-f.window)
 	kept := f.hits[key][:0]
 	for _, t := range f.hits[key] {
@@ -644,19 +656,22 @@ func (f *failureLimiter) recent(key string) []time.Time {
 	return kept
 }
 
-func (f *failureLimiter) blocked(key string) bool {
+// Blocked reports whether key has failed too often lately.
+func (f *FailureLimiter) Blocked(key string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.recent(key)) >= f.max
 }
 
-func (f *failureLimiter) add(key string) {
+// Add counts a failure for key.
+func (f *FailureLimiter) Add(key string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.hits[key] = append(f.recent(key), f.now())
 }
 
-func (f *failureLimiter) reset(key string) {
+// Reset forgets key's failures (it signed in).
+func (f *FailureLimiter) Reset(key string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.hits, key)

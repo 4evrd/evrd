@@ -3,8 +3,9 @@
 Point any IRC client at the bouncer and authenticate with a **server password**
 of `<user>:<password>` (or `<user>/<network>:<password>` to pick a network).
 The password is the account password or an **IRC client password** made on
-the web app's *IRC clients* page — the only option for accounts that sign in
-with SSO, and revocable one client at a time. Clients that do SASL can sign in
+the web app's *IRC clients* page — revocable one client at a time. Accounts
+that sign in with SSO use a client password, or their SSO password where the
+admin turned that on (`sso_irc_password`; the *IRC clients* page says so). Clients that do SASL can sign in
 with SASL PLAIN instead (user name `<user>` or `<user>/<network>`):
 
 ```
@@ -246,9 +247,17 @@ before.
 ## Troubleshooting
 
 **`464 :Invalid credentials` with an SSO account.** An account that signs in
-with SSO has no evrd password, and your SSO provider's password doesn't work
-over IRC. Make an IRC client password on the web app's *IRC clients* page
+with SSO has no evrd password, and unless the admin turned on SSO passwords
+for IRC (`sso_irc_password`), your SSO provider's password doesn't work over
+IRC. Make an IRC client password on the web app's *IRC clients* page
 (`<public_url>/clients`) and use that: `<user>:<client password>`. evrd's
 reply says so when the account signs in with SSO, and every refused sign-in is
 logged (`irc sign-in failed` with the user, network, client IP and reason —
 never the password).
+
+**`464 :Can't check your SSO password right now`.** SSO passwords are on, but
+evrd couldn't reach the identity provider (or its management app is set up
+wrong — the server log says which). Use an IRC client password meanwhile.
+
+**`464 :Too many failed sign-ins`.** Ten wrong passwords within 15 minutes, over
+IRC or on the web, lock the account out for a while. Wait and try again.

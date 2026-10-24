@@ -39,6 +39,15 @@ type fakeIdP struct {
 
 	mu     sync.Mutex
 	grants map[string]grant // code -> what the token endpoint returns
+	// passwords answer the password grant: username -> its user
+	passwords map[string]pwUser
+}
+
+// pwUser is a provider user for the password grant: their password and
+// subject, or the error the token endpoint answers with.
+type pwUser struct {
+	password, sub   string
+	error, describe string
 }
 
 type grant struct {
@@ -53,7 +62,7 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &fakeIdP{t: t, key: key, grants: map[string]grant{}}
+	p := &fakeIdP{t: t, key: key, grants: map[string]grant{}, passwords: map[string]pwUser{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
@@ -88,6 +97,10 @@ func b64(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 
 func (p *fakeIdP) token(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
+	if r.Form.Get("grant_type") == "password" {
+		p.passwordGrant(w, r)
+		return
+	}
 	p.mu.Lock()
 	g, ok := p.grants[r.Form.Get("code")]
 	delete(p.grants, r.Form.Get("code"))
@@ -104,6 +117,35 @@ func (p *fakeIdP) token(w http.ResponseWriter, r *http.Request) {
 		"access_token": "at", "token_type": "Bearer", "expires_in": 3600,
 		"id_token": p.sign(g.key, g.claims),
 	})
+}
+
+// passwordGrant answers grant_type=password for the sign-in client.
+func (p *fakeIdP) passwordGrant(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	fail := func(code int, e, d string) {
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(map[string]string{"error": e, "error_description": d})
+	}
+	if r.Form.Get("client_id") != testClientID || r.Form.Get("client_secret") != "s3cret" {
+		fail(http.StatusUnauthorized, "invalid_client", "bad client")
+		return
+	}
+	if r.Form.Get("scope") != "openid" {
+		fail(http.StatusBadRequest, "invalid_scope", "")
+		return
+	}
+	p.mu.Lock()
+	u, ok := p.passwords[r.Form.Get("username")]
+	p.mu.Unlock()
+	switch {
+	case ok && u.error != "":
+		fail(http.StatusBadRequest, u.error, u.describe)
+	case !ok || u.password != r.Form.Get("password"):
+		fail(http.StatusBadRequest, "invalid_grant", "Invalid user credentials")
+	default:
+		json.NewEncoder(w).Encode(map[string]any{"access_token": "at", "token_type": "Bearer", "expires_in": 300,
+			"id_token": p.sign(nil, p.idClaims("", map[string]any{"sub": u.sub}))})
+	}
 }
 
 // sign makes a compact RS256 JWT.
