@@ -22,7 +22,7 @@ test('the IRC clients page fits a phone, on every client’s tab', async ({ page
   await page.goto('/clients')
   await expect(page.getByRole('heading', { name: 'Set up your client' })).toBeVisible()
   await expect(page.getByText('A laptop with a fairly long name')).toBeVisible()
-  for (const tab of ['HexChat', 'irssi', 'WeeChat', 'Other']) {
+  for (const tab of ['HexChat', 'mIRC', 'irssi', 'WeeChat', 'Other']) {
     const t = page.getByRole('tab', { name: tab })
     await t.scrollIntoViewIfNeeded() // below the sign-in switch on a phone
     await expect(t).toBeInViewport({ ratio: 1 })
