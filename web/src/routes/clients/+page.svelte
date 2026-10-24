@@ -29,6 +29,12 @@
   onDestroy(() => clearInterval(timer))
 
   let tab = $state('hex')
+  // How the guide signs in: by link (no password; *status sends a link to
+  // allow on this website) when the server offers it, else a password. SSO
+  // accounts start on the link, password accounts on their password.
+  const linkOn = $derived(!!session.config.ircLinkSignIn)
+  let method = $state(null)
+  const byLink = $derived(linkOn && (method ?? (me.hasPassword ? 'password' : 'link')) === 'link')
   const TABS = $derived([['hex', 'HexChat'], ['irssi', 'irssi'], ['wee', 'WeeChat'], ['other', t('clients.other')]])
 
   // new password drawer
@@ -75,6 +81,11 @@
     <Icon name="key" />
     <span class="od-fill"><b>{t('clients.ssoWorksTitle', { sso: session.config.ssoLabel || 'SSO' })}</b> <Msg key="clients.ssoWorks" vars={{}}>{#snippet format()}<span class="code">{me.username}/{firstNet}:<i>{t('clients.passwordWord')}</i></span>{/snippet}</Msg></span>
   </div>
+{:else if !me.hasPassword && linkOn}
+  <div class="callout enter" role="note" data-testid="link-notice" style="margin-bottom:var(--s6)">
+    <Icon name="key" />
+    <span class="od-fill"><b>{t('clients.linkTitle')}</b> <Msg key="clients.linkBody" vars={{}}>{#snippet format()}<span class="code">{me.username}/{firstNet}</span>{/snippet}</Msg></span>
+  </div>
 {:else if !me.hasPassword}
   <div class="callout warn enter" role="note" data-testid="sso-notice" style="margin-bottom:var(--s6)">
     <Icon name="alert" />
@@ -93,14 +104,21 @@
       <div class="kv-list">
         <div class="kv"><div class="od-field"><span class="k">{t('clients.server')}</span><span class="v" data-testid="irc-host">{host}</span></div><Copy text={host} label={t('clients.copyServer')} /></div>
         <div class="kv"><div class="od-field"><span class="k">{t('clients.port')}</span><span class="v">{ports.map((p) => `${p.port} (${p.tls ? 'TLS' : t('clients.plain')})`).join(' · ') || port.port}</span></div><Copy text={String(port.port)} label={t('clients.copyPort')} /></div>
-        <div class="kv"><div class="od-field"><span class="k">{t('clients.serverPassword')}</span><span class="v">{me.username}/<i>{t('clients.networkWord')}</i>:<i>{t('clients.passwordWord')}</i></span></div><Copy text="{me.username}/{firstNet}:" label={t('clients.copyFormat')} /></div>
+        <div class="kv"><div class="od-field"><span class="k">{t('clients.serverPassword')}</span><span class="v" data-testid="pass-format">{me.username}/<i>{t('clients.networkWord')}</i>{#if !byLink}:<i>{t('clients.passwordWord')}</i>{/if}</span></div><Copy text={byLink ? `${me.username}/${firstNet}` : `${me.username}/${firstNet}:`} label={t('clients.copyFormat')} /></div>
       </div>
-      <p class="desc" style="margin-top:var(--s4)">{me.hasPassword ? t('clients.useAccountPassword') : session.config.ssoIRCPassword ? t('clients.useSsoOrClientPassword', { sso: session.config.ssoLabel || 'SSO' }) : t('clients.useClientPassword', { sso: session.config.ssoLabel })} <Msg key={session.nets[0] ? 'clients.leaveOutNamed' : 'clients.leaveOut'} vars={{ network: session.nets[0]?.name }}>{#snippet path()}<span class="code">/network</span>{/snippet}</Msg></p>
+      <p class="desc" style="margin-top:var(--s4)">{me.hasPassword ? t('clients.useAccountPassword') : session.config.ssoIRCPassword ? t('clients.useSsoOrClientPassword', { sso: session.config.ssoLabel || 'SSO' }) : t('clients.useClientPassword', { sso: session.config.ssoLabel })} <Msg key={session.nets[0] ? 'clients.leaveOutNamed' : 'clients.leaveOut'} vars={{ network: session.nets[0]?.name }}>{#snippet path()}<span class="code">/network</span>{/snippet}</Msg>{#if linkOn && !byLink} {t('clients.linkHint')}{/if}</p>
     </section>
 
     <section class="card enter" aria-labelledby="guide-h">
       <div class="section-head"><div class="od-stack"><span class="caps">{t('clients.setupGuide')}</span><h2 id="guide-h">{t('clients.setUp')}</h2></div></div>
       <div style="display:grid;grid-template-columns:minmax(0, 1fr);gap:var(--s4)">
+        {#if linkOn}
+          <div class="tabs" role="tablist" aria-label={t('clients.methodLabel')} data-testid="signin-method">
+            <button class="tab" role="tab" aria-selected={byLink} onclick={() => (method = 'link')}>{t('clients.methodLink')}</button>
+            <button class="tab" role="tab" aria-selected={!byLink} onclick={() => (method = 'password')}>{t('clients.methodPassword')}</button>
+          </div>
+          {#if byLink}<p class="desc" data-testid="link-steps">{t('clients.linkSteps')}</p>{/if}
+        {/if}
         <div class="tabs" role="tablist" aria-label={t('clients.client')}>
           {#each TABS as [k, l]}<button class="tab" role="tab" aria-selected={tab === k} onclick={() => (tab = k)}>{l}</button>{/each}
         </div>
@@ -110,15 +128,15 @@
 <pre class="snippet">Servers         <b>{host}/{port.port}</b>
 Use SSL         <b>{port.tls ? 'on' : 'off'}</b>
 Login method    <em>Server password (/PASS password)</em>
-Password        <b>{me.username}/{firstNet}:</b><em>{pwText}</em></pre>
+Password        <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if}</pre>
           </div>
         {:else if tab === 'irssi'}
 <pre class="snippet">/network add <b>evrd-{firstNet}</b>
-/server add {port.tls ? '-tls ' : ''}-network <b>evrd-{firstNet}</b> -password <b>{me.username}/{firstNet}:</b><em>{pwText}</em> <b>{host}</b> {port.port}
+/server add {port.tls ? '-tls ' : ''}-network <b>evrd-{firstNet}</b> -password <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if} <b>{host}</b> {port.port}
 /connect <b>evrd-{firstNet}</b></pre>
         {:else if tab === 'wee'}
 <pre class="snippet">/server add <b>evrd</b> <b>{host}</b>/{port.port}{port.tls ? ' -tls' : ''}
-/set irc.server.evrd.password "<b>{me.username}/{firstNet}:</b><em>{pwText}</em>"
+/set irc.server.evrd.password "<b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if}"
 /connect <b>evrd</b></pre>
         {:else}
           <p class="desc">{t('clients.otherWorks')} <Msg key={port.tls ? 'clients.otherUseTls' : 'clients.otherUse'}>{#snippet hostname()}<span class="code">{host}</span>{/snippet}{#snippet portnum()}<span class="code">{port.port}</span>{/snippet}</Msg> {t('clients.otherPerNetwork')}</p>
