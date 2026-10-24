@@ -571,12 +571,12 @@ func (se *session) joinChannels() {
 		if cs := se.up.ChannelSettings(ch); cs.Detached || cs.Disabled && !se.up.Joined(ch) {
 			continue
 		}
-		// Make the client open the buffer, then ask the upstream for the real
-		// names/topic — the replies stream back over the raw feed.
+		// Make the client open the buffer, then give it the topic and names
+		// a join brings, from evrd's state (or the network's, while evrd
+		// doesn't know them whole).
 		se.send(se.selfJoin(ch))
 		se.joinedMark(ch)
-		se.up.SendRaw("NAMES " + ch)
-		se.up.SendRaw("TOPIC " + ch)
+		se.channelBurst(ch)
 	}
 }
 
@@ -875,8 +875,7 @@ func (se *session) attachChannel(ch string) {
 	se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Detached = false })
 	se.send(se.selfJoin(ch))
 	se.joinedMark(ch)
-	se.up.SendRaw("NAMES " + ch)
-	se.up.SendRaw("TOPIC " + ch)
+	se.channelBurst(ch)
 	if !se.caps["draft/chathistory"] {
 		// what it missed while detached: after its clear mark
 		p := se.playRules()
@@ -951,7 +950,14 @@ func (se *session) dispatch(m irc.Message) {
 			}
 		}
 		se.passOn(m)
+	case "TOPIC", "MODE":
+		if !se.answerLocally(m.Command, m.Params) {
+			se.passOn(m)
+		}
 	case "NAMES":
+		if se.answerLocally(m.Command, m.Params) {
+			return
+		}
 		if se.caps["no-implicit-names"] && len(m.Params) > 0 {
 			if se.namesAsked == nil {
 				se.namesAsked = map[string]int{}

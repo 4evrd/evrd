@@ -67,6 +67,8 @@ func TestServerRegistersAndConfirms(t *testing.T) {
 	c.expect(":fake 001 alice :welcome")
 	c.send("JOIN #c")
 	c.expect(":alice!u@h JOIN #c")
+	c.expect(":fake 353 alice = #c :alice")
+	c.expect(":fake 366 alice #c :End of /NAMES list.")
 	c.send("NAMES #c")
 	c.expect(":fake 353 alice = #c :alice @op")
 	c.expect(":fake 366 alice #c :End of /NAMES list.")
