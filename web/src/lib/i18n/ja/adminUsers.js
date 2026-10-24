@@ -140,4 +140,9 @@ export default {
   'adminUsers.deleted': '{name} を削除しました',
   'adminUsers.cantDeleteSelf': '自分のアカウントはここでは削除できません。アカウント設定から削除してください。',
   'adminUsers.bouncerSettings': 'バウンサー設定',
+  'adminUsers.dropsCaps': 'IRC クライアント',
+  'adminUsers.dropsTitle': '直近 1 日の切断',
+  'adminUsers.dropsSeeAll': 'すべての切断を見る',
+  'adminUsers.dropsNone': '直近 1 日の切断はありません。',
+  'adminUsers.dropsMostly': { other: '{count} 回切断、主に{reason}' },
 }

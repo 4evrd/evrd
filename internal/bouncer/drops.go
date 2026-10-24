@@ -6,6 +6,7 @@ package bouncer
 
 import (
 	"context"
+	"math"
 	"slices"
 	"sort"
 	"time"
@@ -92,7 +93,13 @@ func (b *Bouncer) ClientDrops(ctx context.Context, userID int64, since time.Time
 	if err != nil {
 		return nil, err
 	}
-	// a device attached right now came back after its last disconnect
+	out, _ := byDevice(ds, b.attachedSince(userID))
+	return out, nil
+}
+
+// attachedSince is when each of userID's devices (DeviceKey) attached, for
+// those attached right now: they came back after their last disconnect.
+func (b *Bouncer) attachedSince(userID int64) map[string]time.Time {
 	back := map[string]time.Time{}
 	for _, c := range b.ClientsOf(userID) {
 		if c.Kind != "irc" {
@@ -105,8 +112,16 @@ func (b *Bouncer) ClientDrops(ctx context.Context, userID int64, since time.Time
 			}
 		}
 	}
+	return back
+}
+
+// byDevice groups one user's disconnects (newest first) by device, most
+// drops first, and says how long the device was gone after each one (by
+// the disconnect's reason). back is attachedSince.
+func byDevice(ds []store.ClientDisconnect, back map[string]time.Time) ([]DeviceDrops, []gap) {
 	byKey := map[string]*DeviceDrops{}
 	gaps := map[string][]float64{}
+	var all []gap
 	var order []string
 	for _, d := range ds { // newest first
 		dd := byKey[d.DeviceKey]
@@ -118,13 +133,18 @@ func (b *Bouncer) ClientDrops(ctx context.Context, userID int64, since time.Time
 		}
 		dd.Drops++
 		dd.Reasons[d.Reason]++
+		g := gap{reason: d.Reason, secs: -1}
 		switch {
 		case d.ReconnectedAt != nil:
-			gaps[d.DeviceKey] = append(gaps[d.DeviceKey], d.ReconnectedAt.Sub(d.EndedAt).Seconds())
+			g.secs = d.ReconnectedAt.Sub(d.EndedAt).Seconds()
 		case d.EndedAt.Equal(dd.Last) && back[d.DeviceKey].After(d.EndedAt):
 			// its latest one, and it's attached again now
-			gaps[d.DeviceKey] = append(gaps[d.DeviceKey], back[d.DeviceKey].Sub(d.EndedAt).Seconds())
+			g.secs = back[d.DeviceKey].Sub(d.EndedAt).Seconds()
 		}
+		if g.secs >= 0 {
+			gaps[d.DeviceKey] = append(gaps[d.DeviceKey], g.secs)
+		}
+		all = append(all, g)
 	}
 	out := make([]DeviceDrops, 0, len(order))
 	for _, k := range order {
@@ -134,7 +154,14 @@ func (b *Bouncer) ClientDrops(ctx context.Context, userID int64, since time.Time
 		out = append(out, *dd)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Drops > out[j].Drops })
-	return out, nil
+	return out, all
+}
+
+// gap is how long a device was gone after a disconnect (secs -1: it didn't
+// come back within the period).
+type gap struct {
+	reason string
+	secs   float64
 }
 
 // DropSummary is every IRC client disconnect since since: how many, by
@@ -198,4 +225,146 @@ func (b *Bouncer) LastDisconnect(ctx context.Context, userID int64, deviceKey st
 		}
 	}
 	return store.ClientDisconnect{}, false
+}
+
+// GapStats is how long devices were gone after disconnects for one reason,
+// in seconds, over the ones they came back from.
+type GapStats struct {
+	Back   int     `json:"back"`   // came back within the period
+	Gone   int     `json:"gone"`   // didn't (yet)
+	Median float64 `json:"median"` // 0 when none came back
+	P90    float64 `json:"p90"`
+}
+
+// GapBuckets are the upper bounds (seconds) the admin view sorts gaps into;
+// a further bucket holds the longer ones, and a last one those not back.
+var GapBuckets = []float64{10, 60, 300, 3600}
+
+// UserDeviceDrops is a device's drops, with whose it is.
+type UserDeviceDrops struct {
+	UserID int64 `json:"userId"`
+	DeviceDrops
+}
+
+// AllDrops is every user's IRC client disconnects over a period, for the
+// admin view: by reason, how long devices were gone, and the devices that
+// drop most.
+type AllDrops struct {
+	Drops    int                 `json:"drops"`
+	Accounts int                 `json:"accounts"`
+	Devices  int                 `json:"devices"`
+	Reasons  map[string]int      `json:"reasons"`
+	Gaps     map[string]GapStats `json:"gaps"` // by reason
+	// Buckets counts disconnects by how long the device was gone (one per
+	// GapBuckets bound, then longer, then not back), by reason.
+	Buckets []map[string]int  `json:"buckets"`
+	Top     []UserDeviceDrops `json:"top"`
+	// Timeline counts disconnects per time slot, by reason: Slots slots of
+	// Step each from Start, the last one the slot in progress.
+	Timeline map[string][]int `json:"timeline"`
+}
+
+// Slots is how AllClientDrops lays its timeline out: n slots of step each
+// from start. UserID, when set, narrows it all to that user.
+type Slots struct {
+	Start  time.Time
+	Step   time.Duration
+	N      int
+	UserID int64
+}
+
+// AllClientDrops sums up every user's IRC client disconnects since since,
+// with the limit devices that dropped most (or most for one reason, when
+// by is one of DropReasons).
+func (b *Bouncer) AllClientDrops(ctx context.Context, slots Slots, by string, limit int) (AllDrops, error) {
+	since := slots.Start
+	ds, err := b.store.ClientDisconnects(ctx, slots.UserID, since)
+	if err != nil {
+		return AllDrops{}, err
+	}
+	perUser := map[int64][]store.ClientDisconnect{}
+	var users []int64
+	timeline := map[string][]int{}
+	for _, r := range DropReasons {
+		timeline[r] = make([]int, slots.N)
+	}
+	for _, d := range ds {
+		if i := int(d.EndedAt.Sub(slots.Start) / slots.Step); i >= 0 && i < slots.N && timeline[d.Reason] != nil {
+			timeline[d.Reason][i]++
+		}
+	}
+	for _, d := range ds { // newest first, kept so per user
+		if perUser[d.UserID] == nil {
+			users = append(users, d.UserID)
+		}
+		perUser[d.UserID] = append(perUser[d.UserID], d)
+	}
+	a := AllDrops{Drops: len(ds), Accounts: len(users), Reasons: map[string]int{}, Gaps: map[string]GapStats{}, Timeline: timeline,
+		Buckets: make([]map[string]int, len(GapBuckets)+2), Top: []UserDeviceDrops{}}
+	for i := range a.Buckets {
+		a.Buckets[i] = map[string]int{}
+	}
+	secs := map[string][]float64{}
+	for _, uid := range users {
+		devs, gaps := byDevice(perUser[uid], b.attachedSince(uid))
+		for _, d := range devs {
+			a.Top = append(a.Top, UserDeviceDrops{UserID: uid, DeviceDrops: d})
+		}
+		for _, g := range gaps {
+			a.Reasons[g.reason]++
+			st := a.Gaps[g.reason]
+			if g.secs < 0 {
+				st.Gone++
+				a.Buckets[len(a.Buckets)-1][g.reason]++
+			} else {
+				st.Back++
+				secs[g.reason] = append(secs[g.reason], g.secs)
+				a.Buckets[bucket(g.secs)][g.reason]++
+			}
+			a.Gaps[g.reason] = st
+		}
+	}
+	for r, xs := range secs {
+		st := a.Gaps[r]
+		st.Median, st.P90 = median(xs), percentile(xs, 0.9)
+		a.Gaps[r] = st
+	}
+	a.Devices = len(a.Top)
+	count := func(d UserDeviceDrops) int { return d.Drops }
+	if slices.Contains(DropReasons, by) {
+		count = func(d UserDeviceDrops) int { return d.Reasons[by] }
+		// by a reason: only the devices that had it
+		a.Top = slices.DeleteFunc(a.Top, func(d UserDeviceDrops) bool { return count(d) == 0 })
+	}
+	sort.SliceStable(a.Top, func(i, j int) bool {
+		if ci, cj := count(a.Top[i]), count(a.Top[j]); ci != cj {
+			return ci > cj
+		}
+		return a.Top[i].Drops > a.Top[j].Drops
+	})
+	if len(a.Top) > limit {
+		a.Top = a.Top[:limit]
+	}
+	return a, nil
+}
+
+// bucket is the GapBuckets bucket a gap of secs falls in.
+func bucket(secs float64) int {
+	for i, le := range GapBuckets {
+		if secs <= le {
+			return i
+		}
+	}
+	return len(GapBuckets)
+}
+
+// percentile is the p-th (0–1) of xs, by nearest rank.
+func percentile(xs []float64, p float64) float64 {
+	if len(xs) == 0 {
+		return 0
+	}
+	xs = slices.Clone(xs)
+	slices.Sort(xs)
+	i := int(math.Ceil(p*float64(len(xs)))) - 1
+	return xs[max(0, min(i, len(xs)-1))]
 }

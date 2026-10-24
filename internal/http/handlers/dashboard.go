@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -800,6 +801,59 @@ func (s *Handlers) clusterUsage(ctx context.Context) usage {
 	}
 	wg.Wait()
 	return total
+}
+
+// AdminClientDrops is every user's IRC client disconnects over ?range=
+// (24h, 7d or 30d): by reason, how long devices were gone, and the devices
+// that dropped most, with whose they are (?sort= drops or a reason,
+// ?limit= up to 100).
+func (s *Handlers) AdminClientDrops(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	// the network health page's ranges and slots, so the charts read alike
+	key, span, step := healthRange(q.Get("range"))
+	n := int(span / step)
+	start := time.Now().Truncate(step).Add(-time.Duration(n-1) * step)
+	by := q.Get("sort")
+	if !slices.Contains(bouncer.DropReasons, by) {
+		by = "drops"
+	}
+	limit := 25
+	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 {
+		limit = min(n, 100)
+	}
+	// ?user= narrows everything to one account (Admin → Users links here)
+	var only map[string]any
+	slots := bouncer.Slots{Start: start, Step: step, N: n}
+	if id, err := strconv.ParseInt(q.Get("user"), 10, 64); err == nil && id > 0 {
+		u, err := s.acc.UserByID(r.Context(), id)
+		if err != nil {
+			writeErr(w, http.StatusNotFound, "no such user")
+			return
+		}
+		slots.UserID, only = id, map[string]any{"id": u.ID, "username": u.Username}
+	}
+	all, err := s.b.AllClientDrops(r.Context(), slots, by, limit)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	users, _ := s.acc.ListUsers(r.Context())
+	names := map[int64]string{}
+	for _, u := range users {
+		names[u.ID] = u.Username
+	}
+	top := make([]map[string]any, 0, len(all.Top))
+	for _, t := range all.Top {
+		top = append(top, map[string]any{"userId": t.UserID, "user": orDeleted(names[t.UserID]), "device": t.Device,
+			"software": t.Software, "network": t.Network, "drops": t.Drops, "reasons": t.Reasons, "mainReason": t.MainReason,
+			"medianGap": t.MedianGap, "last": t.Last.Unix(), "connected": t.Connected})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"range": key, "sort": by, "order": bouncer.DropReasons, "bucketBounds": bouncer.GapBuckets,
+		"drops": all.Drops, "accounts": all.Accounts, "devices": all.Devices, "reasons": all.Reasons,
+		"gaps": all.Gaps, "buckets": all.Buckets, "top": top,
+		"start": start.Unix(), "step": int64(step / time.Second), "points": n, "timeline": all.Timeline, "user": only,
+	})
 }
 
 // clientDropSummary is every IRC client disconnect in the last day, for the

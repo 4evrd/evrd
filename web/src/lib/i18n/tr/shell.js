@@ -82,4 +82,5 @@ export default {
   'shell.passwordChanged': 'Parola değişti. Diğer web oturumlarının çıkışı yapıldı.',
   'shell.fixThings': { other: 'Kaydetmeden önce {count} şeyi düzelt:' },
   'shell.changePassword': 'Parolayı değiştir',
+  'shell.navDrops': 'Kopmalar',
 }

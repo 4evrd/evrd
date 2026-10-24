@@ -140,4 +140,9 @@ export default {
   'adminUsers.deleted': '{name} eliminato',
   'adminUsers.cantDeleteSelf': 'Non puoi eliminare il tuo account da qui: usa le impostazioni dell’account.',
   'adminUsers.bouncerSettings': 'Impostazioni del bouncer',
+  'adminUsers.dropsCaps': 'Client IRC',
+  'adminUsers.dropsTitle': 'Cadute nell’ultimo giorno',
+  'adminUsers.dropsSeeAll': 'Vedi tutte le sue cadute',
+  'adminUsers.dropsNone': 'Nessuna caduta nell’ultimo giorno.',
+  'adminUsers.dropsMostly': { one: '{count} caduta, {reason}', other: '{count} cadute, per lo più {reason}' },
 }
