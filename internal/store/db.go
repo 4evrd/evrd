@@ -28,6 +28,7 @@ type gormStore struct {
 	CacheRepositoryImpl
 	LanguagePackRepositoryImpl
 	MFARepositoryImpl
+	PendingSignInRepositoryImpl
 
 	db *DB
 }
@@ -67,7 +68,7 @@ func NewDatabase(dsn string) (*DB, error) {
 		return nil, err
 	}
 	hadPlayback := db.Migrator().HasTable(&BufferPlayback{})
-	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}, &PendingSignIn{}); err != nil {
 		return nil, err
 	}
 	if !hadPlayback {
@@ -97,6 +98,7 @@ func newStore(db *DB) *gormStore {
 		CacheRepositoryImpl:          NewCacheRepository(db),
 		LanguagePackRepositoryImpl:   NewLanguagePackRepository(db),
 		MFARepositoryImpl:            NewMFARepository(db),
+		PendingSignInRepositoryImpl:  NewPendingSignInRepository(db),
 		db:                           db,
 	}
 }

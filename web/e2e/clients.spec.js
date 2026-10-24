@@ -68,9 +68,12 @@ test('client passwords: shown once, used to attach, revoked', async ({ page }) =
   await confirm(page)
   await expect(page.getByText('Revoked Laptop')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Revoke Laptop' })).toHaveCount(0)
-  // a new attach with the revoked password is refused
+  // a new attach with the revoked password doesn't get in: it's a long
+  // secret evrd doesn't know, so it's offered a sign-in link (only the
+  // owner, signed in on the website, could allow it)
   const refused = await attach({ password: secret })
-  await refused.waitFor(/ 464 .*Invalid credentials/)
+  await refused.waitFor(/Sign in on the website to connect: /)
+  await expect.poll(() => refused.lines.some((l) => / JOIN /.test(l))).toBe(false)
 })
 
 test('a native client gets backlog and stays in sync with the web', async ({ page }) => {

@@ -633,6 +633,24 @@
     "irc.settingLabel.irc_mfa": "IRC için ikinci faktör",
     "irc.settingHelp.irc_mfa": "Parolayla giriş yapan IRC istemcilerinin ne zaman bir doğrulama uygulamasından kod da vermesi gerektiği: hiçbir zaman (off), kullanıcı isterse (optional) ya da her zaman (required — kullanıcılar kapatamaz).",
     "irc.settingLabel.irc_mfa_client_passwords": "İstemci parolalarında da ikinci faktör",
-    "irc.settingHelp.irc_mfa_client_passwords": "IRC istemci parolaları rastgele, cihaza özel ve iptal edilebilir; bu açık olmadıkça ikinci faktör gerekmez."
+    "irc.settingHelp.irc_mfa_client_passwords": "IRC istemci parolaları rastgele, cihaza özel ve iptal edilebilir; bu açık olmadıkça ikinci faktör gerekmez.",
+    "irc.signin.tooMany": "çok fazla giriş bağlantısı açık — birkaç dakika sonra yeniden dene",
+    "irc.signin.gone": "bu bağlantının süresi doldu ya da zaten kullanıldı",
+    "irc.signin.notYours": "bu giriş başka bir hesaba ait",
+    "irc.signin.noSecret": "istemci hatırlanabilecek bir sır göndermedi",
+    "irc.signin.forbidden": "bu hesap girişlere izin veremez",
+    "irc.signin.link": "Bağlanmak için web sitesinde giriş yap: {url} (bağlantı bir kez, {minutes} dakika boyunca çalışır).",
+    "irc.signin.waiting": "Web sitesinde izin verilmesi bekleniyor: {url}",
+    "irc.signin.expired": "Giriş bağlantısının süresi doldu — yeniden bağlan.",
+    "irc.signin.denied": "Giriş web sitesinde reddedildi.",
+    "irc.signin.allowed": "Web sitesinde izin verildi — hoş geldin.",
+    "irc.signin.otherNode": "İzin verildi — bitirmek için yeniden bağlan (bouncer'ın kümenin başka bir sunucusunda çalışıyor).",
+    "irc.mfa.challengeOrLink": "{network} ağına girmeden önce ikinci faktör gerekiyor: /msg {status} otp <kod>, ya da bu girişe web sitesinde izin ver: {url}",
+    "irc.mfa.linkOnly": "{network} ağına girmeden önce bu girişe web sitesinde izin ver: {url}",
+    "irc.event.attachedLink": "{client} bağlandı, web sitesinde izin verildi",
+    "irc.settingLabel.irc_link_signin": "Bağlantıyla IRC girişi",
+    "irc.settingHelp.irc_link_signin": "Kullanılabilir parolası olmayan bir IRC istemcisi, giriş yaptıktan sonra (SSO ve onun MFA'sıyla) buradan izin vermek için bir bağlantı alır. Genel URL gerekir.",
+    "irc.settingLabel.irc_remember_days": "Hatırlanan IRC cihazlarının süresi",
+    "irc.settingHelp.irc_remember_days": "Bağlantıyla izin verilip hatırlanan bir cihazın sormadan giriş yapmaya devam ettiği gün sayısı (1–365)."
   }
 }

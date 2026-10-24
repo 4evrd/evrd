@@ -166,6 +166,22 @@ type MFARepositoryImpl interface {
 	UseRecoveryCode(ctx context.Context, id int64, at time.Time) (bool, error)
 }
 
+// PendingSignInRepositoryImpl keeps IRC sign-ins waiting on the website.
+// PendingSignIn* return ErrNotFound when there's none.
+type PendingSignInRepositoryImpl interface {
+	CreatePendingSignIn(ctx context.Context, p PendingSignIn) error
+	PendingSignIn(ctx context.Context, id string) (PendingSignIn, error)
+	PendingSignInByToken(ctx context.Context, tokenHash string) (PendingSignIn, error)
+	// DecidePendingSignIn sets a pending one's state (once: false when it
+	// was decided already or is gone).
+	DecidePendingSignIn(ctx context.Context, id, state string, userID int64, device string) (bool, error)
+	DeletePendingSignIn(ctx context.Context, id string) error
+	// CountPendingSignIns is how many undecided ones from ip, and for
+	// username, are still open at now.
+	CountPendingSignIns(ctx context.Context, ip, username string, now time.Time) (byIP, byUser int64, err error)
+	DeleteExpiredSignIns(ctx context.Context, now time.Time) error
+}
+
 // Store is every repository on one database, plus what spans them. It's
 // what Open returns; a service takes only the repositories it uses.
 // Implementations must be safe for concurrent use.
@@ -182,6 +198,7 @@ type Store interface {
 	CacheRepositoryImpl
 	LanguagePackRepositoryImpl
 	MFARepositoryImpl
+	PendingSignInRepositoryImpl
 
 	// EncryptSecrets re-encrypts network secrets under the current key.
 	EncryptSecrets(ctx context.Context) (int, error)

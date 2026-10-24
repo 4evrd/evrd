@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/4evrd/evrd/internal/ircsignin"
 	"strings"
 	"sync"
 	"time"
@@ -63,14 +64,32 @@ var (
 	otpTries = 5
 )
 
-// lockedSignIn is a client waiting for its second factor.
+// lockedSignIn is a client waiting for its second factor, or to be allowed
+// on the website (link.go).
 type lockedSignIn struct {
 	net      store.Network // where it goes once verified
 	unbound  bool          // a bouncer connection: on no network either way
 	username string
 	device   string
+	totp     bool // the account has an authenticator app
 	tries    int
 	timer    *time.Timer
+	// link is set while the client, not signed in yet, waits to be
+	// allowed on the website; pendingID and url are its link (also a
+	// second factor's alternative to a code).
+	link      bool
+	pendingID string
+	url       string
+}
+
+// networkNamed is a network a client asked for by name, before it's known
+// whose it is.
+func networkNamed(name string) store.Network { return store.Network{Name: name} }
+
+// cutLogin splits PASS's login: user[/network].
+func cutLogin(login string) (username, network string, ok bool) {
+	username, network, ok = strings.Cut(login, "/")
+	return username, network, ok
 }
 
 // clientPassword reports whether device is an IRC client password's name
@@ -80,33 +99,33 @@ func clientPassword(device string) bool { return device != "" && device != ssoDe
 // secondFactor decides whether u's sign-in needs a second factor and checks
 // otp, the code sent after the password, if any: locked when the client
 // has to send one first, or the numeric to refuse it with and why.
-func (se *session) secondFactor(u store.User, username, network, device, otp string) (locked bool, code, why string) {
+func (se *session) secondFactor(u store.User, username, network, device, otp string) (locked, totp bool, code, why string) {
 	factors, policy := se.srv.secondFactors()
 	if factors == nil || !policy.Needed(u.IRCRequireMFA, clientPassword(device)) {
-		return false, "", ""
+		return false, false, "", ""
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	st, err := factors.Status(ctx, u.ID)
 	if err != nil {
 		se.srv.log.Warn("second factor", "user", username, "err", err)
-		return false, "464", "Can't check your second factor right now — try again in a moment"
+		return false, false, "464", "Can't check your second factor right now — try again in a moment"
 	}
-	if !st.TOTP {
+	if !st.TOTP && !se.srv.linkSignInOn() {
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("no_second_factor"))
 		se.loginFailed(username, network, "no_second_factor")
-		return false, "464", "This account needs a second factor for IRC — set up an authenticator app on " + se.srv.securityPage() + " first"
+		return false, false, "464", "This account needs a second factor for IRC — set up an authenticator app on " + se.srv.securityPage() + " first"
 	}
-	if otp == "" {
-		return true, "", ""
+	if otp == "" || !st.TOTP {
+		return true, st.TOTP, "", "" // the code (or the website) next
 	}
 	if err := factors.Verify(ctx, u.ID, otp); err != nil {
 		se.otpFailed(username)
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("wrong_second_factor"))
 		se.loginFailed(username, network, "wrong_second_factor")
-		return false, "464", "Wrong second-factor code"
+		return false, false, "464", "Wrong second-factor code"
 	}
-	return false, "", ""
+	return false, false, "", ""
 }
 
 // securityPage is where users set up second factors.
@@ -126,20 +145,40 @@ func (se *session) otpFailed(username string) {
 	}
 }
 
-// lock leaves the client waiting for its second factor, for otpWait.
+// lock leaves the client waiting for its second factor: a code from the
+// app, for otpWait, or (sign-in by link on) allowing it on the website,
+// for as long as the link lasts.
 func (se *session) lock(l lockedSignIn) {
+	wait := otpWait
+	if links := se.srv.links(); links != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		id, token, err := links.Begin(ctx, ircsignin.Request{UserID: se.uid, Username: se.acct.Username, Network: l.net.Name, Nick: se.nick, IP: se.clientIP()})
+		cancel()
+		if err == nil {
+			l.pendingID, l.url = id, se.srv.linkURL(token)
+			wait = max(wait, ircsignin.LinkFor)
+		} else {
+			se.srv.log.Warn("irc sign-in link", "err", err)
+		}
+	}
 	se.locked = &l
 	conn := se.conn
-	l.timer = time.AfterFunc(otpWait, func() {
+	se.locked.timer = time.AfterFunc(wait, func() {
 		se.send(fmt.Sprintf("ERROR :%s", ircText(se.tr("mfa.timedOut"))))
 		conn.Close()
 	})
-	se.locked.timer = l.timer
 	where := l.net.Name
 	if l.unbound {
 		where = "evrd"
 	}
-	se.say("mfa.challenge", "network", where, "status", statusNick)
+	switch {
+	case l.totp && l.url != "":
+		se.say("mfa.challengeOrLink", "network", where, "status", statusNick, "url", l.url)
+	case l.url != "":
+		se.say("mfa.linkOnly", "network", where, "url", l.url)
+	default:
+		se.say("mfa.challenge", "network", where, "status", statusNick)
+	}
 }
 
 // lockedCommand handles a command from a client waiting for its second
@@ -149,6 +188,15 @@ func (se *session) lockedCommand(m irc.Message) bool {
 	switch m.Command {
 	case "PING", "QUIT", "CAP", "PASS", "USER", "AUTHENTICATE":
 		return true
+	}
+	if se.locked.link {
+		// not signed in yet: only the website gets it further
+		if m.Command != "NOTICE" {
+			se.say("signin.waiting", "url", se.locked.url)
+		}
+		return false
+	}
+	switch m.Command {
 	case "ZNC":
 		se.lockedStatus(strings.Join(m.Params, " "))
 	case "PRIVMSG", "NOTICE":
@@ -217,6 +265,7 @@ func (se *session) verifyLocked(code string) {
 // unlock puts a verified client on its network, as attach would have.
 func (se *session) unlock() {
 	l := se.locked
+	se.dropLink() // a code was given, or the website allowed it: the link is done
 	l.timer.Stop()
 	se.locked = nil
 	if !l.unbound {

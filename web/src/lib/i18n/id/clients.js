@@ -25,6 +25,8 @@ export default {
   'clients.ssoWorksTitle': 'Password {sso}-mu juga bisa dipakai di klien IRC.',
   'clients.ssoWorks': 'Gunakan sebagai bagian terakhir password server, {format}, atau buat password klien untuk tiap klien.',
   'clients.useSsoOrClientPassword': 'Gunakan password {sso}-mu atau password klien dari bawah.',
+  'clients.rememberedUntil': 'diingat sampai {date}',
+  'clients.rememberedExpired': 'diingat, kedaluwarsa',
   'clients.leaveOut': 'Hilangkan {path} untuk tersambung ke network pertama kamu.',
   'clients.leaveOutNamed': 'Hilangkan {path} untuk tersambung ke network pertama kamu, {network}.',
   'clients.setupGuide': 'Panduan setup',

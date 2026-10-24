@@ -54,6 +54,7 @@ type session struct {
 	saslUser       store.User      // who SASL signed in
 	saslDevice     string
 	saslOTP        string // a second-factor code after SASL's password
+	refusal        string // why the last sign-in was refused (signIn)
 	partial        []byte // a line read so far
 	lsWaiting      bool   // a CAP LS waits for the network to be known
 	lsSince        time.Time
@@ -166,11 +167,14 @@ func (se *session) serve(ctx context.Context) {
 	}
 	defer func() {
 		se.unsubscribe()
+		se.dropLink() // a sign-in link dies with its connection
 		if se.heldOver(ctx) {
 			return // still attached, as far as the next evrd is concerned
 		}
 		se.markOnNetwork() // until now
-		se.release()
+		if se.release != nil {
+			se.release()
+		}
 	}()
 	se.bridge(ctx)
 }
@@ -301,6 +305,7 @@ func (se *session) signIn(username, network, password string) (u store.User, dev
 	}
 	telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result(result))
 	se.loginFailed(username, network, reason)
+	se.refusal = reason
 	return store.User{}, "", "", code, why
 }
 
@@ -356,6 +361,11 @@ func (se *session) ssoSignIn(username, password string, failed error) (store.Use
 // factor first waits for it on no network (mfa.go).
 func (se *session) attach() bool {
 	login, password, ok := strings.Cut(se.pass, ":")
+	if (!ok || password == "") && se.srv.linkSignInOn() && !strings.ContainsAny(login, " ") {
+		// no password: sign in on the website instead (user, user/network
+		// or nothing at all)
+		return se.waitForLink(login, "")
+	}
 	if !ok || password == "" {
 		// Never log PASS itself: without a colon it may be just the password.
 		se.srv.log.Info("irc sign-in without a password", "ip", se.clientIP(), "pass_sent", se.pass != "")
@@ -367,6 +377,11 @@ func (se *session) attach() bool {
 	if se.saslUser.ID == 0 {
 		var code, why string
 		if u, device, otp, code, why = se.signIn(username, network, password); code != "" {
+			if se.linkAfterRefusal(password) {
+				// a long secret evrd doesn't know: allowed on the website, it
+				// can be remembered as this device's password
+				return se.waitForLink(login, password)
+			}
 			se.numeric(code, ":"+why)
 			return false
 		}
@@ -382,39 +397,16 @@ func (se *session) attach() bool {
 		se.numeric("464", ":"+movingMsg)
 		return false
 	}
-	locked, code, why := se.secondFactor(u, username, network, device, otp)
+	locked, totp, code, why := se.secondFactor(u, username, network, device, otp)
 	if code != "" {
 		se.numeric(code, ":"+why)
 		return false
 	}
 
-	nets, _ := se.srv.acc.ListNetworks(context.Background(), u.ID)
-	// A bouncer-networks client that names no network gets a bouncer
-	// connection, bound to none.
-	unbound := network == "" && se.bindID == "" && se.caps["soju.im/bouncer-networks"]
-	var chosen store.Network
-	switch {
-	case unbound:
-	case se.bindID != "":
-		n, ok := findNetworkID(nets, se.bindID)
-		if !ok {
-			se.bouncerFail("INVALID_NETID", "BIND", se.bindID, "Unknown network ID")
-			se.numeric("464", ":Unknown network "+se.bindID)
-			return false
-		}
-		chosen = n
-	case len(nets) == 0:
-		se.numeric("464", ":No networks configured — add one in the web app first")
+	chosen, unbound, code, why := se.chooseNetwork(u, network)
+	if code != "" {
+		se.numeric(code, ":"+why)
 		return false
-	case network != "":
-		n, ok := findNetwork(nets, network)
-		if !ok {
-			se.numeric("464", ":Unknown network "+network)
-			return false
-		}
-		chosen = n
-	default:
-		chosen = nets[0]
 	}
 	var bound []string
 	if !unbound && !locked {
@@ -438,7 +430,7 @@ func (se *session) attach() bool {
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("second_factor"))
 		se.welcome()
 		se.syncCaps()
-		se.lock(lockedSignIn{net: chosen, unbound: unbound, username: username, device: device})
+		se.lock(lockedSignIn{net: chosen, unbound: unbound, username: username, device: device, totp: totp})
 		return true
 	}
 	if !unbound {
@@ -454,6 +446,36 @@ func (se *session) attach() bool {
 	se.syncCaps()
 	se.signedIn(!unbound, username, chosen.Name, device)
 	return true
+}
+
+// chooseNetwork is the network u's client attaches to: the one it named
+// (or BOUNCER BIND's), else the first; none (unbound) for a
+// bouncer-networks client that names none. A refusal is the numeric and
+// why.
+func (se *session) chooseNetwork(u store.User, network string) (chosen store.Network, unbound bool, code, why string) {
+	nets, _ := se.srv.acc.ListNetworks(context.Background(), u.ID)
+	unbound = network == "" && se.bindID == "" && se.caps["soju.im/bouncer-networks"]
+	switch {
+	case unbound:
+	case se.bindID != "":
+		n, ok := findNetworkID(nets, se.bindID)
+		if !ok {
+			se.bouncerFail("INVALID_NETID", "BIND", se.bindID, "Unknown network ID")
+			return chosen, false, "464", "Unknown network " + se.bindID
+		}
+		chosen = n
+	case len(nets) == 0:
+		return chosen, false, "464", "No networks configured — add one in the web app first"
+	case network != "":
+		n, ok := findNetwork(nets, network)
+		if !ok {
+			return chosen, false, "464", "Unknown network " + network
+		}
+		chosen = n
+	default:
+		chosen = nets[0]
+	}
+	return chosen, unbound, "", ""
 }
 
 // signedIn finishes attaching a client that's signed in: the network's
@@ -486,15 +508,11 @@ func (se *session) signedIn(onNetwork bool, username, netName, device string) {
 				sw = c.Software
 			}
 		}
-		title := messages.T("event.attached", "client", sw)
-		if device == ssoDevice {
-			method := "password_grant"
-			if se.srv.signIns != nil {
-				method = orElse(se.srv.signIns.SSOPasswordMethod(), method)
-			}
-			title = messages.T("event.attachedSSO", "client", sw, "method", messages.T("ssoMethod."+method))
+		method := "password_grant"
+		if se.srv.signIns != nil {
+			method = orElse(se.srv.signIns.SSOPasswordMethod(), method)
 		}
-		se.srv.b.AddEvent(uid, "attached", title, messages.Raw(strings.TrimSpace(username+"/"+netName+" · "+ip)))
+		se.srv.b.AddEvent(uid, "attached", eventTitle(device, sw, method), messages.Raw(strings.TrimSpace(username+"/"+netName+" · "+ip)))
 	}()
 }
 
@@ -742,6 +760,10 @@ func (se *session) bridge(ctx context.Context) {
 				se.send(se.formatAs(m, false))
 			}
 		case <-follow.C:
+			if se.locked != nil {
+				se.checkLink() // allowed on the website yet?
+				continue
+			}
 			if conn, ok := se.srv.b.ConnFor(se.net.ID); ok && conn != se.up {
 				se.unsubscribe()
 				se.up = conn

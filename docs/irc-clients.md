@@ -4,8 +4,9 @@ Point any IRC client at the bouncer and authenticate with a **server password**
 of `<user>:<password>` (or `<user>/<network>:<password>` to pick a network).
 The password is the account password or an **IRC client password** made on
 the web app's *IRC clients* page — revocable one client at a time. Accounts
-that sign in with SSO use a client password, or their SSO password where the
-admin turned that on (`sso_irc_password`; the *IRC clients* page says so). Clients that do SASL can sign in
+that sign in with SSO can also **sign in by link** (below), or use their SSO
+password where the admin turned that on (`sso_irc_password`; the *IRC clients*
+page says so). Clients that do SASL can sign in
 with SASL PLAIN instead (user name `<user>` or `<user>/<network>`):
 
 ```
@@ -13,6 +14,38 @@ server:   bnc.example.org         (your irc_host)
 port:     6697 (TLS)              — accept the certificate if evrd made a self-signed one
 password: mira/libera:<password>  (user/network:password)
 ```
+
+### Signing in by link
+
+The easiest way for an SSO account (and works for any account): connect
+**without a password** — server password `mira`, `mira/libera`, or none at all.
+evrd registers the client on no network and `*status` sends a link:
+
+```
+<*status> Sign in on the website to connect: https://bnc.example.org/irc/approve/… (the link works once, for 5 minutes).
+```
+
+Open it, sign in the way you do on the website (your identity provider and its
+MFA included), check the client it shows (nick, network, address, time) and
+**Allow** it: the client is put on its network. **Turn away** closes it. Allow
+only a client you just connected yourself — someone who sends you a link would
+get into your account; the page says so, and points out when the client
+connects from another address than yours.
+
+Allowing can **remember the device** for 30 days (`irc_remember_days`):
+
+- with a new IRC client password, shown once on the page, to put in the
+  client's server password (`mira/libera:<password>`); or
+- with the password the client sent, if it sent a long one (24 characters or
+  more) that evrd didn't know: put a long random string in your client's
+  server password, connect, allow it with "the password the client sent", and
+  from then on it signs in by itself.
+
+Remembered devices are listed on the *IRC clients* page with their end date,
+and revoked there like any client password. A link is good for one connection:
+it goes when the client disconnects, and a client waits five minutes at most.
+At most three links are open per address and five per account. Turned off with
+`irc_link_signin no` (it needs `public_url`).
 
 ### A second factor
 
@@ -26,7 +59,9 @@ password: mira/libera:<password>:123456      (or a recovery code: …:<password>
 ```
 
 or sign in as usual: evrd registers the client on no network, `*status` asks for
-the code, and nothing else works until it's in:
+the code — or, with sign-in by link on, to allow the sign-in on the website
+instead (which also works without an authenticator app) — and nothing else
+works until it's in:
 
 ```
 <*status> A second factor is needed before you're on libera: /msg *status otp <code>, …

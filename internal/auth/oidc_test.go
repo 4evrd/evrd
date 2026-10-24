@@ -345,6 +345,30 @@ func TestOIDCRolesClaim(t *testing.T) {
 	}
 }
 
+func TestOIDCSignInReturnsToItsPage(t *testing.T) {
+	p := newFakeIdP(t)
+	m, _, _ := newOIDCManager(t, p, config.Auth{OIDCAutoCreate: true})
+	rec := httptest.NewRecorder()
+	m.OIDCLogin(rec, httptest.NewRequest(http.MethodGet, "/auth/login?next="+url.QueryEscape("/irc/approve/tok-1"), nil))
+	loc, _ := url.Parse(rec.Header().Get("Location"))
+	q := loc.Query()
+	p.issue("code-1", grant{challenge: q.Get("code_challenge"), claims: p.idClaims(q.Get("nonce"), map[string]any{"sub": "n1", "username": "nina"})})
+	if got := callback(m, q.Get("state"), "code-1").Header().Get("Location"); got != "/irc/approve/tok-1" {
+		t.Fatalf("back to %q", got)
+	}
+}
+
+func TestSafeNext(t *testing.T) {
+	for in, want := range map[string]string{
+		"/irc/approve/x": "/irc/approve/x", "/account#security": "/account#security", "": "/",
+		"//evil.example": "/", "/\\evil.example": "/", "https://evil.example": "/", "evil": "/", "/a\r\nSet-Cookie: x": "/",
+	} {
+		if got := SafeNext(in); got != want {
+			t.Errorf("%q: %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestRolesIn(t *testing.T) {
 	claims := map[string]any{
 		"roles":         []any{"a", "b", 3},

@@ -237,6 +237,8 @@ func (s *Handlers) ListClientPasswords(w http.ResponseWriter, r *http.Request) {
 	for _, c := range list {
 		out = append(out, map[string]any{
 			"id": c.ID, "name": c.Name, "createdAt": c.CreatedAt.Unix(), "lastUsedAt": unix(c.LastUsedAt),
+			// a device remembered when its sign-in was allowed by link
+			"remembered": c.Remembered, "expiresAt": unix(c.ExpiresAt),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

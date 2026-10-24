@@ -25,6 +25,8 @@ export default {
   'clients.ssoWorksTitle': '{sso} のパスワードは IRC クライアントでも使えます。',
   'clients.ssoWorks': 'サーバーパスワードの最後の部分として使うか ({format})、クライアントごとにクライアントパスワードを作ってください。',
   'clients.useSsoOrClientPassword': '{sso} のパスワードか、下のクライアントパスワードを使ってください。',
+  'clients.rememberedUntil': '{date} まで記憶',
+  'clients.rememberedExpired': '記憶（期限切れ）',
   'clients.leaveOut': '{path} を省略すると、最初のネットワークにアタッチします。',
   'clients.leaveOutNamed': '{path} を省略すると、最初のネットワーク（{network}）にアタッチします。',
   'clients.setupGuide': 'セットアップガイド',

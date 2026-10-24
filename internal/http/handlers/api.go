@@ -11,6 +11,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"github.com/4evrd/evrd/internal/ircsignin"
 	"github.com/4evrd/evrd/internal/mfa"
 	"io"
 	"log/slog"
@@ -57,7 +58,8 @@ type Handlers struct {
 	langs   languages.LanguageServiceImpl
 	msgs    messages.MessageServiceImpl
 	state   cluster.StateServiceImpl
-	mfa     mfa.MFAServiceImpl // nil: no second factors
+	mfa     mfa.MFAServiceImpl             // nil: no second factors
+	signIns ircsignin.IRCSignInServiceImpl // nil: no sign-in by link
 	cfgp    atomic.Pointer[config.Config]
 	// settings, when set, edits the server settings (Admin → Settings).
 	settings *settings.Manager
@@ -78,13 +80,15 @@ type Services struct {
 	Cluster  cluster.StateServiceImpl // nodes and leases (with or without a cluster)
 	// MFA is users' second factors for IRC sign-ins; nil: none (tests).
 	MFA mfa.MFAServiceImpl
+	// IRCSignIns is IRC sign-in by link; nil: none.
+	IRCSignIns ircsignin.IRCSignInServiceImpl
 }
 
 // New makes the handlers on b and svc; status, when set, runs *status
 // commands for the web chat.
 func New(b *bouncer.Bouncer, svc Services, cfg *config.Config, status StatusRunner, log *slog.Logger) *Handlers {
 	s := &Handlers{
-		b: b, acc: svc.Accounts, auth: svc.Auth, langs: svc.Languages, msgs: svc.Messages, state: svc.Cluster, mfa: svc.MFA, status: status, log: log,
+		b: b, acc: svc.Accounts, auth: svc.Auth, langs: svc.Languages, msgs: svc.Messages, state: svc.Cluster, mfa: svc.MFA, signIns: svc.IRCSignIns, status: status, log: log,
 		up: websocket.Upgrader{CheckOrigin: middleware.CheckWebSocketOrigin},
 	}
 	if s.msgs == nil {

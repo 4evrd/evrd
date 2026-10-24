@@ -660,6 +660,24 @@
     "irc.settingLabel.irc_mfa": "Secondo fattore per IRC",
     "irc.settingHelp.irc_mfa": "Quando i client IRC che accedono con una password devono anche dare un codice di un'app di autenticazione: mai (off), quando l'utente lo chiede (optional) o sempre (required — gli utenti non possono disattivarlo).",
     "irc.settingLabel.irc_mfa_client_passwords": "Secondo fattore anche con le password client",
-    "irc.settingHelp.irc_mfa_client_passwords": "Le password dei client IRC sono casuali, per dispositivo e revocabili, quindi non serve un secondo fattore a meno che questo non sia attivo."
+    "irc.settingHelp.irc_mfa_client_passwords": "Le password dei client IRC sono casuali, per dispositivo e revocabili, quindi non serve un secondo fattore a meno che questo non sia attivo.",
+    "irc.signin.tooMany": "troppi link di accesso aperti — riprova tra qualche minuto",
+    "irc.signin.gone": "questo link è scaduto o è già stato usato",
+    "irc.signin.notYours": "questo accesso è di un altro account",
+    "irc.signin.noSecret": "il client non ha inviato un segreto che si possa ricordare",
+    "irc.signin.forbidden": "questo account non può permettere accessi",
+    "irc.signin.link": "Accedi al sito per collegarti: {url} (il link vale una volta, per {minutes} minuti).",
+    "irc.signin.waiting": "In attesa del permesso sul sito: {url}",
+    "irc.signin.expired": "Il link di accesso è scaduto — collegati di nuovo.",
+    "irc.signin.denied": "L'accesso è stato rifiutato sul sito.",
+    "irc.signin.allowed": "Permesso sul sito — benvenuto.",
+    "irc.signin.otherNode": "Permesso — collegati di nuovo per finire (il tuo bouncer gira su un altro server del cluster).",
+    "irc.mfa.challengeOrLink": "Serve un secondo fattore prima di entrare su {network}: /msg {status} otp <codice>, oppure permetti questo accesso sul sito: {url}",
+    "irc.mfa.linkOnly": "Permetti questo accesso sul sito prima di entrare su {network}: {url}",
+    "irc.event.attachedLink": "{client} collegato, permesso sul sito",
+    "irc.settingLabel.irc_link_signin": "Accesso IRC tramite link",
+    "irc.settingHelp.irc_link_signin": "Un client IRC senza una password utilizzabile riceve un link per permetterlo qui, dopo l'accesso (con SSO e il suo MFA). Serve l'URL pubblico.",
+    "irc.settingLabel.irc_remember_days": "I dispositivi IRC ricordati valgono",
+    "irc.settingHelp.irc_remember_days": "Giorni in cui un dispositivo permesso tramite link e ricordato continua ad accedere senza chiedere (1–365)."
   }
 }

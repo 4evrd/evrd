@@ -61,6 +61,10 @@ export const api = {
   confirmTOTP: (code) => req('POST', '/api/me/mfa/totp/confirm', { code }),
   removeTOTP: (code) => req('POST', '/api/me/mfa/totp/remove', { code }),
   newRecoveryCodes: (code) => req('POST', '/api/me/mfa/recovery', { code }),
+  // IRC sign-in by link: the page a client's link opens
+  ircSignIn: (token) => req('GET', `/api/irc-signins/${encodeURIComponent(token)}`),
+  allowIRCSignIn: (token, remember) => req('POST', `/api/irc-signins/${encodeURIComponent(token)}/allow`, { remember }),
+  denyIRCSignIn: (token) => req('POST', `/api/irc-signins/${encodeURIComponent(token)}/deny`),
   clientPasswords: () => req('GET', '/api/me/client-passwords'),
   createClientPassword: (name) => req('POST', '/api/me/client-passwords', { name }),
   deleteClientPassword: (id) => req('DELETE', `/api/me/client-passwords/${id}`),

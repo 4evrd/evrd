@@ -25,6 +25,8 @@ export default {
   'clients.ssoWorksTitle': '{sso} parolan IRC istemcilerinde de çalışır.',
   'clients.ssoWorks': 'Sunucu parolasının son kısmı olarak kullan, {format}, ya da her istemci için bir istemci parolası oluştur.',
   'clients.useSsoOrClientPassword': '{sso} parolanı ya da aşağıdaki bir istemci parolasını kullan.',
+  'clients.rememberedUntil': '{date} tarihine kadar hatırlanıyor',
+  'clients.rememberedExpired': 'hatırlanıyordu, süresi doldu',
   'clients.leaveOut': 'İlk ağına bağlanmak için {path} kısmını yazma.',
   'clients.leaveOutNamed': 'İlk ağına ({network}) bağlanmak için {path} kısmını yazma.',
   'clients.setupGuide': 'Kurulum rehberi',
