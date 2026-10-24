@@ -77,7 +77,7 @@
       <div class="tile">
         <div class="tile-top"><span class="caps"><Icon name="monitor" class="i-sm" />{t('admin.clients')}</span><span class="chip ok live"><span class="dot" aria-hidden="true"></span>{t('admin.live')}</span></div>
         <div class="od-stat"><span class="n">{ov.attachedClients}</span><span class="u">{ov.attachedClients ? t('admin.ircClientsAcross', { count: ov.attachedClients, accounts: t('admin.nAccounts', { count: ov.accountsAttached }) }) : t('admin.ircClients', { count: ov.attachedClients })}{ov.webAttached ? ' · ' + t('admin.inWebApp', { count: ov.webAttached }) : ''}</span></div>
-        {#if ov.clientDrops?.drops}<p class="sub" data-testid="client-drops-summary" style="font-size:var(--fs-xs);margin:0 0 var(--s2)">{t('admin.clientDrops', { count: ov.clientDrops.drops, reason: t('clients.reason.' + Object.entries(ov.clientDrops.reasons).sort((a, b) => b[1] - a[1])[0][0]) })}</p>{/if}
+        {#if ov.clientDrops?.drops}<p class="sub" data-testid="client-drops-summary" style="font-size:var(--fs-xs);margin:0 0 var(--s2)">{t('admin.clientDrops', { count: ov.clientDrops.drops, reason: t('clients.reason.' + Object.entries(ov.clientDrops.reasons).sort((a, b) => b[1] - a[1])[0][0]) })} <a href="/admin/drops">{t('admin.drops.seeWhy')}</a></p>{/if}
         <span class="ubar" role="img" aria-label={t('admin.clientsAttachedAria', { count: ov.attachedClients })}><span style="transform:scaleX({ratio(ov.accountsAttached, ov.users)});background:var(--nick)"></span></span>
       </div>
       <div class="tile">

@@ -91,4 +91,5 @@ export default {
   'shell.passwordChanged': 'Password changed. Other web sessions were signed out.',
   'shell.fixThings': { one: 'Fix {count} thing before saving:', other: 'Fix {count} things before saving:' },
   'shell.changePassword': 'Change password',
+  'shell.navDrops': 'Drops',
 }

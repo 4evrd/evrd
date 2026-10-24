@@ -342,3 +342,45 @@ test('admins see why a user’s network can’t connect, and its connection log'
     await expect(page).toHaveURL(new RegExp(`#net-${bad.id}$`))
   } finally { await u.cleanup() }
 })
+
+test('IRC client drops across every account: why, how long, and which devices', async ({ page }) => {
+  const u = await freshUser('drop')
+  try {
+    await addNetwork(u.api, { name: 'Dev', nick: u.name, channels: ['#' + uniq('d')] })
+    const c = await IRC.connect({ user: u.name, network: 'Dev', password: u.password })
+    await c.next(/ 376 /)
+    c.send('QUIT :bye')
+    await c.closed()
+
+    await page.goto('/admin')
+    await page.getByRole('link', { name: 'Drops' }).click()
+    await expect(page.getByRole('heading', { level: 1, name: 'IRC client drops' })).toBeVisible()
+    const mine = () => page.getByTestId('drops-row').filter({ hasText: u.name })
+    await expect(async () => {
+      await page.reload()
+      await expect(mine()).toBeVisible({ timeout: 2000 })
+    }).toPass({ timeout: 20000 })
+    await expect(page.getByTestId('reason-quit')).toContainText('Left on purpose: the user or the client said QUIT.')
+    await expect(page.getByTestId('drops-gaps')).toContainText('not back')
+
+    // by a reason, then over 30 days, then on to the user
+    await page.getByTestId('drops-sort').selectOption('quit')
+    await expect(mine()).toContainText('1 / 1')
+    await page.getByRole('tab', { name: '30 days' }).click()
+    await expect(page.getByRole('tab', { name: '30 days' })).toHaveAttribute('aria-selected', 'true')
+    await expect(mine()).toBeVisible()
+    await mine().getByRole('link', { name: u.name }).click()
+    await expect(page.getByTestId('user-title')).toHaveText(u.name)
+  } finally { await u.cleanup() }
+})
+
+test('users can’t see every account’s drops', async ({ page }) => {
+  const u = await freshUser('nodrop')
+  try {
+    expect(await u.api.get('/api/admin/client-drops').then(() => 'ok', (e) => e.message)).toMatch(/403/)
+    await page.context().clearCookies() // signed in as the admin before each test
+    await login(page, u.name, u.password)
+    await page.goto('/admin/drops')
+    await expect(page.getByText('Only admins can see every account’s drops.')).toBeVisible()
+  } finally { await u.cleanup() }
+})

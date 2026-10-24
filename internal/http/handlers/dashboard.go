@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -800,6 +801,52 @@ func (s *Handlers) clusterUsage(ctx context.Context) usage {
 	}
 	wg.Wait()
 	return total
+}
+
+// dropRanges are the periods the admin view of IRC client drops offers,
+// all within the 30 days disconnects are kept.
+var dropRanges = map[string]time.Duration{"24h": 24 * time.Hour, "7d": 7 * 24 * time.Hour, "30d": 30 * 24 * time.Hour}
+
+// AdminClientDrops is every user's IRC client disconnects over ?range=
+// (24h, 7d or 30d): by reason, how long devices were gone, and the devices
+// that dropped most, with whose they are (?sort= drops or a reason,
+// ?limit= up to 100).
+func (s *Handlers) AdminClientDrops(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	key := q.Get("range")
+	d, ok := dropRanges[key]
+	if !ok {
+		key, d = "24h", dropRanges["24h"]
+	}
+	by := q.Get("sort")
+	if !slices.Contains(bouncer.DropReasons, by) {
+		by = "drops"
+	}
+	limit := 25
+	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 {
+		limit = min(n, 100)
+	}
+	all, err := s.b.AllClientDrops(r.Context(), time.Now().Add(-d), by, limit)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	users, _ := s.acc.ListUsers(r.Context())
+	names := map[int64]string{}
+	for _, u := range users {
+		names[u.ID] = u.Username
+	}
+	top := make([]map[string]any, 0, len(all.Top))
+	for _, t := range all.Top {
+		top = append(top, map[string]any{"userId": t.UserID, "user": orDeleted(names[t.UserID]), "device": t.Device,
+			"software": t.Software, "network": t.Network, "drops": t.Drops, "reasons": t.Reasons, "mainReason": t.MainReason,
+			"medianGap": t.MedianGap, "last": t.Last, "connected": t.Connected})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"range": key, "sort": by, "order": bouncer.DropReasons, "bucketBounds": bouncer.GapBuckets,
+		"drops": all.Drops, "accounts": all.Accounts, "devices": all.Devices, "reasons": all.Reasons,
+		"gaps": all.Gaps, "buckets": all.Buckets, "top": top,
+	})
 }
 
 // clientDropSummary is every IRC client disconnect in the last day, for the

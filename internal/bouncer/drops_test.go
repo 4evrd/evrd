@@ -11,6 +11,24 @@ import (
 	"github.com/4evrd/evrd/internal/store"
 )
 
+func TestGapBucketsAndPercentile(t *testing.T) {
+	for secs, want := range map[float64]int{0: 0, 10: 0, 11: 1, 60: 1, 300: 2, 3600: 3, 3601: 4} {
+		if got := bucket(secs); got != want {
+			t.Errorf("bucket(%v) = %d, want %d", secs, got, want)
+		}
+	}
+	if percentile(nil, 0.9) != 0 {
+		t.Error("no values")
+	}
+	xs := []float64{5, 1, 4, 2, 3, 10, 9, 8, 7, 6}
+	if percentile(xs, 0.9) != 9 || percentile(xs, 0.5) != 5 || percentile(xs, 1) != 10 || percentile([]float64{7}, 0.9) != 7 {
+		t.Errorf("percentiles of %v", xs)
+	}
+	if xs[0] != 5 {
+		t.Error("percentile sorted its argument")
+	}
+}
+
 func TestClientDrops(t *testing.T) {
 	st, err := store.Open("sqlite:" + filepath.Join(t.TempDir(), "evrd.db"))
 	if err != nil {

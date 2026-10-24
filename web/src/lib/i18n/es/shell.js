@@ -82,4 +82,5 @@ export default {
   'shell.passwordChanged': 'Contraseña cambiada. Se cerraron tus otras sesiones web.',
   'shell.fixThings': { one: 'Corrige {count} cosa antes de guardar:', other: 'Corrige {count} cosas antes de guardar:' },
   'shell.changePassword': 'Cambiar contraseña',
+  'shell.navDrops': 'Cortes',
 }

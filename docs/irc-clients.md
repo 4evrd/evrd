@@ -399,6 +399,20 @@ them apart. That also lets a phone that comes back replace its old connection
 at once (*reconnected*) instead of counting toward your client limit until
 evrd notices the old one is gone.
 
+**Across every account (admins).** *Admin → Drops* (`<public_url>/admin/drops`)
+shows the same for everyone over the last 24 hours, 7 days or 30 days:
+
+- how many drops for each reason, with what the reason usually means and how
+  long devices were typically gone after it (the median, and the time 9 in 10
+  were back within);
+- how long devices took to come back — within 10 seconds, a minute, five
+  minutes, an hour, longer, or not back yet — split by reason;
+- the devices that drop most, with their account, sortable by any reason.
+
+Short gaps after *stopped answering* point to phones losing signal or
+switching networks; many *stopped reading* drops point to slow or congested
+links. The data comes from `GET /api/admin/client-drops?range=24h|7d|30d&sort=drops|<reason>&limit=`.
+
 **How evrd notices a client is gone.** A phone that loses signal doesn't
 close its connection; it goes quiet. evrd pings a client that has said
 nothing for 90 seconds and drops it when it doesn't answer within

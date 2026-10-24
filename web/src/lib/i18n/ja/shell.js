@@ -90,4 +90,5 @@ export default {
   'shell.passwordChanged': 'パスワードを変更しました。他の Web セッションはサインアウトされました。',
   'shell.fixThings': { other: '保存する前に {count} 件の問題を修正してください:' },
   'shell.changePassword': 'パスワードを変更',
+  'shell.navDrops': '切断',
 }

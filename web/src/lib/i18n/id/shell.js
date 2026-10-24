@@ -90,4 +90,5 @@ export default {
   'shell.passwordChanged': 'Password diganti. Sesi web lain sudah dikeluarkan.',
   'shell.fixThings': { other: 'Perbaiki {count} hal sebelum menyimpan:' },
   'shell.changePassword': 'Ganti password',
+  'shell.navDrops': 'Terputus',
 }
