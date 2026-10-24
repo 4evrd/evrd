@@ -153,6 +153,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	// networks
 	mux.HandleFunc("GET /api/networks", user(h.ListNetworks))
 	mux.HandleFunc("POST /api/networks", user(h.CreateNetwork))
+	mux.HandleFunc("GET /api/networks/export", user(h.ExportNetworks))
+	mux.HandleFunc("POST /api/networks/import/preview", user(h.PreviewImport))
+	mux.HandleFunc("POST /api/networks/import", user(h.ImportNetworks))
 	mux.HandleFunc("GET /api/networks/{id}", user(h.GetNetwork))
 	mux.HandleFunc("PATCH /api/networks/{id}", user(h.UpdateNetwork))
 	mux.HandleFunc("GET /api/bindhosts", user(h.BindHosts))

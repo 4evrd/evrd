@@ -308,6 +308,53 @@ sasluser, auth, servicesnick, identifyargs, identifyon, authcommand, ghost,
 joinafterauth, authtimeout, bindhost, quitmsg, encoding, trustallcerts,
 trustpki, floodrate, floodburst, joindelay.
 
+## Exporting and importing networks
+
+**Networks → Export** downloads your networks as a YAML file: servers,
+identity, services login, certificates, channels, modules and each buffer's
+playback settings. **Networks → Import** adds networks from one of these, or
+from a ZNC config: a whole `znc.conf`, or just the `<User>` or `<Network>`
+blocks you paste in. When a ZNC config has several users, you pick whose
+networks to bring in, then tick the networks. A network you already have
+(same name) is left alone, or updated from the file if you choose; its
+history stays. Imported networks connect only if you ask, so ZNC and evrd
+don't fight over your nick while both are up.
+
+Passwords never go out as plaintext. Server and services passwords, the
+services login command, channel keys and module settings are written
+encrypted with the server's `secret_key` (`enc:v1:…`), and the key isn't in
+the file. They come back on the same server, or on another one with the same
+key. Anywhere else they're left empty, and the import says which ones to set
+again. Without a `secret_key` they're left out of the export.
+
+From ZNC, the config has the servers (and their passwords), nicks, channels
+(keys, detached, disabled, buffer sizes), certificate fingerprints, flood
+settings and `IRCConnectEnabled`. `keepnick`, `kickrejoin`, `autocycle` and
+`ctcpflood` come over as evrd's modules. `sasl` and `nickserv` set the
+login method, but ZNC keeps their passwords outside the config (as it does
+`perform`'s commands and `autoop`'s list), so the import tells you what to
+fill in. The ZNC user's own password (`Pass`) is never read. For old logs,
+see `evrctl history import-znc`.
+
+A file written by hand works too. Fields left out keep what the network
+already has (or the defaults), and passwords may be given in plaintext, to
+be encrypted once imported:
+
+```yaml
+evrd_networks: 1
+networks:
+  - name: libera
+    servers:
+      - host: irc.libera.chat   # port 6697 and TLS unless given
+    nick: alice
+    login: {method: sasl, account: alice, password: "…"}
+    channels:
+      - name: "#evrd"
+      - name: "#secret"
+        key: "…"
+        playback: {lines: 500}
+```
+
 ## HTTPS and certificates
 
 evrd's own TLS ports — the `ircs://` IRC listeners, and `https_listen` when

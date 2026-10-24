@@ -657,6 +657,19 @@
     "irc.settingLabel.irc_link_signin": "Bağlantıyla IRC girişi",
     "irc.settingHelp.irc_link_signin": "Kullanılabilir parolası olmayan bir IRC istemcisi, giriş yaptıktan sonra (SSO ve onun MFA'sıyla) buradan izin vermek için bir bağlantı alır. Genel URL gerekir.",
     "irc.settingLabel.irc_remember_days": "Hatırlanan IRC cihazlarının süresi",
-    "irc.settingHelp.irc_remember_days": "Bağlantıyla izin verilip hatırlanan bir cihazın sormadan giriş yapmaya devam ettiği gün sayısı (1–365)."
+    "irc.settingHelp.irc_remember_days": "Bağlantıyla izin verilip hatırlanan bir cihazın sormadan giriş yapmaya devam ettiği gün sayısı (1–365).",
+    "irc.web.importTooBig": "dosya içe aktarmak için çok büyük (en fazla {max})",
+    "irc.web.importUnknown": "bu bir evrd ağ dosyası ya da ZNC yapılandırması değil",
+    "irc.web.importUnreadable": "dosya okunamadı: {error}",
+    "irc.web.importNoUser": "dosyada {user} adlı ZNC kullanıcısı yok",
+    "irc.netfile.serverPassword": "{host} sunucusunun parolası başka bir evrd sunucusunda kaydedildi ve burada okunamıyor: yeniden gir.",
+    "irc.netfile.loginPassword": "Servis parolası başka bir evrd sunucusunda kaydedildi ve burada okunamıyor: Kimlik doğrulama altında yeniden gir.",
+    "irc.netfile.loginCommand": "Servis giriş komutu başka bir evrd sunucusunda kaydedildi ve burada okunamıyor: Kimlik doğrulama altında yeniden gir.",
+    "irc.netfile.channelKey": "{channel} anahtarı başka bir evrd sunucusunda kaydedildi ve burada okunamıyor: yeniden gir.",
+    "irc.netfile.moduleSettings": "{module} modülünün ayarları başka bir evrd sunucusunda kaydedildi ve burada okunamıyor: Modüller altında yeniden gir.",
+    "irc.netfile.unknownField": "{field} evrd'nin bildiği bir ağ ayarı değil, bu yüzden atlandı.",
+    "irc.znc.loginPassword": "ZNC'nin {module} modülü parolasını yapılandırmanın dışında tutuyor: Kimlik doğrulama altında gir.",
+    "irc.znc.moduleData": "ZNC'nin {module} modülü ayarlarını yapılandırmanın dışında tutuyor: Modüller altında aç ve doldur.",
+    "irc.znc.modulesSkipped": "evrd'de bunlar için modül yok, bu yüzden atlandı: {modules}."
   }
 }

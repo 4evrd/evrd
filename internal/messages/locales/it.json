@@ -685,6 +685,19 @@
     "irc.settingLabel.irc_link_signin": "Accesso IRC tramite link",
     "irc.settingHelp.irc_link_signin": "Un client IRC senza una password utilizzabile riceve un link per permetterlo qui, dopo l'accesso (con SSO e il suo MFA). Serve l'URL pubblico.",
     "irc.settingLabel.irc_remember_days": "I dispositivi IRC ricordati valgono",
-    "irc.settingHelp.irc_remember_days": "Giorni in cui un dispositivo permesso tramite link e ricordato continua ad accedere senza chiedere (1–365)."
+    "irc.settingHelp.irc_remember_days": "Giorni in cui un dispositivo permesso tramite link e ricordato continua ad accedere senza chiedere (1–365).",
+    "irc.web.importTooBig": "il file è troppo grande da importare (al massimo {max})",
+    "irc.web.importUnknown": "non è un file di reti di evrd né una configurazione di ZNC",
+    "irc.web.importUnreadable": "impossibile leggere il file: {error}",
+    "irc.web.importNoUser": "il file non ha l'utente ZNC {user}",
+    "irc.netfile.serverPassword": "La password del server {host} è stata salvata da un altro server evrd e qui non si può leggere: impostala di nuovo.",
+    "irc.netfile.loginPassword": "La password dei servizi è stata salvata da un altro server evrd e qui non si può leggere: impostala di nuovo in Autenticazione.",
+    "irc.netfile.loginCommand": "Il comando di accesso ai servizi è stato salvato da un altro server evrd e qui non si può leggere: impostalo di nuovo in Autenticazione.",
+    "irc.netfile.channelKey": "La chiave di {channel} è stata salvata da un altro server evrd e qui non si può leggere: impostala di nuovo.",
+    "irc.netfile.moduleSettings": "Le impostazioni del modulo {module} sono state salvate da un altro server evrd e qui non si possono leggere: impostale di nuovo in Moduli.",
+    "irc.netfile.unknownField": "{field} non è un'impostazione di rete che evrd conosce, quindi è stata tralasciata.",
+    "irc.znc.loginPassword": "Il modulo {module} di ZNC tiene la password fuori dalla configurazione: impostala in Autenticazione.",
+    "irc.znc.moduleData": "Il modulo {module} di ZNC tiene le impostazioni fuori dalla configurazione: attivalo e compilalo in Moduli.",
+    "irc.znc.modulesSkipped": "evrd non ha un modulo per questi, quindi sono stati tralasciati: {modules}."
   }
 }
