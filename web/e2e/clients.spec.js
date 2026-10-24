@@ -36,6 +36,38 @@ test('connection settings and setup guides', async ({ page }) => {
   await expect(snippet).toContainText(`/set irc.server.evrd.password "${u.name}/Dev:PASSWORD"`)
   await page.getByRole('tab', { name: 'Other' }).click()
   await expect(page.getByText('Any client that can send a server password')).toBeVisible()
+
+  // sign-in by link is on (public_url is set): an account with a password
+  // starts on the password, and can switch the guide to the link
+  await expect(page.getByText('Or leave the password out: *status sends a link')).toBeVisible()
+  const method = page.getByTestId('signin-method')
+  await expect(method.getByRole('tab', { name: 'A password' })).toHaveAttribute('aria-selected', 'true')
+  await method.getByRole('tab', { name: 'A link (no password)' }).click()
+  await expect(page.getByTestId('pass-format')).toHaveText(`${u.name}/network`)
+  await expect(page.getByTestId('link-steps')).toContainText('open the link *status sends you')
+  await page.getByRole('tab', { name: 'WeeChat' }).click()
+  await expect(snippet).toContainText(`/set irc.server.evrd.password "${u.name}/Dev"`)
+})
+
+test('an SSO account is told it can connect without a password', async ({ page }) => {
+  await page.route('**/api/me', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    const res = await route.fetch()
+    await route.fulfill({ response: res, json: { ...(await res.json()), hasPassword: false } })
+  })
+  await page.route('**/api/config', async (route) => {
+    const res = await route.fetch()
+    await route.fulfill({ response: res, json: { ...(await res.json()), sso: true, ssoLabel: 'Authentik', ircLinkSignIn: true } })
+  })
+  await page.goto('/clients')
+  const notice = page.getByTestId('link-notice')
+  await expect(notice).toContainText('You can connect without a password.')
+  await expect(notice).toContainText(`${u.name}/Dev`)
+  await expect(page.getByTestId('sso-notice')).toHaveCount(0)
+  // the guide starts on the link: no password in the snippets
+  await expect(page.getByTestId('signin-method').getByRole('tab', { name: 'A link (no password)' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('pre.snippet')).toContainText(`Password        ${u.name}/Dev`)
+  await expect(page.locator('pre.snippet')).not.toContainText('PASSWORD')
 })
 
 test('client passwords: shown once, used to attach, revoked', async ({ page }) => {
@@ -130,7 +162,7 @@ test('an SSO account is told its SSO password won’t work in IRC clients', asyn
   })
   await page.route('**/api/config', async (route) => {
     const res = await route.fetch()
-    await route.fulfill({ response: res, json: { ...(await res.json()), sso: true, ssoLabel: 'Authentik' } })
+    await route.fulfill({ response: res, json: { ...(await res.json()), sso: true, ssoLabel: 'Authentik', ircLinkSignIn: false } })
   })
   await page.goto('/clients')
   const notice = page.getByTestId('sso-notice')

@@ -32,6 +32,14 @@ func TestConfigEndpoint(t *testing.T) {
 	if cfg["ircHost"] != "irc.example.org" || cfg["passwordLogin"] != true || cfg["sso"] != false || cfg["ircSelfSigned"] != true {
 		t.Fatalf("config: %v", cfg)
 	}
+	// sign-in by link needs public_url to build the link
+	if cfg["ircLinkSignIn"] != false {
+		t.Fatalf("link sign-in without public_url: %v", cfg["ircLinkSignIn"])
+	}
+	e = newEnv(t, func(c *config.Config) { c.PublicURL = "https://bnc.example.org" })
+	if _, cfg := e.anon().do("GET", "/api/config", nil); cfg["ircLinkSignIn"] != true {
+		t.Fatalf("link sign-in with public_url: %v", cfg["ircLinkSignIn"])
+	}
 }
 
 func TestSettingsUnavailable(t *testing.T) {
