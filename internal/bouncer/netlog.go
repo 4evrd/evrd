@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/upstream"
 )
 
@@ -46,6 +47,6 @@ func (l *netLogs) drop(networkID int64) {
 // NetworkLog is a network's connection log, oldest first.
 func (b *Bouncer) NetworkLog(networkID int64) []upstream.LogEntry { return b.netlog.get(networkID) }
 
-func (b *Bouncer) logNote(networkID int64, text string) {
-	b.netlog.add(networkID, upstream.LogEntry{At: time.Now(), From: "evrd", Text: text})
+func (b *Bouncer) logNote(networkID int64, t messages.Text) {
+	b.netlog.add(networkID, upstream.LogEntry{At: time.Now(), From: "evrd", Text: t.English(), Msg: t})
 }

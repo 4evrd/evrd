@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/store"
 )
@@ -23,9 +24,9 @@ import (
 var linkEventKinds = map[string]bool{"disconnected": true, "failed": true, "connected": true, "netsplit": true}
 
 func (s *Handlers) Reconnects(w http.ResponseWriter, r *http.Request) {
-	out, err := s.reconnectsOf(r.Context(), auth.User(r).ID)
+	out, err := s.reconnectsOf(r.Context(), s.printer(r), auth.User(r).ID)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -37,9 +38,9 @@ func (s *Handlers) AdminUserReconnects(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	out, err := s.reconnectsOf(r.Context(), u.ID)
+	out, err := s.reconnectsOf(r.Context(), s.printer(r), u.ID)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -48,7 +49,7 @@ func (s *Handlers) AdminUserReconnects(w http.ResponseWriter, r *http.Request) {
 // reconnectsOf is a user's last day of link trouble, per network: links
 // dropped, connection attempts that failed, minutes offline, the hours it
 // happened in, and the live state with the last error; then the events.
-func (s *Handlers) reconnectsOf(ctx context.Context, userID int64) (map[string]any, error) {
+func (s *Handlers) reconnectsOf(ctx context.Context, p *messages.Printer, userID int64) (map[string]any, error) {
 	nets, err := s.acc.ListNetworks(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -61,7 +62,7 @@ func (s *Handlers) reconnectsOf(ctx context.Context, userID int64) (map[string]a
 	netsOut := make([]map[string]any, 0, len(nets))
 	for _, n := range nets {
 		id := strconv.FormatInt(n.ID, 10)
-		d := s.networkDTO(n)
+		d := s.networkDTO(p, n)
 		row := map[string]any{"id": n.ID, "name": n.Name, "enabled": n.Enabled}
 		for _, k := range []string{"status", "lastError", "lastErrorAt", "hint", "attempts", "retryIn", "connectedAt", "server"} {
 			if v, ok := d[k]; ok {
@@ -104,7 +105,7 @@ func (s *Handlers) reconnectsOf(ctx context.Context, userID int64) (map[string]a
 		"available": m.available, "error": m.err,
 		"start": start.Unix(), "step": 3600,
 		"networks": netsOut,
-		"events":   eventsDTO(link),
+		"events":   eventsDTO(p, link),
 	}, nil
 }
 

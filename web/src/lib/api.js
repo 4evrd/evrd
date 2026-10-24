@@ -12,10 +12,18 @@ export class ApiError extends Error {
   }
 }
 
+// language is the one the app shows (setLanguage): sent with each request,
+// so evrd's own messages (errors, the connection log, events) come back in it.
+let language = ''
+export function setLanguage(code) { language = code || '' }
+
 async function req(method, path, body) {
+  const headers = {}
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  if (language) headers['X-Evrd-Language'] = language
   const res = await fetch(path, {
     method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   let data = null
@@ -84,7 +92,7 @@ export const api = {
   // ({target, nick, state: active|paused|done}).
   openStream(id, onMessage, onClose, onReady, onTyping) {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${proto}//${location.host}/api/networks/${id}/stream`)
+    const ws = new WebSocket(`${proto}//${location.host}/api/networks/${id}/stream${language ? '?lang=' + encodeURIComponent(language) : ''}`)
     ws.onmessage = (e) => {
       let m
       try { m = JSON.parse(e.data) } catch { return /* ignore malformed frames */ }

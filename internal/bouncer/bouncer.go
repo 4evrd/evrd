@@ -21,6 +21,7 @@ import (
 
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/links"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
 	"github.com/4evrd/evrd/internal/version"
@@ -251,7 +252,7 @@ func (b *Bouncer) JumpServer(networkID int64, i int) error {
 	if _, ok := b.ConnFor(networkID); !ok {
 		return errors.New("it isn't connected")
 	}
-	b.logNote(networkID, "Jumping to another server")
+	b.logNote(networkID, messages.T("log.jumping"))
 	b.Disconnect(networkID)
 	return b.connect(networkID, &i)
 }
@@ -300,7 +301,7 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 			}
 			b.observe(n, conn.Nick(), m)
 		},
-		OnEvent:     func(e upstream.Event) { b.addNetworkEvent(n.UserID, n.ID, e.Kind, e.Title, e.Detail) },
+		OnEvent:     func(e upstream.Event) { b.addNetworkEvent(n.UserID, n.ID, e.Kind, e.TitleText, e.DetailText) },
 		OnLog:       func(e upstream.LogEntry) { b.netlog.add(networkID, e) },
 		ModulesOff:  b.modulesOff,
 		AltNick:     u.DefaultAltNick,
@@ -328,7 +329,7 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 	}
 	go conn.Run(cctx)
 	b.log.Info("connecting network", "network", n.Name, "host", n.Host)
-	b.logNote(networkID, "Switched on")
+	b.logNote(networkID, messages.T("log.switchedOn"))
 
 	return b.store.SetNetworkEnabled(context.Background(), networkID, true)
 }
@@ -341,7 +342,7 @@ func (b *Bouncer) Disconnect(networkID int64) error {
 	b.mu.Unlock()
 	if e != nil {
 		e.cancel()
-		b.logNote(networkID, "Switched off")
+		b.logNote(networkID, messages.T("log.switchedOff"))
 	}
 	return b.store.SetNetworkEnabled(context.Background(), networkID, false)
 }
@@ -410,7 +411,7 @@ func (b *Bouncer) Reconnect(networkID int64) error {
 	if _, ok := b.ConnFor(networkID); !ok {
 		return nil
 	}
-	b.logNote(networkID, "Settings changed: reconnecting")
+	b.logNote(networkID, messages.T("log.settingsChanged"))
 	b.Disconnect(networkID)
 	return b.Connect(networkID)
 }

@@ -12,7 +12,7 @@
 
 import { LANGUAGES, pick as pickFrom } from './locale.js'
 import { layered, languageList, pluralLocale } from './langpack.js'
-import { api } from './api.js'
+import { api, setLanguage } from './api.js'
 
 export { LANGUAGES }
 
@@ -102,6 +102,7 @@ export async function setLocale(code) {
   i18n.messages = layered(en, base, server, mine)
   i18n.intl = pluralLocale(code)
   i18n.locale = code
+  setLanguage(code)
   if (typeof document !== 'undefined') document.documentElement.lang = code
 }
 

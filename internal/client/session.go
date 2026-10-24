@@ -64,6 +64,7 @@ type session struct {
 	uid      int64
 	acct     store.User        // as loaded at attach (LastSeenAt is the previous visit)
 	pr       *messages.Printer // *status's language, for the command running (printer)
+	lang     string            // the web chat's language ("": the account's)
 	net      store.Network
 	up       *upstream.Conn
 	unick    string
@@ -376,7 +377,7 @@ func (se *session) attach() bool {
 				sw = c.Software
 			}
 		}
-		se.srv.b.AddEvent(uid, "attached", sw+" attached", strings.TrimSpace(username+"/"+netName+" · "+ip))
+		se.srv.b.AddEvent(uid, "attached", messages.T("event.attached", "client", sw), messages.Raw(strings.TrimSpace(username+"/"+netName+" · "+ip)))
 	}()
 	return true
 }

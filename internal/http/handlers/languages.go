@@ -5,14 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"slices"
+	"strconv"
 	"unicode/utf8"
 
 	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/store"
 )
 
@@ -23,6 +24,8 @@ import (
 
 // MaxPackSize is the largest language pack file accepted.
 const MaxPackSize = 512 << 10
+
+var errTooBig = messages.Errorf("web.packTooBig", "max", MaxPackSize>>10)
 
 var (
 	packCode = regexp.MustCompile(`^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$`)
@@ -42,19 +45,19 @@ type languagePack struct {
 
 // readPack reads and checks a pack file from the request body, answering
 // 422 itself when it isn't one. messages is the canonical JSON to store.
-func readPack(w http.ResponseWriter, r *http.Request) (p languagePack, messages string, ok bool) {
+func (s *Handlers) readPack(w http.ResponseWriter, r *http.Request) (p languagePack, messages string, ok bool) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, MaxPackSize))
 	var tooBig *http.MaxBytesError
 	if errors.As(err, &tooBig) {
-		writeErr(w, http.StatusUnprocessableEntity, fmt.Sprintf("the file is larger than %d KiB", MaxPackSize>>10))
+		writeErr(w, http.StatusUnprocessableEntity, s.printer(r).Say(errTooBig))
 		return p, "", false
 	} else if err != nil {
-		writeErr(w, http.StatusBadRequest, "bad request")
+		s.say(w, r, http.StatusBadRequest, "web.badRequest")
 		return p, "", false
 	}
 	p, messages, err = parsePack(raw)
 	if err != nil {
-		writeErr(w, http.StatusUnprocessableEntity, err.Error())
+		writeErr(w, http.StatusUnprocessableEntity, s.printer(r).Say(err))
 		return p, "", false
 	}
 	return p, messages, true
@@ -65,28 +68,28 @@ func readPack(w http.ResponseWriter, r *http.Request) (p languagePack, messages 
 func parsePack(raw []byte) (languagePack, string, error) {
 	var p languagePack
 	if len(raw) > MaxPackSize {
-		return p, "", fmt.Errorf("the file is larger than %d KiB", MaxPackSize>>10)
+		return p, "", errTooBig
 	}
 	if err := json.Unmarshal(raw, &p); err != nil {
-		return p, "", errors.New("that isn't a language pack: expected JSON like {\"code\": \"de\", \"name\": \"Deutsch\", \"messages\": {…}}")
+		return p, "", messages.Errorf("web.packNotJSON")
 	}
 	if !packCode.MatchString(p.Code) {
-		return p, "", fmt.Errorf("%q isn't a language code: use 2 or 3 lowercase letters, optionally with a region (de, pt-BR)", p.Code)
+		return p, "", messages.Errorf("web.packCode", "code", strconv.Quote(p.Code))
 	}
 	if n := utf8.RuneCountInString(p.Name); n < 1 || n > 40 {
-		return p, "", errors.New("the language's name must be 1 to 40 characters")
+		return p, "", messages.Errorf("web.packName")
 	}
 	if p.Messages == nil {
-		return p, "", errors.New("the file has no \"messages\" object")
+		return p, "", messages.Errorf("web.packNoMessages")
 	}
 	out := make(map[string]any, len(p.Messages))
 	for k, v := range p.Messages {
 		if !packKey.MatchString(k) {
-			return p, "", fmt.Errorf("%q isn't a message key: use letters, digits, _ . and - (at most 100)", k)
+			return p, "", messages.Errorf("web.packKey", "key", strconv.Quote(k))
 		}
 		msg, err := packMessage(v)
 		if err != nil {
-			return p, "", fmt.Errorf("%s: %s", k, err)
+			return p, "", messages.Errorf("web.packEntry", "key", k, "problem", err)
 		}
 		out[k] = msg
 	}
@@ -99,31 +102,31 @@ func packMessage(raw json.RawMessage) (any, error) {
 	var s string
 	if bytes.HasPrefix(bytes.TrimSpace(raw), []byte(`"`)) {
 		if err := json.Unmarshal(raw, &s); err != nil {
-			return nil, errors.New("not a string")
+			return nil, messages.Errorf("web.packNotText")
 		}
 		return s, packText(s)
 	}
 	var forms map[string]string
 	if err := json.Unmarshal(raw, &forms); err != nil || forms == nil {
-		return nil, errors.New("must be text, or plural forms like {\"one\": \"…\", \"other\": \"…\"}")
+		return nil, messages.Errorf("web.packValue")
 	}
 	for f, text := range forms {
 		if !slices.Contains(pluralForms, f) {
-			return nil, fmt.Errorf("%q isn't a plural form: use zero, one, two, few, many or other", f)
+			return nil, messages.Errorf("web.packForm", "form", strconv.Quote(f))
 		}
 		if err := packText(text); err != nil {
 			return nil, err
 		}
 	}
 	if _, ok := forms["other"]; !ok {
-		return nil, errors.New("plural forms need \"other\"")
+		return nil, messages.Errorf("web.packOther")
 	}
 	return forms, nil
 }
 
 func packText(s string) error {
 	if utf8.RuneCountInString(s) > maxPackText {
-		return fmt.Errorf("longer than %d characters", maxPackText)
+		return messages.Errorf("web.packLong", "max", maxPackText)
 	}
 	return nil
 }
@@ -143,7 +146,7 @@ func packDTO(code, name, messages string, updated int64) map[string]any {
 func (s *Handlers) ListLanguages(w http.ResponseWriter, r *http.Request) {
 	list, err := s.langs.LanguagePacks(r.Context())
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	out := make([]map[string]any, 0, len(list))
@@ -157,31 +160,31 @@ func (s *Handlers) ListLanguages(w http.ResponseWriter, r *http.Request) {
 func (s *Handlers) GetLanguage(w http.ResponseWriter, r *http.Request) {
 	p, err := s.langs.LanguagePack(r.Context(), r.PathValue("code"))
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, packDTO(p.Code, p.Name, p.Messages, p.UpdatedAt.Unix()))
 }
 
 func (s *Handlers) PutLanguage(w http.ResponseWriter, r *http.Request) {
-	p, messages, ok := readPack(w, r)
+	p, messages, ok := s.readPack(w, r)
 	if !ok {
 		return
 	}
 	if p.Code != r.PathValue("code") {
-		writeErr(w, http.StatusUnprocessableEntity, fmt.Sprintf("the file is for %q, not %q", p.Code, r.PathValue("code")))
+		s.say(w, r, http.StatusUnprocessableEntity, "web.packWrongCode", "file", strconv.Quote(p.Code), "want", strconv.Quote(r.PathValue("code")))
 		return
 	}
 	admin := auth.User(r).Username
 	if err := s.langs.PutLanguagePack(r.Context(), store.LanguagePack{Code: p.Code, Name: p.Name, Messages: messages, UpdatedBy: admin}); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.msgs.Forget()
 	s.log.Info("language pack saved", "admin", admin, "code", p.Code, "messages", len(p.Messages))
 	saved, err := s.langs.LanguagePack(r.Context(), p.Code)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, packDTO(saved.Code, saved.Name, "", saved.UpdatedAt.Unix()))
@@ -190,7 +193,7 @@ func (s *Handlers) PutLanguage(w http.ResponseWriter, r *http.Request) {
 func (s *Handlers) DeleteLanguage(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	if err := s.langs.DeleteLanguagePack(r.Context(), code); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.msgs.Forget()
@@ -214,20 +217,20 @@ func (s *Handlers) myPackDTO(userID int64) any {
 func (s *Handlers) MyLanguagePack(w http.ResponseWriter, r *http.Request) {
 	p, err := s.langs.UserLanguagePack(r.Context(), auth.User(r).ID)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, packDTO(p.Code, p.Name, p.Messages, p.UpdatedAt.Unix()))
 }
 
 func (s *Handlers) PutMyLanguagePack(w http.ResponseWriter, r *http.Request) {
-	p, messages, ok := readPack(w, r)
+	p, messages, ok := s.readPack(w, r)
 	if !ok {
 		return
 	}
 	id := auth.User(r).ID
 	if err := s.langs.PutUserLanguagePack(r.Context(), store.UserLanguagePack{UserID: id, Code: p.Code, Name: p.Name, Messages: messages}); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.msgs.Forget()
@@ -236,7 +239,7 @@ func (s *Handlers) PutMyLanguagePack(w http.ResponseWriter, r *http.Request) {
 
 func (s *Handlers) DeleteMyLanguagePack(w http.ResponseWriter, r *http.Request) {
 	if err := s.langs.DeleteUserLanguagePack(r.Context(), auth.User(r).ID); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.msgs.Forget()
@@ -251,7 +254,7 @@ func (s *Handlers) DeleteMyLanguagePack(w http.ResponseWriter, r *http.Request) 
 func (s *Handlers) IRCCoverage(w http.ResponseWriter, r *http.Request) {
 	total, have, err := s.msgs.Coverage(r.Context())
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"total": total, "languages": have})
@@ -263,7 +266,7 @@ func (s *Handlers) IRCMessages(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	m, ok := s.msgs.Builtin(code)
 	if !ok {
-		writeErr(w, http.StatusNotFound, "no built-in IRC texts for that language")
+		s.say(w, r, http.StatusNotFound, "web.noIRCTexts")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"code": code, "messages": m})

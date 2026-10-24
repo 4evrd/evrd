@@ -130,8 +130,9 @@ func (se *session) statusCommand(text string) {
 
 // WebStatus runs a *status command for the web chat, on the given network,
 // passing each reply line to out.
-func (s *Server) WebStatus(userID int64, n store.Network, text string, out func(string)) {
-	se := &session{srv: s, uid: userID, net: n, web: out}
+// lang is the language to answer in ("": the account's).
+func (s *Server) WebStatus(userID int64, lang string, n store.Network, text string, out func(string)) {
+	se := &session{srv: s, uid: userID, net: n, web: out, lang: lang}
 	if conn, ok := s.b.ConnFor(n.ID); ok {
 		se.up = conn
 		se.unick = conn.Nick()
@@ -168,6 +169,9 @@ func (se *session) printer() *messages.Printer {
 			u, err := se.srv.acc.UserByID(context.Background(), se.uid)
 			if err != nil {
 				u = se.account()
+			}
+			if se.lang != "" {
+				u.Language = se.lang
 			}
 			se.pr = se.srv.msgs.For(context.Background(), u)
 		}

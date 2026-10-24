@@ -29,7 +29,7 @@ func TestStorageDescriptions(t *testing.T) {
 		15 * 24 * time.Hour:  "2 weeks",
 		100 * 24 * time.Hour: "14 weeks",
 	} {
-		if got := ago(time.Now().Add(-d)); got != want {
+		if got := ago(time.Now().Add(-d)).English(); got != want {
 			t.Errorf("ago(%v) = %q, want %q", d, got, want)
 		}
 	}

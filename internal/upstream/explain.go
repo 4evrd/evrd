@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/4evrd/evrd/internal/messages"
 )
 
 // LogEntry is one line of a network's connection log: a step evrd took, or
@@ -14,9 +16,12 @@ import (
 // What evrd sends is never logged (it can carry passwords).
 type LogEntry struct {
 	At   time.Time `json:"at"`
-	From string    `json:"from"` // "evrd" or "server"
-	Text string    `json:"text"`
+	From string    `json:"from"`          // "evrd" or "server"
+	Text string    `json:"text"`          // in English, or as the server sent it
 	Bad  bool      `json:"bad,omitempty"` // a failure
+	// Msg is evrd's own entries in words, to show in the reader's language
+	// (zero for the server's lines).
+	Msg messages.Text `json:"msg,omitzero"`
 }
 
 // hints match a failure (evrd's description of it, or what the server said)
@@ -30,59 +35,47 @@ var (
 	throttledRE = regexp.MustCompile(`(?i)(throttl|too fast|too many (connections|clients|users)|reconnect(ing)? too|wait .* (before|between)|connection limit|session limit|clones)`)
 )
 
+// hints match a failure to what it means and what to do about it: the
+// text is irc.hint.<key> (internal/messages).
 var hints = []struct {
-	re   *regexp.Regexp
-	hint string
+	re  *regexp.Regexp
+	key string
 }{
-	{bannedRE,
-		"The server refuses connections from this bouncer's address. evrd rests that server for half an hour (longer each time, as retrying sooner makes bans longer) and tries the network's other servers meanwhile. Some servers only accept certain countries or networks, or clients with ident; add other servers of the network, or ask its staff why — the server's own words are in the connection log."},
-	{throttledRE,
-		"The server limits how often, or how many, connections come from one address — other users of this bouncer on the same network count too. evrd rests that server for at least two minutes, trying the network's other servers meanwhile."},
+	{bannedRE, "banned"},
+	{throttledRE, "throttled"},
 	// services and channels that need a login (see services.go)
-	{regexp.MustCompile(`(?i)(must be (registered|identified|logged in)|need (to be )?(identified|logged in|a registered nick)|registered nick|\(\+r\)|registered-only)`),
-		"That channel only lets in people logged in to an account. Set up Authentication, and switch on “Join channels after identifying” so evrd joins once services confirm the login."},
-	{regexp.MustCompile(`(?i)(isn't registered|is not (a )?registered|not a registered|no such account|account does not exist|unknown account)`),
-		"That account isn't registered on this network. Check the account name under Authentication, or register it first (/msg NickServ REGISTER)."},
-	{regexp.MustCompile(`(?i)(suspended|frozen)`),
-		"Services have suspended or frozen this account. Ask the network's staff."},
-	{regexp.MustCompile(`(?i)(services didn't answer|no services nick|services are (down|unavailable))`),
-		"Services didn't answer the way evrd expected. Check the login method and services nick under Authentication: DALnet's is NickServ@services.dal.net, Undernet logs in to X and QuakeNet to Q (pick their presets)."},
-	{regexp.MustCompile(`(?i)(sasl (authentication |login )?(is )?required|requires sasl|only .* sasl)`),
-		"This server only lets in people who log in with SASL. Set your account and password under Authentication (Automatic or SASL)."},
-	{regexp.MustCompile(`(?i)hung up during the TLS handshake`),
-		"The server hung up before the secure connection was set up. It may be busy or refusing this address for now, or that port doesn't speak TLS — evrd keeps trying, and other servers of the network may let you in."},
-	{regexp.MustCompile(`(?i)(doesn't offer SASL|refused the SASL capability)`),
-		"This network has no SASL. Choose Automatic or NickServ under Authentication, so evrd identifies once connected."},
-	{regexp.MustCompile(`(?i)(password (is )?(incorrect|mismatch|required|wrong)|(bad|invalid|incorrect|wrong) password|invalid (account )?credentials|sasl authentication failed|authentication failed|login (unsuccessful|failed))`),
-		"The password was refused. Check the account and password under Authentication (and a server password, if the server needs one)."},
-	{regexp.MustCompile(`(?i)(didn't answer with TLS|plain-text port)`),
-		"This port doesn't speak TLS. Use the server's TLS port (often 6697, sometimes 9999 or 7000), or switch TLS off for this server."},
-	{regexp.MustCompile(`(?i)speaks TLS on this port`),
-		"The server expects TLS on this port. Switch TLS on for this server."},
-	{regexp.MustCompile(`(?i)(certificate|x509|unknown authority|not trusted)`),
-		"The server's certificate couldn't be verified. If it's self-signed and you know it's the right server, trust its fingerprint; otherwise check the host name."},
-	{regexp.MustCompile(`(?i)(can't resolve|no such host)`),
-		"That host name doesn't exist. Check its spelling, or the network's list of servers."},
-	{regexp.MustCompile(`(?i)connection refused`),
-		"The server's address answered, but nothing listens on that port. Check the port (and that the server is up)."},
-	{regexp.MustCompile(`(?i)(timed out|can't connect|no route|unreachable|i/o timeout)`),
-		"The server didn't answer. It may be down, or a firewall is in the way — of the server, or of this bouncer's outgoing connections."},
-	{regexp.MustCompile(`(?i)(nickname is already in use|erroneous nickname|nick .* in use|no free nick)`),
-		"The nick is taken or not allowed. Set an alternate nick, or another nick, for this network."},
-	{regexp.MustCompile(`(?i)ping timeout`),
-		"The connection went quiet and was dropped. Usually a network hiccup; evrd reconnects by itself."},
-	{regexp.MustCompile(`(?i)(closing link|connection closed by server|closed the connection)`),
-		"The server closed the connection. Its last words, if any, are in the connection log."},
+	{regexp.MustCompile(`(?i)(must be (registered|identified|logged in)|need (to be )?(identified|logged in|a registered nick)|registered nick|\(\+r\)|registered-only)`), "needsLogin"},
+	{regexp.MustCompile(`(?i)(isn't registered|is not (a )?registered|not a registered|no such account|account does not exist|unknown account)`), "notRegistered"},
+	{regexp.MustCompile(`(?i)(suspended|frozen)`), "suspended"},
+	{regexp.MustCompile(`(?i)(services didn't answer|no services nick|services are (down|unavailable))`), "servicesNoAnswer"},
+	{regexp.MustCompile(`(?i)(sasl (authentication |login )?(is )?required|requires sasl|only .* sasl)`), "saslRequired"},
+	{regexp.MustCompile(`(?i)hung up during the TLS handshake`), "hungUp"},
+	{regexp.MustCompile(`(?i)(doesn't offer SASL|refused the SASL capability)`), "noSASL"},
+	{regexp.MustCompile(`(?i)(password (is )?(incorrect|mismatch|required|wrong)|(bad|invalid|incorrect|wrong) password|invalid (account )?credentials|sasl authentication failed|authentication failed|login (unsuccessful|failed))`), "password"},
+	{regexp.MustCompile(`(?i)(didn't answer with TLS|plain-text port)`), "notTLS"},
+	{regexp.MustCompile(`(?i)speaks TLS on this port`), "speaksTLS"},
+	{regexp.MustCompile(`(?i)(certificate|x509|unknown authority|not trusted)`), "certificate"},
+	{regexp.MustCompile(`(?i)(can't resolve|no such host)`), "noHost"},
+	{regexp.MustCompile(`(?i)connection refused`), "refused"},
+	{regexp.MustCompile(`(?i)(timed out|can't connect|no route|unreachable|i/o timeout)`), "noAnswer"},
+	{regexp.MustCompile(`(?i)(nickname is already in use|erroneous nickname|nick .* in use|no free nick)`), "nick"},
+	{regexp.MustCompile(`(?i)ping timeout`), "pingTimeout"},
+	{regexp.MustCompile(`(?i)(closing link|connection closed by server|closed the connection)`), "closed"},
 }
 
-// Hint says what a failure means and what to do, or "" when it's unclear.
-func Hint(failure string) string {
+// Hint says what a failure means and what to do, in English, or "" when
+// it's unclear.
+func Hint(failure string) string { return HintText(failure).English() }
+
+// HintText is Hint in words, to put in the reader's language (zero when
+// it's unclear).
+func HintText(failure string) messages.Text {
 	for _, h := range hints {
 		if h.re.MatchString(failure) {
-			return h.hint
+			return messages.T("hint." + h.key)
 		}
 	}
-	return ""
+	return messages.Text{}
 }
 
 // logged reports whether a server line belongs in the connection log:

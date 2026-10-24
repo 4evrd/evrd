@@ -37,7 +37,7 @@ func (s *Handlers) settingsDTO() map[string]any {
 
 func (s *Handlers) GetSettings(w http.ResponseWriter, r *http.Request) {
 	if s.settings == nil {
-		writeErr(w, http.StatusNotFound, "settings aren't available")
+		s.say(w, r, http.StatusNotFound, "web.noSettings")
 		return
 	}
 	writeJSON(w, http.StatusOK, s.settingsDTO())
@@ -47,14 +47,14 @@ func (s *Handlers) GetSettings(w http.ResponseWriter, r *http.Request) {
 // (reset goes back to the config file's value or the default).
 func (s *Handlers) SaveSettings(w http.ResponseWriter, r *http.Request) {
 	if s.settings == nil {
-		writeErr(w, http.StatusNotFound, "settings aren't available")
+		s.say(w, r, http.StatusNotFound, "web.noSettings")
 		return
 	}
 	var in struct {
 		Set   map[string]string `json:"set"`
 		Reset []string          `json:"reset"`
 	}
-	if !decode(w, r, &in) {
+	if !s.decode(w, r, &in) {
 		return
 	}
 	if err := s.settings.Save(in.Set, in.Reset, auth.User(r).Username); err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/modules"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
@@ -19,12 +20,12 @@ import (
 func (s *Handlers) ListNetworks(w http.ResponseWriter, r *http.Request) {
 	nets, err := s.acc.ListNetworks(r.Context(), auth.User(r).ID)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	out := make([]map[string]any, 0, len(nets))
 	for _, n := range nets {
-		out = append(out, s.networkDTO(n))
+		out = append(out, s.networkDTO(s.printer(r), n))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -194,7 +195,7 @@ func (s *Handlers) checkNetwork(u store.User, n *store.Network, before *store.Ne
 func (s *Handlers) CreateNetwork(w http.ResponseWriter, r *http.Request) {
 	u := auth.User(r)
 	var in networkInput
-	if !decode(w, r, &in) {
+	if !s.decode(w, r, &in) {
 		return
 	}
 	// New networks start from the user's defaults and ZNC's flood settings.
@@ -204,19 +205,19 @@ func (s *Handlers) CreateNetwork(w http.ResponseWriter, r *http.Request) {
 	}
 	in.apply(&n)
 	if err := s.checkNetwork(u, &n, nil); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	if err := s.acc.CanCreateNetwork(u); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	n, err := s.acc.CreateNetwork(r.Context(), n)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.networkDTO(n))
+	writeJSON(w, http.StatusOK, s.networkDTO(s.printer(r), n))
 }
 
 func (s *Handlers) GetNetwork(w http.ResponseWriter, r *http.Request) {
@@ -224,7 +225,7 @@ func (s *Handlers) GetNetwork(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, s.networkDTO(n))
+	writeJSON(w, http.StatusOK, s.networkDTO(s.printer(r), n))
 }
 
 // UpdateNetwork edits a network. Fields left out are unchanged; a
@@ -236,29 +237,29 @@ func (s *Handlers) UpdateNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in networkInput
-	if !decode(w, r, &in) {
+	if !s.decode(w, r, &in) {
 		return
 	}
 	before := n
 	in.apply(&n)
 	if err := s.checkNetwork(auth.User(r), &n, &before); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	if err := s.acc.UpdateNetwork(r.Context(), n); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.b.Reconfigure(n)
 	reconnected := false
 	if accounts.NeedsReconnect(before, n) && s.b.Status(n.ID) != "disconnected" {
 		if err := s.b.Reconnect(n.ID); err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 		reconnected = true
 	}
-	d := s.networkDTO(n)
+	d := s.networkDTO(s.printer(r), n)
 	d["reconnected"] = reconnected
 	writeJSON(w, http.StatusOK, d)
 }
@@ -278,7 +279,7 @@ func (s *Handlers) DeleteNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.b.DeleteNetwork(n.UserID, n.ID); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -290,7 +291,7 @@ func (s *Handlers) Connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.b.Connect(n.ID); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": string(s.b.Status(n.ID))})
@@ -312,7 +313,7 @@ func (s *Handlers) Messages(w http.ResponseWriter, r *http.Request) {
 	}
 	msgs, err := s.b.History().Recent(n.ID, r.URL.Query().Get("target"), 200)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	out := make([]map[string]any, 0, len(msgs))
@@ -329,7 +330,25 @@ func (s *Handlers) NetworkLog(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, s.b.NetworkLog(n.ID))
+	writeJSON(w, http.StatusOK, logDTO(s.printer(r), s.b.NetworkLog(n.ID)))
+}
+
+// logDTO is a connection log with evrd's own entries in p's language.
+func logDTO(p *messages.Printer, log []upstream.LogEntry) []upstream.LogEntry {
+	for i, e := range log {
+		log[i].Text = orText(p, e.Msg, e.Text)
+		log[i].Msg = messages.Text{}
+	}
+	return log
+}
+
+// orText is t in p's language, or text when t is zero (English only, or
+// the server's own words).
+func orText(p *messages.Printer, t messages.Text, text string) string {
+	if t.IsZero() {
+		return text
+	}
+	return p.Text(t)
 }
 
 // AdminNetworkLog is a user's network's connection log, for admins
@@ -339,7 +358,7 @@ func (s *Handlers) AdminNetworkLog(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, s.b.NetworkLog(n.ID))
+	writeJSON(w, http.StatusOK, logDTO(s.printer(r), s.b.NetworkLog(n.ID)))
 }
 
 func (s *Handlers) Buffers(w http.ResponseWriter, r *http.Request) {
@@ -411,7 +430,7 @@ func (s *Handlers) MarkRead(w http.ResponseWriter, r *http.Request) {
 	var in struct{ Target string }
 	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in)
 	if err := s.b.MarkRead(n.ID, in.Target); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -441,7 +460,7 @@ func (s *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
 	}
 	conn, ok := s.b.ConnFor(n.ID)
 	if !ok {
-		writeErr(w, http.StatusConflict, "network not connected")
+		s.say(w, r, http.StatusConflict, "web.notConnected")
 		return
 	}
 
@@ -562,13 +581,13 @@ func (s *Handlers) webStatus(r *http.Request, n store.Network, text string, repl
 		}
 	}
 	if s.status == nil {
-		reply("*status isn't available here.")
+		reply(s.printer(r).T(messages.Area + "web.noStatus"))
 		return
 	}
 	if fresh, err := s.acc.NetworkByID(r.Context(), n.ID); err == nil {
 		n = fresh
 	}
-	s.status.WebStatus(auth.User(r).ID, n, text, reply)
+	s.status.WebStatus(auth.User(r).ID, requestLanguage(r), n, text, reply)
 }
 
 // ownedNetwork loads the {id} network if it belongs to the signed-in user,
@@ -576,13 +595,13 @@ func (s *Handlers) webStatus(r *http.Request, n store.Network, text string, repl
 func (s *Handlers) ownedNetwork(w http.ResponseWriter, r *http.Request) (store.Network, bool) {
 	n, err := s.acc.NetworkByID(r.Context(), PathID(r))
 	if err != nil || n.UserID != auth.User(r).ID {
-		writeErr(w, http.StatusNotFound, "not found")
+		s.say(w, r, http.StatusNotFound, "web.notFound")
 		return store.Network{}, false
 	}
 	return n, true
 }
 
-func (s *Handlers) networkDTO(n store.Network) map[string]any {
+func (s *Handlers) networkDTO(p *messages.Printer, n store.Network) map[string]any {
 	ch := n.Channels
 	if ch == nil {
 		ch = []string{}
@@ -593,7 +612,8 @@ func (s *Handlers) networkDTO(n store.Network) map[string]any {
 		nick = c.Nick() // the live nick, after any /nick
 		h := c.Health()
 		health = map[string]any{
-			"status": string(h.Status), "lastError": h.LastError, "lastErrorAt": unixT(h.LastErrorAt), "hint": h.Hint,
+			"status": string(h.Status), "lastError": orText(p, h.LastErrorText, h.LastError), "lastErrorAt": unixT(h.LastErrorAt),
+			"hint":     orText(p, h.HintText, h.Hint),
 			"attempts": h.Attempts, "retryIn": int(h.RetryIn.Seconds()), "connectedAt": unixT(h.ConnectedAt),
 			"server": h.Server, "untrustedFingerprint": h.UntrustedFingerprint, "auth": h.Auth,
 		}

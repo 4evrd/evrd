@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/messages"
 )
 
 // fakeHost is a connection a test drives: it records what modules send and
@@ -39,7 +40,7 @@ func (f *fakeHost) Members(c string) []Member       { return f.members[strings.T
 func (f *fakeHost) IsOp(c string) bool              { return f.ops[strings.ToLower(c)] }
 func (f *fakeHost) Account() (string, string)       { return f.user, f.password }
 func (f *fakeHost) After(_ time.Duration, g func()) { f.timers = append(f.timers, g) }
-func (f *fakeHost) Log(t string)                    { f.logs = append(f.logs, t) }
+func (f *fakeHost) Log(t messages.Text)             { f.logs = append(f.logs, t.English()) }
 func (f *fakeHost) Reply(string)                    {}
 
 // fire runs the timers set so far (not ones they set).

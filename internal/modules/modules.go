@@ -46,7 +46,7 @@ type Host interface {
 	// connection ends first.
 	After(d time.Duration, f func())
 	// Log writes to the network's connection log.
-	Log(text string)
+	Log(t messages.Text)
 	// Reply sends a notice to the user's attached clients, as the module.
 	Reply(text string)
 }

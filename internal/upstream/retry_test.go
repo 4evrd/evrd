@@ -160,11 +160,11 @@ func TestRestNote(t *testing.T) {
 		{notAuthorised, 30 * time.Minute, 30 * time.Minute, 1, true, true, "Trying again in 30m"},
 		{"connection refused", 0, 2 * time.Second, 2, false, false, "Trying again in 2s"},
 	} {
-		if got := restNote("EFnet", "irc.du.se:6667", tc.msg, tc.rest, tc.wait, tc.servers, tc.allRest, tc.alBan); !strings.HasPrefix(got, tc.want) {
+		if got := restNote("EFnet", "irc.du.se:6667", tc.msg, tc.rest, tc.wait, tc.servers, tc.allRest, tc.alBan).English(); !strings.HasPrefix(got, tc.want) {
 			t.Errorf("%q: %q, want %q", tc.msg, got, tc.want)
 		}
 	}
-	if got := restNote("EFnet", "odd", kLined, time.Minute, time.Second, 2, false, false); !strings.HasPrefix(got, "odd refuses") {
+	if got := restNote("EFnet", "odd", kLined, time.Minute, time.Second, 2, false, false).English(); !strings.HasPrefix(got, "odd refuses") {
 		t.Errorf("unsplittable server: %q", got)
 	}
 }

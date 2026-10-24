@@ -5,12 +5,12 @@ package upstream
 // waits when every server is resting.
 
 import (
-	"fmt"
 	"math/rand/v2"
 	"net"
 	"strconv"
 	"time"
 
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/store"
 )
 
@@ -112,24 +112,24 @@ func (r rests) retryWait(backoff time.Duration, servers []store.Server, now time
 
 // restNote is the connection log's line on what evrd does next: with
 // servers of the network to spare, which one rests and for how long.
-func restNote(network, server, msg string, rest, wait time.Duration, servers int, allRest, allBanned bool) string {
+func restNote(network, server, msg string, rest, wait time.Duration, servers int, allRest, allBanned bool) messages.Text {
 	switch {
 	case allRest && servers > 1:
-		why := "refuse this address"
+		key := "rest.allBanned"
 		if !allBanned {
-			why = "refuse or limit connections from this address"
+			key = "rest.allLimited"
 		}
-		return fmt.Sprintf("All servers of %s %s: trying again in %s", network, why, roundDur(wait))
+		return messages.T(key, "network", network, "wait", durText(wait))
 	case rest > 0 && servers > 1:
 		host, _, err := net.SplitHostPort(server)
 		if err != nil {
 			host = server
 		}
-		why := "refuses this address"
+		key := "rest.banned"
 		if !bannedRE.MatchString(msg) {
-			why = "limits connections from this address"
+			key = "rest.limited"
 		}
-		return fmt.Sprintf("%s %s: resting it for %s, trying the network's other servers", host, why, roundDur(rest))
+		return messages.T(key, "host", host, "rest", durText(rest))
 	}
-	return "Trying again in " + roundDur(wait)
+	return messages.T("rest.retrying", "wait", durText(wait))
 }

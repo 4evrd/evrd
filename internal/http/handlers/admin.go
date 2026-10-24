@@ -22,7 +22,7 @@ func (s *Handlers) adminUserDTO(u store.User) map[string]any {
 func (s *Handlers) AdminListUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := s.acc.ListUsers(r.Context())
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	counts, _ := s.acc.NetworkCounts(r.Context())
@@ -50,14 +50,14 @@ func (s *Handlers) AdminListUsers(w http.ResponseWriter, r *http.Request) {
 
 func (s *Handlers) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 	var in struct{ Username, Email, Password, Role string }
-	if !decode(w, r, &in) {
+	if !s.decode(w, r, &in) {
 		return
 	}
 	// An admin-chosen password is temporary: the user changes it at first
 	// sign-in.
 	u, err := s.acc.Create(accounts.CreateInput{Username: in.Username, Email: in.Email, Password: in.Password, Role: in.Role, Temporary: in.Password != ""})
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.log.Info("admin created user", "admin", auth.User(r).Username, "user", u.Username)
@@ -68,7 +68,7 @@ func (s *Handlers) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 func (s *Handlers) adminTarget(w http.ResponseWriter, r *http.Request) (store.User, bool) {
 	u, err := s.acc.UserByID(r.Context(), PathID(r))
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return store.User{}, false
 	}
 	return u, true
@@ -82,7 +82,7 @@ func (s *Handlers) AdminGetUser(w http.ResponseWriter, r *http.Request) {
 	nets, _ := s.acc.ListNetworks(r.Context(), u.ID)
 	netsOut := make([]map[string]any, 0, len(nets))
 	for _, n := range nets {
-		netsOut = append(netsOut, s.networkDTO(n))
+		netsOut = append(netsOut, s.networkDTO(s.printer(r), n))
 	}
 	d := s.adminUserDTO(u)
 	d["networks"] = netsOut
@@ -116,20 +116,20 @@ func (s *Handlers) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		Settings        *userSettingsInput `json:"settings"`
 		DenySetBindHost *bool              `json:"denySetBindHost"`
 	}
-	if !decode(w, r, &in) {
+	if !s.decode(w, r, &in) {
 		return
 	}
 	before := u
 	if in.Role != nil {
 		if *in.Role != store.RoleUser && *in.Role != store.RoleAdmin {
-			writeErr(w, http.StatusUnprocessableEntity, "role must be user or admin")
+			s.say(w, r, http.StatusUnprocessableEntity, "err.role")
 			return
 		}
 		u.Role = *in.Role
 	}
 	if in.Suspended != nil {
 		if *in.Suspended && u.ID == me.ID {
-			writeErr(w, http.StatusUnprocessableEntity, "you can't suspend yourself")
+			s.say(w, r, http.StatusUnprocessableEntity, "web.suspendSelf")
 			return
 		}
 		u.Suspended = *in.Suspended
@@ -146,19 +146,19 @@ func (s *Handlers) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	if l := in.Limits; l != nil {
 		for _, v := range []*int{l.MaxNetworks, l.MaxClients, l.BacklogLines} {
 			if v != nil && *v < 0 {
-				writeErr(w, http.StatusUnprocessableEntity, "limits can't be negative (0 means unlimited)")
+				s.say(w, r, http.StatusUnprocessableEntity, "web.negativeLimits")
 				return
 			}
 		}
 		u.MaxNetworks, u.MaxClients, u.BacklogLines = l.MaxNetworks, l.MaxClients, l.BacklogLines
 	}
 	if err := s.acc.GuardAdminChange(before, u.IsAdmin() && !u.Suspended); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	if in.Settings != nil {
 		if err := in.Settings.apply(&u); err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 	}
@@ -166,7 +166,7 @@ func (s *Handlers) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		u.DenySetBindHost = *in.DenySetBindHost
 	}
 	if err := s.acc.UpdateUser(r.Context(), u); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	switch {
@@ -196,7 +196,7 @@ func (s *Handlers) AdminSetPassword(w http.ResponseWriter, r *http.Request) {
 	_ = decodeOptional(r, &in)
 	pw, err := s.acc.SetTemporaryPassword(&u, in.Password)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	keep := ""
@@ -222,7 +222,7 @@ func (s *Handlers) AdminRevokeSessions(w http.ResponseWriter, r *http.Request) {
 		keep = auth.SessionOf(r).ID
 	}
 	if err := s.auth.DeleteUserSessions(r.Context(), u.ID, keep); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -234,11 +234,11 @@ func (s *Handlers) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if u.ID == auth.User(r).ID {
-		writeErr(w, http.StatusUnprocessableEntity, "delete your own account from the Account page")
+		s.say(w, r, http.StatusUnprocessableEntity, "web.deleteSelf")
 		return
 	}
 	if err := s.acc.GuardAdminChange(u, false); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.deleteUser(u)

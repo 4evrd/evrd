@@ -306,7 +306,7 @@ func TestWebStatus(t *testing.T) {
 	r := newRig(t)
 	run := func(n store.Network, cmd string) []string {
 		var out []string
-		r.srv.WebStatus(r.user.ID, n, cmd, func(s string) { out = append(out, s) })
+		r.srv.WebStatus(r.user.ID, "", n, cmd, func(s string) { out = append(out, s) })
 		return out
 	}
 	has := func(lines []string, s string) bool { return anyHas(lines, s) }
@@ -351,7 +351,7 @@ func TestStatusDirectory(t *testing.T) {
 	r := newRig(t)
 	run := func(cmd string) []string {
 		var out []string
-		r.srv.WebStatus(r.user.ID, r.network("one"), cmd, func(s string) { out = append(out, s) })
+		r.srv.WebStatus(r.user.ID, "", r.network("one"), cmd, func(s string) { out = append(out, s) })
 		return out
 	}
 	if out := run("directory"); !anyHas(out, "The network directory is empty here") {

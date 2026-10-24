@@ -14,7 +14,6 @@ package upstream
 import (
 	"bufio"
 	"context"
-	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -36,6 +35,7 @@ import (
 	"github.com/4evrd/evrd/internal/irc"
 	"github.com/4evrd/evrd/internal/irctls"
 	"github.com/4evrd/evrd/internal/links"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/modules"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/telemetry"
@@ -81,7 +81,12 @@ type Health struct {
 	Status    Status `json:"status"`
 	LastError string `json:"lastError,omitempty"`
 	// Hint says what LastError means and what to do about it.
-	Hint        string        `json:"hint,omitempty"`
+	Hint string `json:"hint,omitempty"`
+	// LastErrorText and HintText are them in words, to show in the
+	// reader's language.
+	LastErrorText messages.Text `json:"lastErrorText,omitzero"`
+	HintText      messages.Text `json:"hintText,omitzero"`
+
 	LastErrorAt time.Time     `json:"lastErrorAt"`
 	Attempts    int           `json:"attempts"` // failed attempts since last connected
 	RetryIn     time.Duration `json:"retryIn"`  // wait before the next attempt
@@ -100,9 +105,12 @@ type Health struct {
 // Event is something worth telling the user about.
 type Event struct {
 	Kind   string // connected | disconnected | failed (couldn't connect) | netsplit
-	Title  string
+	Title  string // in English
 	Detail string
 	At     time.Time
+	// TitleText and DetailText are Title and Detail in words, to show in
+	// the reader's language.
+	TitleText, DetailText messages.Text
 }
 
 // Conn is a single upstream IRC connection.
@@ -400,7 +408,8 @@ func (c *Conn) Run(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		msg := describeErr(err)
+		reason := reasonOf(err)
+		msg := reason.English()
 		now := time.Now()
 		c.mu.Lock()
 		server := c.health.Server
@@ -415,21 +424,23 @@ func (c *Conn) Run(ctx context.Context) {
 		wait := c.rests.retryWait(backoff, servers, now)
 		_, allBanned, allRest := c.rests.allResting(servers, now)
 		c.mu.Unlock()
-		hint := Hint(msg)
+		hintT := HintText(msg)
+		hint := hintT.English()
 		if wasConnected {
-			c.note("evrd", true, "Disconnected: "+msg)
+			c.noteT(true, messages.T("log.disconnected", "reason", reason))
 		} else {
-			c.note("evrd", true, "Couldn't connect: "+msg)
+			c.noteT(true, messages.T("log.couldntConnect", "reason", reason))
 		}
 		if hint != "" && hint != lastHint {
-			c.note("evrd", false, hint)
+			c.noteT(false, hintT)
 		}
 		lastHint = hint
 		next := restNote(c.net.Name, server, msg, rest, wait, len(servers), allRest, allBanned)
-		c.note("evrd", false, next)
+		c.noteT(false, next)
 		c.update(func(h *Health) {
 			h.Status, h.Lag = StatusReconnecting, -1
 			h.LastError, h.LastErrorAt, h.Hint = msg, time.Now(), hint
+			h.LastErrorText, h.HintText = reason, hintT
 			h.Attempts++
 			h.RetryIn = wait
 		})
@@ -441,14 +452,15 @@ func (c *Conn) Run(ctx context.Context) {
 		telemetry.UpstreamDisconnects.Add(ctx, 1, telemetry.Attrs("user", c.userAttr, "network", c.netAttr, "kind", kind))
 		switch {
 		case wasConnected:
-			c.notify(Event{Kind: "disconnected", Title: c.net.Name + " " + msg, Detail: fmt.Sprintf("Reconnecting in %s", roundDur(wait))})
+			c.notify(Event{Kind: "disconnected", TitleText: messages.T("event.disconnected", "network", c.net.Name, "reason", reason),
+				DetailText: messages.T("event.reconnectingIn", "wait", durText(wait))})
 		case msg != lastFail:
 			lastFail = msg
-			detail := hint
-			if detail == "" {
+			detail := hintT
+			if detail.IsZero() {
 				detail = next
 			}
-			c.notify(Event{Kind: "failed", Title: c.net.Name + ": couldn't connect: " + msg, Detail: detail})
+			c.notify(Event{Kind: "failed", TitleText: messages.T("event.failed", "network", c.net.Name, "reason", reason), DetailText: detail})
 		}
 		select {
 		case <-ctx.Done():
@@ -502,13 +514,13 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		switch {
 		case rerr == nil:
 			conn, resumed, held = rc, res, true
-			c.note("evrd", false, fmt.Sprintf("Picked up the connection the holder kept while evrd restarted (as %s)", res.Nick))
+			c.noteT(false, messages.T("log.resumed", "nick", res.Nick))
 		case !errors.Is(rerr, links.ErrNoLink):
 			c.log.Warn("resume held link", "network", c.net.Name, "err", rerr)
 		}
 	}
 	if conn == nil {
-		c.note("evrd", false, fmt.Sprintf("Connecting to %s port %d%s", sv.Host, sv.Port, map[bool]string{true: " with TLS", false: " without TLS"}[sv.TLS]))
+		c.noteT(false, messages.T(map[bool]string{true: "log.connectingTLS", false: "log.connecting"}[sv.TLS], "host", sv.Host, "port", sv.Port))
 		if c.dial != nil {
 			conn, err = c.dial(dctxDial, sv.Host, sv.Port)
 		} else {
@@ -520,7 +532,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 			return false, err
 		}
 		if ra := conn.RemoteAddr(); ra != nil {
-			c.note("evrd", false, "Connected to "+ra.String())
+			c.noteT(false, messages.T("log.connected", "address", ra.String()))
 		}
 		// Kept for ident queries: once in the holder, conn is a unix stream.
 		c.setAddrs(addrPort(conn.LocalAddr()), addrPort(conn.RemoteAddr()))
@@ -531,7 +543,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 			case herr == nil:
 				conn, held = hc, true
 				if sv.TLS {
-					c.note("evrd", false, "TLS handshake done")
+					c.noteT(false, messages.T("log.tlsDone"))
 				}
 			case errors.Is(herr, links.ErrUnavailable):
 				// no holder: connect directly, as without one
@@ -560,7 +572,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 			return false, err
 		}
 		conn = tc
-		c.note("evrd", false, "TLS handshake done")
+		c.noteT(false, messages.T("log.tlsDone"))
 		c.mu.Lock()
 		c.health.UntrustedFingerprint = ""
 		c.mu.Unlock()
@@ -624,7 +636,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		c.send("NICK " + c.net.Nick)
 		real := orElse(c.net.Realname, c.net.Nick)
 		c.send(fmt.Sprintf("USER %s 0 * :%s", c.Ident(), real))
-		c.note("evrd", false, "Signing in as "+c.net.Nick)
+		c.noteT(false, messages.T("log.signingIn", "nick", c.net.Nick))
 	}
 
 	sc := bufio.NewScanner(conn)
@@ -747,8 +759,8 @@ func (c *Conn) resume(r *links.Resumed) {
 	}()
 	c.log.Info("resumed held link", "network", c.net.Name, "nick", r.Nick, "channels", len(saved), "dropped", r.Dropped)
 	if r.Dropped > 0 {
-		c.notify(Event{Kind: "netsplit", Title: c.net.Name + ": lines missed while evrd restarted",
-			Detail: fmt.Sprintf("%d lines didn't fit the holder's buffer", r.Dropped)})
+		c.notify(Event{Kind: "netsplit", TitleText: messages.T("event.linesMissed", "network", c.net.Name),
+			DetailText: messages.T("event.linesDropped", "count", r.Dropped)})
 	}
 }
 
@@ -794,11 +806,11 @@ func (c *Conn) handle(m irc.Message) {
 		c.saslOK = true
 		c.health.Auth = AuthIdentified
 		c.mu.Unlock()
-		c.note("evrd", false, "Logged in with SASL as "+orElse(c.net.SASLUser, orElse(c.net.Username, c.net.Nick)))
+		c.noteT(false, messages.T("log.saslDone", "account", orElse(c.net.SASLUser, orElse(c.net.Username, c.net.Nick))))
 		c.send("CAP END")
 	case "902", "904", "905", "906", "908": // SASL failures
 		c.log.Warn("SASL failed, continuing unauthenticated", "network", c.net.Name)
-		c.saslFailed(lastParam(m))
+		c.saslFailed(messages.Raw(lastParam(m)))
 		c.send("CAP END")
 	case "901": // RPL_LOGGEDOUT
 		c.mu.Lock()
@@ -819,8 +831,8 @@ func (c *Conn) handle(m irc.Message) {
 	case "401", "440": // no such nick, services down
 		c.servicesMissing(m)
 	case "477": // ERR_NEEDREGGEDNICK: a channel for logged-in users only
-		if h := Hint(lastParam(m)); h != "" {
-			c.note("evrd", false, h)
+		if h := HintText(lastParam(m)); !h.IsZero() {
+			c.noteT(false, h)
 		}
 	case "001": // RPL_WELCOME — registration complete
 		moduleLogin := c.modsLogIn()
@@ -847,8 +859,9 @@ func (c *Conn) handle(m irc.Message) {
 		for _, l := range pending {
 			c.send(l)
 		}
-		c.notify(Event{Kind: "connected", Title: "Connected to " + c.net.Name, Detail: fmt.Sprintf("%s:%d as %s", c.net.Host, c.net.Port, c.Nick())})
-		c.note("evrd", false, "Signed in as "+c.Nick())
+		c.notify(Event{Kind: "connected", TitleText: messages.T("event.connected", "network", c.net.Name),
+			DetailText: messages.T("event.connectedAs", "host", c.net.Host, "port", c.net.Port, "nick", c.Nick())})
+		c.noteT(false, messages.T("log.signedIn", "nick", c.Nick()))
 		c.modsRegistered()
 	case "005": // RPL_ISUPPORT
 		if len(m.Params) > 2 {
@@ -943,7 +956,7 @@ func (c *Conn) handle(m irc.Message) {
 			c.event("quit", ch, who, reason, "")
 		}
 		if split {
-			c.notify(Event{Kind: "netsplit", Title: "Netsplit on " + c.net.Name, Detail: reason})
+			c.notify(Event{Kind: "netsplit", TitleText: messages.T("event.netsplit", "network", c.net.Name), DetailText: messages.Raw(reason)})
 		}
 	case "JOIN":
 		if len(m.Params) == 0 {
@@ -1035,18 +1048,55 @@ func (c *Conn) stamp(m history.Message) history.Message {
 // note adds to the connection log. The network's password never shows,
 // even when a server or services repeat it.
 func (c *Conn) note(from string, bad bool, text string) {
+	c.logEntry(LogEntry{At: time.Now(), From: from, Text: text, Bad: bad})
+}
+
+// noteT is note for evrd's own words.
+func (c *Conn) noteT(bad bool, t messages.Text) {
+	c.logEntry(LogEntry{At: time.Now(), From: "evrd", Text: t.English(), Bad: bad, Msg: t})
+}
+
+func (c *Conn) logEntry(e LogEntry) {
 	if p := c.net.Password; len(p) >= 4 {
-		text = strings.ReplaceAll(text, p, "••••••")
+		e.Text = strings.ReplaceAll(e.Text, p, "••••••")
+		e.Msg = redact(e.Msg, p)
 	}
 	if c.onLog != nil {
-		c.onLog(LogEntry{At: time.Now(), From: from, Text: text, Bad: bad})
+		c.onLog(e)
 	}
+}
+
+// redact is t with secret blanked out of its arguments.
+func redact(t messages.Text, secret string) messages.Text {
+	if t.IsZero() {
+		return t
+	}
+	out := messages.Text{Key: t.Key}
+	for k, v := range t.Args {
+		if out.Args == nil {
+			out.Args = map[string]string{}
+		}
+		out.Args[k] = strings.ReplaceAll(v, secret, "••••••")
+	}
+	for k, v := range t.Sub {
+		if out.Sub == nil {
+			out.Sub = map[string]messages.Text{}
+		}
+		out.Sub[k] = redact(v, secret)
+	}
+	return out
 }
 
 func (c *Conn) notify(e Event) {
 	if c.onEvent != nil {
 		if e.At.IsZero() {
 			e.At = time.Now()
+		}
+		if e.Title == "" {
+			e.Title = e.TitleText.English()
+		}
+		if e.Detail == "" {
+			e.Detail = e.DetailText.English()
 		}
 		c.onEvent(e)
 	}
@@ -1248,7 +1298,7 @@ func (c *Conn) handleCap(m irc.Message) {
 	method := c.net.Auth()
 	sasl := c.net.Password != "" && (method == store.AuthAuto || method == store.AuthSASL)
 	// without SASL: say so, and (auto only) try the password as PASS
-	noSASL := func(why string) {
+	noSASL := func(why messages.Text) {
 		if sasl && method == store.AuthSASL {
 			c.saslFailed(why)
 		}
@@ -1281,7 +1331,7 @@ func (c *Conn) handleCap(m irc.Message) {
 			return
 		}
 		if len(req) == 0 {
-			noSASL("the server doesn't offer SASL")
+			noSASL(messages.T("reason.noSASL"))
 			return
 		}
 		for _, n := range req {
@@ -1290,12 +1340,12 @@ func (c *Conn) handleCap(m irc.Message) {
 	case "ACK", "NAK": // the last answer
 		switch {
 		case c.HasCap("sasl"):
-			c.note("evrd", false, "Logging in with SASL as "+orElse(c.net.SASLUser, orElse(c.net.Username, c.net.Nick)))
+			c.noteT(false, messages.T("log.saslLoggingIn", "account", orElse(c.net.SASLUser, orElse(c.net.Username, c.net.Nick))))
 			c.send("AUTHENTICATE PLAIN")
 		case sasl && c.offers("sasl"):
-			noSASL("the server refused the SASL capability")
+			noSASL(messages.T("reason.refusedSASL"))
 		default:
-			noSASL("the server doesn't offer SASL")
+			noSASL(messages.T("reason.noSASL"))
 		}
 	}
 }
@@ -1795,31 +1845,14 @@ func (s *splitTracker) quit(at time.Time) bool {
 
 // --- helpers -------------------------------------------------------------
 
-func describeErr(err error) string {
-	var dnsErr *net.DNSError
-	var opErr *net.OpError
-	switch {
-	case errors.Is(err, ErrPingTimeout):
-		return "ping timeout"
-	case errors.Is(err, io.EOF):
-		return "connection closed by server"
-	case errors.As(err, &dnsErr):
-		return "can't resolve " + dnsErr.Name
-	case errors.Is(err, context.DeadlineExceeded):
-		return "connection timed out"
-	case errors.As(err, &opErr) && opErr.Op == "dial":
-		if strings.Contains(err.Error(), "refused") {
-			return "connection refused"
-		}
-		return "can't connect"
-	case err == nil:
-		return "disconnected"
+func describeErr(err error) string { return reasonOf(err).English() }
+
+// durText is roundDur in words ("a moment" in the reader's language).
+func durText(d time.Duration) messages.Text {
+	if d < time.Second {
+		return messages.T("moment")
 	}
-	var cert *tls.CertificateVerificationError
-	if errors.As(err, &cert) {
-		return "TLS certificate rejected"
-	}
-	return err.Error()
+	return messages.Raw(roundDur(d))
 }
 
 func roundDur(d time.Duration) string {

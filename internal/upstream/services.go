@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/modules"
 	"github.com/4evrd/evrd/internal/store"
 )
@@ -161,7 +162,7 @@ func (c *Conn) login(moduleLogin bool, joins []string) {
 		c.sendJoins(joins) // SASL failed (and said so) or nothing to log in with
 		return
 	case method == store.AuthNickServ && n.Password == "":
-		c.note("evrd", true, "No password set: not identifying to "+servicesTarget(n))
+		c.noteT(true, messages.T("log.noPassword", "services", servicesTarget(n)))
 		c.sendJoins(joins)
 		return
 	}
@@ -179,13 +180,13 @@ func (c *Conn) login(moduleLogin bool, joins []string) {
 	prompt, afterNick, holding := c.auth.prompt, c.auth.afterNick, c.auth.holding
 	c.mu.Unlock()
 	if holding {
-		c.note("evrd", false, "Joining channels once services confirm the login")
+		c.noteT(false, messages.T("log.joinAfterLogin"))
 	} else {
 		defer c.sendJoins(joins) // after IDENTIFY, at least
 	}
 	switch {
 	case prompt:
-		c.note("evrd", false, fmt.Sprintf("Waiting for %s to ask before identifying", servicesTarget(n)))
+		c.noteT(false, messages.T("log.waitingForPrompt", "services", servicesTarget(n)))
 		time.AfterFunc(promptWait, func() { c.identify(gen) })
 	case afterNick:
 		c.ghost()
@@ -211,14 +212,14 @@ func (c *Conn) identify(gen int) {
 		for _, l := range commandLines(n) {
 			c.send(l)
 		}
-		to := ""
 		if t := commandTarget(n); t != "" {
-			to = " to " + t
+			c.noteT(false, messages.T("log.sentLoginCommandTo", "target", t))
+		} else {
+			c.noteT(false, messages.T("log.sentLoginCommand"))
 		}
-		c.note("evrd", false, "Sent the login command"+to)
 	} else {
 		c.send(identifyLine(n, nick))
-		c.note("evrd", false, fmt.Sprintf("Identifying to %s as %s", servicesTarget(n), account(n)))
+		c.noteT(false, messages.T("log.identifying", "services", servicesTarget(n), "account", account(n)))
 	}
 	time.AfterFunc(c.authTimeout(), func() { c.authExpired(gen) })
 }
@@ -234,8 +235,8 @@ func (c *Conn) authExpired(gen int) {
 	c.health.Auth = AuthUnconfirmed
 	held := c.takeHeld()
 	c.mu.Unlock()
-	c.note("evrd", true, fmt.Sprintf("Services didn't answer the login within %s, so evrd can't tell whether it worked", roundDur(c.authTimeout())))
-	c.note("evrd", false, Hint("services didn't answer the login"))
+	c.noteT(true, messages.T("log.servicesSilent", "wait", durText(c.authTimeout())))
+	c.noteT(false, HintText("services didn't answer the login"))
 	c.sendJoins(held)
 }
 
@@ -251,11 +252,15 @@ func (c *Conn) authDone(gen int, ok bool, said string) {
 	held := c.takeHeld()
 	c.mu.Unlock()
 	if ok {
-		c.note("evrd", false, "Identified to services: "+said)
+		c.noteT(false, messages.T("log.identified", "said", said))
 		c.ghost()
 	} else {
-		c.note("evrd", true, "Services refused the login: "+said)
-		c.note("evrd", false, orElse(Hint(said), Hint("password incorrect")))
+		c.noteT(true, messages.T("log.loginRefused", "said", said))
+		if h := HintText(said); !h.IsZero() {
+			c.noteT(false, h)
+		} else {
+			c.noteT(false, HintText("password incorrect"))
+		}
 	}
 	c.sendJoins(held)
 }
@@ -325,7 +330,7 @@ func (c *Conn) ghost() {
 		text += " " + n.Password
 	}
 	c.send(servicesLine(servicesTarget(n), text))
-	c.note("evrd", false, fmt.Sprintf("%s is taken: asking %s to %s it", n.Nick, servicesTarget(n), n.GhostCmd))
+	c.noteT(false, messages.T("log.ghosting", "nick", n.Nick, "services", servicesTarget(n), "command", n.GhostCmd))
 	time.AfterFunc(ghostWait, func() { c.takeNick(gen) })
 }
 
@@ -354,7 +359,7 @@ func (c *Conn) nickChanged(nick string) {
 }
 
 // saslFailed logs a refused or impossible SASL login (once).
-func (c *Conn) saslFailed(why string) {
+func (c *Conn) saslFailed(why messages.Text) {
 	method := c.net.Auth()
 	c.mu.Lock()
 	if c.auth.saslFailed {
@@ -366,11 +371,11 @@ func (c *Conn) saslFailed(why string) {
 		c.health.Auth = AuthFailed
 	}
 	c.mu.Unlock()
-	c.note("evrd", true, "SASL login failed: "+why)
+	c.noteT(true, messages.T("log.saslFailed", "reason", why))
 	if method == store.AuthAuto {
-		c.note("evrd", false, fmt.Sprintf("Will identify to %s once connected instead", servicesTarget(c.net)))
-	} else if h := Hint(why); h != "" {
-		c.note("evrd", false, h)
+		c.noteT(false, messages.T("log.identifyInstead", "services", servicesTarget(c.net)))
+	} else if h := HintText(why.English()); !h.IsZero() {
+		c.noteT(false, h)
 	}
 }
 
