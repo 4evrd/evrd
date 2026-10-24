@@ -140,4 +140,9 @@ export default {
   'adminUsers.deleted': 'Deleted {name}',
   'adminUsers.cantDeleteSelf': 'You can’t delete your own account here — use Account settings.',
   'adminUsers.bouncerSettings': 'Bouncer settings',
+  'adminUsers.dropsCaps': 'IRC clients',
+  'adminUsers.dropsTitle': 'Drops in the last day',
+  'adminUsers.dropsSeeAll': 'See all their drops',
+  'adminUsers.dropsNone': 'No drops in the last day.',
+  'adminUsers.dropsMostly': { one: '{count} drop, {reason}', other: '{count} drops, mostly {reason}' },
 }

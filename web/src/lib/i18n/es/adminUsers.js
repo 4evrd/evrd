@@ -140,4 +140,9 @@ export default {
   'adminUsers.deleted': '{name} eliminado',
   'adminUsers.cantDeleteSelf': 'Aquí no puedes eliminar tu propia cuenta: usa los ajustes de tu cuenta.',
   'adminUsers.bouncerSettings': 'Ajustes del bouncer',
+  'adminUsers.dropsCaps': 'Clientes IRC',
+  'adminUsers.dropsTitle': 'Cortes en el último día',
+  'adminUsers.dropsSeeAll': 'Ver todos sus cortes',
+  'adminUsers.dropsNone': 'Ningún corte en el último día.',
+  'adminUsers.dropsMostly': { one: '{count} corte, {reason}', other: '{count} cortes, sobre todo {reason}' },
 }

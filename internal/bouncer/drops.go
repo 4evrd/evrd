@@ -265,11 +265,12 @@ type AllDrops struct {
 }
 
 // Slots is how AllClientDrops lays its timeline out: n slots of step each
-// from start.
+// from start. UserID, when set, narrows it all to that user.
 type Slots struct {
-	Start time.Time
-	Step  time.Duration
-	N     int
+	Start  time.Time
+	Step   time.Duration
+	N      int
+	UserID int64
 }
 
 // AllClientDrops sums up every user's IRC client disconnects since since,
@@ -277,7 +278,7 @@ type Slots struct {
 // by is one of DropReasons).
 func (b *Bouncer) AllClientDrops(ctx context.Context, slots Slots, by string, limit int) (AllDrops, error) {
 	since := slots.Start
-	ds, err := b.store.ClientDisconnects(ctx, 0, since)
+	ds, err := b.store.ClientDisconnects(ctx, slots.UserID, since)
 	if err != nil {
 		return AllDrops{}, err
 	}

@@ -140,4 +140,9 @@ export default {
   'adminUsers.deleted': '{name} silindi',
   'adminUsers.cantDeleteSelf': 'Kendi hesabını buradan silemezsin, Hesap ayarlarını kullan.',
   'adminUsers.bouncerSettings': 'Bouncer ayarları',
+  'adminUsers.dropsCaps': 'IRC istemcileri',
+  'adminUsers.dropsTitle': 'Son bir gündeki kopmalar',
+  'adminUsers.dropsSeeAll': 'Tüm kopmalarını gör',
+  'adminUsers.dropsNone': 'Son bir günde kopma yok.',
+  'adminUsers.dropsMostly': { one: '{count} kopma, {reason}', other: '{count} kopma, çoğu {reason}' },
 }

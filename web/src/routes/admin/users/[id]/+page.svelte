@@ -25,6 +25,7 @@
   let cur = $state(null) // /api/admin/users/{id}
   let ov = $state(null)  // /api/admin/users/{id}/overview
   let rc = $state(null)  // /api/admin/users/{id}/reconnects
+  let drops = $state(null) // /api/admin/client-drops?user={id}, the last day
   let err = $state('')
   let ovErr = $state('')
   let lim = $state({ maxNetworks: '', maxClients: '', backlogLines: '' })
@@ -44,6 +45,7 @@
   async function loadOverview() {
     try { ov = await api.admin.userOverview(id); ovErr = '' } catch (e) { ovErr = e.message }
     try { rc = await api.admin.userReconnects(id) } catch { /* the overview shows the error */ }
+    try { drops = await api.admin.clientDrops('24h', 'drops', id) } catch { /* the overview shows the error */ }
   }
   onMount(async () => {
     if (!isAdmin) return
@@ -228,6 +230,19 @@
         {:else}<p class="desc" style="font-size:var(--fs-sm)">{t('adminUsers.noClientPasswords')}</p>{/each}
       </div>
     </div>
+  </section>
+
+  <section class="card enter" id="drops" aria-labelledby="drops-h" data-testid="user-drops">
+    <div class="section-head">
+      <div class="od-stack"><span class="caps">{t('adminUsers.dropsCaps')}</span><h2 id="drops-h">{t('adminUsers.dropsTitle')}</h2></div>
+      <a class="btn btn-ghost btn-sm" href="/admin/drops?user={id}">{t('adminUsers.dropsSeeAll')}</a>
+    </div>
+    {#each drops?.top || [] as x (x.device + '/' + x.software + '/' + x.network)}
+      <div class="row" style="--cols:minmax(0,1fr) auto">
+        <span class="od-field"><span class="name">{x.device || x.software || t('adminUsers.ircClient')}{x.device && x.software ? ' · ' + x.software : ''}</span><span class="sub">{x.network} · {t('adminUsers.dropsMostly', { count: x.drops, reason: t('clients.reason.' + x.mainReason) })}</span></span>
+        <span class="faint" style="font-size:var(--fs-xs)">{ago(x.last)}</span>
+      </div>
+    {:else}<p class="desc" style="font-size:var(--fs-sm)">{t('adminUsers.dropsNone')}</p>{/each}
   </section>
 
   <section class="card enter" id="manage" aria-labelledby="man-h">

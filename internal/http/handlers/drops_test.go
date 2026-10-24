@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -111,8 +112,25 @@ func TestAdminClientDrops(t *testing.T) {
 		t.Fatalf("30d slots: %v %v", wk["step"], wk["points"])
 	}
 	top := body["top"].([]any)
+	// when each device last dropped, in seconds like the rest of the API
+	if last, ok := top[0].(map[string]any)["last"].(float64); !ok || int64(last) > now.Unix() || int64(last) < now.Add(-4*time.Hour).Unix() {
+		t.Fatalf("last drop: %v", top[0].(map[string]any)["last"])
+	}
 	if len(top) != 2 || top[0].(map[string]any)["user"] != "bob" || top[0].(map[string]any)["device"] != "Desktop" || top[1].(map[string]any)["user"] != "alice" {
 		t.Fatalf("top: %v", top)
+	}
+
+	// one user: everything narrows to theirs, and the reply names them
+	_, mine := e.login("root").do("GET", fmt.Sprintf("/api/admin/client-drops?user=%d", alice.ID), nil)
+	if mine["drops"] != float64(2) || mine["accounts"] != float64(1) || mine["user"].(map[string]any)["username"] != "alice" ||
+		len(mine["top"].([]any)) != 1 || mine["reasons"].(map[string]any)[bouncer.DropWriteStalled] != nil {
+		t.Fatalf("alice's: %v", mine)
+	}
+	if code, _ := e.login("root").do("GET", "/api/admin/client-drops?user=99999", nil); code != 404 {
+		t.Fatalf("no such user: %d", code)
+	}
+	if body["user"] != nil {
+		t.Fatalf("everyone's names no user: %v", body["user"])
 	}
 
 	// by a reason: only the devices that had it, most first

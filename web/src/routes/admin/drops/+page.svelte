@@ -2,7 +2,8 @@
   // Why IRC clients disconnect, across every account: by reason, how long
   // devices were gone, and the devices that drop most. Telling phones that
   // lose signal from slow or congested links (issue #92).
-  import { onMount } from 'svelte'
+  import { untrack } from 'svelte'
+  import { page } from '$app/state'
   import Icon from '$lib/components/Icon.svelte'
   import Select from '$lib/components/Select.svelte'
   import SlotBars from '$lib/components/SlotBars.svelte'
@@ -19,14 +20,20 @@
   let d = $state(null)
   let err = $state('')
   let loading = $state(false)
+  // ?user= narrows the page to one account's devices (Admin → Users and
+  // the names in the table link here)
+  const userId = $derived(Number(page.url.searchParams.get('user')) || 0)
   async function load() {
     loading = true
-    try { d = await api.admin.clientDrops(range, sort); err = '' } catch (e) { err = e.message }
+    try { d = await api.admin.clientDrops(range, sort, userId || undefined); err = '' } catch (e) { err = e.message }
     loading = false
   }
   function pickRange(r) { range = r; load() }
   function pickSort(s) { sort = s; load() }
-  onMount(() => { if (isAdmin) load() })
+  $effect(() => {
+    userId // load again when the filter changes
+    if (isAdmin) untrack(load)
+  })
 
   // Each reason keeps its colour whatever else is shown (identity, not rank).
   const COLOR = {
@@ -77,6 +84,15 @@
       {#each RANGES as [k, l]}<button class="tab" role="tab" aria-selected={range === k} onclick={() => pickRange(k)}>{l}</button>{/each}
     </div>
   </div>
+
+  {#if d?.user}
+    <div class="callout enter" role="status" data-testid="drops-only" style="margin-bottom:var(--s5)">
+      <Icon name="user" />
+      <span class="od-fill">{t('admin.drops.onlyUser', { name: d.user.username })}</span>
+      <a class="btn btn-ghost btn-sm" href="/admin/users/{d.user.id}">{t('admin.drops.openAccount')}</a>
+      <a class="btn btn-ghost btn-sm" href="/admin/drops">{t('admin.drops.showEveryone')}</a>
+    </div>
+  {/if}
 
   {#if err && !d}
     <div class="callout bad" role="alert"><Icon name="alert" /><span>{t('admin.drops.loadFailed', { error: err })}</span></div>
@@ -153,7 +169,7 @@
             <tbody>
               {#each d.top as x (x.userId + '/' + x.device + '/' + x.software + '/' + x.network)}
                 <tr data-testid="drops-row">
-                  <td><a href="/admin/users/{x.userId}">{x.user}</a></td>
+                  <td><a href="/admin/drops?user={x.userId}" aria-label={t('admin.drops.filterUser', { name: x.user })}>{x.user}</a></td>
                   <td><span class="od-field"><span>{x.device || x.software || t('clients.ircClient')}{x.device && x.software ? ' · ' + x.software : ''}</span><span class="sub">{x.network}</span></span>{#if x.connected}<span class="chip ok" style="margin-left:var(--s2)">{t('admin.drops.connected')}</span>{/if}</td>
                   <td><span class="rname"><i style="background:{COLOR[x.mainReason]}" aria-hidden="true"></i>{t('clients.reason.' + x.mainReason)}</span></td>
                   <td class="mono num">{sort === 'drops' ? x.drops : `${x.reasons[sort] || 0} / ${x.drops}`}</td>

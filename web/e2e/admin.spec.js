@@ -374,8 +374,17 @@ test('IRC client drops across every account: why, how long, and which devices', 
     await page.getByRole('tab', { name: '30 days' }).click()
     await expect(page.getByRole('tab', { name: '30 days' })).toHaveAttribute('aria-selected', 'true')
     await expect(mine()).toBeVisible()
+    // one user: their name narrows the page to their devices
     await mine().getByRole('link', { name: u.name }).click()
+    await expect(page).toHaveURL(/\/admin\/drops\?user=\d+/)
+    await expect(page.getByTestId('drops-only')).toContainText(`Only ${u.name}’s devices.`)
+    await expect(page.getByTestId('drops-row')).toHaveCount(1)
+    // and on to their account, whose page lists their drops too
+    await page.getByTestId('drops-only').getByRole('link', { name: 'Open their account' }).click()
     await expect(page.getByTestId('user-title')).toHaveText(u.name)
+    await expect(page.getByTestId('user-drops')).toContainText('quit')
+    await page.getByTestId('user-drops').getByRole('link', { name: 'See all their drops' }).click()
+    await expect(page.getByTestId('drops-only')).toBeVisible()
   } finally { await u.cleanup() }
 })
 

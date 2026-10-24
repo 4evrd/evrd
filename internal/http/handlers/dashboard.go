@@ -821,7 +821,18 @@ func (s *Handlers) AdminClientDrops(w http.ResponseWriter, r *http.Request) {
 	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 {
 		limit = min(n, 100)
 	}
-	all, err := s.b.AllClientDrops(r.Context(), bouncer.Slots{Start: start, Step: step, N: n}, by, limit)
+	// ?user= narrows everything to one account (Admin → Users links here)
+	var only map[string]any
+	slots := bouncer.Slots{Start: start, Step: step, N: n}
+	if id, err := strconv.ParseInt(q.Get("user"), 10, 64); err == nil && id > 0 {
+		u, err := s.acc.UserByID(r.Context(), id)
+		if err != nil {
+			writeErr(w, http.StatusNotFound, "no such user")
+			return
+		}
+		slots.UserID, only = id, map[string]any{"id": u.ID, "username": u.Username}
+	}
+	all, err := s.b.AllClientDrops(r.Context(), slots, by, limit)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -835,13 +846,13 @@ func (s *Handlers) AdminClientDrops(w http.ResponseWriter, r *http.Request) {
 	for _, t := range all.Top {
 		top = append(top, map[string]any{"userId": t.UserID, "user": orDeleted(names[t.UserID]), "device": t.Device,
 			"software": t.Software, "network": t.Network, "drops": t.Drops, "reasons": t.Reasons, "mainReason": t.MainReason,
-			"medianGap": t.MedianGap, "last": t.Last, "connected": t.Connected})
+			"medianGap": t.MedianGap, "last": t.Last.Unix(), "connected": t.Connected})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"range": key, "sort": by, "order": bouncer.DropReasons, "bucketBounds": bouncer.GapBuckets,
 		"drops": all.Drops, "accounts": all.Accounts, "devices": all.Devices, "reasons": all.Reasons,
 		"gaps": all.Gaps, "buckets": all.Buckets, "top": top,
-		"start": start.Unix(), "step": int64(step / time.Second), "points": n, "timeline": all.Timeline,
+		"start": start.Unix(), "step": int64(step / time.Second), "points": n, "timeline": all.Timeline, "user": only,
 	})
 }
 

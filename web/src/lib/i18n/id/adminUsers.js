@@ -140,4 +140,9 @@ export default {
   'adminUsers.deleted': '{name} dihapus',
   'adminUsers.cantDeleteSelf': 'Kamu tidak bisa menghapus akun kamu sendiri di sini — gunakan Pengaturan akun.',
   'adminUsers.bouncerSettings': 'Pengaturan bouncer',
+  'adminUsers.dropsCaps': 'Klien IRC',
+  'adminUsers.dropsTitle': 'Terputus dalam sehari terakhir',
+  'adminUsers.dropsSeeAll': 'Lihat semua putusnya',
+  'adminUsers.dropsNone': 'Tidak ada yang terputus dalam sehari terakhir.',
+  'adminUsers.dropsMostly': { other: '{count} kali terputus, kebanyakan {reason}' },
 }

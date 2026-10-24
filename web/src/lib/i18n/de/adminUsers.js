@@ -140,4 +140,9 @@ export default {
   'adminUsers.deleted': '{name} gelöscht',
   'adminUsers.cantDeleteSelf': 'Dein eigenes Konto kannst du hier nicht löschen — nutze die Kontoeinstellungen.',
   'adminUsers.bouncerSettings': 'Bouncer-Einstellungen',
+  'adminUsers.dropsCaps': 'IRC-Clients',
+  'adminUsers.dropsTitle': 'Abbrüche am letzten Tag',
+  'adminUsers.dropsSeeAll': 'Alle Abbrüche ansehen',
+  'adminUsers.dropsNone': 'Keine Abbrüche am letzten Tag.',
+  'adminUsers.dropsMostly': { one: '{count} Abbruch, {reason}', other: '{count} Abbrüche, meist {reason}' },
 }

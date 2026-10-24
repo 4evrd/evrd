@@ -143,7 +143,7 @@ export const api = {
     networkLog: (id, nid) => req('GET', `/api/admin/users/${id}/networks/${nid}/log`),
     networkHealth: (id, nid, range) => req('GET', `/api/admin/users/${id}/networks/${nid}/health?${q({ range })}`),
     metrics: (range) => req('GET', `/api/admin/metrics?range=${encodeURIComponent(range)}`),
-    clientDrops: (range, sort) => req('GET', `/api/admin/client-drops?${q({ range, sort })}`),
+    clientDrops: (range, sort, user) => req('GET', `/api/admin/client-drops?${q({ range, sort, user })}`),
     updateUser: (id, patch) => req('PATCH', `/api/admin/users/${id}`, patch),
     deleteUser: (id) => req('DELETE', `/api/admin/users/${id}`),
     // no password: one is generated and returned; either way it's temporary
