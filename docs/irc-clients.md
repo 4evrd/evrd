@@ -338,6 +338,42 @@ with soju: Goguma, gamja, Halloy and Senpai. Recent WeeChat takes the batched
 backlog with `server-time`; irssi, HexChat and mIRC take the backlog as
 before.
 
+## On phones and tethering
+
+A phone's connection drops all the time — between cell towers, in a lift, when
+the app is put to sleep — and a laptop tethered to it drops with it. evrd is
+built for that:
+
+- **Give each device its own IRC client password** (*IRC clients* page). It's
+  what lets evrd tell your phone from your laptop: each gets what *it* missed,
+  even while the other is attached (see *Playback buffers*); a phone that comes
+  back replaces its old connection at once instead of counting toward your
+  client limit; and its drops are listed by device. Clients without one share
+  one position and one row.
+- **Turn on auto-clear** for the buffers you follow from the phone, so it gets
+  only what's new rather than the last lines every time.
+- **Mark me away** waits two minutes after the last client goes by default, so
+  the networks don't see you go away and come back every time the phone drops.
+- **A dropped connection is noticed** within about two and a half minutes (90
+  seconds of quiet, then a 60-second ping; `client_ping_timeout`), and a phone
+  back within two minutes gets a slim welcome followed by what it missed.
+- **When a phone drops, it may see a few lines twice** — those sent after evrd
+  last heard from it — but never misses one. A client with `server-time` and
+  `message-tags` sees each line's time and msgid, so it can tell repeats; one
+  with `echo-message` and `labeled-response` learns which of its own lines went
+  through (and a line sent as the connection died comes back in its replay,
+  with the same msgid).
+- **Clients that use `draft/chathistory`** (Goguma, gamja, Halloy, Senpai) get
+  no playback: they ask for exactly what's after the last line they have, which
+  suits flaky links best.
+- **Background apps.** A phone OS may stop an IRC app in the background; evrd
+  keeps you on the networks and saves everything, so the app catches up when
+  it's opened. Push notifications are the app's business; evrd doesn't send
+  any yet.
+- **On a tethered laptop**, a client that reconnects on its own (most do) needs
+  nothing special; use TLS (port 6697 or yours) so a captive or flaky network
+  can't garble the connection, and TLS sessions resume, saving a round trip.
+
 ## Troubleshooting
 
 **A client keeps dropping.** The *IRC clients* page (`<public_url>/clients`)
