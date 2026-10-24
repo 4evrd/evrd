@@ -149,6 +149,7 @@ type Service struct {
 	mu        sync.RWMutex // settings that can change at runtime
 	defaults  config.Limits
 	bindHosts []string
+	zncTTL    time.Duration // how long a ZNC password brought over lasts unused
 }
 
 // SetBindHosts sets the bind hosts users may choose from.
@@ -238,6 +239,8 @@ type CreateInput struct {
 	Username string
 	Email    string
 	Password string // optional: empty means SSO / client passwords only
+	// PasswordHash is a password hash brought over instead (ZNCPasswordHash).
+	PasswordHash string
 	// Temporary makes the password one the user must change at first sign-in.
 	Temporary bool
 	Role      string
@@ -271,6 +274,8 @@ func (s *Service) Create(in CreateInput) (store.User, error) {
 			return store.User{}, err
 		}
 		u.MustChangePassword = in.Temporary
+	} else if in.PasswordHash != "" {
+		u.PasswordHash, u.MustChangePassword = in.PasswordHash, in.Temporary
 	}
 	if in.Subject != "" {
 		sub := in.Subject
@@ -325,7 +330,7 @@ func RandomPassword() (string, error) {
 
 // ChangePassword is the self-service change: the current password must match.
 func (s *Service) ChangePassword(u *store.User, current, next string) error {
-	if u.PasswordHash == "" || bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(current)) != nil {
+	if !s.matchPassword(u, current) {
 		return ErrInvalidCredentials
 	}
 	return s.SetPassword(u, next)
@@ -339,13 +344,36 @@ func (s *Service) PasswordLogin(username, password string) (store.User, error) {
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
 		return store.User{}, ErrInvalidCredentials
 	}
-	if u.PasswordHash == "" || bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
+	if !s.matchPassword(&u, password) {
 		return store.User{}, ErrInvalidCredentials
 	}
 	if u.Suspended {
 		return store.User{}, ErrSuspended
 	}
 	return u, nil
+}
+
+// matchPassword checks pw against u's password. A ZNC hash it matches is
+// replaced with evrd's own (best effort: it still matched if saving fails),
+// and one too short for evrd's policy must be changed at the next web
+// sign-in. A ZNC hash past its time (zncExpired) matches nothing, and goes.
+func (s *Service) matchPassword(u *store.User, pw string) bool {
+	if s.zncExpired(*u) {
+		u.PasswordHash = ""
+		_ = s.users.UpdateUser(context.Background(), *u)
+		return false
+	}
+	ok, upgrade := matchHash(u.PasswordHash, pw)
+	if upgrade {
+		if h, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost); err == nil {
+			u.PasswordHash = string(h)
+			if CheckPassword(pw) != nil {
+				u.MustChangePassword = true
+			}
+			_ = s.users.UpdateUser(context.Background(), *u)
+		}
+	}
+	return ok
 }
 
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("evrd-timing-dummy"), bcrypt.DefaultCost)
@@ -360,7 +388,7 @@ func (s *Service) IRCLogin(username, secret string) (store.User, string, error) 
 		return store.User{}, "", ErrInvalidCredentials
 	}
 	device := ""
-	ok := u.PasswordHash != "" && bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(secret)) == nil
+	ok := s.matchPassword(&u, secret)
 	if !ok {
 		cps, err := s.passwords.ListClientPasswords(context.Background(), u.ID)
 		if err != nil {

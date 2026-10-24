@@ -658,6 +658,8 @@
     "irc.settingHelp.irc_link_signin": "Kullanılabilir parolası olmayan bir IRC istemcisi, giriş yaptıktan sonra (SSO ve onun MFA'sıyla) buradan izin vermek için bir bağlantı alır. Genel URL gerekir.",
     "irc.settingLabel.irc_remember_days": "Hatırlanan IRC cihazlarının süresi",
     "irc.settingHelp.irc_remember_days": "Bağlantıyla izin verilip hatırlanan bir cihazın sormadan giriş yapmaya devam ettiği gün sayısı (1–365).",
+    "irc.settingLabel.znc_password_days": "ZNC parolalarının süresi",
+    "irc.settingHelp.znc_password_days": "Bir ZNC yapılandırmasından açılan hesabın, kimse onunla giriş yapmazsa ZNC parolasını koruduğu gün sayısı (1–3650). İlk giriş onu evrd'nin kendi parolasıyla değiştirir; kullanılmazsa silinir.",
     "irc.web.importTooBig": "dosya içe aktarmak için çok büyük (en fazla {max})",
     "irc.web.importUnknown": "bu bir evrd ağ dosyası ya da ZNC yapılandırması değil",
     "irc.web.importUnreadable": "dosya okunamadı: {error}",
@@ -670,6 +672,7 @@
     "irc.netfile.unknownField": "{field} evrd'nin bildiği bir ağ ayarı değil, bu yüzden atlandı.",
     "irc.znc.loginPassword": "ZNC'nin {module} modülü parolasını yapılandırmanın dışında tutuyor: Kimlik doğrulama altında gir.",
     "irc.znc.moduleData": "ZNC'nin {module} modülü ayarlarını yapılandırmanın dışında tutuyor: Modüller altında aç ve doldur.",
-    "irc.znc.modulesSkipped": "evrd'de bunlar için modül yok, bu yüzden atlandı: {modules}."
+    "irc.znc.modulesSkipped": "evrd'de bunlar için modül yok, bu yüzden atlandı: {modules}.",
+    "irc.znc.passwordUnusable": "Bu kullanıcının ZNC parolası evrd'nin doğrulayamadığı bir biçimde, bu yüzden hesabın henüz parolası yok: bir parola belirle ya da SSO ile girmesine izin ver."
   }
 }

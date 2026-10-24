@@ -2,7 +2,10 @@ package handlers_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -56,8 +59,10 @@ func TestExportImportNetworks(t *testing.T) {
 	if pn["name"] != "libera" || pn["exists"] != false || pn["channels"].(float64) != 1 || len(pn["notes"].([]any)) != 0 {
 		t.Errorf("previewed network: %v", pn)
 	}
-	if strings.Contains(strings.ToLower(fmtAny(pv)), "pass") {
-		t.Errorf("the preview sends secrets back: %v", pv)
+	for _, secret := range []string{"saslpass", "serverpass", "chankey", "enc:v1"} {
+		if strings.Contains(fmtAny(pv), secret) {
+			t.Errorf("the preview sends %q back: %v", secret, pv)
+		}
 	}
 	imp := func(c *client, body map[string]any) map[string]any {
 		t.Helper()
@@ -112,3 +117,100 @@ func TestExportImportNetworks(t *testing.T) {
 }
 
 func fmtAny(v any) string { b, _ := json.Marshal(v); return string(b) }
+
+func TestImportMerge(t *testing.T) {
+	e := newEnv(t)
+	e.user("alice", store.RoleUser)
+	c := e.login("alice")
+	c.do("POST", "/api/networks", map[string]any{"name": "libera", "host": "irc.libera.chat", "port": 6697, "tls": true, "nick": "mine", "channels": []string{"#a"}})
+	file := "networks:\n  - name: libera\n    nick: theirs\n    realname: Filled In\n    channels: [{name: '#a'}, {name: '#b'}]\n"
+	code, out := c.do("POST", "/api/networks/import", map[string]any{"text": file, "networks": []string{"libera"}, "existing": "merge"})
+	if code != 200 || out["results"].([]any)[0].(map[string]any)["result"] != "merged" {
+		t.Fatalf("merge: %d %v", code, out)
+	}
+	_, list := c.doAny("GET", "/api/networks", nil)
+	n := list.([]any)[0].(map[string]any)
+	if n["nick"] != "mine" || n["realname"] != "Filled In" || fmtAny(n["channels"]) != `["#a","#b"]` {
+		t.Errorf("merged network: nick %v realname %v channels %v", n["nick"], n["realname"], n["channels"])
+	}
+}
+
+func TestZNCMigration(t *testing.T) {
+	e := newEnv(t)
+	e.user("root", store.RoleAdmin)
+	e.user("taken", store.RoleUser)
+	admin := e.login("root")
+	sum := sha256.Sum256([]byte("old znc password" + "pepper"))
+	conf := "<User Carol>\n <Pass password>\n  Method = SHA256\n  Hash = " + hex.EncodeToString(sum[:]) + "\n  Salt = pepper\n </Pass>\n" +
+		" <Network libera>\n  Server = irc.libera.chat +6697\n  BindHost = vhost.example.org\n </Network>\n</User>\n" +
+		"<User taken>\n Pass = plain#whatever\n <Network oftc>\n  Server = irc.oftc.net +6697\n </Network>\n</User>\n" +
+		"<User 9bad>\n <Network x>\n  Server = x 1\n </Network>\n</User>\n"
+
+	code, pv := admin.do("POST", "/api/admin/znc/preview", map[string]any{"text": conf, "accounts": map[string]string{"9bad": "nine"}})
+	if code != 200 {
+		t.Fatalf("preview: %d %v", code, pv)
+	}
+	rows := pv["users"].([]any)
+	carol, taken, nine := rows[0].(map[string]any), rows[1].(map[string]any), rows[2].(map[string]any)
+	if carol["account"] != "carol" || carol["exists"] != false || carol["hasPassword"] != true {
+		t.Errorf("carol: %v", carol)
+	}
+	if taken["exists"] != true || taken["accountID"] == nil {
+		t.Errorf("taken: %v", taken)
+	}
+	if nine["account"] != "nine" || nine["accountError"] != nil {
+		t.Errorf("a renamed account: %v", nine)
+	}
+	if strings.Contains(fmtAny(pv), "pepper") || strings.Contains(fmtAny(pv), hex.EncodeToString(sum[:])) {
+		t.Errorf("the preview has the password hash: %v", pv)
+	}
+	if _, pv := admin.do("POST", "/api/admin/znc/preview", map[string]any{"text": conf}); pv["users"].([]any)[2].(map[string]any)["accountError"] == nil {
+		t.Errorf("9bad isn't a valid account name: %v", pv)
+	}
+
+	code, out := admin.do("POST", "/api/admin/znc/accounts", map[string]any{"text": conf, "users": []map[string]any{
+		{"znc": "Carol", "account": "carol", "email": "carol@example.org"},
+		{"znc": "taken", "account": "taken"},
+		{"znc": "nobody", "account": "nobody"},
+	}})
+	if code != 200 {
+		t.Fatalf("accounts: %d %v", code, out)
+	}
+	acc := out["accounts"].([]any)
+	if a := acc[0].(map[string]any); a["created"] != true || a["password"] != true || a["claimable"] != true {
+		t.Errorf("carol's account: %v", a)
+	}
+	if a := acc[1].(map[string]any); a["created"] != false || a["id"] == nil {
+		t.Errorf("an existing account: %v", a)
+	}
+	if a := acc[2].(map[string]any); a["error"] == nil {
+		t.Errorf("a ZNC user not in the config: %v", a)
+	}
+	if _, err := e.acc.PasswordLogin("taken", "whatever"); err == nil {
+		t.Error("an existing account's password was replaced by ZNC's")
+	}
+	// a plaintext ZNC password too short for evrd: kept, to be changed
+	_, out = admin.do("POST", "/api/admin/znc/accounts", map[string]any{"text": "<User shorty>\n Pass = tiny\n</User>\n", "users": []map[string]any{{"znc": "shorty", "account": "shorty"}}})
+	if u, err := e.acc.PasswordLogin("shorty", "tiny"); err != nil || !u.MustChangePassword {
+		t.Errorf("a short plaintext ZNC password: %v, must change %v (%v)", err, u.MustChangePassword, out)
+	}
+
+	// then the networks, as the admin, on carol's node
+	id := int64(acc[0].(map[string]any)["id"].(float64))
+	code, out = admin.do("POST", fmt.Sprintf("/api/admin/users/%d/networks/import", id), map[string]any{"text": conf, "user": "Carol", "networks": []string{"libera"}})
+	if r := out["results"].([]any)[0].(map[string]any); code != 200 || r["result"] != "created" {
+		t.Fatalf("carol's networks: %d %v", code, out)
+	}
+	carolC := e.anon()
+	if code, body := carolC.do("POST", "/auth/password", map[string]string{"username": "carol", "password": "old znc password"}); code != 200 {
+		t.Fatalf("carol signs in with her ZNC password: %d %v", code, body)
+	}
+	_, list := carolC.doAny("GET", "/api/networks", nil)
+	if n := list.([]any)[0].(map[string]any); n["name"] != "libera" || n["bindHost"] != "vhost.example.org" {
+		t.Errorf("carol's network (an admin brings the vhost over): %v", n)
+	}
+	res, file := admin.raw(fmt.Sprintf("/api/admin/users/%d/networks/export", id))
+	if res.StatusCode != 200 || !strings.Contains(res.Header.Get("Content-Disposition"), "evrd-networks-carol-") || !bytes.Contains(file, []byte("libera")) {
+		t.Errorf("admin export: %d %v", res.StatusCode, res.Header)
+	}
+}

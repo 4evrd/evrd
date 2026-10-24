@@ -1,0 +1,27 @@
+// Bringing a whole ZNC over (Admin → Users → Import from ZNC): its users
+// become accounts, and their networks come with them.
+export default {
+  'zncMove.button': 'Impor dari ZNC',
+  'zncMove.title': 'Impor dari ZNC',
+  'zncMove.intro': 'Pindahkan pengguna server ZNC: masing-masing masuk ke akun evrd, dibuat di sini kalau belum ada, dengan network yang kamu pilih.',
+  'zncMove.choose': 'Pilih znc.conf',
+  'zncMove.passwords': 'Akun baru tetap memakai kata sandi ZNC pengguna: evrd memeriksa hash ZNC saat dia pertama masuk, lalu menggantinya dengan milik evrd. Hash itu tidak pernah ditampilkan atau diekspor. Akun yang sudah ada tetap memakai kata sandinya sendiri. Kalau tidak dipakai, dihapus setelah jumlah hari di Pengaturan → Masuk; yang lebih pendek dari yang diizinkan evrd tetap berlaku, tapi harus diganti saat login web berikutnya.',
+  'zncMove.noUsers': 'Tidak ada blok <User> di konfigurasi ini.',
+  'zncMove.includeUser': 'Pindahkan {name}',
+  'zncMove.account': 'Akun evrd untuk {name}',
+  'zncMove.new': 'Akun baru',
+  'zncMove.existing': 'Akun yang sudah ada',
+  'zncMove.willKeepPassword': 'Tetap memakai kata sandi ZNC',
+  'zncMove.noZncPassword': 'Tidak ada kata sandi di konfigurasi: perlu email untuk SSO, atau kata sandi dari Reset',
+  'zncMove.email': 'Email (opsional)',
+  'zncMove.emailFor': 'Email untuk {name}',
+  'zncMove.emailHelp': 'Dengan email, login SSO pertamanya dengan nama pengguna dan email yang sama akan mengklaim akun ini.',
+  'zncMove.go': { one: 'Pindahkan {count} pengguna ({networks} network)', other: 'Pindahkan {count} pengguna ({networks} network)' },
+  'zncMove.progress': 'Mengimpor {name} ({n} dari {count})…',
+  'zncMove.created': 'Akun dibuat',
+  'zncMove.existed': 'Akun sudah ada',
+  'zncMove.keptPassword': 'kata sandi ZNC tetap',
+  'zncMove.noPassword': 'tanpa kata sandi',
+  'zncMove.claimable': 'bisa diklaim lewat SSO',
+  'zncMove.toUsers': 'Ke pengguna',
+}

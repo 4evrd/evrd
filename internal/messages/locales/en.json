@@ -677,6 +677,8 @@
     "irc.settingHelp.irc_link_signin": "An IRC client without a password it can use gets a link to allow it here, after signing in (with SSO and its MFA). Needs the public URL.",
     "irc.settingLabel.irc_remember_days": "Remembered IRC devices last",
     "irc.settingHelp.irc_remember_days": "Days a device allowed by link and remembered keeps signing in without asking (1–365).",
+    "irc.settingLabel.znc_password_days": "ZNC passwords last",
+    "irc.settingHelp.znc_password_days": "Days an account made from a ZNC config keeps its ZNC password if no one signs in with it (1–3650). The first sign-in replaces it with evrd's own; unused, it's cleared.",
     "irc.web.importTooBig": "that file is too big to import (the most is {max})",
     "irc.web.importUnknown": "that isn't an evrd networks file or a ZNC config",
     "irc.web.importUnreadable": "couldn't read the file: {error}",
@@ -689,6 +691,7 @@
     "irc.netfile.unknownField": "{field} isn't a network setting evrd knows, so it was left out.",
     "irc.znc.loginPassword": "ZNC's {module} module keeps its password outside the config: set it under Authentication.",
     "irc.znc.moduleData": "ZNC's {module} module keeps its settings outside the config: turn it on and fill it in under Modules.",
-    "irc.znc.modulesSkipped": "evrd has no module for these, so they were left out: {modules}."
+    "irc.znc.modulesSkipped": "evrd has no module for these, so they were left out: {modules}.",
+    "irc.znc.passwordUnusable": "ZNC's password for this user is in a form evrd can't check, so the account has no password yet: set one, or let them sign in with SSO."
   }
 }

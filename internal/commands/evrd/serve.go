@@ -232,6 +232,7 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 
 	acc := accounts.New(st, cfg.Limits)
 	acc.SetBindHosts(cfg.Outbound.BindHosts)
+	acc.SetZNCPasswordDays(cfg.Auth.ZNCPasswordDays)
 	am, err := auth.New(ctx, st, acc, cfg.Auth, cfg.PublicURL, log)
 	if err != nil {
 		log.Error("set up sign-in", "issuer", cfg.Auth.OIDCIssuer, "err", err)
@@ -313,6 +314,7 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 	clusterDone := make(chan struct{})
 	go func() { cl.Run(ctx); close(clusterDone) }()
 	go b.PruneLoop(ctx, 10*time.Minute, func(u store.User) int { return acc.LimitsFor(u).BacklogLines }, cl.Leader)
+	go acc.ZNCExpiryLoop(ctx, time.Hour, cl.Leader, log)
 
 	// Metrics: pushed over OTLP (to VictoriaMetrics), read back for the
 	// dashboards from metrics_url.
@@ -416,6 +418,7 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		live.Metrics.OTLPEndpoint, live.Metrics.Interval = running.Metrics.OTLPEndpoint, running.Metrics.Interval
 		acc.SetDefaults(live.Limits)
 		acc.SetBindHosts(live.Outbound.BindHosts)
+		acc.SetZNCPasswordDays(live.Auth.ZNCPasswordDays)
 		am.SetConfig(live.Auth)
 		irc.SetMFAPolicy(mfa.PolicyOf(live.Auth))
 		irc.SetLinkSignInOn(live.LinkSignIn())

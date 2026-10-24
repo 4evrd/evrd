@@ -43,4 +43,10 @@ export default {
   'transfer.result.skipped': 'Saltata: già aggiunta',
   'transfer.result.failed': 'Non importata',
   'transfer.toNetworks': 'Vai alle tue reti',
+  'transfer.merge': 'Unisci il file',
+  'transfer.mergeHelp': 'Mantengono le loro impostazioni; si aggiungono i canali e i server che mancano e si compila ciò che è vuoto.',
+  'transfer.result.merged': 'Unita',
+  'transfer.adminTitle': 'Importa reti per {name}',
+  'transfer.adminIntro': 'Aggiungi reti a questo account da un’esportazione di evrd o da una configurazione di ZNC. Da admin puoi portare un bind host e superare il limite di reti dell’account.',
+  'transfer.toAccount': 'Torna a {name}',
 }

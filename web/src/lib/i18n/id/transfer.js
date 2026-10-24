@@ -43,4 +43,10 @@ export default {
   'transfer.result.skipped': 'Dilewati: sudah ada',
   'transfer.result.failed': 'Tidak diimpor',
   'transfer.toNetworks': 'Ke network kamu',
+  'transfer.merge': 'Gabungkan dengan file',
+  'transfer.mergeHelp': 'Pengaturannya tetap; channel dan server yang belum ada ditambahkan, dan yang kosong diisi.',
+  'transfer.result.merged': 'Digabungkan',
+  'transfer.adminTitle': 'Impor network untuk {name}',
+  'transfer.adminIntro': 'Tambahkan network ke akun ini dari ekspor evrd atau konfigurasi ZNC. Sebagai admin, kamu bisa membawa bind host dan melewati batas network akun.',
+  'transfer.toAccount': 'Kembali ke {name}',
 }

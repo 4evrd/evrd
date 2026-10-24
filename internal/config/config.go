@@ -384,6 +384,9 @@ type Auth struct {
 	// IRCRememberDays is how long a device remembered there keeps working.
 	IRCLinkSignIn   bool
 	IRCRememberDays int
+	// ZNCPasswordDays is how long a ZNC password an account was made with
+	// (Admin → Users → Import from ZNC) keeps working if it's never used.
+	ZNCPasswordDays int
 }
 
 // LinkSignIn reports whether IRC sign-in by link is on: irc_link_signin,
@@ -449,6 +452,7 @@ func Default() *Config {
 			IRCMFA:           "optional",
 			IRCLinkSignIn:    true,
 			IRCRememberDays:  30,
+			ZNCPasswordDays:  90,
 		},
 		Limits:            Limits{MaxNetworks: 0, MaxClients: 0, BacklogLines: 2000},
 		Outbound:          Outbound{ConnectRate: 5, PreferIPv6: true},
@@ -718,6 +722,11 @@ func (c *Config) set(key, val string) error {
 		c.Auth.IRCRememberDays, err = strconv.Atoi(val)
 		if err == nil && (c.Auth.IRCRememberDays < 1 || c.Auth.IRCRememberDays > 365) {
 			err = fmt.Errorf("want 1 to 365 days, got %d", c.Auth.IRCRememberDays)
+		}
+	case "znc_password_days":
+		c.Auth.ZNCPasswordDays, err = strconv.Atoi(val)
+		if err == nil && (c.Auth.ZNCPasswordDays < 1 || c.Auth.ZNCPasswordDays > 3650) {
+			err = fmt.Errorf("want 1 to 3650 days, got %d", c.Auth.ZNCPasswordDays)
 		}
 	case "logto_m2m_client_id":
 		c.Auth.LogtoM2MClientID = val

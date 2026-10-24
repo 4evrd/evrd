@@ -686,6 +686,8 @@
     "irc.settingHelp.irc_link_signin": "Un client IRC senza una password utilizzabile riceve un link per permetterlo qui, dopo l'accesso (con SSO e il suo MFA). Serve l'URL pubblico.",
     "irc.settingLabel.irc_remember_days": "I dispositivi IRC ricordati valgono",
     "irc.settingHelp.irc_remember_days": "Giorni in cui un dispositivo permesso tramite link e ricordato continua ad accedere senza chiedere (1–365).",
+    "irc.settingLabel.znc_password_days": "Le password ZNC valgono",
+    "irc.settingHelp.znc_password_days": "Giorni in cui un account creato da una configurazione ZNC mantiene la sua password ZNC se nessuno accede con essa (1–3650). Il primo accesso la sostituisce con quella di evrd; se non usata, viene cancellata.",
     "irc.web.importTooBig": "il file è troppo grande da importare (al massimo {max})",
     "irc.web.importUnknown": "non è un file di reti di evrd né una configurazione di ZNC",
     "irc.web.importUnreadable": "impossibile leggere il file: {error}",
@@ -698,6 +700,7 @@
     "irc.netfile.unknownField": "{field} non è un'impostazione di rete che evrd conosce, quindi è stata tralasciata.",
     "irc.znc.loginPassword": "Il modulo {module} di ZNC tiene la password fuori dalla configurazione: impostala in Autenticazione.",
     "irc.znc.moduleData": "Il modulo {module} di ZNC tiene le impostazioni fuori dalla configurazione: attivalo e compilalo in Moduli.",
-    "irc.znc.modulesSkipped": "evrd non ha un modulo per questi, quindi sono stati tralasciati: {modules}."
+    "irc.znc.modulesSkipped": "evrd non ha un modulo per questi, quindi sono stati tralasciati: {modules}.",
+    "irc.znc.passwordUnusable": "La password di ZNC di questo utente è in una forma che evrd non sa verificare, quindi l'account non ha ancora una password: impostane una, o lascia che entri con SSO."
   }
 }
