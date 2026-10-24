@@ -5,10 +5,12 @@
   import { onMount } from 'svelte'
   import Icon from '$lib/components/Icon.svelte'
   import Select from '$lib/components/Select.svelte'
+  import SlotBars from '$lib/components/SlotBars.svelte'
+  import { slotTimes, ticks } from '$lib/health.js'
   import { api } from '$lib/api.js'
   import { session } from '$lib/session.svelte.js'
-  import { dur, ago } from '$lib/format.js'
-  import { t } from '$lib/i18n.svelte.js'
+  import { dur, ago, clock, date } from '$lib/format.js'
+  import { i18n, t } from '$lib/i18n.svelte.js'
 
   const isAdmin = $derived(session.me?.role === 'admin')
   const RANGES = $derived([['24h', t('admin.drops.range24h')], ['7d', t('admin.drops.range7d')], ['30d', t('admin.drops.range30d')]])
@@ -35,6 +37,19 @@
   // as much as what did. seen is the ones that did, for the gap legend.
   const reasons = $derived(d ? d.order : [])
   const seen = $derived(reasons.filter((r) => d.reasons[r]))
+  // Over time, as the network health page draws it: a column per slot,
+  // stacked by the reasons that happened.
+  const n = $derived(d?.points || 0)
+  const step = $derived(d?.step || 3600)
+  const overTime = $derived(seen.map((r) => ({ name: t('clients.reason.' + r), color: COLOR[r], points: d.timeline[r] })))
+  const weekday = (u) => new Date(u * 1000).toLocaleDateString(i18n.intl, { weekday: 'short' })
+  function slotLabel(i) {
+    const s = slotTimes(d.start, step, i, n)
+    if (step >= 86400) return date(s.from + step / 2) + (s.current ? ' · ' + t('health.soFar') : '')
+    const day = n > 24 ? weekday(s.from) + ' ' : ''
+    return day + (s.current ? t('format.untilNow', { from: clock(s.from) }) : `${clock(s.from)}–${clock(s.to)}`)
+  }
+  const axis = $derived(d ? ticks(n, step).map((i) => [i, i === n ? t('format.now') : step >= 86400 ? date(d.start + i * step + step / 2) : n > 24 ? weekday(d.start + i * step) : clock(d.start + i * step)]) : [])
   const most = $derived(Math.max(1, ...reasons.map((r) => d.reasons[r] || 0)))
   const sortOptions = $derived([{ value: 'drops', label: t('admin.drops.sortDrops') }, ...reasons.map((r) => ({ value: r, label: t('clients.reason.' + r) }))])
   const buckets = $derived(d ? d.buckets.map((b, i) => ({ label: bucketLabel(i), counts: b, total: Object.values(b).reduce((a, n) => a + n, 0) })) : [])
@@ -112,6 +127,17 @@
         <div class="legend" style="margin-top:var(--s3)">
           {#each seen as r}<span><i style="--c:{COLOR[r]}"></i>{t('clients.reason.' + r)}</span>{/each}
         </div>
+      </section>
+
+      <section class="card wide" aria-labelledby="dr-time" data-testid="drops-time">
+        <div class="section-head" style="margin-bottom:var(--s3)">
+          <div class="od-stack"><span class="caps">{t('admin.drops.timeCaps')}</span><h2 id="dr-time">{t('admin.drops.timeTitle')}</h2></div>
+        </div>
+        <SlotBars series={overTime} label={slotLabel} {axis} testid="drops-chart" />
+        <div class="legend" style="margin-top:var(--s3)">
+          {#each seen as r}<span><i style="--c:{COLOR[r]}"></i>{t('clients.reason.' + r)}</span>{/each}
+        </div>
+        <p class="desc" style="font-size:var(--fs-xs);margin-top:var(--s2)">{step >= 86400 ? t('admin.drops.timeHelpDay') : t('admin.drops.timeHelpHour')}</p>
       </section>
 
       <section class="card wide" aria-labelledby="dr-top" data-testid="drops-top">

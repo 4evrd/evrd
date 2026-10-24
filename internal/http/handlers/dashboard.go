@@ -803,21 +803,16 @@ func (s *Handlers) clusterUsage(ctx context.Context) usage {
 	return total
 }
 
-// dropRanges are the periods the admin view of IRC client drops offers,
-// all within the 30 days disconnects are kept.
-var dropRanges = map[string]time.Duration{"24h": 24 * time.Hour, "7d": 7 * 24 * time.Hour, "30d": 30 * 24 * time.Hour}
-
 // AdminClientDrops is every user's IRC client disconnects over ?range=
 // (24h, 7d or 30d): by reason, how long devices were gone, and the devices
 // that dropped most, with whose they are (?sort= drops or a reason,
 // ?limit= up to 100).
 func (s *Handlers) AdminClientDrops(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	key := q.Get("range")
-	d, ok := dropRanges[key]
-	if !ok {
-		key, d = "24h", dropRanges["24h"]
-	}
+	// the network health page's ranges and slots, so the charts read alike
+	key, span, step := healthRange(q.Get("range"))
+	n := int(span / step)
+	start := time.Now().Truncate(step).Add(-time.Duration(n-1) * step)
 	by := q.Get("sort")
 	if !slices.Contains(bouncer.DropReasons, by) {
 		by = "drops"
@@ -826,7 +821,7 @@ func (s *Handlers) AdminClientDrops(w http.ResponseWriter, r *http.Request) {
 	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 {
 		limit = min(n, 100)
 	}
-	all, err := s.b.AllClientDrops(r.Context(), time.Now().Add(-d), by, limit)
+	all, err := s.b.AllClientDrops(r.Context(), bouncer.Slots{Start: start, Step: step, N: n}, by, limit)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -846,6 +841,7 @@ func (s *Handlers) AdminClientDrops(w http.ResponseWriter, r *http.Request) {
 		"range": key, "sort": by, "order": bouncer.DropReasons, "bucketBounds": bouncer.GapBuckets,
 		"drops": all.Drops, "accounts": all.Accounts, "devices": all.Devices, "reasons": all.Reasons,
 		"gaps": all.Gaps, "buckets": all.Buckets, "top": top,
+		"start": start.Unix(), "step": int64(step / time.Second), "points": n, "timeline": all.Timeline,
 	})
 }
 

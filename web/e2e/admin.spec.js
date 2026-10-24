@@ -362,6 +362,9 @@ test('IRC client drops across every account: why, how long, and which devices', 
     }).toPass({ timeout: 20000 })
     await expect(page.getByTestId('reason-quit')).toContainText('Left on purpose: the user or the client said QUIT.')
     await expect(page.getByTestId('drops-gaps')).toContainText('not back')
+    // over time: a column per hour, stacked by reason
+    await expect(page.getByTestId('drops-chart')).toBeVisible()
+    await expect(page.getByTestId('drops-time')).toContainText('quit')
     // every reason is listed, even ones that didn't happen
     await expect(page.locator('[data-testid^="reason-"]')).toHaveCount(9)
 

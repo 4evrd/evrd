@@ -86,6 +86,30 @@ func TestAdminClientDrops(t *testing.T) {
 		buckets[5].(map[string]any)[bouncer.DropPingTimeout] != float64(1) {
 		t.Fatalf("buckets: %v", buckets)
 	}
+	// over time: hourly slots like the health page, the last one now's;
+	// every drop in its slot, and every reason listed
+	tl := body["timeline"].(map[string]any)
+	start, step, n := int64(body["start"].(float64)), int64(body["step"].(float64)), int(body["points"].(float64))
+	if step != 3600 || n != 24 || start%3600 != 0 || len(tl) != len(bouncer.DropReasons) {
+		t.Fatalf("timeline: start %d step %d points %d, %d reasons", start, step, n, len(tl))
+	}
+	slot := func(at time.Time) int { return int((at.Unix() - start) / step) }
+	pings := tl[bouncer.DropPingTimeout].([]any)
+	if pings[slot(now.Add(-50*time.Minute))].(float64) < 1 || pings[slot(now.Add(-10*time.Minute))].(float64) < 1 {
+		t.Fatalf("ping timeouts over time: %v", pings)
+	}
+	total := 0.0
+	for _, pts := range tl {
+		for _, v := range pts.([]any) {
+			total += v.(float64)
+		}
+	}
+	if total != 5 {
+		t.Fatalf("timeline total %v, want 5", total)
+	}
+	if _, wk := e.login("root").do("GET", "/api/admin/client-drops?range=30d", nil); wk["step"] != float64(86400) || wk["points"] != float64(30) {
+		t.Fatalf("30d slots: %v %v", wk["step"], wk["points"])
+	}
 	top := body["top"].([]any)
 	if len(top) != 2 || top[0].(map[string]any)["user"] != "bob" || top[0].(map[string]any)["device"] != "Desktop" || top[1].(map[string]any)["user"] != "alice" {
 		t.Fatalf("top: %v", top)

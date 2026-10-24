@@ -259,25 +259,46 @@ type AllDrops struct {
 	// GapBuckets bound, then longer, then not back), by reason.
 	Buckets []map[string]int  `json:"buckets"`
 	Top     []UserDeviceDrops `json:"top"`
+	// Timeline counts disconnects per time slot, by reason: Slots slots of
+	// Step each from Start, the last one the slot in progress.
+	Timeline map[string][]int `json:"timeline"`
+}
+
+// Slots is how AllClientDrops lays its timeline out: n slots of step each
+// from start.
+type Slots struct {
+	Start time.Time
+	Step  time.Duration
+	N     int
 }
 
 // AllClientDrops sums up every user's IRC client disconnects since since,
 // with the limit devices that dropped most (or most for one reason, when
 // by is one of DropReasons).
-func (b *Bouncer) AllClientDrops(ctx context.Context, since time.Time, by string, limit int) (AllDrops, error) {
+func (b *Bouncer) AllClientDrops(ctx context.Context, slots Slots, by string, limit int) (AllDrops, error) {
+	since := slots.Start
 	ds, err := b.store.ClientDisconnects(ctx, 0, since)
 	if err != nil {
 		return AllDrops{}, err
 	}
 	perUser := map[int64][]store.ClientDisconnect{}
 	var users []int64
+	timeline := map[string][]int{}
+	for _, r := range DropReasons {
+		timeline[r] = make([]int, slots.N)
+	}
+	for _, d := range ds {
+		if i := int(d.EndedAt.Sub(slots.Start) / slots.Step); i >= 0 && i < slots.N && timeline[d.Reason] != nil {
+			timeline[d.Reason][i]++
+		}
+	}
 	for _, d := range ds { // newest first, kept so per user
 		if perUser[d.UserID] == nil {
 			users = append(users, d.UserID)
 		}
 		perUser[d.UserID] = append(perUser[d.UserID], d)
 	}
-	a := AllDrops{Drops: len(ds), Accounts: len(users), Reasons: map[string]int{}, Gaps: map[string]GapStats{},
+	a := AllDrops{Drops: len(ds), Accounts: len(users), Reasons: map[string]int{}, Gaps: map[string]GapStats{}, Timeline: timeline,
 		Buckets: make([]map[string]int, len(GapBuckets)+2), Top: []UserDeviceDrops{}}
 	for i := range a.Buckets {
 		a.Buckets[i] = map[string]int{}
