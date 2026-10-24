@@ -81,7 +81,12 @@ replay, and live traffic. evrd keeps each channel's members, topic and modes
 up to date from what the network sends, so the channels on connect, and
 `/names`, `/topic` and `/mode` about a channel you're in, are answered by evrd
 straight away rather than asking the network each time (setting a topic or
-modes, and ban lists, still go to the network). `/join` and `/part` update the network's saved
+modes, and ban lists, still go to the network). `/who #channel` (and its
+WHOX form, `WHO #channel %fields`) and `/who nick` are answered the same way
+when the network keeps evrd current: it needs `away-notify` (and
+`account-notify` for accounts), and for people who join later,
+`extended-join`. Otherwise, and for masks and filters (`/who *`,
+`/who #channel o`), WHO goes to the network. `/join` and `/part` update the network's saved
 channel list, `/nick` changes your nick upstream, and your own notices and
 `/me` actions are saved and shown on your other clients like messages. evrd
 offers the [IRCv3](#ircv3) capabilities below.

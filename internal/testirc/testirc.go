@@ -126,6 +126,9 @@ func StartCaps(t testing.TB, log *Log, caps string) string {
 						}
 					case "USER":
 						out(":fake 001 %s :welcome", nick)
+						if offered(caps, "evrd.test/whox") { // a test hook, not a real cap
+							out(":fake 005 %s WHOX :are supported", nick)
+						}
 					case "JOIN": // as a server answers a join: no topic set, then the names
 						out(":%s!u@h JOIN %s", nick, f[1])
 						out(":fake 353 %s = %s :%s", nick, f[1], nick)
@@ -141,6 +144,19 @@ func StartCaps(t testing.TB, log *Log, caps string) string {
 						if len(f) > 1 {
 							out(":fake 332 %s %s :the topic", nick, f[1])
 						}
+					case "WHO": // the joined nick and @op, in WHOX's form when asked
+						if len(f) < 2 {
+							continue
+						}
+						if len(f) > 2 && strings.HasPrefix(f[2], "%") {
+							_, token, _ := strings.Cut(f[2], ",")
+							out(":fake 354 %s %s %s u h fake %s H 0 0 :Real %s", nick, token, f[1], nick, nick)
+							out(":fake 354 %s %s %s o oh fake op H@ 0 opacct :The Op", nick, token, f[1])
+						} else {
+							out(":fake 352 %s %s u h fake %s H :0 Real %s", nick, f[1], nick, nick)
+							out(":fake 352 %s %s o oh fake op H@ :0 The Op", nick, f[1])
+						}
+						out(":fake 315 %s %s :End of /WHO list.", nick, f[1])
 					case "SIMULATE": // test hook: the server sends a line as-is
 						out("%s", strings.TrimPrefix(sc.Text(), "SIMULATE "))
 					}

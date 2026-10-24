@@ -159,6 +159,12 @@ type Conn struct {
 	// info is the rest of what evrd knows of each joined channel (see
 	// chanstate.go), by lowercased channel.
 	info map[string]*chanInfo
+	// people is what evrd knows of each member beyond user@host (who.go),
+	// by lowercased nick; whoAsked the channels evrd's own WHO is out for
+	// ('x' WHOX, 'w' plain), and serverName the server it's connected to.
+	people     map[string]*person
+	whoAsked   map[string]byte
+	serverName string
 	// chanModes are the server's ISUPPORT CHANMODES groups.
 	chanModes [4]string
 	// prefixes maps channel modes to their nick prefix, highest first, from
@@ -320,6 +326,8 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		members:      map[string]map[string]*Member{},
 		topics:       map[string]string{},
 		info:         map[string]*chanInfo{},
+		people:       map[string]*person{},
+		whoAsked:     map[string]byte{},
 		chanModes:    defaultChanModes,
 		prefixModes:  "ov",
 		prefixChars:  "@+",
@@ -631,6 +639,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	c.members = map[string]map[string]*Member{}
 	c.topics = map[string]string{}
 	c.info = map[string]*chanInfo{}
+	c.people, c.whoAsked, c.serverName = map[string]*person{}, map[string]byte{}, ""
 	c.chanModes = defaultChanModes
 	c.mu.Unlock()
 
@@ -767,6 +776,7 @@ func (c *Conn) resume(r *links.Resumed) {
 			send("NAMES " + ch)
 			send("TOPIC " + ch)
 			send("MODE " + ch)
+			c.askWho(ch)
 		}
 		if away != "" {
 			send("AWAY :" + away)
@@ -885,6 +895,9 @@ func (c *Conn) handle(m irc.Message) {
 		if len(m.Params) > 2 {
 			c.mu.Lock()
 			c.isupport = mergeISupport(c.isupport, m.Params[1:len(m.Params)-1])
+			if c.serverName == "" {
+				c.serverName = m.Prefix
+			}
 			c.mu.Unlock()
 		}
 		for _, tok := range m.Params[1:] {
@@ -972,6 +985,7 @@ func (c *Conn) handle(m irc.Message) {
 			c.nick = nu
 		}
 		chans := c.channelsOf(old, me)
+		c.renamePerson(old, nu)
 		for _, ch := range chans {
 			set := c.members[strings.ToLower(ch)]
 			mem := Member{}
@@ -999,6 +1013,7 @@ func (c *Conn) handle(m irc.Message) {
 		for _, ch := range chans {
 			delete(c.members[strings.ToLower(ch)], strings.ToLower(who))
 		}
+		delete(c.people, strings.ToLower(who))
 		split := len(chans) > 0 && isSplitReason(reason) && c.splits.quit(time.Now())
 		ghost := c.auth.ghosted && strings.EqualFold(who, c.net.Nick)
 		gen := c.auth.gen
@@ -1020,9 +1035,11 @@ func (c *Conn) handle(m irc.Message) {
 		if c.isMe(m.Prefix) {
 			c.joined(ch)
 			c.askModes(ch)
+			c.askWho(ch)
 		}
 		c.mu.Lock()
 		c.addMember(ch, m.Prefix) // nick!user@host
+		c.joinedBy(who, m.Params)
 		c.mu.Unlock()
 		c.event("join", ch, who, "", "")
 	case "PART":
@@ -1037,6 +1054,7 @@ func (c *Conn) handle(m irc.Message) {
 		} else {
 			c.mu.Lock()
 			delete(c.members[strings.ToLower(ch)], strings.ToLower(who))
+			c.forgetPerson(who)
 			c.mu.Unlock()
 		}
 	case "KICK":
@@ -1051,6 +1069,7 @@ func (c *Conn) handle(m irc.Message) {
 		} else {
 			c.mu.Lock()
 			delete(c.members[strings.ToLower(ch)], strings.ToLower(victim))
+			c.forgetPerson(victim)
 			c.mu.Unlock()
 		}
 	case "TOPIC":
@@ -1070,6 +1089,36 @@ func (c *Conn) handle(m irc.Message) {
 			c.applyModes(m.Params[0], m.Params[1], m.Params[2:])
 			c.mu.Unlock()
 			c.event("mode", m.Params[0], nickOf(m.Prefix), strings.Join(m.Params[1:], " "), "")
+		}
+	case "AWAY": // away-notify: :nick!user@host AWAY [:message]
+		c.mu.Lock()
+		c.awayChanged(nickOf(m.Prefix), len(m.Params) > 0)
+		c.mu.Unlock()
+	case "ACCOUNT": // account-notify: :nick!user@host ACCOUNT account|*
+		if len(m.Params) > 0 {
+			c.mu.Lock()
+			c.accountChanged(nickOf(m.Prefix), m.Params[0])
+			c.mu.Unlock()
+		}
+	case "SETNAME": // setname: :nick!user@host SETNAME :realname
+		if len(m.Params) > 0 {
+			c.mu.Lock()
+			c.realnameChanged(nickOf(m.Prefix), m.Params[0])
+			c.mu.Unlock()
+		}
+	case "352": // RPL_WHOREPLY
+		c.mu.Lock()
+		c.whoReply(m.Params)
+		c.mu.Unlock()
+	case "354": // RPL_WHOSPCRPL (WHOX)
+		c.mu.Lock()
+		c.whoxReply(m.Params)
+		c.mu.Unlock()
+	case "315": // RPL_ENDOFWHO
+		if len(m.Params) >= 2 {
+			c.mu.Lock()
+			c.whoEnded(m.Params[1])
+			c.mu.Unlock()
 		}
 	case "CHGHOST": // chghost: :nick!old@host CHGHOST newuser newhost
 		if len(m.Params) >= 2 {
@@ -1299,7 +1348,11 @@ func (c *Conn) joined(ch string) {
 // parted records a channel we left; forget drops it from the saved list too.
 func (c *Conn) parted(ch string, forget bool) {
 	c.mu.Lock()
+	gone := c.members[strings.ToLower(ch)]
 	delete(c.members, strings.ToLower(ch))
+	for nick := range gone {
+		c.forgetPerson(nick)
+	}
 	delete(c.topics, strings.ToLower(ch))
 	delete(c.info, strings.ToLower(ch))
 	for k := range c.channels {
@@ -1723,6 +1776,12 @@ func (c *Conn) resyncReply(m irc.Message) bool {
 		key, end = "mode "+strings.ToLower(p[1]), true
 	case m.Command == "329" && len(p) >= 2:
 		key, end = "created "+strings.ToLower(p[1]), true
+	case m.Command == "352" && len(p) >= 2:
+		key = "who " + strings.ToLower(p[1])
+	case m.Command == "354" && len(p) >= 3 && p[1] == whoToken:
+		key = "who " + strings.ToLower(p[2])
+	case m.Command == "315" && len(p) >= 2:
+		key, end = "who "+strings.ToLower(p[1]), true
 	default:
 		return false
 	}

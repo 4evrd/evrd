@@ -98,9 +98,10 @@ func TestNamesFromEvrdsStateFitTheClient(t *testing.T) {
 	full.send("SIMULATE :fake MODE #one +ov bob bob")
 	full.expect("MODE #one +ov bob bob")
 
-	// every prefix and the hosts evrd knows (its own from its JOIN)
+	// every prefix and the hosts evrd knows (its own from its JOIN, op's
+	// from evrd's own WHO)
 	full.send("NAMES #one")
-	full.expect(":evrd 353 alice_one = #one :@+bob!b@hostb @op alice_one!u@h")
+	full.expect(":evrd 353 alice_one = #one :@+bob!b@hostb @op!o@oh alice_one!u@h")
 
 	// the highest prefix and nicks only, for a client without the caps
 	plain := r.attach("alice/one:alice-password")

@@ -954,6 +954,10 @@ func (se *session) dispatch(m irc.Message) {
 		if !se.answerLocally(m.Command, m.Params) {
 			se.passOn(m)
 		}
+	case "WHO":
+		if !se.answerWho(m.Params) {
+			se.passOn(m)
+		}
 	case "NAMES":
 		if se.answerLocally(m.Command, m.Params) {
 			return
