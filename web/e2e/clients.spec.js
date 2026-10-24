@@ -159,6 +159,14 @@ test('channels on attach and the usual queries come from evrd', async () => {
   await c.next(new RegExp(`^:evrd 331 \\S+ ${esc} `))
   c.send(`NAMES ${chan}`)
   await c.next(new RegExp(`^:evrd 353 \\S+ = ${esc} :.*${u.name}`))
+  // WHO and WHOX too, once evrd's own WHO is in (ergo has away-notify,
+  // account-notify, extended-join and WHOX)
+  await expect.poll(async () => {
+    c.send(`WHO ${chan}`)
+    return (await c.next(new RegExp(` 315 \\S+ ${esc} `))).startsWith(':evrd 315 ')
+  }, { timeout: 15000 }).toBe(true)
+  c.send(`WHO ${chan} %tnfa,7`)
+  await c.next(new RegExp(`^:evrd 354 \\S+ 7 ${u.name} H\\S* `))
 })
 
 test('attach errors', async () => {

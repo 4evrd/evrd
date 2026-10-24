@@ -26,6 +26,8 @@ type chanInfo struct {
 	modes      []chanMode // the channel's modes, list modes left out
 	modesKnown bool
 	created    time.Time
+	// whoKnown: evrd's own WHO about the channel ended (who.go)
+	whoKnown bool
 }
 
 // chanMode is one channel mode, with its argument if it takes one.
