@@ -162,12 +162,18 @@ test('anyone can download a language to edit, in any format', async ({ page }) =
   }
 })
 
-// statusSays sends a *status command and waits for a reply containing text.
-function statusSays(c, cmd, text) {
+// statusSays sends a *status command and waits for a reply containing text
+// (saying what came instead when it doesn't).
+async function statusSays(c, cmd, text) {
   const esc = text.replace(/[#.*+?^${}()|[\]\\]/g, '\\$&')
+  const from = c.lines.length
   const reply = c.next(new RegExp(`^:\\*status!\\S+ PRIVMSG \\S+ :.*${esc}`))
   c.send(`PRIVMSG *status :${cmd}`)
-  return reply
+  try {
+    return await reply
+  } catch (e) {
+    throw new Error(`${e.message}; after "${cmd}" got:\n${c.lines.slice(from).join('\n')}`)
+  }
 }
 
 test('*status answers in your language, your own translation on top', async () => {
