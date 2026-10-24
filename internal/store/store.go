@@ -130,6 +130,25 @@ type ClientPassword struct {
 	ExpiresAt  *time.Time
 }
 
+// ClientDisconnect is an IRC client that went: which device, when it came
+// and went, why, and when the same device was back (nil: not yet). Kept a
+// while for the IRC clients page and the admin overview.
+type ClientDisconnect struct {
+	ID     int64 `gorm:"primaryKey"`
+	UserID int64 `gorm:"index:idx_client_disconnects_user_ended"`
+	// DeviceKey tells a device's disconnects apart from another's: its client
+	// password, or its software on a network when it used none.
+	DeviceKey     string `gorm:"size:200"`
+	Device        string // the client password's name, if one was used
+	Software      string
+	Network       string
+	IP            string
+	Reason        string `gorm:"size:32"`
+	ConnectedAt   time.Time
+	EndedAt       time.Time `gorm:"index:idx_client_disconnects_user_ended;index"`
+	ReconnectedAt *time.Time
+}
+
 // PendingSignIn is an IRC client waiting to be allowed on the website
 // (sign-in by link): the link's token as a SHA-256, what the client said
 // about itself, and the decision. Shared by every node: the website may be

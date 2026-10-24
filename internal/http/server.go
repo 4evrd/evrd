@@ -171,6 +171,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/networks/{id}/playback", user(h.SetPlayback))
 	mux.HandleFunc("POST /api/networks/{id}/playback/clear", user(h.ClearPlayback))
 	mux.HandleFunc("GET /api/me/clients", user(h.MyClients))
+	mux.HandleFunc("GET /api/me/client-drops", user(h.MyClientDrops))
 	mux.HandleFunc("GET /api/me/events", user(h.MyEvents))
 	mux.HandleFunc("GET /api/overview", user(h.Overview))
 	mux.HandleFunc("GET /api/reconnects", user(h.Reconnects))

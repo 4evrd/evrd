@@ -8,7 +8,7 @@
   import { api } from '$lib/api.js'
   import { session, ircPort } from '$lib/session.svelte.js'
   import { toast, confirmDialog, openDrawer, closeDrawers } from '$lib/ui.svelte.js'
-  import { date, ago, since, limit } from '$lib/format.js'
+  import { date, ago, since, limit, dur } from '$lib/format.js'
   import { check } from '$lib/validate.js'
   import { t } from '$lib/i18n.svelte.js'
 
@@ -20,10 +20,12 @@
 
   let pws = $state(null)
   let attached = $state(null)
+  let drops = $state(null) // how the user's IRC clients dropped lately, by device
   let timer
   async function load() {
     try { pws = await api.clientPasswords() } catch (e) { if (!pws) toast(e.message, 'bad') }
     try { attached = await api.clients() } catch { /* keep */ }
+    try { drops = await api.clientDrops() } catch { /* keep */ }
   }
   onMount(() => { load(); timer = setInterval(async () => { try { attached = await api.clients() } catch { /* keep */ } }, 10000) })
   onDestroy(() => clearInterval(timer))
@@ -202,6 +204,26 @@ Password        <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<
         {/if}
       </div>
     </section>
+
+    {#if drops}
+      <section class="card tight enter" aria-labelledby="drops-h" data-testid="client-drops">
+        <div class="section-head" style="margin-bottom:var(--s3)">
+          <h2 id="drops-h" style="font-size:var(--fs-md)">{t('clients.dropsTitle')}</h2>
+          <span class="chip">{t('clients.dropsPeriod', { hours: drops.hours })}</span>
+        </div>
+        <div class="rows">
+          {#each drops.devices as d (d.device + d.software + d.network)}
+            <div class="row" style="--cols:minmax(0,1fr) auto">
+              <span class="od-field"><span class="name">{d.device || d.software || t('clients.ircClient')}{d.device && d.software ? ' · ' + d.software : ''}</span><span class="sub od-truncate">{d.network ? d.network + ' · ' : ''}{t('clients.dropsMostly', { count: d.drops, reason: t('clients.reason.' + d.mainReason) })}{d.medianGap ? ' · ' + t('clients.dropsBack', { gap: dur(Math.round(d.medianGap)) }) : ''}</span></span>
+              {#if d.connected}<span class="chip ok live"><span class="dot" aria-hidden="true"></span>{t('clients.now')}</span>{:else}<span class="chip">{ago(Math.round(Date.parse(d.last) / 1000))}</span>{/if}
+            </div>
+          {:else}
+            <p class="desc" style="font-size:var(--fs-sm)">{t('clients.noDrops', { hours: drops.hours })}</p>
+          {/each}
+          {#if drops.devices.some((d) => !d.device)}<p class="desc" style="font-size:var(--fs-xs)">{t('clients.dropsHint')}</p>{/if}
+        </div>
+      </section>
+    {/if}
   </div>
 </div>
 

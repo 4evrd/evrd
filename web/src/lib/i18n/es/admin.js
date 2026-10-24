@@ -115,4 +115,5 @@ export default {
   'admin.metrics.chatLines': 'Líneas de chat',
   'admin.metrics.busiest': 'Redes con más actividad',
   'admin.metrics.noLines': 'No hay líneas de chat en este rango.',
+  'admin.clientDrops': { one: '{count} corte en el último día: {reason}', other: '{count} cortes en el último día, sobre todo {reason}' },
 }

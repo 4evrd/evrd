@@ -44,6 +44,22 @@ func (s *Handlers) MyClients(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// dropsPeriod is how far back the IRC clients page and the admin overview
+// count client disconnects.
+const dropsPeriod = 24 * time.Hour
+
+// MyClientDrops is how the user's IRC clients disconnected in the last day,
+// by device: how often, mostly why, and how long they were typically gone.
+func (s *Handlers) MyClientDrops(w http.ResponseWriter, r *http.Request) {
+	u := auth.User(r)
+	devices, err := s.b.ClientDrops(r.Context(), u.ID, time.Now().Add(-dropsPeriod))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"devices": devices, "hours": int(dropsPeriod / time.Hour)})
+}
+
 func (s *Handlers) clientsDTO(userID int64) []map[string]any {
 	out := []map[string]any{}
 	for _, c := range s.b.ClientsOf(userID) {
@@ -613,6 +629,7 @@ func (s *Handlers) AdminOverview(w http.ResponseWriter, r *http.Request) {
 		"attention": attention, "upstreams": upList, "storage": s.storageHealth(),
 		"ircHost": s.cfg().IRCHost,
 		"version": version.Version, "holder": s.holderStatus(ctx),
+		"clientDrops": s.clientDropSummary(ctx),
 	})
 }
 
@@ -783,4 +800,14 @@ func (s *Handlers) clusterUsage(ctx context.Context) usage {
 	}
 	wg.Wait()
 	return total
+}
+
+// clientDropSummary is every IRC client disconnect in the last day, for the
+// admin overview (nil when it can't be read).
+func (s *Handlers) clientDropSummary(ctx context.Context) any {
+	sum, err := s.b.ClientDropSummary(ctx, time.Now().Add(-dropsPeriod))
+	if err != nil {
+		return nil
+	}
+	return sum
 }

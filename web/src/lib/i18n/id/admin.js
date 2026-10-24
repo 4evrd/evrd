@@ -115,4 +115,5 @@ export default {
   'admin.metrics.chatLines': 'Baris chat',
   'admin.metrics.busiest': 'Network tersibuk',
   'admin.metrics.noLines': 'Tidak ada baris chat dalam rentang ini.',
+  'admin.clientDrops': { other: '{count} kali terputus dalam sehari terakhir, kebanyakan {reason}' },
 }

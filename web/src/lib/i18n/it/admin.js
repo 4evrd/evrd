@@ -115,4 +115,5 @@ export default {
   'admin.metrics.chatLines': 'Righe di chat',
   'admin.metrics.busiest': 'Reti più attive',
   'admin.metrics.noLines': 'Nessuna riga di chat in questo intervallo.',
+  'admin.clientDrops': { one: '{count} caduta nell’ultimo giorno: {reason}', other: '{count} cadute nell’ultimo giorno, per lo più {reason}' },
 }

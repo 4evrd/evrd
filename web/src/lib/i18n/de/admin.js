@@ -115,4 +115,5 @@ export default {
   'admin.metrics.chatLines': 'Chatzeilen',
   'admin.metrics.busiest': 'Aktivste Netzwerke',
   'admin.metrics.noLines': 'Keine Chatzeilen in diesem Zeitraum.',
+  'admin.clientDrops': { one: '{count} Abbruch am letzten Tag: {reason}', other: '{count} Abbrüche am letzten Tag, meist {reason}' },
 }

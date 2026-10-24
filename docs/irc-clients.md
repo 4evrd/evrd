@@ -317,6 +317,30 @@ before.
 
 ## Troubleshooting
 
+**A client keeps dropping.** The *IRC clients* page (`<public_url>/clients`)
+lists, under *Connection drops*, each device whose IRC client disconnected in
+the last 24 hours: how often, mostly why, and how long it was typically gone
+before it came back. The reasons:
+
+| Reason | What happened |
+|---|---|
+| stopped answering | the client went quiet: a phone that lost signal, a laptop asleep |
+| connection broke | the connection was reset or failed (often a network change) |
+| stopped reading | the client stopped taking what evrd sent |
+| hung up | the client closed the connection without saying QUIT |
+| quit | the client said QUIT |
+| reconnected | the same device connected again, replacing this one |
+| client limit reached | refused: the account had its most clients attached |
+| evrd stopped | evrd stopped, with no connection holder to keep the client |
+| closed by evrd | the account was suspended, deleted or stopped |
+
+A device is its IRC client password, or its client software on a network when
+it signed in without one, so give each device its own client password to tell
+them apart. Admins see the day's total by reason on the admin overview; the
+metrics `evrd.irc.client_disconnects` (by `reason`) and
+`evrd.irc.client_reconnect_gap` (seconds a device was gone) chart it over
+time. Disconnects are kept 30 days.
+
 **`464 :Invalid credentials` with an SSO account.** An account that signs in
 with SSO has no evrd password, and unless the admin turned on SSO passwords
 for IRC (`sso_irc_password`), your SSO provider's password doesn't work over

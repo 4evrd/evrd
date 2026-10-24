@@ -59,7 +59,7 @@ func (r *UserRepository) DeleteUser(ctx context.Context, id int64) error {
 				}
 			}
 		}
-		for _, m := range []any{&Network{}, &Session{}, &ClientPassword{}, &UserEvent{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}} {
+		for _, m := range []any{&Network{}, &Session{}, &ClientPassword{}, &UserEvent{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}, &ClientDisconnect{}} {
 			if err := tx.Where("user_id = ?", id).Delete(m).Error; err != nil {
 				return err
 			}

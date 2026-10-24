@@ -72,6 +72,7 @@ export const api = {
   putMyLanguagePack: (pack) => req('PUT', '/api/me/language-pack', pack),
   deleteMyLanguagePack: () => req('DELETE', '/api/me/language-pack'),
   clients: () => req('GET', '/api/me/clients'),
+  clientDrops: () => req('GET', '/api/me/client-drops'),
   events: (limit = 50) => req('GET', `/api/me/events?limit=${limit}`),
   overview: () => req('GET', '/api/overview'),
   reconnects: () => req('GET', '/api/reconnects'),
