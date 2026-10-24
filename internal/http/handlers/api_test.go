@@ -190,7 +190,9 @@ func TestAdminRoutesRefuseUsers(t *testing.T) {
 	e.user("root", store.RoleAdmin)
 	e.user("alice", store.RoleUser)
 	c := e.login("alice")
-	for _, rt := range []string{"GET /api/admin/overview", "GET /api/admin/users", "POST /api/admin/users", "PATCH /api/admin/users/1", "DELETE /api/admin/users/1", "PUT /api/admin/languages/de", "DELETE /api/admin/languages/de"} {
+	for _, rt := range []string{"GET /api/admin/overview", "GET /api/admin/users", "POST /api/admin/users", "PATCH /api/admin/users/1", "DELETE /api/admin/users/1", "PUT /api/admin/languages/de", "DELETE /api/admin/languages/de",
+		"GET /api/admin/users/1/networks/export", "POST /api/admin/users/1/networks/import/preview", "POST /api/admin/users/1/networks/import",
+		"POST /api/admin/znc/preview", "POST /api/admin/znc/accounts"} {
 		method, path, _ := strings.Cut(rt, " ")
 		if code, _ := c.do(method, path, map[string]any{}); code != http.StatusForbidden {
 			t.Errorf("%s as a user: got %d, want 403", rt, code)

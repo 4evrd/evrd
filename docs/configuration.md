@@ -316,8 +316,9 @@ playback settings. **Networks → Import** adds networks from one of these, or
 from a ZNC config: a whole `znc.conf`, or just the `<User>` or `<Network>`
 blocks you paste in. When a ZNC config has several users, you pick whose
 networks to bring in, then tick the networks. A network you already have
-(same name) is left alone, or updated from the file if you choose; its
-history stays. Imported networks connect only if you ask, so ZNC and evrd
+(same name) is left alone, merged with the file's (its settings kept, the
+channels and servers it lacks added, empty fields filled in), or updated
+from the file, as you choose; its history stays either way. Imported networks connect only if you ask, so ZNC and evrd
 don't fight over your nick while both are up.
 
 Passwords never go out as plaintext. Server and services passwords, the
@@ -333,8 +334,28 @@ settings and `IRCConnectEnabled`. `keepnick`, `kickrejoin`, `autocycle` and
 `ctcpflood` come over as evrd's modules. `sasl` and `nickserv` set the
 login method, but ZNC keeps their passwords outside the config (as it does
 `perform`'s commands and `autoop`'s list), so the import tells you what to
-fill in. The ZNC user's own password (`Pass`) is never read. For old logs,
-see `evrctl history import-znc`.
+fill in. For old logs, see `evrctl history import-znc`.
+
+Admins can do the same for any account (Admin → Users → a user →
+**Import**, and **Export** beside it), with an admin's say: a bind host
+comes over though it isn't on the `bind_hosts` list, and the account's
+network limit doesn't apply.
+
+**Admin → Users → Import from ZNC** brings a whole ZNC server over. Each
+`<User>` in its config goes to an evrd account: the same name by default
+(change it to put a ZNC user somewhere else, or several into one account).
+An account that doesn't exist yet is made, and
+
+- it keeps the user's ZNC password. evrd stores ZNC's hash (salted SHA-256
+  or MD5, Argon2id, or a plaintext `Pass` hashed on the way in), checks it
+  at the first sign-in, web or IRC client, and replaces it with its own
+  bcrypt hash then. The hash is never shown or exported.
+- with an email, it's also claimable, as with the
+  [provisioning API](#provisioning-api): the owner's first SSO sign-in with
+  the same username and email takes it over.
+
+An account that already exists keeps its own password. Then each user's
+networks are imported into their account, as above.
 
 A file written by hand works too. Fields left out keep what the network
 already has (or the defaults), and passwords may be given in plaintext, to

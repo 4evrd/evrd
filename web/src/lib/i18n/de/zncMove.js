@@ -1,0 +1,27 @@
+// Bringing a whole ZNC over (Admin → Users → Import from ZNC): its users
+// become accounts, and their networks come with them.
+export default {
+  'zncMove.button': 'Aus ZNC importieren',
+  'zncMove.title': 'Aus ZNC importieren',
+  'zncMove.intro': 'Hol die Benutzer eines ZNC-Servers herüber: jeder kommt in ein evrd-Konto, das hier angelegt wird, falls es noch nicht existiert, mit den Netzwerken, die du auswählst.',
+  'zncMove.choose': 'znc.conf auswählen',
+  'zncMove.passwords': 'Ein neues Konto behält das ZNC-Passwort des Benutzers: evrd prüft ZNCs Hash bei der ersten Anmeldung und ersetzt ihn dann durch seinen eigenen. Er wird nie angezeigt oder exportiert. Ein Konto, das es schon gibt, behält sein eigenes Passwort.',
+  'zncMove.noUsers': 'In dieser Konfiguration gibt es keine <User>-Blöcke.',
+  'zncMove.includeUser': '{name} übernehmen',
+  'zncMove.account': 'evrd-Konto für {name}',
+  'zncMove.new': 'Neues Konto',
+  'zncMove.existing': 'Vorhandenes Konto',
+  'zncMove.willKeepPassword': 'Behält das ZNC-Passwort',
+  'zncMove.noZncPassword': 'Kein Passwort in der Konfiguration: es braucht eine E-Mail für SSO oder ein Passwort über Zurücksetzen',
+  'zncMove.email': 'E-Mail (optional)',
+  'zncMove.emailFor': 'E-Mail für {name}',
+  'zncMove.emailHelp': 'Mit einer E-Mail übernimmt die erste SSO-Anmeldung mit demselben Benutzernamen und derselben E-Mail das Konto.',
+  'zncMove.go': { one: '{count} Benutzer übernehmen ({networks} Netzwerke)', other: '{count} Benutzer übernehmen ({networks} Netzwerke)' },
+  'zncMove.progress': '{name} wird importiert ({n} von {count})…',
+  'zncMove.created': 'Konto angelegt',
+  'zncMove.existed': 'Konto schon vorhanden',
+  'zncMove.keptPassword': 'ZNC-Passwort behalten',
+  'zncMove.noPassword': 'kein Passwort',
+  'zncMove.claimable': 'per SSO übernehmbar',
+  'zncMove.toUsers': 'Zu den Benutzern',
+}

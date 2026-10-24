@@ -675,6 +675,7 @@
     "irc.netfile.unknownField": "{field} bukan pengaturan jaringan yang dikenal evrd, jadi dilewati.",
     "irc.znc.loginPassword": "Modul {module} ZNC menyimpan kata sandinya di luar konfigurasi: atur di Autentikasi.",
     "irc.znc.moduleData": "Modul {module} ZNC menyimpan pengaturannya di luar konfigurasi: nyalakan dan isi di Modul.",
-    "irc.znc.modulesSkipped": "evrd tidak punya modul untuk ini, jadi dilewati: {modules}."
+    "irc.znc.modulesSkipped": "evrd tidak punya modul untuk ini, jadi dilewati: {modules}.",
+    "irc.znc.passwordUnusable": "Kata sandi ZNC pengguna ini dalam bentuk yang tidak bisa diperiksa evrd, jadi akunnya belum punya kata sandi: atur satu, atau biarkan dia masuk dengan SSO."
   }
 }

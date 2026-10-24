@@ -4,6 +4,7 @@ package handlers
 // importing one, or a ZNC config (internal/zncimport), back in.
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,7 +28,17 @@ const maxImportBytes = 2 << 20
 // out sealed under the server's key; X-Evrd-Secrets says "sealed", or
 // "omitted" when there's no key to seal them with.
 func (s *Handlers) ExportNetworks(w http.ResponseWriter, r *http.Request) {
-	u := auth.User(r)
+	s.exportNetworks(w, r, auth.User(r), "evrd-networks")
+}
+
+// AdminExportNetworks is ExportNetworks for the {id} user.
+func (s *Handlers) AdminExportNetworks(w http.ResponseWriter, r *http.Request) {
+	if u, ok := s.adminTarget(w, r); ok {
+		s.exportNetworks(w, r, u, "evrd-networks-"+u.Username)
+	}
+}
+
+func (s *Handlers) exportNetworks(w http.ResponseWriter, r *http.Request, u store.User, filename string) {
 	nets, err := s.acc.ListNetworks(r.Context(), u.ID)
 	if err != nil {
 		s.fail(w, r, err)
@@ -52,7 +63,7 @@ func (s *Handlers) ExportNetworks(w http.ResponseWriter, r *http.Request) {
 		secrets = "omitted"
 	}
 	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="evrd-networks-%s.yaml"`, time.Now().Format("2006-01-02")))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-%s.yaml"`, filename, time.Now().Format("2006-01-02")))
 	w.Header().Set("X-Evrd-Secrets", secrets)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(out)
@@ -113,6 +124,17 @@ func notesOf(p *messages.Printer, x *netfile.Network) []string {
 // in it: its users and their networks, which of them the user already has,
 // and what wouldn't carry over. Nothing secret is sent back.
 func (s *Handlers) PreviewImport(w http.ResponseWriter, r *http.Request) {
+	s.previewImport(w, r, auth.User(r))
+}
+
+// AdminPreviewImport is PreviewImport for the {id} user.
+func (s *Handlers) AdminPreviewImport(w http.ResponseWriter, r *http.Request) {
+	if u, ok := s.adminTarget(w, r); ok {
+		s.previewImport(w, r, u)
+	}
+}
+
+func (s *Handlers) previewImport(w http.ResponseWriter, r *http.Request, u store.User) {
 	var in struct {
 		Text string `json:"text"`
 	}
@@ -124,12 +146,17 @@ func (s *Handlers) PreviewImport(w http.ResponseWriter, r *http.Request) {
 		s.badImport(w, r, err)
 		return
 	}
-	u := auth.User(r)
 	have, err := s.acc.ListNetworks(r.Context(), u.ID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]any{"format": src.format, "users": previewUsers(s.printer(r), src.users, have)})
+}
+
+// previewUsers describes users' networks against the networks an account
+// has (have).
+func previewUsers(p *messages.Printer, users []zncimport.User, have []store.Network) []map[string]any {
 	existing := func(name string) *store.Network {
 		for i := range have {
 			if strings.EqualFold(have[i].Name, strings.TrimSpace(name)) {
@@ -138,9 +165,8 @@ func (s *Handlers) PreviewImport(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	}
-	p := s.printer(r)
-	users := []map[string]any{}
-	for _, su := range src.users {
+	out := []map[string]any{}
+	for _, su := range users {
 		nets := []map[string]any{}
 		for i := range su.Networks {
 			x := &su.Networks[i]
@@ -158,16 +184,29 @@ func (s *Handlers) PreviewImport(w http.ResponseWriter, r *http.Request) {
 				"exists": existing(x.Name) != nil, "enabled": x.Enabled == nil || *x.Enabled, "notes": notesOf(p, x),
 			})
 		}
-		users = append(users, map[string]any{"name": su.Name, "networks": nets})
+		out = append(out, map[string]any{"name": su.Name, "networks": nets, "hasPassword": su.Pass != nil})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"format": src.format, "users": users})
+	return out
 }
 
 // ImportNetworks adds the networks picked ({networks}, by name) of one user
 // ({user}; "" for a networks file) from {text}. A network the user already
-// has (by name) is skipped, or updated with {existing: "update"}; {connect}
-// connects the ones the file has enabled.
+// has (by name) is skipped, updated from the file ({existing: "update"}) or
+// merged with it ("merge"); {connect} connects the ones the file has
+// enabled.
 func (s *Handlers) ImportNetworks(w http.ResponseWriter, r *http.Request) {
+	s.importNetworks(w, r, auth.User(r), false)
+}
+
+// AdminImportNetworks is ImportNetworks into the {id} user's account, with
+// an admin's say: any bind host, and past the account's network limit.
+func (s *Handlers) AdminImportNetworks(w http.ResponseWriter, r *http.Request) {
+	if u, ok := s.adminTarget(w, r); ok {
+		s.importNetworks(w, r, u, true)
+	}
+}
+
+func (s *Handlers) importNetworks(w http.ResponseWriter, r *http.Request, u store.User, admin bool) {
 	var in struct {
 		Text     string   `json:"text"`
 		User     string   `json:"user"`
@@ -197,7 +236,6 @@ func (s *Handlers) ImportNetworks(w http.ResponseWriter, r *http.Request) {
 	for _, n := range in.Networks {
 		want[strings.ToLower(strings.TrimSpace(n))] = true
 	}
-	u := auth.User(r)
 	p := s.printer(r)
 	results := []map[string]any{}
 	for i := range picked.Networks {
@@ -206,7 +244,7 @@ func (s *Handlers) ImportNetworks(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		res := map[string]any{"name": x.Name}
-		result, err := s.importNetwork(r, u, x, in.Existing == "update", in.Connect)
+		result, err := s.importNetwork(r.Context(), u, x, in.Existing, in.Connect, admin)
 		res["result"] = result
 		if err != nil {
 			var ve *accounts.ValidationError
@@ -224,9 +262,9 @@ func (s *Handlers) ImportNetworks(w http.ResponseWriter, r *http.Request) {
 }
 
 // importNetwork saves one network from a file: "created", "updated",
-// "skipped" (it exists and update is false) or "failed".
-func (s *Handlers) importNetwork(r *http.Request, u store.User, x *netfile.Network, update, connect bool) (string, error) {
-	ctx := r.Context()
+// "merged", "skipped" (it exists and existing is neither "update" nor
+// "merge") or "failed".
+func (s *Handlers) importNetwork(ctx context.Context, u store.User, x *netfile.Network, existing string, connect, admin bool) (string, error) {
 	have, err := s.acc.ListNetworks(ctx, u.ID)
 	if err != nil {
 		return "failed", err
@@ -237,7 +275,7 @@ func (s *Handlers) importNetwork(r *http.Request, u store.User, x *netfile.Netwo
 			before = &have[i]
 		}
 	}
-	if before != nil && !update {
+	if before != nil && existing != "update" && existing != "merge" {
 		return "skipped", nil
 	}
 	n := store.Network{
@@ -247,14 +285,29 @@ func (s *Handlers) importNetwork(r *http.Request, u store.User, x *netfile.Netwo
 	if before != nil {
 		n = *before
 	}
-	pb := x.Apply(&n)
-	if err := s.checkNetwork(u, &n, before); err != nil {
+	var pb netfile.Settings
+	result := "updated"
+	if before != nil && existing == "merge" {
+		p, err := s.b.Playback(*before, u, "")
+		if err != nil {
+			return "failed", err
+		}
+		pb, result = x.Merge(&n, p.Buffers), "merged"
+	} else {
+		pb = x.Apply(&n)
+	}
+	checkAs := u
+	if admin {
+		checkAs = asAdmin(u)
+	}
+	if err := s.checkNetwork(checkAs, &n, before); err != nil {
 		return "failed", err
 	}
-	result := "updated"
 	if before == nil {
-		if err := s.acc.CanCreateNetwork(u); err != nil {
-			return "failed", err
+		if !admin {
+			if err := s.acc.CanCreateNetwork(u); err != nil {
+				return "failed", err
+			}
 		}
 		if n, err = s.acc.CreateNetwork(ctx, n); err != nil {
 			return "failed", err

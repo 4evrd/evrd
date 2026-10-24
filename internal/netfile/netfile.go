@@ -450,3 +450,72 @@ func (x *Network) Apply(n *store.Network) Settings {
 func isChannel(s string) bool { return s != "" && strings.ContainsRune("#&+!", rune(s[0])) }
 
 func ptr[T any](v T) *T { return &v }
+
+// Merge adds x to an existing network n without changing what n has: the
+// servers, channels, fingerprints and modules n lacks are added, and its
+// empty fields filled in; a password or key n already has is kept. It
+// returns the playback settings of the buffers it added (channels n didn't
+// have, and the network's own when n has none); notes go to x.Notes.
+func (x *Network) Merge(n *store.Network, have map[string]store.BufferPlayback) Settings {
+	var f store.Network
+	pb := x.Apply(&f)
+	fill := func(dst *string, v string) {
+		if *dst == "" {
+			*dst = v
+		}
+	}
+	fill(&n.Nick, f.Nick)
+	fill(&n.AltNick, f.AltNick)
+	fill(&n.Username, f.Username)
+	fill(&n.Realname, f.Realname)
+	fill(&n.QuitMsg, f.QuitMsg)
+	fill(&n.BindHost, f.BindHost)
+	fill(&n.Encoding, f.Encoding)
+	if n.Password == "" && n.AuthCommand == "" && n.Auth() == store.AuthAuto {
+		// no login of its own yet: take the file's whole
+		n.AuthMethod, n.SASLUser, n.Password, n.AuthCommand = f.AuthMethod, f.SASLUser, f.Password, f.AuthCommand
+		n.ServicesNick, n.IdentifyArgs, n.IdentifyOn, n.GhostCmd = f.ServicesNick, f.IdentifyArgs, f.IdentifyOn, f.GhostCmd
+	}
+	list := n.ServerList()
+	for _, sv := range f.Servers {
+		if !slices.ContainsFunc(list, func(o store.Server) bool { return strings.EqualFold(o.Host, sv.Host) && o.Port == sv.Port }) {
+			list = append(list, sv)
+		}
+	}
+	n.Servers = list
+	for _, fp := range f.Fingerprints {
+		if !slices.Contains(n.Fingerprints, fp) {
+			n.Fingerprints = append(n.Fingerprints, fp)
+		}
+	}
+	added := map[string]bool{}
+	for _, c := range f.Channels {
+		k := strings.ToLower(c)
+		if slices.ContainsFunc(n.Channels, func(o string) bool { return strings.EqualFold(o, c) }) {
+			continue
+		}
+		n.Channels = append(n.Channels, c)
+		if cs, ok := f.ChannelSettings[k]; ok {
+			if n.ChannelSettings == nil {
+				n.ChannelSettings = map[string]store.ChannelSettings{}
+			}
+			n.ChannelSettings[k] = cs
+		}
+		added[k] = true
+	}
+	for name, m := range f.Modules {
+		if _, ok := n.Modules[name]; !ok {
+			if n.Modules == nil {
+				n.Modules = map[string]store.ModuleConfig{}
+			}
+			n.Modules[name] = m
+		}
+	}
+	out := Settings{}
+	for b, p := range pb {
+		if old := have[b]; added[b] || (old.Lines == nil && old.AutoClear == nil) {
+			out[b] = p
+		}
+	}
+	return out
+}
