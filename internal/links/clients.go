@@ -124,7 +124,7 @@ func (h *Holder) accept(hl *heldListener) {
 
 func (h *Holder) newClient(hl *heldListener, conn net.Conn) {
 	if hl.TLS {
-		tc := tls.Server(conn, &tls.Config{GetCertificate: h.getCert})
+		tc := tls.Server(conn, h.clientTLS())
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		err := tc.HandshakeContext(ctx)
 		cancel()
@@ -484,4 +484,12 @@ func hangUp(conn net.Conn) {
 		io.Copy(io.Discard, conn)
 		conn.Close()
 	}()
+}
+
+// clientTLS is the TLS config the holder's IRC clients connect with: one for
+// all of them, so a client's session ticket from its last connection resumes
+// (Go keeps ticket keys per config).
+func (h *Holder) clientTLS() *tls.Config {
+	h.tlsOnce.Do(func() { h.tlsConf = &tls.Config{GetCertificate: h.getCert} })
+	return h.tlsConf
 }

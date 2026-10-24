@@ -175,6 +175,10 @@
     "irc.web.jumpnetwork": "In the web app, pick a network from the Networks page instead.",
     "irc.playback.badLines": "{lines} isn't a number of lines.",
     "irc.playback.nothing": "Nothing saved for {buffer}.",
+    "irc.playback.more": {
+      "one": "{count} more line in {buffer} from while you were away: /msg *status playback {buffer} {lines}",
+      "other": "{count} more lines in {buffer} from while you were away: /msg *status playback {buffer} {lines}"
+    },
     "irc.replayed": "Replayed {count} line(s) of {buffer}.",
     "irc.info.unlimited": "unlimited",
     "irc.info.account": "Account {user} ({role}). On {network} as {nick}.",

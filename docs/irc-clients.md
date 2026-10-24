@@ -158,6 +158,18 @@ playback lines; `setbuffer` for one network or one buffer). A buffer that
   with ZNC: what came since an IRC client was last on that network, nothing
   while another client is on it. Give each device its own client password.
 
+When an auto-clearing buffer missed more than it plays back, `*status` says
+how many more there are and how to get them (`/msg *status playback <buffer>
+<lines>`).
+
+A device back within two minutes of its connection dropping (a phone between
+cell towers, a laptop waking up) gets a slimmer welcome: no message of the
+day (`422` instead), no `*status` VERSION question and no new activity entry.
+Its channels still come — an IRC client starts every connection afresh — but
+from evrd's own state, without asking the network, followed by just what it
+missed. TLS connections resume their session (one round trip less) on evrd's
+own ports and through the connection holder.
+
 `clearbuffer` starts a buffer over. The network's page in the web app has
 the same settings under **Playback**: lines per buffer for the network, each
 buffer's lines and what it plays back, what's waiting, and clearing. The lines stay in history either way: the

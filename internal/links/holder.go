@@ -48,6 +48,8 @@ type Holder struct {
 	watcher   net.Conn   // evrd's clients stream, told of clients waiting
 	wmu       sync.Mutex // one write to the watcher at a time
 	cert      atomic.Pointer[tls.Certificate]
+	tlsOnce   sync.Once
+	tlsConf   *tls.Config // clientTLS
 }
 
 // NewHolder makes a holder with default limits.

@@ -184,3 +184,18 @@ func median(xs []float64) float64 {
 	}
 	return (xs[len(xs)/2-1] + xs[len(xs)/2]) / 2
 }
+
+// LastDisconnect is the latest disconnect of a device (DeviceKey) of
+// userID's since since (ok false: none).
+func (b *Bouncer) LastDisconnect(ctx context.Context, userID int64, deviceKey string, since time.Time) (store.ClientDisconnect, bool) {
+	ds, err := b.store.ClientDisconnects(ctx, userID, since)
+	if err != nil {
+		return store.ClientDisconnect{}, false
+	}
+	for _, d := range ds { // newest first
+		if d.DeviceKey == deviceKey {
+			return d, true
+		}
+	}
+	return store.ClientDisconnect{}, false
+}

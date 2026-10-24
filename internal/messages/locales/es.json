@@ -178,6 +178,10 @@
     "irc.web.jumpnetwork": "En la app web, elige una red en la página Redes.",
     "irc.playback.badLines": "{lines} no es un número de líneas.",
     "irc.playback.nothing": "No hay nada guardado de {buffer}.",
+    "irc.playback.more": {
+      "one": "{count} línea más en {buffer} de mientras no estabas: /msg *status playback {buffer} {lines}",
+      "other": "{count} líneas más en {buffer} de mientras no estabas: /msg *status playback {buffer} {lines}"
+    },
     "irc.replayed": {
       "one": "Reproducida {count} línea de {buffer}.",
       "other": "Reproducidas {count} líneas de {buffer}."

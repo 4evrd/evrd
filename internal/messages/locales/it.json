@@ -178,6 +178,10 @@
     "irc.web.jumpnetwork": "Nell'app web, scegli invece una rete dalla pagina Reti.",
     "irc.playback.badLines": "{lines} non è un numero di righe.",
     "irc.playback.nothing": "Niente di salvato per {buffer}.",
+    "irc.playback.more": {
+      "one": "{count} riga in più in {buffer} da quando eri via: /msg *status playback {buffer} {lines}",
+      "other": "{count} righe in più in {buffer} da quando eri via: /msg *status playback {buffer} {lines}"
+    },
     "irc.replayed": {
       "one": "Riprodotta {count} riga di {buffer}.",
       "other": "Riprodotte {count} righe di {buffer}."

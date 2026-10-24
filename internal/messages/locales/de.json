@@ -178,6 +178,10 @@
     "irc.web.jumpnetwork": "Wähle in der Web-App stattdessen ein Netzwerk auf der Seite Netzwerke.",
     "irc.playback.badLines": "{lines} ist keine Zeilenzahl.",
     "irc.playback.nothing": "Nichts gespeichert für {buffer}.",
+    "irc.playback.more": {
+      "one": "{count} weitere Zeile in {buffer} aus deiner Abwesenheit: /msg *status playback {buffer} {lines}",
+      "other": "{count} weitere Zeilen in {buffer} aus deiner Abwesenheit: /msg *status playback {buffer} {lines}"
+    },
     "irc.replayed": {
       "one": "{count} Zeile von {buffer} abgespielt.",
       "other": "{count} Zeilen von {buffer} abgespielt."
