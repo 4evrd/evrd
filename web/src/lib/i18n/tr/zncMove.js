@@ -1,0 +1,27 @@
+// Bringing a whole ZNC over (Admin → Users → Import from ZNC): its users
+// become accounts, and their networks come with them.
+export default {
+  'zncMove.button': 'ZNC’den içe aktar',
+  'zncMove.title': 'ZNC’den içe aktar',
+  'zncMove.intro': 'Bir ZNC sunucusunun kullanıcılarını taşı: her biri, yoksa burada açılan bir evrd hesabına, seçtiğin ağlarla birlikte gider.',
+  'zncMove.choose': 'znc.conf seç',
+  'zncMove.passwords': 'Yeni bir hesap kullanıcının ZNC parolasını korur: evrd ilk girişte ZNC’nin özetini doğrular, sonra kendi özetiyle değiştirir. Hiçbir zaman gösterilmez ya da dışa aktarılmaz. Zaten var olan bir hesap kendi parolasını korur.',
+  'zncMove.noUsers': 'Bu yapılandırmada <User> bloğu yok.',
+  'zncMove.includeUser': '{name} kullanıcısını taşı',
+  'zncMove.account': '{name} için evrd hesabı',
+  'zncMove.new': 'Yeni hesap',
+  'zncMove.existing': 'Var olan hesap',
+  'zncMove.willKeepPassword': 'ZNC parolasını korur',
+  'zncMove.noZncPassword': 'Yapılandırmada parola yok: SSO için bir e-posta ya da Sıfırla ile bir parola gerekecek',
+  'zncMove.email': 'E-posta (isteğe bağlı)',
+  'zncMove.emailFor': '{name} için e-posta',
+  'zncMove.emailHelp': 'Bir e-postayla, aynı kullanıcı adı ve e-postayla yapılan ilk SSO girişi hesabı sahiplenir.',
+  'zncMove.go': { one: '{count} kullanıcıyı taşı ({networks} ağ)', other: '{count} kullanıcıyı taşı ({networks} ağ)' },
+  'zncMove.progress': '{name} içe aktarılıyor ({n}/{count})…',
+  'zncMove.created': 'Hesap açıldı',
+  'zncMove.existed': 'Hesap zaten vardı',
+  'zncMove.keptPassword': 'ZNC parolası korundu',
+  'zncMove.noPassword': 'parola yok',
+  'zncMove.claimable': 'SSO ile sahiplenilebilir',
+  'zncMove.toUsers': 'Kullanıcılara git',
+}

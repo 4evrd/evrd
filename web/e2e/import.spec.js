@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { test, expect } from '@playwright/test'
-import { login, freshUser, choose } from './helpers.js'
+import { login, freshUser, choose, session, uniq, ADMIN, ADMIN_PASS } from './helpers.js'
 
-// Importing networks: a ZNC config (pick the user, then the networks), and
-// an evrd export carried to another account.
+// Importing networks: a ZNC config (pick the user, then the networks), an
+// evrd export carried to another account, and an admin bringing a whole ZNC
+// over.
 
 const conf = `Version = 1.8.2
 <User first>
@@ -95,4 +96,41 @@ test('an export imports into another account; again, the network is skipped', as
   await page.getByTestId('import-read').click()
   await expect(page.getByTestId('import-network').first()).toContainText('Already added')
   await expect(page.getByTestId('import-go')).toBeDisabled()
+})
+
+test('an admin brings a ZNC over: new accounts keep their ZNC password', async ({ page }) => {
+  const a = await session(ADMIN, ADMIN_PASS)
+  const one = uniq('zone'), two = uniq('ztwo')
+  try {
+    const zconf = `<User ${one}>\n Pass = plain#first-znc-password\n <Network devirc>\n  Server = ircd 6667\n  <Chan #fromznc>\n  </Chan>\n </Network>\n</User>\n` +
+      `<User ${two}>\n <Network devirc>\n  Server = ircd 6667\n </Network>\n <Network other>\n  Server = ircd 6667\n </Network>\n</User>\n`
+    await login(page, ADMIN, ADMIN_PASS)
+    await page.goto('/admin/users')
+    await page.getByTestId('znc-import-link').click()
+    await page.getByTestId('znc-paste').fill(zconf)
+    await page.getByTestId('znc-read').click()
+    const users = page.getByTestId('znc-user')
+    await expect(users).toHaveCount(2)
+    await expect(users.first()).toContainText('New account')
+    await expect(users.first()).toContainText('Keeps their ZNC password')
+    await expect(users.nth(1)).toContainText('No password in the config')
+    await users.nth(1).getByTestId('znc-email').fill(`${two}@example.org`)
+    await users.nth(1).locator('label.pick').filter({ hasText: 'other' }).getByRole('checkbox').uncheck()
+    await expect(page.getByTestId('znc-go')).toHaveText(/Bring 2 users over \(2 networks\)/)
+    await page.getByTestId('znc-go').click()
+    const res = page.getByTestId('znc-result')
+    await expect(res).toHaveCount(2)
+    await expect(res.first()).toContainText('Account made')
+    await expect(res.first()).toContainText('ZNC password kept')
+    await expect(res.nth(1)).toContainText('claimable by SSO')
+    await expect(page.locator('[data-testid=znc-result] [data-result=created]')).toHaveCount(2)
+
+    const s = await session(one, 'first-znc-password')
+    const nets = await s.get('/api/networks')
+    expect(nets.map((n) => [n.name, n.channels])).toEqual([['devirc', ['#fromznc']]])
+    await s.dispose()
+  } finally {
+    for (const u of (await a.get('/api/admin/users')).filter((u) => [one, two].includes(u.username))) await a.del(`/api/admin/users/${u.id}`).catch(() => {})
+    await a.dispose()
+  }
 })

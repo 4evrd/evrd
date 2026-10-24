@@ -675,6 +675,7 @@
     "irc.netfile.unknownField": "{field} は evrd が知らないネットワーク設定なので、取り込みませんでした。",
     "irc.znc.loginPassword": "ZNC の {module} モジュールはパスワードを設定ファイルの外に保存しています。「認証」で設定してください。",
     "irc.znc.moduleData": "ZNC の {module} モジュールは設定を設定ファイルの外に保存しています。「モジュール」で有効にして入力してください。",
-    "irc.znc.modulesSkipped": "evrd にはこれらのモジュールがないため、取り込みませんでした: {modules}。"
+    "irc.znc.modulesSkipped": "evrd にはこれらのモジュールがないため、取り込みませんでした: {modules}。",
+    "irc.znc.passwordUnusable": "このユーザーの ZNC パスワードは evrd が確認できない形式のため、アカウントにはまだパスワードがありません。設定するか、SSO でサインインしてもらってください。"
   }
 }

@@ -43,4 +43,10 @@ export default {
   'transfer.result.skipped': 'スキップ: 追加済み',
   'transfer.result.failed': 'インポートできませんでした',
   'transfer.toNetworks': 'ネットワーク一覧へ',
+  'transfer.merge': 'ファイルを統合する',
+  'transfer.mergeHelp': '今の設定はそのまま。足りないチャンネルとサーバーを追加し、空の項目を埋めます。',
+  'transfer.result.merged': '統合しました',
+  'transfer.adminTitle': '{name} のネットワークをインポート',
+  'transfer.adminIntro': 'evrd のエクスポートや ZNC の設定から、このアカウントにネットワークを追加します。管理者はバインドホストを引き継ぎ、アカウントのネットワーク上限を超えて追加できます。',
+  'transfer.toAccount': '{name} に戻る',
 }

@@ -43,4 +43,10 @@ export default {
   'transfer.result.skipped': 'Omitida: ya estaba',
   'transfer.result.failed': 'No importada',
   'transfer.toNetworks': 'Ir a tus redes',
+  'transfer.merge': 'Combinar con el archivo',
+  'transfer.mergeHelp': 'Conservan sus ajustes; se añaden los canales y servidores que les faltan y se rellena lo vacío.',
+  'transfer.result.merged': 'Combinada',
+  'transfer.adminTitle': 'Importar redes para {name}',
+  'transfer.adminIntro': 'Añade redes a esta cuenta desde una exportación de evrd o una configuración de ZNC. Como admin puedes traer un bind host y pasar el límite de redes de la cuenta.',
+  'transfer.toAccount': 'Volver a {name}',
 }

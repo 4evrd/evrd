@@ -78,7 +78,10 @@
       <h1>{t('adminUsers.heading')}</h1>
       <p>{t('adminUsers.intro')}</p>
     </div>
-    <button class="btn btn-primary" type="button" onclick={openNew}><Icon name="plus" />{t('adminUsers.newUser')}</button>
+    <div class="od-cluster">
+      <a class="btn btn-ghost" href="/admin/users/import-znc" data-testid="znc-import-link"><Icon name="upload" />{t('zncMove.button')}</a>
+      <button class="btn btn-primary" type="button" onclick={openNew}><Icon name="plus" />{t('adminUsers.newUser')}</button>
+    </div>
   </div>
 
   <div class="tiles admin enter">

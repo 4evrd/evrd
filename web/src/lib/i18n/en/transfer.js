@@ -36,6 +36,8 @@ export default {
   'transfer.existing': 'Networks you already have',
   'transfer.skip': 'Leave them as they are',
   'transfer.skipHelp': 'Only networks you don’t have yet are added.',
+  'transfer.merge': 'Merge the file in',
+  'transfer.mergeHelp': 'Keep their settings; add the channels and servers they’re missing, and fill in what’s empty.',
   'transfer.update': 'Update them from the file',
   'transfer.updateHelp': 'Their settings and channels become the file’s. History is kept.',
   'transfer.connect': 'Connect them once imported',
@@ -46,7 +48,13 @@ export default {
   'transfer.done': 'Done',
   'transfer.result.created': 'Added',
   'transfer.result.updated': 'Updated',
+  'transfer.result.merged': 'Merged',
   'transfer.result.skipped': 'Skipped: already added',
   'transfer.result.failed': 'Not imported',
   'transfer.toNetworks': 'Go to your networks',
+
+  // an admin importing into someone's account
+  'transfer.adminTitle': 'Import networks for {name}',
+  'transfer.adminIntro': 'Add networks to this account from an evrd export or a ZNC config. As an admin you can bring a bind host over and go past the account’s network limit.',
+  'transfer.toAccount': 'Back to {name}',
 }

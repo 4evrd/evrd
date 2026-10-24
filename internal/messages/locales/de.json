@@ -698,6 +698,7 @@
     "irc.netfile.unknownField": "{field} ist keine Netzwerkeinstellung, die evrd kennt, und wurde weggelassen.",
     "irc.znc.loginPassword": "ZNCs Modul {module} speichert sein Passwort außerhalb der Konfiguration: setz es unter Anmeldung.",
     "irc.znc.moduleData": "ZNCs Modul {module} speichert seine Einstellungen außerhalb der Konfiguration: schalte es unter Module ein und füll es aus.",
-    "irc.znc.modulesSkipped": "Dafür hat evrd kein Modul, sie wurden weggelassen: {modules}."
+    "irc.znc.modulesSkipped": "Dafür hat evrd kein Modul, sie wurden weggelassen: {modules}.",
+    "irc.znc.passwordUnusable": "ZNCs Passwort für diesen Benutzer liegt in einer Form vor, die evrd nicht prüfen kann, also hat das Konto noch kein Passwort: setz eines, oder lass den Benutzer sich per SSO anmelden."
   }
 }

@@ -1,0 +1,27 @@
+// Bringing a whole ZNC over (Admin → Users → Import from ZNC): its users
+// become accounts, and their networks come with them.
+export default {
+  'zncMove.button': 'ZNC からインポート',
+  'zncMove.title': 'ZNC からインポート',
+  'zncMove.intro': 'ZNC サーバーのユーザーを移します。各ユーザーは evrd のアカウント(まだなければここで作成)に、選んだネットワークと一緒に入ります。',
+  'zncMove.choose': 'znc.conf を選ぶ',
+  'zncMove.passwords': '新しいアカウントはユーザーの ZNC パスワードを引き継ぎます。evrd は最初のサインイン時に ZNC のハッシュを確認し、その後自分の形式に置き換えます。表示やエクスポートは一切しません。既存のアカウントは自分のパスワードのままです。',
+  'zncMove.noUsers': 'この設定には <User> ブロックがありません。',
+  'zncMove.includeUser': '{name} を移す',
+  'zncMove.account': '{name} の evrd アカウント',
+  'zncMove.new': '新しいアカウント',
+  'zncMove.existing': '既存のアカウント',
+  'zncMove.willKeepPassword': 'ZNC のパスワードを引き継ぎます',
+  'zncMove.noZncPassword': '設定にパスワードがありません。SSO 用のメールアドレスか、リセットでのパスワードが必要です',
+  'zncMove.email': 'メールアドレス(任意)',
+  'zncMove.emailFor': '{name} のメールアドレス',
+  'zncMove.emailHelp': 'メールアドレスがあれば、同じユーザー名とメールアドレスでの最初の SSO サインインでアカウントを引き取れます。',
+  'zncMove.go': { one: '{count} 人のユーザーを移す(ネットワーク {networks} 件)', other: '{count} 人のユーザーを移す(ネットワーク {networks} 件)' },
+  'zncMove.progress': '{name} をインポート中({n}/{count})…',
+  'zncMove.created': 'アカウントを作成しました',
+  'zncMove.existed': 'アカウントは既にあります',
+  'zncMove.keptPassword': 'ZNC のパスワードを引き継ぎ',
+  'zncMove.noPassword': 'パスワードなし',
+  'zncMove.claimable': 'SSO で引き取り可能',
+  'zncMove.toUsers': 'ユーザー一覧へ',
+}
