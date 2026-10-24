@@ -1,7 +1,9 @@
 # Translating evrd
 
-The web app comes in English, Italian, Spanish and Turkish. Anyone can add a
-language or change some of the text, without touching the code:
+evrd comes in English, German, Indonesian, Italian, Japanese, Spanish and
+Turkish: the web app, and what evrd says to IRC clients (see [IRC
+messages](#irc-messages)). Anyone can add a language or change some of the
+text, without touching the code:
 
 - **Admins**, in *Admin → Settings → Languages*, upload a translation for
   everyone. It can be a new language (`de`) or changes to a built-in one
@@ -62,6 +64,27 @@ a translation whose placeholders differ from English isn't accepted.
 Text is always shown as plain text: HTML in a translation shows as written,
 it isn't interpreted.
 
+## IRC messages
+
+What evrd says to IRC clients — `*status`'s replies and its `help` — is in
+the same file, as the keys starting with `irc.` (`irc.notOn`,
+`irc.help.connect`…). The template and *Download* include them; a file can
+have only those, only the web app's, or both. Admin → Settings → Languages
+and your own translation say how many of them a language has.
+
+*status answers in the language picked under *Account → Profile →
+Language*, with the same order as above: your own translation (for that
+language), the admin's, the built-in one, English. With *the browser's
+language* picked, evrd can't tell which that is, so IRC replies are in
+English. A change shows on the next command; a translation an admin
+uploads reaches every node of a cluster within 30 seconds.
+
+Command names, settings and their values (`connect`, `set nick …`, `on`,
+`off`) stay as they are in every language, as do `<arguments>` in usage
+lines' commands — translate the words around them. Lines before an IRC
+client has signed in, and IRC protocol replies (numerics, `FAIL`), are in
+English.
+
 ## Plurals
 
 Some texts change with a number (`1 minute ago`, `5 minutes ago`). They have
@@ -109,6 +132,11 @@ The upload is JSON in evrd's format (above):
 - `PUT /api/admin/languages/{code}`, `DELETE …`: admins only.
 - `GET`, `PUT`, `DELETE /api/me/language-pack`: your own (`GET` is a 404
   when there's none).
+- `GET /api/irc-messages/{code}`: a built-in language's IRC messages
+  (`irc.*`; `en` has every key). Public.
+- `GET /api/irc-messages`: how many IRC messages English has (`total`), and
+  how many each language has, built in or from the admin's translation
+  (`languages`). Public.
 
 Invalid files get a `422` with the reason. A user's own translation is
 deleted with their account.
