@@ -111,6 +111,17 @@ test('client passwords: shown once, used to attach, revoked', async ({ page }) =
   await expect.poll(() => refused.lines.some((l) => / JOIN /.test(l))).toBe(false)
 })
 
+test('an IRC client that leaves shows up under connection drops', async ({ page }) => {
+  const c = await attach()
+  await c.next(/ 376 /)
+  c.send('QUIT :bye')
+  await c.closed()
+  await expect(async () => {
+    await page.goto('/clients')
+    await expect(page.getByTestId('client-drops')).toContainText('1 drop: quit', { timeout: 2000 })
+  }).toPass({ timeout: 20000 })
+})
+
 test('a native client gets backlog and stays in sync with the web', async ({ page }) => {
   const them = await freshUser('peer')
   try {

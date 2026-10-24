@@ -115,4 +115,5 @@ export default {
   'admin.metrics.chatLines': 'チャットの行数',
   'admin.metrics.busiest': '最も活発なネットワーク',
   'admin.metrics.noLines': 'この期間のチャット行はありません。',
+  'admin.clientDrops': { other: '直近 1 日に {count} 回切断、主に{reason}' },
 }

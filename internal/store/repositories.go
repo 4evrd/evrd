@@ -182,6 +182,18 @@ type PendingSignInRepositoryImpl interface {
 	DeleteExpiredSignIns(ctx context.Context, now time.Time) error
 }
 
+// ClientDisconnectRepositoryImpl keeps IRC client disconnects.
+type ClientDisconnectRepositoryImpl interface {
+	// AddClientDisconnect records d, and marks the same device's last
+	// disconnect before d.ConnectedAt (and after since) as reconnected then,
+	// returning how long the device was gone in between (0: none found).
+	AddClientDisconnect(ctx context.Context, d ClientDisconnect, since time.Time) (time.Duration, error)
+	// ClientDisconnects lists disconnects that ended after since, newest
+	// first: a user's, or everyone's for userID 0.
+	ClientDisconnects(ctx context.Context, userID int64, since time.Time) ([]ClientDisconnect, error)
+	DeleteClientDisconnectsBefore(ctx context.Context, before time.Time) error
+}
+
 // Store is every repository on one database, plus what spans them. It's
 // what Open returns; a service takes only the repositories it uses.
 // Implementations must be safe for concurrent use.
@@ -199,6 +211,7 @@ type Store interface {
 	LanguagePackRepositoryImpl
 	MFARepositoryImpl
 	PendingSignInRepositoryImpl
+	ClientDisconnectRepositoryImpl
 
 	// EncryptSecrets re-encrypts network secrets under the current key.
 	EncryptSecrets(ctx context.Context) (int, error)

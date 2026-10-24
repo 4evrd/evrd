@@ -608,6 +608,9 @@ func (b *Bouncer) prune(backlog func(store.User) int, leader bool) {
 	if err := b.store.PruneUserEvents(context.Background(), time.Now().AddDate(0, 0, -30)); err != nil {
 		b.log.Warn("prune activity feed", "err", err)
 	}
+	if err := b.store.DeleteClientDisconnectsBefore(context.Background(), time.Now().Add(-dropsKept)); err != nil {
+		b.log.Warn("prune client disconnects", "err", err)
+	}
 	if err := b.store.DeleteExpiredSessions(context.Background(), time.Now()); err != nil {
 		b.log.Warn("expire sessions", "err", err)
 	}

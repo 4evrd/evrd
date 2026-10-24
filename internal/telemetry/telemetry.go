@@ -146,6 +146,8 @@ var (
 	UpstreamDisconnects = counter("evrd.upstream.disconnects", "Upstream links lost (kind=dropped) or connection attempts failed (kind=failed)", "{disconnect}")
 	// IRCLogins counts native client attaches, by result.
 	IRCLogins = counter("evrd.irc.logins", "IRC client sign-ins", "{login}")
+	// ClientDisconnects counts IRC clients that went, by reason.
+	ClientDisconnects = counter("evrd.irc.client_disconnects", "IRC clients that disconnected, by reason", "{disconnect}")
 	// WebLogins counts web sign-ins, by method and result.
 	WebLogins = counter("evrd.web.logins", "Web app sign-ins", "{login}")
 	// Forwarded counts requests and connections handed to another node, by
@@ -159,6 +161,18 @@ var (
 		h, err := meter.Float64Histogram("evrd.http.server.duration",
 			metric.WithDescription("API request duration"), metric.WithUnit("s"),
 			metric.WithExplicitBucketBoundaries(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10))
+		if err != nil {
+			panic(err)
+		}
+		return h
+	}()
+
+	// ReconnectGap is how long an IRC client's device was gone before it
+	// connected again.
+	ReconnectGap = func() metric.Float64Histogram {
+		h, err := meter.Float64Histogram("evrd.irc.client_reconnect_gap",
+			metric.WithDescription("How long an IRC client's device was gone before it reconnected"), metric.WithUnit("s"),
+			metric.WithExplicitBucketBoundaries(1, 5, 15, 30, 60, 120, 300, 900, 3600, 4*3600, 24*3600))
 		if err != nil {
 			panic(err)
 		}

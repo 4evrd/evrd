@@ -78,7 +78,11 @@ type session struct {
 	unsubMsg func()
 	release  func() // frees this client's slot in the user's client limit
 	att      *bouncer.Attachment
-	fromIP   string // the client's address when another node forwarded it
+	// dropped is why the connection ended (bouncer.Drop*), the first reason
+	// to be noted winning (drops.go).
+	dropMu  sync.Mutex
+	dropped string
+	fromIP  string // the client's address when another node forwarded it
 	// locked is set while the client waits for its second factor (mfa.go):
 	// signed in, on no network, only *status answering.
 	locked *lockedSignIn
@@ -171,6 +175,7 @@ func (se *session) serve(ctx context.Context) {
 		if se.heldOver(ctx) {
 			return // still attached, as far as the next evrd is concerned
 		}
+		se.recordDrop()
 		se.markOnNetwork() // until now
 		if se.release != nil {
 			se.release()
@@ -415,9 +420,11 @@ func (se *session) attach() bool {
 
 	att, err := se.srv.b.AttachClient(u.ID, se.srv.acc.LimitsFor(u).MaxClients,
 		bouncer.ClientInfo{Device: device, Networks: bound, IP: se.clientIP()},
-		func() { se.conn.Close() })
+		func() { se.drop(bouncer.DropRemoved); se.conn.Close() })
 	if errors.Is(err, bouncer.ErrTooManyClients) {
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("too_many_clients"))
+		now := time.Now()
+		se.srv.b.RecordDisconnect(u.ID, bouncer.ClientInfo{Device: device, IP: se.clientIP(), Since: now}, chosen.Name, bouncer.DropClientLimit, now)
 		se.numeric("464", fmt.Sprintf(":Too many clients attached (limit %d) — detach one first", se.srv.acc.LimitsFor(u).MaxClients))
 		return false
 	}
@@ -436,6 +443,7 @@ func (se *session) attach() bool {
 	if !unbound {
 		if err := se.bind(chosen); err != nil {
 			se.release()
+			se.att = nil
 			se.numeric("464", ":Network unavailable: "+err.Error())
 			return false
 		}
@@ -716,6 +724,7 @@ func (se *session) bridge(ctx context.Context) {
 		for {
 			line, err := se.readLine()
 			if err != nil {
+				se.drop(readDrop(err))
 				return
 			}
 			select {
@@ -779,6 +788,7 @@ func (se *session) bridge(ctx context.Context) {
 			se.syncMarks()
 			se.saveState()
 		case <-ctx.Done():
+			se.drop(bouncer.DropEvrdStopping)
 			return
 		}
 	}
@@ -915,6 +925,7 @@ func (se *session) dispatch(m irc.Message) {
 	case "PING":
 		se.send(fmt.Sprintf(":%s PONG %s :%s", serverName, serverName, lastParam(m)))
 	case "QUIT":
+		se.drop(bouncer.DropQuit)
 		se.conn.Close()
 	case "ZNC":
 		// ZNC's raw command (/znc ListNetworks, /quote znc …): a *status

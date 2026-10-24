@@ -29,6 +29,7 @@ type gormStore struct {
 	LanguagePackRepositoryImpl
 	MFARepositoryImpl
 	PendingSignInRepositoryImpl
+	ClientDisconnectRepositoryImpl
 
 	db *DB
 }
@@ -68,7 +69,7 @@ func NewDatabase(dsn string) (*DB, error) {
 		return nil, err
 	}
 	hadPlayback := db.Migrator().HasTable(&BufferPlayback{})
-	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}, &PendingSignIn{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}, &PendingSignIn{}, &ClientDisconnect{}); err != nil {
 		return nil, err
 	}
 	if !hadPlayback {
@@ -86,20 +87,21 @@ func NewDatabase(dsn string) (*DB, error) {
 // newStore builds every repository on db.
 func newStore(db *DB) *gormStore {
 	return &gormStore{
-		UserRepositoryImpl:           NewUserRepository(db),
-		SessionRepositoryImpl:        NewSessionRepository(db),
-		ClientPasswordRepositoryImpl: NewClientPasswordRepository(db),
-		NetworkRepositoryImpl:        NewNetworkRepository(db),
-		ReadMarkerRepositoryImpl:     NewReadMarkerRepository(db),
-		BufferPlaybackRepositoryImpl: NewBufferPlaybackRepository(db),
-		UserEventRepositoryImpl:      NewUserEventRepository(db),
-		ClusterRepositoryImpl:        NewClusterRepository(db),
-		SettingRepositoryImpl:        NewSettingRepository(db),
-		CacheRepositoryImpl:          NewCacheRepository(db),
-		LanguagePackRepositoryImpl:   NewLanguagePackRepository(db),
-		MFARepositoryImpl:            NewMFARepository(db),
-		PendingSignInRepositoryImpl:  NewPendingSignInRepository(db),
-		db:                           db,
+		UserRepositoryImpl:             NewUserRepository(db),
+		SessionRepositoryImpl:          NewSessionRepository(db),
+		ClientPasswordRepositoryImpl:   NewClientPasswordRepository(db),
+		NetworkRepositoryImpl:          NewNetworkRepository(db),
+		ReadMarkerRepositoryImpl:       NewReadMarkerRepository(db),
+		BufferPlaybackRepositoryImpl:   NewBufferPlaybackRepository(db),
+		UserEventRepositoryImpl:        NewUserEventRepository(db),
+		ClusterRepositoryImpl:          NewClusterRepository(db),
+		SettingRepositoryImpl:          NewSettingRepository(db),
+		CacheRepositoryImpl:            NewCacheRepository(db),
+		LanguagePackRepositoryImpl:     NewLanguagePackRepository(db),
+		MFARepositoryImpl:              NewMFARepository(db),
+		PendingSignInRepositoryImpl:    NewPendingSignInRepository(db),
+		ClientDisconnectRepositoryImpl: NewClientDisconnectRepository(db),
+		db:                             db,
 	}
 }
 

@@ -129,4 +129,5 @@ export default {
   'admin.metrics.chatLines': 'Chat lines',
   'admin.metrics.busiest': 'Busiest networks',
   'admin.metrics.noLines': 'No chat lines in this range.',
+  'admin.clientDrops': { one: '{count} drop in the last day: {reason}', other: '{count} drops in the last day, mostly {reason}' },
 }

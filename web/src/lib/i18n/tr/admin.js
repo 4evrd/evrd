@@ -115,4 +115,5 @@ export default {
   'admin.metrics.chatLines': 'Sohbet satırları',
   'admin.metrics.busiest': 'En yoğun ağlar',
   'admin.metrics.noLines': 'Bu aralıkta sohbet satırı yok.',
+  'admin.clientDrops': { one: 'Son bir günde {count} kopma: {reason}', other: 'Son bir günde {count} kopma, çoğu {reason}' },
 }
