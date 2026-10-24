@@ -628,6 +628,29 @@
     "irc.settingLabel.oidc_roles_claim": "Roles claim",
     "irc.settingHelp.oidc_roles_claim": "The ID-token claim with the user's roles or groups: roles (Logto), groups (authentik), or a dotted path such as realm_access.roles (Keycloak).",
     "irc.settingLabel.oidc_scopes": "Extra scopes",
-    "irc.settingHelp.oidc_scopes": "Scopes to ask for besides openid, profile and email, space-separated. Empty: roles when an admin role is set (what Logto needs)."
+    "irc.settingHelp.oidc_scopes": "Scopes to ask for besides openid, profile and email, space-separated. Empty: roles when an admin role is set (what Logto needs).",
+    "irc.mfa.wrongCode": "that code isn't right",
+    "irc.mfa.noFactor": "no authenticator app is set up",
+    "irc.mfa.notStarted": "start setting up the authenticator app first",
+    "irc.mfa.alreadySet": "an authenticator app is already set up — remove it first",
+    "irc.mfa.needsFactor": "set up an authenticator app first",
+    "irc.mfa.policyOff": "second factors for IRC are turned off on this server",
+    "irc.mfa.policyRequired": "this server requires a second factor for IRC",
+    "irc.web.tooManyAttempts": "too many failed attempts — try again in a few minutes",
+    "irc.mfa.challenge": "A second factor is needed before you're on {network}: /msg {status} otp <code>, with a code from your authenticator app (or a recovery code).",
+    "irc.mfa.verifyFirst": "Send your second factor first: /msg {status} otp <code>",
+    "irc.usage.otp": "Usage: otp <code>",
+    "irc.mfa.wrongCodeTries": {
+      "one": "That code isn't right — {count} try left.",
+      "other": "That code isn't right — {count} tries left."
+    },
+    "irc.mfa.tooManyTries": "Too many wrong codes — sign in again.",
+    "irc.mfa.timedOut": "No second factor within 2 minutes — sign in again.",
+    "irc.mfa.verified": "Second factor accepted.",
+    "irc.mfa.networkFailed": "Couldn't put you on {network}: {error}",
+    "irc.settingLabel.irc_mfa": "Second factor for IRC",
+    "irc.settingHelp.irc_mfa": "When IRC clients signing in with a password also need a code from an authenticator app: never (off), when the user asks for it (optional), or always (required — users can't turn it off).",
+    "irc.settingLabel.irc_mfa_client_passwords": "Second factor with client passwords too",
+    "irc.settingHelp.irc_mfa_client_passwords": "IRC client passwords are random, per device and revocable, so they don't need a second factor unless this is on."
   }
 }

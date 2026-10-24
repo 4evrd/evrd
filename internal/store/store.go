@@ -64,6 +64,9 @@ type User struct {
 	// Language is the web app's language (a code from the app's list); ""
 	// follows the browser.
 	Language string `gorm:"not null;default:''"`
+	// IRCRequireMFA asks for a second factor whenever an IRC client signs
+	// in with a password (the admin's irc_mfa decides whether it counts).
+	IRCRequireMFA bool `gorm:"column:irc_require_mfa;not null;default:false"`
 
 	// Playback to IRC clients: how many lines per channel and query, and
 	// whether a buffer, once played back, starts empty next time (only lines
@@ -350,6 +353,27 @@ type LanguagePack struct {
 	Messages  string
 	UpdatedAt time.Time
 	UpdatedBy string
+}
+
+// UserTOTP is a user's authenticator app (TOTP, RFC 6238): the shared
+// secret, encrypted like other secrets. It counts once Confirmed (the user
+// typed a code from it); LastStep is the last time step a code was taken
+// for, so a code can't be used twice.
+type UserTOTP struct {
+	UserID    int64  `gorm:"primaryKey;autoIncrement:false"`
+	Secret    string `gorm:"serializer:secret;not null"`
+	Confirmed bool   `gorm:"not null;default:false"`
+	LastStep  int64  `gorm:"not null;default:0"`
+	CreatedAt time.Time
+}
+
+// RecoveryCode is a one-time code for when the authenticator app is gone:
+// its SHA-256, and when it was used.
+type RecoveryCode struct {
+	ID     int64  `gorm:"primaryKey"`
+	UserID int64  `gorm:"index;not null"`
+	Hash   string `gorm:"not null"`
+	UsedAt *time.Time
 }
 
 // UserLanguagePack is a user's own translation, applied only for them on

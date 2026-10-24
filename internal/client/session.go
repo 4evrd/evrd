@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/4evrd/evrd/internal/auth"
+	"github.com/4evrd/evrd/internal/mfa"
 	"net"
 	"sort"
 	"strconv"
@@ -52,6 +53,7 @@ type session struct {
 	saslBuf        string          // its payload so far
 	saslUser       store.User      // who SASL signed in
 	saslDevice     string
+	saslOTP        string // a second-factor code after SASL's password
 	partial        []byte // a line read so far
 	lsWaiting      bool   // a CAP LS waits for the network to be known
 	lsSince        time.Time
@@ -76,6 +78,9 @@ type session struct {
 	release  func() // frees this client's slot in the user's client limit
 	att      *bouncer.Attachment
 	fromIP   string // the client's address when another node forwarded it
+	// locked is set while the client waits for its second factor (mfa.go):
+	// signed in, on no network, only *status answering.
+	locked *lockedSignIn
 
 	// web is set for a *status command from the web chat: replies go to it
 	// instead of an IRC connection, and IRC-only commands say so.
@@ -247,8 +252,11 @@ func (se *session) register(ctx context.Context) bool {
 // account password, or (sso_irc_password) their SSO password, checked
 // with the identity provider. Failures count toward the same lockout as
 // the web sign-in. A refusal is logged and comes back as the numeric to
-// answer PASS with and why.
-func (se *session) signIn(username, network, password string) (u store.User, device, code, why string) {
+// answer PASS with and why. A password ending in ":<code>" (an
+// authenticator app's 6 digits, or a recovery code) that isn't right as a
+// whole is tried without it, the code coming back as otp for the second
+// factor.
+func (se *session) signIn(username, network, password string) (u store.User, device, otp, code, why string) {
 	key := strings.ToLower(strings.TrimSpace(username))
 	var fails *auth.FailureLimiter
 	if se.srv.signIns != nil {
@@ -257,11 +265,13 @@ func (se *session) signIn(username, network, password string) (u store.User, dev
 	if fails != nil && fails.Blocked(key) {
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("locked"))
 		se.loginFailed(username, network, "locked")
-		return store.User{}, "", "464", "Too many failed sign-ins — try again in a few minutes"
+		return store.User{}, "", "", "464", "Too many failed sign-ins — try again in a few minutes"
 	}
-	u, device, err := se.srv.acc.IRCLogin(username, password)
-	if errors.Is(err, accounts.ErrInvalidCredentials) && se.srv.signIns != nil && se.srv.signIns.SSOPasswordsOn() {
-		u, device, err = se.ssoSignIn(username, password, err)
+	u, device, err := se.checkSecret(username, password)
+	if base, c, ok := cutCode(password); ok && errors.Is(err, accounts.ErrInvalidCredentials) {
+		if u2, d2, err2 := se.checkSecret(username, base); err2 == nil || !errors.Is(err2, accounts.ErrInvalidCredentials) {
+			u, device, otp, err = u2, d2, c, err2
+		}
 	}
 	result, reason := "invalid", "invalid"
 	switch {
@@ -269,7 +279,7 @@ func (se *session) signIn(username, network, password string) (u store.User, dev
 		if fails != nil {
 			fails.Reset(key)
 		}
-		return u, device, "", ""
+		return u, device, otp, "", ""
 	case errors.Is(err, accounts.ErrSuspended), errors.Is(err, auth.ErrSSOSuspended):
 		result, reason, code, why = "suspended", "suspended", "465", "This account is suspended"
 	case errors.Is(err, auth.ErrSSOUnavailable):
@@ -278,7 +288,7 @@ func (se *session) signIn(username, network, password string) (u store.User, dev
 		se.srv.log.Warn("sso password check", "user", username, "err", err)
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result(result))
 		se.loginFailed(username, network, reason)
-		return store.User{}, "", code, why
+		return store.User{}, "", "", code, why
 	case errors.Is(err, auth.ErrSSONoPassword):
 		reason, code, why = "sso_no_password", "464", "Your SSO account has no password — set one with your identity provider, or use an IRC client password from "+se.srv.clientsPage()
 	case errors.Is(err, accounts.ErrNeedsClientPassword):
@@ -291,7 +301,27 @@ func (se *session) signIn(username, network, password string) (u store.User, dev
 	}
 	telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result(result))
 	se.loginFailed(username, network, reason)
-	return store.User{}, "", code, why
+	return store.User{}, "", "", code, why
+}
+
+// checkSecret is username's account if secret is one of its passwords: a
+// client password, the account password, or the SSO password.
+func (se *session) checkSecret(username, secret string) (store.User, string, error) {
+	u, device, err := se.srv.acc.IRCLogin(username, secret)
+	if errors.Is(err, accounts.ErrInvalidCredentials) && se.srv.signIns != nil && se.srv.signIns.SSOPasswordsOn() {
+		return se.ssoSignIn(username, secret, err)
+	}
+	return u, device, err
+}
+
+// cutCode splits a second-factor code off the end of a password
+// ("password:123456").
+func cutCode(password string) (base, code string, ok bool) {
+	i := strings.LastIndexByte(password, ':')
+	if i <= 0 || !mfa.LooksLikeCode(password[i+1:]) {
+		return "", "", false
+	}
+	return password[:i], password[i+1:], true
 }
 
 // ssoDevice is how a sign-in with the SSO password shows among the user's
@@ -322,7 +352,8 @@ func (se *session) ssoSignIn(username, password string, failed error) (store.Use
 }
 
 // attach authenticates and binds the session to a network, then sends the
-// welcome burst, channel state, and backlog.
+// welcome burst, channel state, and backlog. A sign-in that needs a second
+// factor first waits for it on no network (mfa.go).
 func (se *session) attach() bool {
 	login, password, ok := strings.Cut(se.pass, ":")
 	if !ok || password == "" {
@@ -332,10 +363,10 @@ func (se *session) attach() bool {
 		return false
 	}
 	username, network, _ := strings.Cut(login, "/")
-	u, device := se.saslUser, se.saslDevice // SASL checked it already
+	u, device, otp := se.saslUser, se.saslDevice, se.saslOTP // SASL checked it already
 	if se.saslUser.ID == 0 {
 		var code, why string
-		if u, device, code, why = se.signIn(username, network, password); code != "" {
+		if u, device, otp, code, why = se.signIn(username, network, password); code != "" {
 			se.numeric(code, ":"+why)
 			return false
 		}
@@ -349,6 +380,11 @@ func (se *session) attach() bool {
 	}
 	if !se.srv.b.Owns(u.ID) {
 		se.numeric("464", ":"+movingMsg)
+		return false
+	}
+	locked, code, why := se.secondFactor(u, username, network, device, otp)
+	if code != "" {
+		se.numeric(code, ":"+why)
 		return false
 	}
 
@@ -381,7 +417,7 @@ func (se *session) attach() bool {
 		chosen = nets[0]
 	}
 	var bound []string
-	if !unbound {
+	if !unbound && !locked {
 		bound = []string{chosen.Name}
 	}
 
@@ -397,6 +433,14 @@ func (se *session) attach() bool {
 	se.release = att.Release
 
 	se.unick = orElse(se.nick, u.Username)
+	if locked {
+		// signed in, but on no network until the second factor
+		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("second_factor"))
+		se.welcome()
+		se.syncCaps()
+		se.lock(lockedSignIn{net: chosen, unbound: unbound, username: username, device: device})
+		return true
+	}
 	if !unbound {
 		if err := se.bind(chosen); err != nil {
 			se.release()
@@ -408,7 +452,15 @@ func (se *session) attach() bool {
 	telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("ok"))
 	se.welcome()
 	se.syncCaps()
-	if !unbound {
+	se.signedIn(!unbound, username, chosen.Name, device)
+	return true
+}
+
+// signedIn finishes attaching a client that's signed in: the network's
+// channels and backlog (onNetwork), the bouncer networks it asked for, and
+// its activity entry.
+func (se *session) signedIn(onNetwork bool, username, netName, device string) {
+	if onNetwork {
 		se.startMarks()
 		se.joinChannels()
 		se.replayBacklog()
@@ -425,7 +477,7 @@ func (se *session) attach() bool {
 	// Ask the client what it is (shown on the clients page and in the
 	// activity feed); the reply arrives as a NOTICE to *status.
 	se.send(fmt.Sprintf(":%s!status@%s PRIVMSG %s :\x01VERSION\x01", statusNick, serverName, se.unick))
-	uid, ip, netName := u.ID, se.clientIP(), chosen.Name
+	uid, ip, att := se.uid, se.clientIP(), se.att
 	go func() {
 		time.Sleep(3 * time.Second)
 		sw := "IRC client"
@@ -444,7 +496,6 @@ func (se *session) attach() bool {
 		}
 		se.srv.b.AddEvent(uid, "attached", title, messages.Raw(strings.TrimSpace(username+"/"+netName+" · "+ip)))
 	}()
-	return true
 }
 
 // bind connects n if needed and subscribes this session to its feeds.
@@ -821,6 +872,9 @@ func (se *session) handleClient(m irc.Message) {
 
 // dispatch carries out a client's command.
 func (se *session) dispatch(m irc.Message) {
+	if se.locked != nil && !se.lockedCommand(m) {
+		return
+	}
 	if se.up == nil && !unboundOK[m.Command] {
 		se.send(fmt.Sprintf(":%s NOTICE %s :%s", serverName, se.unick, ircText(se.tr("bouncerConnection"))))
 		return

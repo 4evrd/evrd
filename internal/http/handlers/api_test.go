@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/4evrd/evrd/internal/mfa"
 	"io"
 	"log/slog"
 	"net/http"
@@ -94,7 +95,7 @@ func newEnvStatus(t *testing.T, st store.Store, status evrdhttp.StatusRunner, mu
 	}
 	t.Cleanup(func() { hist.Close() })
 	b := bouncer.New(st, hist, log)
-	api := evrdhttp.New(b, evrdhttp.Services{Accounts: acc, Auth: am, Languages: languages.New(st), Cluster: cluster.NewStateService(st)}, cfg, status, log)
+	api := evrdhttp.New(b, evrdhttp.Services{Accounts: acc, Auth: am, Languages: languages.New(st), Cluster: cluster.NewStateService(st), MFA: mfa.New(st)}, cfg, status, log)
 	sm, err := settings.New(st, cfg, "test", log)
 	if err != nil {
 		t.Fatal(err)

@@ -149,6 +149,23 @@ type LanguagePackRepositoryImpl interface {
 	DeleteUserLanguagePack(ctx context.Context, userID int64) error
 }
 
+// MFARepositoryImpl keeps second factors: a user's authenticator app and
+// recovery codes. TOTP returns ErrNotFound when there's none.
+type MFARepositoryImpl interface {
+	TOTP(ctx context.Context, userID int64) (UserTOTP, error)
+	PutTOTP(ctx context.Context, t UserTOTP) error
+	DeleteTOTP(ctx context.Context, userID int64) error
+	// UseTOTPStep records step as used if it's later than the last one,
+	// reporting whether it was (false: the code was used already).
+	UseTOTPStep(ctx context.Context, userID, step int64) (bool, error)
+	RecoveryCodes(ctx context.Context, userID int64) ([]RecoveryCode, error)
+	// ReplaceRecoveryCodes drops the user's codes and keeps these hashes.
+	ReplaceRecoveryCodes(ctx context.Context, userID int64, hashes []string) error
+	// UseRecoveryCode marks an unused code used, reporting whether it was
+	// unused.
+	UseRecoveryCode(ctx context.Context, id int64, at time.Time) (bool, error)
+}
+
 // Store is every repository on one database, plus what spans them. It's
 // what Open returns; a service takes only the repositories it uses.
 // Implementations must be safe for concurrent use.
@@ -164,6 +181,7 @@ type Store interface {
 	SettingRepositoryImpl
 	CacheRepositoryImpl
 	LanguagePackRepositoryImpl
+	MFARepositoryImpl
 
 	// EncryptSecrets re-encrypts network secrets under the current key.
 	EncryptSecrets(ctx context.Context) (int, error)

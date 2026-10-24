@@ -2,6 +2,7 @@ package evrd
 
 import (
 	"context"
+	"github.com/4evrd/evrd/internal/mfa"
 	"io"
 	"log/slog"
 	"net/url"
@@ -358,13 +359,16 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 	langs := languages.New(st)
 	msgs := messages.New(langs) // *status in each user's language
 	irc.SetMessages(msgs)
-	irc.SetSignIns(am) // the lockout, and SSO passwords (sso_irc_password)
+	irc.SetSignIns(am)     // the lockout, and SSO passwords (sso_irc_password)
+	factors := mfa.New(st) // second factors for IRC sign-ins (irc_mfa)
+	irc.SetSecondFactors(factors, mfa.PolicyOf(cfg.Auth))
 	srv := evrdhttp.New(b, evrdhttp.Services{
 		Accounts:  acc,
 		Auth:      am,
 		Languages: langs,
 		Messages:  msgs,
 		Cluster:   cluster.NewStateService(st),
+		MFA:       factors,
 	}, cfg, irc, log)
 	srv.SetMetrics(metricsq.New(cfg.Metrics.QueryURL))
 	srv.SetSettings(sm)
@@ -408,6 +412,7 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		acc.SetDefaults(live.Limits)
 		acc.SetBindHosts(live.Outbound.BindHosts)
 		am.SetConfig(live.Auth)
+		irc.SetMFAPolicy(mfa.PolicyOf(live.Auth))
 		ob.SetRate(live.Outbound.ConnectRate)
 		ob.SetIPv4First(!live.Outbound.PreferIPv6)
 		b.SetModulesOff(live.ModulesOff)

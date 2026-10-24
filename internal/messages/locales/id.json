@@ -616,6 +616,28 @@
     "irc.settingLabel.oidc_roles_claim": "Klaim peran",
     "irc.settingHelp.oidc_roles_claim": "Klaim di ID token yang berisi peran atau grup pengguna: roles (Logto), groups (authentik), atau jalur bertitik seperti realm_access.roles (Keycloak).",
     "irc.settingLabel.oidc_scopes": "Scope tambahan",
-    "irc.settingHelp.oidc_scopes": "Scope yang diminta selain openid, profile dan email, dipisahkan spasi. Kosong: roles jika peran admin diatur (yang dibutuhkan Logto)."
+    "irc.settingHelp.oidc_scopes": "Scope yang diminta selain openid, profile dan email, dipisahkan spasi. Kosong: roles jika peran admin diatur (yang dibutuhkan Logto).",
+    "irc.mfa.wrongCode": "kode itu tidak benar",
+    "irc.mfa.noFactor": "belum ada aplikasi autentikator yang disiapkan",
+    "irc.mfa.notStarted": "mulai siapkan aplikasi autentikator dulu",
+    "irc.mfa.alreadySet": "aplikasi autentikator sudah disiapkan — hapus dulu",
+    "irc.mfa.needsFactor": "siapkan aplikasi autentikator dulu",
+    "irc.mfa.policyOff": "faktor kedua untuk IRC dimatikan di server ini",
+    "irc.mfa.policyRequired": "server ini mewajibkan faktor kedua untuk IRC",
+    "irc.web.tooManyAttempts": "terlalu banyak percobaan gagal — coba lagi dalam beberapa menit",
+    "irc.mfa.challenge": "Faktor kedua diperlukan sebelum kamu masuk ke {network}: /msg {status} otp <kode>, dengan kode dari aplikasi autentikatormu (atau kode pemulihan).",
+    "irc.mfa.verifyFirst": "Kirim faktor keduamu dulu: /msg {status} otp <kode>",
+    "irc.usage.otp": "Penggunaan: otp <kode>",
+    "irc.mfa.wrongCodeTries": {
+      "other": "Kode itu tidak benar — sisa {count} percobaan."
+    },
+    "irc.mfa.tooManyTries": "Terlalu banyak kode salah — masuk lagi.",
+    "irc.mfa.timedOut": "Tidak ada faktor kedua dalam 2 menit — masuk lagi.",
+    "irc.mfa.verified": "Faktor kedua diterima.",
+    "irc.mfa.networkFailed": "Tidak bisa memasukkanmu ke {network}: {error}",
+    "irc.settingLabel.irc_mfa": "Faktor kedua untuk IRC",
+    "irc.settingHelp.irc_mfa": "Kapan klien IRC yang masuk dengan kata sandi juga butuh kode dari aplikasi autentikator: tidak pernah (off), jika pengguna memintanya (optional), atau selalu (required — pengguna tidak bisa mematikannya).",
+    "irc.settingLabel.irc_mfa_client_passwords": "Faktor kedua juga untuk kata sandi klien",
+    "irc.settingHelp.irc_mfa_client_passwords": "Kata sandi klien IRC acak, per perangkat dan bisa dicabut, jadi tidak butuh faktor kedua kecuali ini dinyalakan."
   }
 }
