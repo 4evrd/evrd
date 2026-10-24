@@ -522,12 +522,15 @@ func (b *Bouncer) AttachClient(userID int64, max int, info ClientInfo, close fun
 		b.clients[userID] = set
 	}
 	info.ID, info.Kind, info.Since = nextClientID(), "irc", time.Now()
+	if len(ghosts) > 0 && info.Software == "" {
+		info.Software = ghosts[0].info.Software
+	}
 	c := &client{close: close, info: info}
 	set[c] = struct{}{}
 	b.mu.Unlock()
 	b.seen(userID)
 	b.refreshAway(userID)
-	return &Attachment{b: b, userID: userID, c: c}, nil
+	return &Attachment{b: b, userID: userID, c: c, replaced: len(ghosts) > 0}, nil
 }
 
 // TrackStream registers an open web chat socket, so StopUser can close it

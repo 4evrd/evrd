@@ -49,7 +49,13 @@ type Attachment struct {
 	userID int64
 	c      *client
 	web    bool
+	// replaced is set when it took over its device's previous connection.
+	replaced bool
 }
+
+// Replaced reports whether the client took over its device's previous,
+// still attached connection (AttachClient).
+func (a *Attachment) Replaced() bool { return a.replaced }
 
 // ID is the client's id.
 func (a *Attachment) ID() string { return a.c.info.ID }

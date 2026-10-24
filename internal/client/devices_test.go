@@ -11,7 +11,7 @@ import (
 func (r *rig) replayedAs(pass string) (*ircClient, []string) {
 	r.t.Helper()
 	ic := r.attach(pass)
-	ic.expect(" 376 ")
+	ic.expect(" 004 ") // then the MOTD, or 422 when it's back within minutes
 	ic.send("PRIVMSG *status :uptime")
 	return ic, ic.until("evrd has been running")
 }

@@ -167,6 +167,9 @@
     "irc.web.jumpnetwork": "Di aplikasi web, pilih network dari halaman Network saja.",
     "irc.playback.badLines": "{lines} bukan jumlah baris.",
     "irc.playback.nothing": "Tidak ada yang tersimpan untuk {buffer}.",
+    "irc.playback.more": {
+      "other": "{count} baris lagi di {buffer} selama kamu pergi: /msg *status playback {buffer} {lines}"
+    },
     "irc.replayed": "Memutar ulang {count} baris dari {buffer}.",
     "irc.info.unlimited": "tanpa batas",
     "irc.info.account": "Akun {user} ({role}). Di {network} sebagai {nick}.",

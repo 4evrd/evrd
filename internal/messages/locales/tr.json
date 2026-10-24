@@ -175,6 +175,9 @@
     "irc.web.jumpnetwork": "Web uygulamasında bunun yerine Ağlar sayfasından bir ağ seç.",
     "irc.playback.badLines": "{lines} bir satır sayısı değil.",
     "irc.playback.nothing": "{buffer} için kayıtlı bir şey yok.",
+    "irc.playback.more": {
+      "other": "Sen yokken {buffer} içinde {count} satır daha var: /msg *status playback {buffer} {lines}"
+    },
     "irc.replayed": "{buffer} arabelleğinden {count} satır oynatıldı.",
     "irc.info.unlimited": "sınırsız",
     "irc.info.account": "Hesap {user} ({role}). {network} ağında {nick} olarak.",

@@ -167,6 +167,9 @@
     "irc.web.jumpnetwork": "ウェブアプリでは、代わりにネットワークページからネットワークを選んでください。",
     "irc.playback.badLines": "{lines} は行数ではありません。",
     "irc.playback.nothing": "{buffer} の保存はありません。",
+    "irc.playback.more": {
+      "other": "不在中の {buffer} にあと {count} 行あります: /msg *status playback {buffer} {lines}"
+    },
     "irc.replayed": "{buffer} の {count} 行を再生しました。",
     "irc.info.unlimited": "無制限",
     "irc.info.account": "アカウント {user}({role})。{network} に {nick} として接続中。",

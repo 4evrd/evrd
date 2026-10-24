@@ -89,7 +89,11 @@ type session struct {
 	// pinged when evrd asked it whether it's still there (liveness.go).
 	lastRead atomic.Int64
 	pinged   time.Time
-	fromIP   string // the client's address when another node forwarded it
+	// quick is set for a device back within resumeWithin of dropping: its
+	// welcome skips the message of the day and *status doesn't ask its
+	// VERSION again (resume.go).
+	quick  bool
+	fromIP string // the client's address when another node forwarded it
 	// locked is set while the client waits for its second factor (mfa.go):
 	// signed in, on no network, only *status answering.
 	locked *lockedSignIn
@@ -458,6 +462,9 @@ func (se *session) attach() bool {
 		se.unick = orElse(se.up.Nick(), chosen.Nick)
 	}
 	telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("ok"))
+	if !unbound {
+		se.quick = se.resuming(u.ID, chosen.Name)
+	}
 	se.welcome()
 	se.syncCaps()
 	se.signedIn(!unbound, username, chosen.Name, device)
@@ -511,6 +518,9 @@ func (se *session) signedIn(onNetwork bool, username, netName, device string) {
 	}
 	if se.caps["soju.im/bouncer-networks-notify"] {
 		se.listNetworks()
+	}
+	if se.quick {
+		return // the same device, back: no new activity entry, nothing new to ask
 	}
 	// Ask the client what it is (shown on the clients page and in the
 	// activity feed); the reply arrives as a NOTICE to *status.
@@ -567,6 +577,13 @@ func (se *session) welcome() {
 	se.send(fmt.Sprintf(":%s 003 %s :evrd bouncer", serverName, n))
 	se.send(fmt.Sprintf(":%s 004 %s %s evrd o o", serverName, n, serverName))
 	se.sendISupport()
+	if se.quick {
+		se.send(fmt.Sprintf(":%s 422 %s :MOTD skipped: back within %d minutes", serverName, n, int(resumeWithin/time.Minute)))
+		if se.nick != "" && se.nick != n {
+			se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.nick, se.nick, serverName, n))
+		}
+		return
+	}
 	se.send(fmt.Sprintf(":%s 375 %s :- %s message of the day -", serverName, n, serverName))
 	if se.up != nil {
 		se.send(fmt.Sprintf(":%s 372 %s :- %s", serverName, n, ircText(se.tr("welcome.motdNetwork", "network", se.net.Name, "host", se.net.Host, "port", se.net.Port))))
@@ -618,7 +635,10 @@ func (se *session) replayBacklog() {
 	p := se.playRules()
 	play := func(name string) {
 		if n := p.Lines(name); n > 0 {
-			se.playbackSince(name, n, p.From(name))
+			from := p.From(name)
+			if se.playbackSince(name, n, from) == n && p.AutoClears(name) && !from.IsZero() {
+				se.sayMore(name, n, from)
+			}
 		}
 	}
 	for _, ch := range se.up.Channels() {
