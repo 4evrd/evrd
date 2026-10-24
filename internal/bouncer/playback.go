@@ -22,6 +22,32 @@ type Playback struct {
 	// LastOn is when an IRC client was last on the network: now while one
 	// is, else when one last left (zero: never).
 	LastOn time.Time
+	// Device is the device asking (its client password; "" for a client
+	// without one), and DeviceAt how far it had been given the network's
+	// lines when it was last on (nil: never, or no device).
+	Device   string
+	DeviceAt *time.Time
+}
+
+// DevicePlayback is Playback for a device: its auto-clearing buffers play
+// from where it left off rather than from when any client was last on.
+func (b *Bouncer) DevicePlayback(n store.Network, u store.User, except, device string) (Playback, error) {
+	p, err := b.Playback(n, u, except)
+	if err != nil || device == "" {
+		return p, err
+	}
+	p.Device = device
+	at, ok, err := b.store.DevicePosition(context.Background(), n.ID, device)
+	if ok {
+		p.DeviceAt = &at
+	}
+	return p, err
+}
+
+// SetDevicePosition records that a device has been given a network's lines
+// up to at.
+func (b *Bouncer) SetDevicePosition(networkID int64, device string, at time.Time) error {
+	return b.store.SetDevicePosition(context.Background(), networkID, device, at)
 }
 
 // Playback loads a network's playback settings for u. except is an IRC
@@ -86,11 +112,21 @@ func (p Playback) ClearedAt(name string) time.Time {
 }
 
 // From is what a buffer plays back from: after its clear mark and, when it
-// auto-clears, after an IRC client was last on the network.
+// auto-clears, after the device was last given the network's lines — or,
+// for a client without a device, after an IRC client was last on the
+// network. A device's first visit gets the normal backlog.
 func (p Playback) From(name string) time.Time {
 	since := p.ClearedAt(name)
-	if p.AutoClears(name) && p.LastOn.After(since) {
-		since = p.LastOn
+	if !p.AutoClears(name) {
+		return since
+	}
+	switch {
+	case p.Device == "":
+		if p.LastOn.After(since) {
+			since = p.LastOn
+		}
+	case p.DeviceAt != nil && p.DeviceAt.After(since):
+		since = *p.DeviceAt
 	}
 	return since
 }

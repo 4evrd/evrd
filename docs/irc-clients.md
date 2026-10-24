@@ -145,8 +145,19 @@ Each channel and private message has a buffer, per network. When an IRC
 client attaches it gets each buffer's last lines (*Account → Bouncer*:
 playback lines; `setbuffer` for one network or one buffer). A buffer that
 **auto-clears** (*Account → Bouncer* for channels and for private messages;
-`autoclear` for one buffer) plays back only what came since an IRC client was
-last on that network — nothing while another client is on it, as with ZNC.
+`autoclear` for one buffer) plays back only what's new to the client:
+
+- a client that signs in with its own **IRC client password** is a device of
+  its own, and gets what came since *that device* was last on the network —
+  even while your other clients are attached and saw it. Its first visit gets
+  the normal backlog. When it left on its own (QUIT, or closing the
+  connection), it starts from then; when its connection dropped, from when evrd
+  last heard from it, so a phone that lost signal may see a few lines again
+  rather than miss any;
+- clients without one can't be told apart, so they share one position, as
+  with ZNC: what came since an IRC client was last on that network, nothing
+  while another client is on it. Give each device its own client password.
+
 `clearbuffer` starts a buffer over. The network's page in the web app has
 the same settings under **Playback**: lines per buffer for the network, each
 buffer's lines and what it plays back, what's waiting, and clearing. The lines stay in history either way: the

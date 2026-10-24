@@ -180,6 +180,7 @@ func (se *session) serve(ctx context.Context) {
 			return // still attached, as far as the next evrd is concerned
 		}
 		se.recordDrop()
+		se.savePosition()
 		se.markOnNetwork() // until now
 		if se.release != nil {
 			se.release()

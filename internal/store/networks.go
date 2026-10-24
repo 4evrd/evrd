@@ -75,8 +75,10 @@ func (r *NetworkRepository) DeleteNetwork(ctx context.Context, userID, id int64)
 		if res.Error != nil || res.RowsAffected == 0 {
 			return res.Error
 		}
-		if err := tx.Where("network_id = ?", id).Delete(&ReadMarker{}).Error; err != nil {
-			return err
+		for _, m := range []any{&ReadMarker{}, &DevicePosition{}} {
+			if err := tx.Where("network_id = ?", id).Delete(m).Error; err != nil {
+				return err
+			}
 		}
 		return tx.Where("network_id = ?", id).Delete(&BufferPlayback{}).Error
 	})

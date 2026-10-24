@@ -30,6 +30,7 @@ type gormStore struct {
 	MFARepositoryImpl
 	PendingSignInRepositoryImpl
 	ClientDisconnectRepositoryImpl
+	DevicePositionRepositoryImpl
 
 	db *DB
 }
@@ -69,7 +70,7 @@ func NewDatabase(dsn string) (*DB, error) {
 		return nil, err
 	}
 	hadPlayback := db.Migrator().HasTable(&BufferPlayback{})
-	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}, &PendingSignIn{}, &ClientDisconnect{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}, &PendingSignIn{}, &ClientDisconnect{}, &DevicePosition{}); err != nil {
 		return nil, err
 	}
 	if !hadPlayback {
@@ -101,6 +102,7 @@ func newStore(db *DB) *gormStore {
 		MFARepositoryImpl:              NewMFARepository(db),
 		PendingSignInRepositoryImpl:    NewPendingSignInRepository(db),
 		ClientDisconnectRepositoryImpl: NewClientDisconnectRepository(db),
+		DevicePositionRepositoryImpl:   NewDevicePositionRepository(db),
 		db:                             db,
 	}
 }

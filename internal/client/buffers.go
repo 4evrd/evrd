@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/store"
@@ -32,11 +33,45 @@ func (se *session) playRules() bouncer.Playback {
 	if se.att != nil {
 		except = se.att.ID()
 	}
-	p, err := se.srv.b.Playback(se.net, se.account(), except)
+	p, err := se.srv.b.DevicePlayback(se.net, se.account(), except, se.device())
 	if err != nil {
 		se.srv.log.Warn("load buffer playback", "network", se.net.ID, "err", err)
 	}
 	return p
+}
+
+// device is this client's device for playback positions: its client
+// password ("" without one: such clients can't be told apart).
+func (se *session) device() string {
+	if se.att == nil {
+		return ""
+	}
+	if d := se.att.Info().Device; d != "" {
+		return "password:" + d
+	}
+	return ""
+}
+
+// savePosition records how far this client's device has been given its
+// network's lines: up to now when it left on its own (QUIT, or closing the
+// connection), else up to when it was last heard from — a client that just
+// went quiet may have missed what was sent since, so it gets that again
+// rather than a gap.
+func (se *session) savePosition() {
+	key := se.device()
+	if key == "" || se.net.ID == 0 || se.web != nil || se.locked != nil {
+		return
+	}
+	se.dropMu.Lock()
+	reason := se.dropped
+	se.dropMu.Unlock()
+	at := time.Now()
+	if reason != bouncer.DropQuit && reason != bouncer.DropClosed && reason != "" {
+		at = time.Unix(0, se.lastRead.Load())
+	}
+	if err := se.srv.b.SetDevicePosition(se.net.ID, key, at); err != nil {
+		se.srv.log.Warn("save device position", "network", se.net.ID, "err", err)
+	}
 }
 
 // markOnNetwork records that this IRC client is (or was, until now) on its
