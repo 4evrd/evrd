@@ -4,6 +4,7 @@
   // lose signal from slow or congested links (issue #92).
   import { onMount } from 'svelte'
   import Icon from '$lib/components/Icon.svelte'
+  import Select from '$lib/components/Select.svelte'
   import { api } from '$lib/api.js'
   import { session } from '$lib/session.svelte.js'
   import { dur, ago } from '$lib/format.js'
@@ -30,8 +31,12 @@
     ping_timeout: 'var(--signal)', reset: 'var(--bad)', write_stalled: 'var(--warn)', closed: 'var(--nick)',
     quit: 'var(--ok)', replaced: 'var(--cyan)', client_limit: 'var(--faint)', evrd_stopping: 'var(--faint)', removed: 'var(--faint)',
   }
-  const reasons = $derived(d ? d.order.filter((r) => d.reasons[r]) : [])
-  const most = $derived(reasons.length ? Math.max(...reasons.map((r) => d.reasons[r])) : 1)
+  // Every reason, always, in the server's order: what didn't happen tells
+  // as much as what did. seen is the ones that did, for the gap legend.
+  const reasons = $derived(d ? d.order : [])
+  const seen = $derived(reasons.filter((r) => d.reasons[r]))
+  const most = $derived(Math.max(1, ...reasons.map((r) => d.reasons[r] || 0)))
+  const sortOptions = $derived([{ value: 'drops', label: t('admin.drops.sortDrops') }, ...reasons.map((r) => ({ value: r, label: t('clients.reason.' + r) }))])
   const buckets = $derived(d ? d.buckets.map((b, i) => ({ label: bucketLabel(i), counts: b, total: Object.values(b).reduce((a, n) => a + n, 0) })) : [])
   const bucketMax = $derived(Math.max(1, ...buckets.map((b) => b.total)))
   function bucketLabel(i) {
@@ -73,9 +78,9 @@
         <ul class="reasons">
           {#each reasons as r (r)}
             {@const g = d.gaps[r] || {}}
-            <li data-testid="reason-{r}">
-              <div class="rtop"><span class="rname"><i style="background:{COLOR[r]}" aria-hidden="true"></i>{t('clients.reason.' + r)}</span><b class="mono">{d.reasons[r]}</b></div>
-              <span class="rbar" aria-hidden="true"><span style="width:{pct(d.reasons[r], most)};background:{COLOR[r]}"></span></span>
+            <li data-testid="reason-{r}" class:none={!d.reasons[r]}>
+              <div class="rtop"><span class="rname"><i style="background:{COLOR[r]}" aria-hidden="true"></i>{t('clients.reason.' + r)}</span><b class="mono">{d.reasons[r] || 0}</b></div>
+              <span class="rbar" aria-hidden="true"><span style="width:{pct(d.reasons[r] || 0, most)};background:{COLOR[r]}"></span></span>
               <p class="desc rmeans">{t('admin.drops.means.' + r)}</p>
               <p class="sub">{g.back ? t('admin.drops.backAfter', { median: dur(Math.round(g.median)), p90: dur(Math.round(g.p90)) }) : ''}{g.back && g.gone ? ' · ' : ''}{g.gone ? t('admin.drops.notBackN', { count: g.gone }) : ''}</p>
             </li>
@@ -105,19 +110,16 @@
           </tbody>
         </table>
         <div class="legend" style="margin-top:var(--s3)">
-          {#each reasons as r}<span><i style="--c:{COLOR[r]}"></i>{t('clients.reason.' + r)}</span>{/each}
+          {#each seen as r}<span><i style="--c:{COLOR[r]}"></i>{t('clients.reason.' + r)}</span>{/each}
         </div>
       </section>
 
       <section class="card wide" aria-labelledby="dr-top" data-testid="drops-top">
         <div class="section-head" style="margin-bottom:var(--s3)">
           <div class="od-stack"><span class="caps">{t('admin.drops.topCaps')}</span><h2 id="dr-top">{t('admin.drops.topTitle')}</h2></div>
-          <label class="sortby"><span class="sub">{t('admin.drops.sortBy')}</span>
-            <select class="input" value={sort} onchange={(e) => pickSort(e.currentTarget.value)} data-testid="drops-sort">
-              <option value="drops">{t('admin.drops.sortDrops')}</option>
-              {#each reasons as r}<option value={r}>{t('clients.reason.' + r)}</option>{/each}
-            </select>
-          </label>
+          <div class="sortby"><label class="sub" for="drops-sort">{t('admin.drops.sortBy')}</label>
+            <Select id="drops-sort" testid="drops-sort" value={sort} options={sortOptions} onchange={pickSort} />
+          </div>
         </div>
         <div class="table-wrap">
           <table class="top">
@@ -161,7 +163,8 @@
   .num { text-align: right; }
   .mono { font-family: var(--font-mono); font-size: var(--fs-sm); }
   .sortby { display: inline-flex; align-items: center; gap: var(--s2); }
-  .sortby .input { width: auto; }
+  .sortby :global(.dd) { min-width: 200px; }
+  .reasons li.none { opacity: 0.55; }
   .table-wrap { overflow-x: auto; }
   .top { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
   .top th { font-size: var(--fs-xs); color: var(--muted); font-weight: 500; text-align: left; padding: var(--s2) var(--s3); white-space: nowrap; }

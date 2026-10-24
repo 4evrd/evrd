@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ADMIN, ADMIN_PASS, login, confirm, freshUser, session, addNetwork, uniq, BASE } from './helpers.js'
+import { ADMIN, ADMIN_PASS, login, confirm, freshUser, session, addNetwork, uniq, BASE, choose } from './helpers.js'
 import { IRC } from './irc.js'
 
 test.beforeEach(async ({ page }) => { await login(page, ADMIN, ADMIN_PASS) })
@@ -362,9 +362,11 @@ test('IRC client drops across every account: why, how long, and which devices', 
     }).toPass({ timeout: 20000 })
     await expect(page.getByTestId('reason-quit')).toContainText('Left on purpose: the user or the client said QUIT.')
     await expect(page.getByTestId('drops-gaps')).toContainText('not back')
+    // every reason is listed, even ones that didn't happen
+    await expect(page.locator('[data-testid^="reason-"]')).toHaveCount(9)
 
     // by a reason, then over 30 days, then on to the user
-    await page.getByTestId('drops-sort').selectOption('quit')
+    await choose(page, page.getByTestId('drops-sort').getByRole('combobox'), 'quit')
     await expect(mine()).toContainText('1 / 1')
     await page.getByRole('tab', { name: '30 days' }).click()
     await expect(page.getByRole('tab', { name: '30 days' })).toHaveAttribute('aria-selected', 'true')
