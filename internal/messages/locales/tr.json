@@ -610,6 +610,29 @@
     "irc.settingLabel.oidc_roles_claim": "Roller claim'i",
     "irc.settingHelp.oidc_roles_claim": "Kullanıcının rollerini ya da gruplarını içeren ID token claim'i: roles (Logto), groups (authentik) ya da realm_access.roles gibi noktalı bir yol (Keycloak).",
     "irc.settingLabel.oidc_scopes": "Ek kapsamlar",
-    "irc.settingHelp.oidc_scopes": "openid, profile ve email dışında istenecek kapsamlar, boşlukla ayrılmış. Boş: bir yönetici rolü ayarlıysa roles (Logto'nun ihtiyacı)."
+    "irc.settingHelp.oidc_scopes": "openid, profile ve email dışında istenecek kapsamlar, boşlukla ayrılmış. Boş: bir yönetici rolü ayarlıysa roles (Logto'nun ihtiyacı).",
+    "irc.mfa.wrongCode": "bu kod doğru değil",
+    "irc.mfa.noFactor": "kurulu bir doğrulama uygulaması yok",
+    "irc.mfa.notStarted": "önce doğrulama uygulamasını kurmaya başla",
+    "irc.mfa.alreadySet": "bir doğrulama uygulaması zaten kurulu — önce onu kaldır",
+    "irc.mfa.needsFactor": "önce bir doğrulama uygulaması kur",
+    "irc.mfa.policyOff": "bu sunucuda IRC için ikinci faktör kapalı",
+    "irc.mfa.policyRequired": "bu sunucu IRC için ikinci faktör istiyor",
+    "irc.web.tooManyAttempts": "çok fazla başarısız deneme — birkaç dakika sonra yeniden dene",
+    "irc.mfa.challenge": "{network} ağına girmeden önce ikinci faktör gerekiyor: /msg {status} otp <kod>, doğrulama uygulamandaki bir kodla (ya da bir kurtarma koduyla).",
+    "irc.mfa.verifyFirst": "Önce ikinci faktörünü gönder: /msg {status} otp <kod>",
+    "irc.usage.otp": "Kullanım: otp <kod>",
+    "irc.mfa.wrongCodeTries": {
+      "one": "Bu kod doğru değil — {count} deneme hakkın kaldı.",
+      "other": "Bu kod doğru değil — {count} deneme hakkın kaldı."
+    },
+    "irc.mfa.tooManyTries": "Çok fazla yanlış kod — yeniden giriş yap.",
+    "irc.mfa.timedOut": "2 dakika içinde ikinci faktör gelmedi — yeniden giriş yap.",
+    "irc.mfa.verified": "İkinci faktör kabul edildi.",
+    "irc.mfa.networkFailed": "Seni {network} ağına alamadım: {error}",
+    "irc.settingLabel.irc_mfa": "IRC için ikinci faktör",
+    "irc.settingHelp.irc_mfa": "Parolayla giriş yapan IRC istemcilerinin ne zaman bir doğrulama uygulamasından kod da vermesi gerektiği: hiçbir zaman (off), kullanıcı isterse (optional) ya da her zaman (required — kullanıcılar kapatamaz).",
+    "irc.settingLabel.irc_mfa_client_passwords": "İstemci parolalarında da ikinci faktör",
+    "irc.settingHelp.irc_mfa_client_passwords": "IRC istemci parolaları rastgele, cihaza özel ve iptal edilebilir; bu açık olmadıkça ikinci faktör gerekmez."
   }
 }

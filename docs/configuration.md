@@ -38,6 +38,7 @@ are stored in the database and win over the file (see below).
 | `oidc_issuer`, `oidc_client_id`, `oidc_client_secret` (`EVRD_OIDC_CLIENT_SECRET`) | — | single sign-on with any OpenID Connect provider |
 | `oidc_label`, `oidc_auto_create`, `oidc_link_existing`, `oidc_admin_role` | `single sign-on`, `yes`, `no`, — | sign-in button text and account rules for SSO |
 | `oidc_roles_claim`, `oidc_scopes` | `roles`, — | where the roles for `oidc_admin_role` are in the ID token (a claim, or a dotted path), and extra scopes to ask for; see [providers](#oidc-providers) |
+| `irc_mfa`, `irc_mfa_client_passwords` | `optional`, `no` | a second factor (authenticator app) for IRC sign-ins with a password: `off`, `optional` (each user's choice on *Account → Security*) or `required` (everyone; users can't turn it off); `irc_mfa_client_passwords` asks for it with IRC client passwords too. See [the IRC clients guide](irc-clients.md#a-second-factor) |
 | `sso_irc_password` | `off` | let SSO accounts use their provider password in IRC clients: `password_grant`, `ldap` or `logto`, each with settings of its own; see [SSO passwords in IRC clients](#sso-passwords-in-irc-clients) |
 | `max_networks`, `max_clients`, `backlog_lines` | `0`, `0`, `2000` | per-user defaults (0 = unlimited); admins override per user |
 | `connect_rate` | `5` | most new connections per second to one IRC server host, per node |

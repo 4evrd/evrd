@@ -281,7 +281,8 @@ type heldState struct {
 
 // saveState gives the holder the client's state, if it changed.
 func (se *session) saveState() {
-	if se.held == nil || !se.registered || se.att == nil {
+	// a client waiting for its second factor signs in again instead
+	if se.held == nil || !se.registered || se.att == nil || se.locked != nil {
 		return
 	}
 	info := se.att.Info()
@@ -376,9 +377,10 @@ func (se *session) restore(raw []byte) error {
 }
 
 // heldOver reports whether the client stays with the holder for the next
-// evrd: evrd is stopping, and the client was signed in.
+// evrd: evrd is stopping, and the client was signed in (not still waiting
+// for its second factor).
 func (se *session) heldOver(ctx context.Context) bool {
-	return se.held != nil && ctx.Err() != nil && se.att != nil
+	return se.held != nil && ctx.Err() != nil && se.att != nil && se.locked == nil
 }
 
 // closeConn ends the session's connection — but a client held over is

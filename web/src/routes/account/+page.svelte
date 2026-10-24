@@ -5,6 +5,7 @@
   import Switch from '$lib/components/Switch.svelte'
   import Select from '$lib/components/Select.svelte'
   import ChangePassword from '$lib/components/ChangePassword.svelte'
+  import SecondFactor from '$lib/components/SecondFactor.svelte'
   import BouncerSettings from '$lib/components/BouncerSettings.svelte'
   import Msg from '$lib/components/Msg.svelte'
   import PackUpload from '$lib/components/PackUpload.svelte'
@@ -191,6 +192,7 @@
         <div class="od-stack"><h2>{t('account.password')}</h2><p class="desc">{me.hasPassword ? t('account.passwordHelp') : t('account.passwordSso', { sso: session.config.ssoLabel })}</p></div>
         {#if me.hasPassword}<ChangePassword username={me.username} />{:else}<div><a class="btn" href="/clients"><Icon name="key" />{t('account.clientPasswords')}</a></div>{/if}
       </div>
+      <SecondFactor />
     </div>
   {:else if tab === 'sessions'}
     <div role="tabpanel" id="sessions" aria-labelledby="t-sessions" class="card">

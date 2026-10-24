@@ -637,6 +637,29 @@
     "irc.settingLabel.oidc_roles_claim": "Claim de roles",
     "irc.settingHelp.oidc_roles_claim": "El claim del ID token con los roles o grupos del usuario: roles (Logto), groups (authentik), o una ruta con puntos como realm_access.roles (Keycloak).",
     "irc.settingLabel.oidc_scopes": "Scopes adicionales",
-    "irc.settingHelp.oidc_scopes": "Scopes que pedir además de openid, profile y email, separados por espacios. Vacío: roles cuando hay un rol de admin (lo que necesita Logto)."
+    "irc.settingHelp.oidc_scopes": "Scopes que pedir además de openid, profile y email, separados por espacios. Vacío: roles cuando hay un rol de admin (lo que necesita Logto).",
+    "irc.mfa.wrongCode": "ese código no es correcto",
+    "irc.mfa.noFactor": "no hay ninguna app de autenticación configurada",
+    "irc.mfa.notStarted": "empieza primero a configurar la app de autenticación",
+    "irc.mfa.alreadySet": "ya hay una app de autenticación configurada — quítala primero",
+    "irc.mfa.needsFactor": "configura primero una app de autenticación",
+    "irc.mfa.policyOff": "los segundos factores para IRC están desactivados en este servidor",
+    "irc.mfa.policyRequired": "este servidor exige un segundo factor para IRC",
+    "irc.web.tooManyAttempts": "demasiados intentos fallidos — vuelve a intentarlo en unos minutos",
+    "irc.mfa.challenge": "Hace falta un segundo factor antes de entrar en {network}: /msg {status} otp <código>, con un código de tu app de autenticación (o un código de recuperación).",
+    "irc.mfa.verifyFirst": "Envía primero tu segundo factor: /msg {status} otp <código>",
+    "irc.usage.otp": "Uso: otp <código>",
+    "irc.mfa.wrongCodeTries": {
+      "one": "Ese código no es correcto — te queda {count} intento.",
+      "other": "Ese código no es correcto — te quedan {count} intentos."
+    },
+    "irc.mfa.tooManyTries": "Demasiados códigos incorrectos — vuelve a iniciar sesión.",
+    "irc.mfa.timedOut": "Ningún segundo factor en 2 minutos — vuelve a iniciar sesión.",
+    "irc.mfa.verified": "Segundo factor aceptado.",
+    "irc.mfa.networkFailed": "No se pudo ponerte en {network}: {error}",
+    "irc.settingLabel.irc_mfa": "Segundo factor para IRC",
+    "irc.settingHelp.irc_mfa": "Cuándo los clientes IRC que entran con contraseña necesitan además un código de una app de autenticación: nunca (off), cuando el usuario lo pide (optional) o siempre (required — los usuarios no pueden desactivarlo).",
+    "irc.settingLabel.irc_mfa_client_passwords": "Segundo factor también con contraseñas de cliente",
+    "irc.settingHelp.irc_mfa_client_passwords": "Las contraseñas de cliente IRC son aleatorias, por dispositivo y revocables, así que no necesitan un segundo factor salvo que esto esté activado."
   }
 }

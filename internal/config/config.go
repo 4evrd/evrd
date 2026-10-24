@@ -370,6 +370,12 @@ type Auth struct {
 	LogtoM2MClientID     string
 	LogtoM2MClientSecret string
 	LogtoM2MResource     string
+
+	// IRCMFA is when IRC sign-ins need a second factor: "off", "optional"
+	// (each user's choice) or "required" (everyone's, whatever they chose).
+	// IRCMFAClientPasswords asks for it with IRC client passwords too.
+	IRCMFA                string
+	IRCMFAClientPasswords bool
 }
 
 // OIDCEnabled reports whether SSO sign-in is configured.
@@ -428,6 +434,7 @@ func Default() *Config {
 			SSOPasswordLogin: "username",
 			LDAPUserFilter:   "(uid={username})",
 			LDAPLogin:        "username",
+			IRCMFA:           "optional",
 		},
 		Limits:   Limits{MaxNetworks: 0, MaxClients: 0, BacklogLines: 2000},
 		Outbound: Outbound{ConnectRate: 5, PreferIPv6: true},
@@ -684,6 +691,10 @@ func (c *Config) set(key, val string) error {
 		c.Auth.LDAPUserFilter = val
 	case "ldap_login":
 		c.Auth.LDAPLogin, err = oneOf(val, "username", "subject")
+	case "irc_mfa":
+		c.Auth.IRCMFA, err = oneOf(val, "off", "optional", "required")
+	case "irc_mfa_client_passwords":
+		c.Auth.IRCMFAClientPasswords, err = parseBool(val)
 	case "logto_m2m_client_id":
 		c.Auth.LogtoM2MClientID = val
 	case "logto_m2m_client_secret":

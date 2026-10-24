@@ -616,6 +616,28 @@
     "irc.settingLabel.oidc_roles_claim": "ロールのクレーム",
     "irc.settingHelp.oidc_roles_claim": "ユーザーのロールやグループが入った ID トークンのクレーム: roles（Logto）、groups（authentik）、または realm_access.roles（Keycloak）のようなドット区切りのパス。",
     "irc.settingLabel.oidc_scopes": "追加のスコープ",
-    "irc.settingHelp.oidc_scopes": "openid、profile、email のほかに要求するスコープ（スペース区切り）。空: 管理者ロールが設定されていれば roles（Logto に必要）。"
+    "irc.settingHelp.oidc_scopes": "openid、profile、email のほかに要求するスコープ（スペース区切り）。空: 管理者ロールが設定されていれば roles（Logto に必要）。",
+    "irc.mfa.wrongCode": "そのコードは正しくありません",
+    "irc.mfa.noFactor": "認証アプリが設定されていません",
+    "irc.mfa.notStarted": "まず認証アプリの設定を始めてください",
+    "irc.mfa.alreadySet": "認証アプリはすでに設定されています。先に削除してください",
+    "irc.mfa.needsFactor": "先に認証アプリを設定してください",
+    "irc.mfa.policyOff": "このサーバーでは IRC の二要素認証がオフになっています",
+    "irc.mfa.policyRequired": "このサーバーでは IRC に二要素認証が必要です",
+    "irc.web.tooManyAttempts": "失敗が多すぎます。数分後にもう一度お試しください",
+    "irc.mfa.challenge": "{network} に入る前に二要素認証が必要です: /msg {status} otp <コード>（認証アプリのコード、またはリカバリーコード）。",
+    "irc.mfa.verifyFirst": "先に二要素認証のコードを送ってください: /msg {status} otp <コード>",
+    "irc.usage.otp": "使い方: otp <コード>",
+    "irc.mfa.wrongCodeTries": {
+      "other": "そのコードは正しくありません。あと {count} 回試せます。"
+    },
+    "irc.mfa.tooManyTries": "間違ったコードが多すぎます。もう一度サインインしてください。",
+    "irc.mfa.timedOut": "2 分以内に二要素認証がありませんでした。もう一度サインインしてください。",
+    "irc.mfa.verified": "二要素認証を確認しました。",
+    "irc.mfa.networkFailed": "{network} に接続できませんでした: {error}",
+    "irc.settingLabel.irc_mfa": "IRC の二要素認証",
+    "irc.settingHelp.irc_mfa": "パスワードでサインインする IRC クライアントに、認証アプリのコードも求めるタイミング: しない（off）、ユーザーが希望したとき（optional）、常に（required — ユーザーはオフにできません）。",
+    "irc.settingLabel.irc_mfa_client_passwords": "クライアントパスワードでも二要素認証",
+    "irc.settingHelp.irc_mfa_client_passwords": "IRC クライアントパスワードはランダムで端末ごと、取り消しもできるため、これがオンでない限り二要素認証は不要です。"
   }
 }

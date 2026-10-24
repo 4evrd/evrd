@@ -27,6 +27,7 @@ type gormStore struct {
 	SettingRepositoryImpl
 	CacheRepositoryImpl
 	LanguagePackRepositoryImpl
+	MFARepositoryImpl
 
 	db *DB
 }
@@ -66,7 +67,7 @@ func NewDatabase(dsn string) (*DB, error) {
 		return nil, err
 	}
 	hadPlayback := db.Migrator().HasTable(&BufferPlayback{})
-	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}); err != nil {
 		return nil, err
 	}
 	if !hadPlayback {
@@ -95,6 +96,7 @@ func newStore(db *DB) *gormStore {
 		SettingRepositoryImpl:        NewSettingRepository(db),
 		CacheRepositoryImpl:          NewCacheRepository(db),
 		LanguagePackRepositoryImpl:   NewLanguagePackRepository(db),
+		MFARepositoryImpl:            NewMFARepository(db),
 		db:                           db,
 	}
 }

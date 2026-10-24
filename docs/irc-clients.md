@@ -14,6 +14,33 @@ port:     6697 (TLS)              — accept the certificate if evrd made a self
 password: mira/libera:<password>  (user/network:password)
 ```
 
+### A second factor
+
+With an authenticator app set up on *Account → Security*, IRC sign-ins with your
+password can also ask for a code from it — when you turn on *Require a second
+factor for IRC*, or always if the admin requires it (`irc_mfa required`).
+Either send the code after the password:
+
+```
+password: mira/libera:<password>:123456      (or a recovery code: …:<password>:abcd-efgh)
+```
+
+or sign in as usual: evrd registers the client on no network, `*status` asks for
+the code, and nothing else works until it's in:
+
+```
+<*status> A second factor is needed before you're on libera: /msg *status otp <code>, …
+/msg *status otp 123456
+<*status> Second factor accepted.
+```
+
+You have two minutes and five tries; then the connection closes and you sign
+in again. A client waiting for its code isn't kept through an evrd restart.
+Recovery codes (ten, shown once when the app is set up) work instead of a code,
+once each. IRC client passwords don't need a second factor (they're random, per
+device and revocable) unless the admin sets `irc_mfa_client_passwords yes`. A
+client the connection holder kept through a restart isn't asked again.
+
 On connect you get the welcome burst, your channels (with names/topic), backlog
 replay, and live traffic. `/join` and `/part` update the network's saved
 channel list, `/nick` changes your nick upstream, and your own notices and

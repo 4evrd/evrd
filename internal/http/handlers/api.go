@@ -11,6 +11,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"github.com/4evrd/evrd/internal/mfa"
 	"io"
 	"log/slog"
 	"net/http"
@@ -56,6 +57,7 @@ type Handlers struct {
 	langs   languages.LanguageServiceImpl
 	msgs    messages.MessageServiceImpl
 	state   cluster.StateServiceImpl
+	mfa     mfa.MFAServiceImpl // nil: no second factors
 	cfgp    atomic.Pointer[config.Config]
 	// settings, when set, edits the server settings (Admin → Settings).
 	settings *settings.Manager
@@ -74,13 +76,15 @@ type Services struct {
 	// Messages is evrd's IRC texts; nil: ones on Languages' packs.
 	Messages messages.MessageServiceImpl
 	Cluster  cluster.StateServiceImpl // nodes and leases (with or without a cluster)
+	// MFA is users' second factors for IRC sign-ins; nil: none (tests).
+	MFA mfa.MFAServiceImpl
 }
 
 // New makes the handlers on b and svc; status, when set, runs *status
 // commands for the web chat.
 func New(b *bouncer.Bouncer, svc Services, cfg *config.Config, status StatusRunner, log *slog.Logger) *Handlers {
 	s := &Handlers{
-		b: b, acc: svc.Accounts, auth: svc.Auth, langs: svc.Languages, msgs: svc.Messages, state: svc.Cluster, status: status, log: log,
+		b: b, acc: svc.Accounts, auth: svc.Auth, langs: svc.Languages, msgs: svc.Messages, state: svc.Cluster, mfa: svc.MFA, status: status, log: log,
 		up: websocket.Upgrader{CheckOrigin: middleware.CheckWebSocketOrigin},
 	}
 	if s.msgs == nil {
@@ -184,6 +188,9 @@ func (s *Handlers) fail(w http.ResponseWriter, r *http.Request, err error) {
 		s.say(w, r, http.StatusForbidden, "web.suspended")
 	case errors.Is(err, bouncer.ErrNotOwner):
 		s.say(w, r, http.StatusServiceUnavailable, "web.moving")
+	case errors.As(err, new(*messages.Error)):
+		// something the user can fix, said in words (a wrong code…)
+		writeErr(w, http.StatusUnprocessableEntity, p.Say(err))
 	default:
 		s.log.Error("api", "err", err)
 		s.say(w, r, http.StatusInternalServerError, "web.failed")

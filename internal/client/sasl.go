@@ -57,12 +57,12 @@ func (se *session) authenticate(m irc.Message) {
 		}
 		login, password := parts[1], parts[2]
 		username, network, _ := strings.Cut(login, "/")
-		u, device, code, why := se.signIn(username, network, password)
+		u, device, otp, code, why := se.signIn(username, network, password)
 		if code != "" {
 			reply("904", ":"+why)
 			return
 		}
-		se.saslUser, se.saslDevice = u, device
+		se.saslUser, se.saslDevice, se.saslOTP = u, device, otp
 		// attach (here, or on the node another one forwards this client
 		// to) takes it from PASS, first: the owner registers the client as
 		// soon as NICK and USER are in

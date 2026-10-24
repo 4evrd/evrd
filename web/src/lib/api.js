@@ -54,6 +54,13 @@ export const api = {
   sessions: () => req('GET', '/api/me/sessions'),
   revokeSession: (id) => req('DELETE', `/api/me/sessions/${encodeURIComponent(id)}`),
   revokeOtherSessions: () => req('POST', '/api/me/sessions/revoke-others'),
+  // second factors for IRC sign-ins
+  mfa: () => req('GET', '/api/me/mfa'),
+  updateMFA: (patch) => req('PATCH', '/api/me/mfa', patch),
+  startTOTP: () => req('POST', '/api/me/mfa/totp'),
+  confirmTOTP: (code) => req('POST', '/api/me/mfa/totp/confirm', { code }),
+  removeTOTP: (code) => req('POST', '/api/me/mfa/totp/remove', { code }),
+  newRecoveryCodes: (code) => req('POST', '/api/me/mfa/recovery', { code }),
   clientPasswords: () => req('GET', '/api/me/client-passwords'),
   createClientPassword: (name) => req('POST', '/api/me/client-passwords', { name }),
   deleteClientPassword: (id) => req('DELETE', `/api/me/client-passwords/${id}`),
