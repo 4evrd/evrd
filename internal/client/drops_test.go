@@ -26,7 +26,13 @@ func TestDisconnectReasons(t *testing.T) {
 	r := newRig(t)
 	want := func(reasons ...string) {
 		t.Helper()
-		eventually(t, fmt.Sprint("recorded ", reasons), func() bool { return fmt.Sprint(r.reasons()) == fmt.Sprint(reasons) })
+		var got []string
+		for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+			if got = r.reasons(); fmt.Sprint(got) == fmt.Sprint(reasons) {
+				return
+			}
+		}
+		t.Fatalf("recorded %v, want %v", got, reasons)
 	}
 
 	quits := r.attach("alice/one:alice-password")

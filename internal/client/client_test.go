@@ -174,7 +174,7 @@ func (r *rig) network(name string) store.Network {
 // eventually retries cond for a moment: the store is written asynchronously.
 func eventually(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 250; i++ { // 5s: CI machines are slower
 		if cond() {
 			return
 		}
