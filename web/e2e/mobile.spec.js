@@ -24,6 +24,7 @@ test('the IRC clients page fits a phone, on every client’s tab', async ({ page
   await expect(page.getByText('A laptop with a fairly long name')).toBeVisible()
   for (const tab of ['HexChat', 'irssi', 'WeeChat', 'Other']) {
     const t = page.getByRole('tab', { name: tab })
+    await t.scrollIntoViewIfNeeded() // below the sign-in switch on a phone
     await expect(t).toBeInViewport({ ratio: 1 })
     await t.click()
     await fits(page)
