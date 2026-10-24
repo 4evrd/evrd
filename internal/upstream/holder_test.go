@@ -82,6 +82,14 @@ func TestRestartKeepsTheLinkThroughTheHolder(t *testing.T) {
 	if c2.Topic("#c") != "the topic" {
 		eventually(t, "topic rebuilt", func() bool { return c2.Topic("#c") == "the topic" })
 	}
+	// what evrd knows of the channel is whole again, to answer clients from
+	eventually(t, "the channel known whole again", func() bool {
+		st, ok := c2.ChannelState("#c")
+		return ok && st.NamesKnown && st.TopicKnown && st.Topic == "the topic"
+	})
+	if !log.Has("MODE #c") {
+		t.Fatal("the resume didn't ask for the channel's modes")
+	}
 	if c2.Nick() != "alice" {
 		t.Fatalf("nick %q", c2.Nick())
 	}

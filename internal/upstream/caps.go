@@ -164,6 +164,10 @@ func (c *Conn) renamed(old, nu string) {
 		delete(c.topics, lo)
 		c.topics[ln] = t
 	}
+	if ci, ok := c.info[lo]; ok {
+		delete(c.info, lo)
+		c.info[ln] = ci
+	}
 	saved := append([]string(nil), c.saved...)
 	c.mu.Unlock()
 	if changed && c.onChannels != nil {

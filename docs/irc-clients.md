@@ -77,7 +77,11 @@ device and revocable) unless the admin sets `irc_mfa_client_passwords yes`. A
 client the connection holder kept through a restart isn't asked again.
 
 On connect you get the welcome burst, your channels (with names/topic), backlog
-replay, and live traffic. `/join` and `/part` update the network's saved
+replay, and live traffic. evrd keeps each channel's members, topic and modes
+up to date from what the network sends, so the channels on connect, and
+`/names`, `/topic` and `/mode` about a channel you're in, are answered by evrd
+straight away rather than asking the network each time (setting a topic or
+modes, and ban lists, still go to the network). `/join` and `/part` update the network's saved
 channel list, `/nick` changes your nick upstream, and your own notices and
 `/me` actions are saved and shown on your other clients like messages. evrd
 offers the [IRCv3](#ircv3) capabilities below.

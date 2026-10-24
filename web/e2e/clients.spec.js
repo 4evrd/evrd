@@ -136,6 +136,31 @@ test('a native client gets backlog and stays in sync with the web', async ({ pag
   } finally { await them.cleanup() }
 })
 
+// #96: once evrd knows a channel, an attaching client's JOIN burst and its
+// MODE, TOPIC and NAMES queries are answered by evrd, not the network.
+test('channels on attach and the usual queries come from evrd', async () => {
+  const chan = net.channels?.[0] || (await u.api.get('/api/networks'))[0].channels[0]
+  const esc = chan.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  await (await attach()).waitFor(new RegExp(` 366 \\S+ ${esc} `)) // connects the network
+  let c
+  await expect.poll(async () => {
+    c?.close()
+    c = await attach()
+    return (await c.waitFor(new RegExp(` 366 \\S+ ${esc} `))).startsWith(':evrd 366 ')
+  }, { timeout: 15000 }).toBe(true)
+  clients.push(c)
+  // a channel without a topic: no "No topic is set" on attach
+  expect(c.lines.some((l) => / 331 /.test(l))).toBe(false)
+  await expect.poll(async () => {
+    c.send(`MODE ${chan}`)
+    return (await c.next(new RegExp(` 324 \\S+ ${esc} `))).startsWith(':evrd 324 ')
+  }, { timeout: 15000 }).toBe(true)
+  c.send(`TOPIC ${chan}`)
+  await c.next(new RegExp(`^:evrd 331 \\S+ ${esc} `))
+  c.send(`NAMES ${chan}`)
+  await c.next(new RegExp(`^:evrd 353 \\S+ = ${esc} :.*${u.name}`))
+})
+
 test('attach errors', async () => {
   const bad = await attach({ password: 'wrong-password' })
   await bad.waitFor(/ 464 .*Invalid credentials/)

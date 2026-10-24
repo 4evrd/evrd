@@ -74,6 +74,12 @@ var ErrPingTimeout = errors.New("ping timeout")
 type Member struct {
 	Nick   string `json:"nick"`
 	Prefix string `json:"prefix"`
+	// Prefixes are all its status prefixes, highest first (only the highest
+	// when the network lacks multi-prefix); User and Host its user@host,
+	// when known (userhost-in-names, its JOIN, CHGHOST).
+	Prefixes string `json:"-"`
+	User     string `json:"-"`
+	Host     string `json:"-"`
 }
 
 // Health is a connection's link state, for the web app and metrics.
@@ -150,6 +156,11 @@ type Conn struct {
 	// under every channel the user shared with that nick.
 	members map[string]map[string]*Member
 	topics  map[string]string // lowercased channel -> topic
+	// info is the rest of what evrd knows of each joined channel (see
+	// chanstate.go), by lowercased channel.
+	info map[string]*chanInfo
+	// chanModes are the server's ISUPPORT CHANMODES groups.
+	chanModes [4]string
 	// prefixes maps channel modes to their nick prefix, highest first, from
 	// the server's ISUPPORT PREFIX (default (ov)@+).
 	prefixModes string
@@ -308,6 +319,8 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		channels:     map[string]bool{},
 		members:      map[string]map[string]*Member{},
 		topics:       map[string]string{},
+		info:         map[string]*chanInfo{},
+		chanModes:    defaultChanModes,
 		prefixModes:  "ov",
 		prefixChars:  "@+",
 		health:       Health{Status: StatusDisconnected, Lag: -1},
@@ -617,6 +630,8 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	c.channels = map[string]bool{}
 	c.members = map[string]map[string]*Member{}
 	c.topics = map[string]string{}
+	c.info = map[string]*chanInfo{}
+	c.chanModes = defaultChanModes
 	c.mu.Unlock()
 
 	// Measure lag every pingEvery; the read deadline below turns silence into
@@ -719,6 +734,7 @@ func (c *Conn) resume(r *links.Resumed) {
 	c.health.Attempts, c.health.RetryIn, c.health.Lag = 0, 0, -1
 	for _, ch := range saved {
 		c.channels[ch] = true
+		c.newChanInfo(ch, false)
 	}
 	pending := c.pending
 	c.pending = nil
@@ -746,9 +762,11 @@ func (c *Conn) resume(r *links.Resumed) {
 			c.mu.Lock()
 			c.resync["names "+strings.ToLower(ch)] = true
 			c.resync["topic "+strings.ToLower(ch)] = true
+			c.resync["mode "+strings.ToLower(ch)] = true
 			c.mu.Unlock()
 			send("NAMES " + ch)
 			send("TOPIC " + ch)
+			send("MODE " + ch)
 		}
 		if away != "" {
 			send("AWAY :" + away)
@@ -870,6 +888,11 @@ func (c *Conn) handle(m irc.Message) {
 			c.mu.Unlock()
 		}
 		for _, tok := range m.Params[1:] {
+			if v, ok := strings.CutPrefix(tok, "CHANMODES="); ok {
+				c.mu.Lock()
+				c.setChanModes(v)
+				c.mu.Unlock()
+			}
 			if v, ok := strings.CutPrefix(tok, "PREFIX=("); ok {
 				if modes, chars, ok := strings.Cut(v, ")"); ok && len(modes) == len(chars) {
 					c.mu.Lock()
@@ -897,7 +920,37 @@ func (c *Conn) handle(m irc.Message) {
 	case "332": // RPL_TOPIC: me #chan :topic
 		if len(m.Params) >= 3 {
 			c.mu.Lock()
-			c.topics[strings.ToLower(m.Params[1])] = m.Params[2]
+			c.topicSet(m.Params[1], m.Params[2], "", time.Time{})
+			c.mu.Unlock()
+		}
+	case "331": // RPL_NOTOPIC: me #chan :No topic is set
+		if len(m.Params) >= 2 {
+			c.mu.Lock()
+			c.topicSet(m.Params[1], "", "", time.Time{})
+			c.mu.Unlock()
+		}
+	case "333": // RPL_TOPICWHOTIME: me #chan setter unixtime
+		if len(m.Params) >= 4 {
+			c.mu.Lock()
+			c.topicWho(m.Params[1], m.Params[2], m.Params[3])
+			c.mu.Unlock()
+		}
+	case "324": // RPL_CHANNELMODEIS: me #chan +modes [args…]
+		if len(m.Params) >= 3 {
+			c.mu.Lock()
+			c.chanModesReply(m.Params[1], m.Params[2], m.Params[3:])
+			c.mu.Unlock()
+		}
+	case "329": // RPL_CREATIONTIME: me #chan unixtime
+		if len(m.Params) >= 3 {
+			c.mu.Lock()
+			c.chanCreated(m.Params[1], m.Params[2])
+			c.mu.Unlock()
+		}
+	case "366": // RPL_ENDOFNAMES: me #chan :End of /NAMES list
+		if len(m.Params) >= 2 {
+			c.mu.Lock()
+			c.namesEnded(m.Params[1])
 			c.mu.Unlock()
 		}
 	case "353": // RPL_NAMREPLY: me symbol #chan :names
@@ -921,13 +974,14 @@ func (c *Conn) handle(m irc.Message) {
 		chans := c.channelsOf(old, me)
 		for _, ch := range chans {
 			set := c.members[strings.ToLower(ch)]
-			prefix := ""
-			if mem := set[strings.ToLower(old)]; mem != nil {
-				prefix = mem.Prefix
+			mem := Member{}
+			if had := set[strings.ToLower(old)]; had != nil {
+				mem = *had
 			}
+			mem.Nick = nu
 			delete(set, strings.ToLower(old))
 			if set != nil {
-				set[strings.ToLower(nu)] = &Member{Nick: nu, Prefix: prefix}
+				set[strings.ToLower(nu)] = &mem
 			}
 		}
 		c.mu.Unlock()
@@ -965,9 +1019,10 @@ func (c *Conn) handle(m irc.Message) {
 		ch, who := m.Params[0], nickOf(m.Prefix)
 		if c.isMe(m.Prefix) {
 			c.joined(ch)
+			c.askModes(ch)
 		}
 		c.mu.Lock()
-		c.addMember(ch, who)
+		c.addMember(ch, m.Prefix) // nick!user@host
 		c.mu.Unlock()
 		c.event("join", ch, who, "", "")
 	case "PART":
@@ -1000,8 +1055,12 @@ func (c *Conn) handle(m irc.Message) {
 		}
 	case "TOPIC":
 		if len(m.Params) >= 2 {
+			at := time.Now()
+			if !c.line.IsZero() {
+				at = c.line.Time()
+			}
 			c.mu.Lock()
-			c.topics[strings.ToLower(m.Params[0])] = m.Params[1]
+			c.topicSet(m.Params[0], m.Params[1], m.Prefix, at)
 			c.mu.Unlock()
 			c.event("topic", m.Params[0], nickOf(m.Prefix), m.Params[1], "")
 		}
@@ -1011,6 +1070,12 @@ func (c *Conn) handle(m irc.Message) {
 			c.applyModes(m.Params[0], m.Params[1], m.Params[2:])
 			c.mu.Unlock()
 			c.event("mode", m.Params[0], nickOf(m.Prefix), strings.Join(m.Params[1:], " "), "")
+		}
+	case "CHGHOST": // chghost: :nick!old@host CHGHOST newuser newhost
+		if len(m.Params) >= 2 {
+			c.mu.Lock()
+			c.hostChanged(nickOf(m.Prefix), m.Params[0], m.Params[1])
+			c.mu.Unlock()
 		}
 	case "RENAME": // draft/channel-rename: RENAME old new [reason]
 		if len(m.Params) >= 2 && c.Joined(m.Params[0]) {
@@ -1102,15 +1167,14 @@ func (c *Conn) notify(e Event) {
 	}
 }
 
-// addMember adds a NAMES entry ("@nick", "nick!user@host", …). Holds c.mu.
+// addMember adds a NAMES entry ("@nick", "@+nick!user@host", …) or a
+// joining nick!user@host. Holds c.mu.
 func (c *Conn) addMember(channel, entry string) {
-	prefix := ""
-	for entry != "" && strings.ContainsRune(c.prefixChars+"~&@%+", rune(entry[0])) {
-		if prefix == "" {
-			prefix = entry[:1] // NAMES lists the highest first
-		}
-		entry = entry[1:]
+	n := 0
+	for n < len(entry) && strings.ContainsRune(c.prefixChars+"~&@%+", rune(entry[n])) {
+		n++
 	}
+	prefixes, entry := entry[:n], entry[n:] // NAMES lists the highest first
 	nick := nickOf(entry)
 	if nick == "" {
 		return
@@ -1119,12 +1183,34 @@ func (c *Conn) addMember(channel, entry string) {
 	if c.members[key] == nil {
 		c.members[key] = map[string]*Member{}
 	}
-	c.members[key][strings.ToLower(nick)] = &Member{Nick: nick, Prefix: prefix}
+	mem := &Member{Nick: nick, Prefixes: prefixes}
+	if prefixes != "" {
+		mem.Prefix = prefixes[:1]
+	}
+	if _, uh, ok := strings.Cut(entry, "!"); ok {
+		mem.User, mem.Host, _ = strings.Cut(uh, "@")
+	}
+	if had := c.members[key][strings.ToLower(nick)]; had != nil && mem.Host == "" {
+		mem.User, mem.Host = had.User, had.Host // a NAMES without hosts keeps the ones known
+	}
+	c.members[key][strings.ToLower(nick)] = mem
 }
 
-// applyModes updates member prefixes for a channel MODE change. Holds c.mu.
+// hostChanged is a nick's new user@host (CHGHOST), in every channel.
+// Holds c.mu.
+func (c *Conn) hostChanged(nick, user, host string) {
+	for _, set := range c.members {
+		if mem := set[strings.ToLower(nick)]; mem != nil {
+			mem.User, mem.Host = user, host
+		}
+	}
+}
+
+// applyModes updates member prefixes and the channel's own modes for a
+// channel MODE change. Holds c.mu.
 func (c *Conn) applyModes(channel, modes string, args []string) {
 	set := c.members[strings.ToLower(channel)]
+	ci := c.info[strings.ToLower(channel)]
 	adding := true
 	for _, m := range modes {
 		switch m {
@@ -1136,26 +1222,46 @@ func (c *Conn) applyModes(channel, modes string, args []string) {
 			continue
 		}
 		i := strings.IndexRune(c.prefixModes, m)
-		takesArg := i >= 0 || strings.ContainsRune("bekl", m) && (adding || m != 'l')
-		if !takesArg || len(args) == 0 {
-			continue
+		kind := c.modeKind(byte(m))
+		arg := ""
+		if i >= 0 || kind == 'A' || kind == 'B' || kind == 'C' && adding {
+			if len(args) == 0 {
+				continue
+			}
+			arg, args = args[0], args[1:]
 		}
-		arg := args[0]
-		args = args[1:]
-		if i < 0 || set == nil {
-			continue
-		}
-		mem := set[strings.ToLower(arg)]
-		if mem == nil {
-			continue
-		}
-		p := c.prefixChars[i : i+1]
 		switch {
-		case adding && (mem.Prefix == "" || strings.Index(c.prefixChars, p) < strings.Index(c.prefixChars, mem.Prefix)):
-			mem.Prefix = p
-		case !adding && mem.Prefix == p:
-			mem.Prefix = "" // without multi-prefix we can't know a lower one
+		case i >= 0:
+			if mem := set[strings.ToLower(arg)]; mem != nil {
+				c.setPrefix(mem, c.prefixChars[i], adding)
+			}
+		case kind == 'A': // lists (bans…) aren't kept
+		case ci != nil:
+			ci.setMode(byte(m), arg, adding)
 		}
+	}
+}
+
+// setPrefix gives a member a status prefix or takes it away, keeping its
+// prefixes highest first. Without multi-prefix only the highest is known:
+// taking it away leaves none. Holds c.mu.
+func (c *Conn) setPrefix(mem *Member, p byte, on bool) {
+	have := strings.IndexByte(mem.Prefixes, p) >= 0
+	switch {
+	case on && !have:
+		var b []byte
+		for i := 0; i < len(c.prefixChars); i++ {
+			if q := c.prefixChars[i]; q == p || strings.IndexByte(mem.Prefixes, q) >= 0 {
+				b = append(b, q)
+			}
+		}
+		mem.Prefixes = string(b)
+	case !on && have:
+		mem.Prefixes = strings.ReplaceAll(mem.Prefixes, string(p), "")
+	}
+	mem.Prefix = ""
+	if mem.Prefixes != "" {
+		mem.Prefix = mem.Prefixes[:1]
 	}
 }
 
@@ -1178,6 +1284,7 @@ func (c *Conn) isMe(prefix string) bool { return strings.EqualFold(nickOf(prefix
 func (c *Conn) joined(ch string) {
 	c.mu.Lock()
 	c.channels[ch] = true
+	c.newChanInfo(ch, true)
 	changed := !containsFold(c.saved, ch)
 	if changed {
 		c.saved = append(c.saved, ch)
@@ -1194,6 +1301,7 @@ func (c *Conn) parted(ch string, forget bool) {
 	c.mu.Lock()
 	delete(c.members, strings.ToLower(ch))
 	delete(c.topics, strings.ToLower(ch))
+	delete(c.info, strings.ToLower(ch))
 	for k := range c.channels {
 		if strings.EqualFold(k, ch) {
 			delete(c.channels, k)
@@ -1611,6 +1719,10 @@ func (c *Conn) resyncReply(m irc.Message) bool {
 		key = "topic " + strings.ToLower(p[1])
 	case (m.Command == "333" || m.Command == "331") && len(p) >= 2:
 		key, end = "topic "+strings.ToLower(p[1]), true
+	case m.Command == "324" && len(p) >= 2:
+		key, end = "mode "+strings.ToLower(p[1]), true
+	case m.Command == "329" && len(p) >= 2:
+		key, end = "created "+strings.ToLower(p[1]), true
 	default:
 		return false
 	}
@@ -1621,6 +1733,10 @@ func (c *Conn) resyncReply(m irc.Message) bool {
 	}
 	if end {
 		delete(c.resync, key)
+	}
+	if m.Command == "324" {
+		// the channel's creation time follows, if the server keeps one
+		c.resync["created "+strings.ToLower(p[1])] = true
 	}
 	return true
 }
