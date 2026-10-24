@@ -35,7 +35,7 @@
   const linkOn = $derived(!!session.config.ircLinkSignIn)
   let method = $state(null)
   const byLink = $derived(linkOn && (method ?? (me.hasPassword ? 'password' : 'link')) === 'link')
-  const TABS = $derived([['hex', 'HexChat'], ['irssi', 'irssi'], ['wee', 'WeeChat'], ['other', t('clients.other')]])
+  const TABS = $derived([['hex', 'HexChat'], ['mirc', 'mIRC'], ['irssi', 'irssi'], ['wee', 'WeeChat'], ['other', t('clients.other')]])
 
   // new password drawer
   let name = $state('')
@@ -129,6 +129,16 @@
 Use SSL         <b>{port.tls ? 'on' : 'off'}</b>
 Login method    <em>Server password (/PASS password)</em>
 Password        <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if}</pre>
+          </div>
+        {:else if tab === 'mirc'}
+          <div class="od-stack" style="--od-gap:12px">
+            <p class="desc">{t('clients.mircSteps')}</p>
+<pre class="snippet">Description     <b>evrd-{firstNet}</b>
+IRC Server      <b>{host}</b>
+Ports           <b>{port.tls ? '+' : ''}{port.port}</b>
+Password        <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if}</pre>
+            <p class="desc">{port.tls ? t('clients.mircCommandTls') : t('clients.mircCommand')}</p>
+<pre class="snippet">/server -m <b>{host}</b> {port.tls ? '+' : ''}{port.port} <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if}</pre>
           </div>
         {:else if tab === 'irssi'}
 <pre class="snippet">/network add <b>evrd-{firstNet}</b>
