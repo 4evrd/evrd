@@ -82,6 +82,9 @@ type session struct {
 	// to be noted winning (drops.go).
 	dropMu  sync.Mutex
 	dropped string
+	// droppedAt is when the reason was noted: when the client left, which
+	// may be a little before evrd is done with the session.
+	droppedAt time.Time
 	// lastRead is when the client last sent a line (unix nanoseconds), and
 	// pinged when evrd asked it whether it's still there (liveness.go).
 	lastRead atomic.Int64

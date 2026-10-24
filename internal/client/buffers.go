@@ -63,10 +63,12 @@ func (se *session) savePosition() {
 		return
 	}
 	se.dropMu.Lock()
-	reason := se.dropped
+	reason, at := se.dropped, se.droppedAt
 	se.dropMu.Unlock()
-	at := time.Now()
-	if reason != bouncer.DropQuit && reason != bouncer.DropClosed && reason != "" {
+	switch {
+	case reason == "":
+		at = time.Now()
+	case reason != bouncer.DropQuit && reason != bouncer.DropClosed:
 		at = time.Unix(0, se.lastRead.Load())
 	}
 	if err := se.srv.b.SetDevicePosition(se.net.ID, key, at); err != nil {
