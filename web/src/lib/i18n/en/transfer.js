@@ -1,0 +1,52 @@
+// Moving networks in and out: the networks file export, and importing one
+// or a ZNC config (/networks/import).
+export default {
+  'transfer.export': 'Export',
+  'transfer.exportTip': 'Download your networks as a YAML file',
+  'transfer.exported': { one: 'Exported {count} network', other: 'Exported {count} networks' },
+  'transfer.exportedNoKey': 'Exported without passwords: this server has no secret key to encrypt them with.',
+  'transfer.import': 'Import',
+  'transfer.importTip': 'Add networks from an evrd export or a ZNC config',
+
+  'transfer.title': 'Import networks',
+  'transfer.intro': 'Add networks from a file: one exported from evrd, or a ZNC config (znc.conf, or just the part you need).',
+  'transfer.choose': 'Choose a file',
+  'transfer.paste': 'Or paste it here',
+  'transfer.pastePlaceholder': 'networks:\n  - name: libera\n…\n\nor\n\n<Network libera>\n  Server = irc.libera.chat +6697\n…',
+  'transfer.read': 'Read it',
+  'transfer.reading': 'Reading…',
+  'transfer.another': 'Use another file',
+  'transfer.secrets': 'An evrd export carries passwords encrypted with its server’s key: they come back on this server, or on one with the same key. From anywhere else you’ll set them again.',
+
+  'transfer.formatEvrd': 'evrd networks file',
+  'transfer.formatZnc': 'ZNC config',
+  'transfer.zncUser': 'ZNC user',
+  'transfer.zncUserHelp': 'The config has several users: pick whose networks to bring in.',
+  'transfer.noUser': 'Networks without a user',
+  'transfer.userNetworks': { one: '{count} network', other: '{count} networks' },
+
+  'transfer.networks': 'Networks',
+  'transfer.all': 'All',
+  'transfer.none': 'None',
+  'transfer.empty': 'There are no networks in this part of the file.',
+  'transfer.channels': { one: '{count} channel', other: '{count} channels' },
+  'transfer.exists': 'Already added',
+  'transfer.off': 'Off in the file',
+
+  'transfer.existing': 'Networks you already have',
+  'transfer.skip': 'Leave them as they are',
+  'transfer.skipHelp': 'Only networks you don’t have yet are added.',
+  'transfer.update': 'Update them from the file',
+  'transfer.updateHelp': 'Their settings and channels become the file’s. History is kept.',
+  'transfer.connect': 'Connect them once imported',
+  'transfer.connectHelp': 'Leave this off while ZNC is still connected, so the two don’t fight over your nick.',
+
+  'transfer.go': { one: 'Import {count} network', other: 'Import {count} networks' },
+  'transfer.importing': 'Importing…',
+  'transfer.done': 'Done',
+  'transfer.result.created': 'Added',
+  'transfer.result.updated': 'Updated',
+  'transfer.result.skipped': 'Skipped: already added',
+  'transfer.result.failed': 'Not imported',
+  'transfer.toNetworks': 'Go to your networks',
+}

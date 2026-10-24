@@ -662,6 +662,19 @@
     "irc.settingLabel.irc_link_signin": "リンクでの IRC サインイン",
     "irc.settingHelp.irc_link_signin": "使えるパスワードを持たない IRC クライアントにリンクを送り、サインイン後（SSO とその MFA で）ここで許可できるようにします。公開 URL が必要です。",
     "irc.settingLabel.irc_remember_days": "記憶した IRC 端末の有効期間",
-    "irc.settingHelp.irc_remember_days": "リンクで許可して記憶した端末が、確認なしでサインインし続けられる日数（1–365）。"
+    "irc.settingHelp.irc_remember_days": "リンクで許可して記憶した端末が、確認なしでサインインし続けられる日数（1–365）。",
+    "irc.web.importTooBig": "インポートするにはファイルが大きすぎます(最大 {max})",
+    "irc.web.importUnknown": "evrd のネットワークファイルでも ZNC の設定でもありません",
+    "irc.web.importUnreadable": "ファイルを読めませんでした: {error}",
+    "irc.web.importNoUser": "ファイルに ZNC ユーザー {user} がありません",
+    "irc.netfile.serverPassword": "サーバー {host} のパスワードは別の evrd サーバーで保存されたため、ここでは読めません。もう一度設定してください。",
+    "irc.netfile.loginPassword": "サービスのパスワードは別の evrd サーバーで保存されたため、ここでは読めません。「認証」でもう一度設定してください。",
+    "irc.netfile.loginCommand": "サービスのログインコマンドは別の evrd サーバーで保存されたため、ここでは読めません。「認証」でもう一度設定してください。",
+    "irc.netfile.channelKey": "{channel} のキーは別の evrd サーバーで保存されたため、ここでは読めません。もう一度設定してください。",
+    "irc.netfile.moduleSettings": "モジュール {module} の設定は別の evrd サーバーで保存されたため、ここでは読めません。「モジュール」でもう一度設定してください。",
+    "irc.netfile.unknownField": "{field} は evrd が知らないネットワーク設定なので、取り込みませんでした。",
+    "irc.znc.loginPassword": "ZNC の {module} モジュールはパスワードを設定ファイルの外に保存しています。「認証」で設定してください。",
+    "irc.znc.moduleData": "ZNC の {module} モジュールは設定を設定ファイルの外に保存しています。「モジュール」で有効にして入力してください。",
+    "irc.znc.modulesSkipped": "evrd にはこれらのモジュールがないため、取り込みませんでした: {modules}。"
   }
 }

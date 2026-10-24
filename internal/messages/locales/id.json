@@ -662,6 +662,19 @@
     "irc.settingLabel.irc_link_signin": "Masuk IRC lewat tautan",
     "irc.settingHelp.irc_link_signin": "Klien IRC tanpa kata sandi yang bisa dipakai mendapat tautan untuk diizinkan di sini, setelah masuk (dengan SSO dan MFA-nya). Butuh URL publik.",
     "irc.settingLabel.irc_remember_days": "Perangkat IRC yang diingat berlaku",
-    "irc.settingHelp.irc_remember_days": "Hari sebuah perangkat yang diizinkan lewat tautan dan diingat tetap masuk tanpa bertanya (1–365)."
+    "irc.settingHelp.irc_remember_days": "Hari sebuah perangkat yang diizinkan lewat tautan dan diingat tetap masuk tanpa bertanya (1–365).",
+    "irc.web.importTooBig": "file itu terlalu besar untuk diimpor (paling besar {max})",
+    "irc.web.importUnknown": "itu bukan file jaringan evrd atau konfigurasi ZNC",
+    "irc.web.importUnreadable": "file tidak bisa dibaca: {error}",
+    "irc.web.importNoUser": "file itu tidak punya pengguna ZNC {user}",
+    "irc.netfile.serverPassword": "Kata sandi untuk server {host} disimpan oleh server evrd lain dan tidak bisa dibaca di sini: atur lagi.",
+    "irc.netfile.loginPassword": "Kata sandi services disimpan oleh server evrd lain dan tidak bisa dibaca di sini: atur lagi di Autentikasi.",
+    "irc.netfile.loginCommand": "Perintah login services disimpan oleh server evrd lain dan tidak bisa dibaca di sini: atur lagi di Autentikasi.",
+    "irc.netfile.channelKey": "Kunci untuk {channel} disimpan oleh server evrd lain dan tidak bisa dibaca di sini: atur lagi.",
+    "irc.netfile.moduleSettings": "Pengaturan modul {module} disimpan oleh server evrd lain dan tidak bisa dibaca di sini: atur lagi di Modul.",
+    "irc.netfile.unknownField": "{field} bukan pengaturan jaringan yang dikenal evrd, jadi dilewati.",
+    "irc.znc.loginPassword": "Modul {module} ZNC menyimpan kata sandinya di luar konfigurasi: atur di Autentikasi.",
+    "irc.znc.moduleData": "Modul {module} ZNC menyimpan pengaturannya di luar konfigurasi: nyalakan dan isi di Modul.",
+    "irc.znc.modulesSkipped": "evrd tidak punya modul untuk ini, jadi dilewati: {modules}."
   }
 }

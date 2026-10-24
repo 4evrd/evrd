@@ -69,6 +69,18 @@
   }
 
   const slotsLeft = $derived(max ? max - (nets?.length || 0) : null)
+
+  let exporting = $state(false)
+  async function exportAll() {
+    exporting = true
+    try {
+      const { blob, name, sealed } = await api.exportNetworks()
+      const url = URL.createObjectURL(blob)
+      Object.assign(document.createElement('a'), { href: url, download: name }).click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast(sealed ? t('transfer.exported', { count: nets?.length ?? 0 }) : t('transfer.exportedNoKey'), sealed ? 'ok' : 'bad')
+    } catch (e) { toast(e.message, 'bad') } finally { exporting = false }
+  }
 </script>
 
 <svelte:head><title>{t('networks.title')} · evrd</title></svelte:head>
@@ -79,6 +91,8 @@
     <p>{t('networks.intro')}</p>
   </div>
   <div class="od-cluster">
+    <a class="btn btn-ghost" href="/networks/import" title={t('transfer.importTip')} data-testid="import-link"><Icon name="upload" />{t('transfer.import')}</a>
+    <button class="btn btn-ghost" type="button" onclick={exportAll} disabled={exporting || !nets?.length} title={t('transfer.exportTip')} data-testid="export"><Icon name="download" />{t('transfer.export')}</button>
     <span class="chip" id="usage" data-testid="net-count">{t('networks.usage', { used: nets?.length ?? me.usage.networks, max: limit(max) })}</span>
     {#if atLimit}<button class="btn btn-primary" type="button" disabled><Icon name="plus" />{t('networks.addNetwork')}</button>{:else}<a class="btn btn-primary" href="/networks/new"><Icon name="plus" />{t('networks.addNetwork')}</a>{/if}
   </div>

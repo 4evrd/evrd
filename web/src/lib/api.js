@@ -83,6 +83,16 @@ export const api = {
   addNetwork: (net) => req('POST', '/api/networks', net),
   updateNetwork: (id, patch) => req('PATCH', `/api/networks/${id}`, patch),
   removeNetwork: (id) => req('DELETE', `/api/networks/${id}`),
+  // a networks file (YAML) to save, and importing one or a ZNC config
+  exportNetworks: async () => {
+    const res = await fetch('/api/networks/export', { headers: language ? { 'X-Evrd-Language': language } : {} })
+    if (res.status === 401) throw new Unauthorized('sign in first')
+    if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status)
+    const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1] || 'evrd-networks.yaml'
+    return { blob: await res.blob(), name, sealed: res.headers.get('X-Evrd-Secrets') !== 'omitted' }
+  },
+  previewImport: (text) => req('POST', '/api/networks/import/preview', { text }),
+  importNetworks: (body) => req('POST', '/api/networks/import', body),
   connect: (id) => req('POST', `/api/networks/${id}/connect`),
   disconnect: (id) => req('POST', `/api/networks/${id}/disconnect`),
   messages: (id, target) => req('GET', `/api/networks/${id}/messages?${q({ target })}`),

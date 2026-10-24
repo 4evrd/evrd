@@ -685,6 +685,19 @@
     "irc.settingLabel.irc_link_signin": "IRC-Anmeldung per Link",
     "irc.settingHelp.irc_link_signin": "Ein IRC-Client ohne brauchbares Passwort bekommt einen Link, um ihn hier nach der Anmeldung (mit SSO und dessen MFA) zu erlauben. Braucht die öffentliche URL.",
     "irc.settingLabel.irc_remember_days": "Gemerkte IRC-Geräte gelten",
-    "irc.settingHelp.irc_remember_days": "Tage, die ein per Link erlaubtes und gemerktes Gerät sich ohne Nachfrage anmeldet (1–365)."
+    "irc.settingHelp.irc_remember_days": "Tage, die ein per Link erlaubtes und gemerktes Gerät sich ohne Nachfrage anmeldet (1–365).",
+    "irc.web.importTooBig": "die Datei ist zu groß zum Importieren (höchstens {max})",
+    "irc.web.importUnknown": "das ist weder eine evrd-Netzwerkdatei noch eine ZNC-Konfiguration",
+    "irc.web.importUnreadable": "die Datei konnte nicht gelesen werden: {error}",
+    "irc.web.importNoUser": "die Datei hat keinen ZNC-Benutzer {user}",
+    "irc.netfile.serverPassword": "Das Passwort für den Server {host} wurde von einem anderen evrd-Server gespeichert und kann hier nicht gelesen werden: setz es neu.",
+    "irc.netfile.loginPassword": "Das Services-Passwort wurde von einem anderen evrd-Server gespeichert und kann hier nicht gelesen werden: setz es unter Anmeldung neu.",
+    "irc.netfile.loginCommand": "Der Services-Anmeldebefehl wurde von einem anderen evrd-Server gespeichert und kann hier nicht gelesen werden: setz ihn unter Anmeldung neu.",
+    "irc.netfile.channelKey": "Der Schlüssel für {channel} wurde von einem anderen evrd-Server gespeichert und kann hier nicht gelesen werden: setz ihn neu.",
+    "irc.netfile.moduleSettings": "Die Einstellungen des Moduls {module} wurden von einem anderen evrd-Server gespeichert und können hier nicht gelesen werden: setz sie unter Module neu.",
+    "irc.netfile.unknownField": "{field} ist keine Netzwerkeinstellung, die evrd kennt, und wurde weggelassen.",
+    "irc.znc.loginPassword": "ZNCs Modul {module} speichert sein Passwort außerhalb der Konfiguration: setz es unter Anmeldung.",
+    "irc.znc.moduleData": "ZNCs Modul {module} speichert seine Einstellungen außerhalb der Konfiguration: schalte es unter Module ein und füll es aus.",
+    "irc.znc.modulesSkipped": "Dafür hat evrd kein Modul, sie wurden weggelassen: {modules}."
   }
 }

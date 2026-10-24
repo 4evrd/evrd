@@ -170,6 +170,7 @@ func TestEveryPrivateRouteNeedsASession(t *testing.T) {
 		"GET /api/me/client-passwords", "POST /api/me/client-passwords", "DELETE /api/me/client-passwords/1",
 		"GET /api/networks", "POST /api/networks", "PATCH /api/networks/1", "DELETE /api/networks/1",
 		"POST /api/networks/1/connect", "POST /api/networks/1/disconnect",
+		"GET /api/networks/export", "POST /api/networks/import/preview", "POST /api/networks/import",
 		"GET /api/networks/1/messages", "GET /api/networks/1/buffers", "GET /api/networks/1/stream",
 		"GET /api/admin/overview", "GET /api/admin/users", "POST /api/admin/users",
 		"GET /api/admin/users/1", "PATCH /api/admin/users/1", "DELETE /api/admin/users/1",
