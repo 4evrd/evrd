@@ -1,7 +1,8 @@
 // Package http is evrd's web server: the API's routes, the middleware in
 // front of them, and the listeners. The handlers are internal/http/handlers.
 //
-// Every route except /api/config, /api/languages and the sign-in endpoints
+// Every route except /api/config, /api/languages, /api/irc-messages and the
+// sign-in endpoints
 // needs a session cookie (see internal/auth); /api/admin/* also needs the
 // admin role.
 //
@@ -87,6 +88,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/config", h.Config)
 	mux.HandleFunc("GET /api/languages", h.ListLanguages)
 	mux.HandleFunc("GET /api/languages/{code}", h.GetLanguage)
+	mux.HandleFunc("GET /api/irc-messages", h.IRCCoverage)
+	mux.HandleFunc("GET /api/irc-messages/{code}", h.IRCMessages)
 	mux.HandleFunc("POST /auth/password", s.auth.PasswordLogin)
 	mux.HandleFunc("GET /auth/login", s.auth.OIDCLogin)
 	mux.HandleFunc("GET /auth/callback", s.auth.Callback)

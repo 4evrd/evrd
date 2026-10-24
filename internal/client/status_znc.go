@@ -23,7 +23,7 @@ var started = time.Now()
 // when it isn't.
 func (se *session) online() bool {
 	if se.up == nil || se.srv.b.Status(se.net.ID) != upstream.StatusConnected {
-		se.statusf("%s isn't connected right now.", se.net.Name)
+		se.say("notConnectedNow", "network", se.net.Name)
 		return false
 	}
 	return true
@@ -43,20 +43,20 @@ func splitChans(args []string) []string {
 
 func (se *session) cmdAttach(args []string) {
 	if se.web != nil {
-		se.statusf("Attaching shows channels to IRC clients; the web chat shows everything.")
+		se.say("web.attach")
 		return
 	}
 	chans := se.matchBuffers(splitChans(args))
 	if len(chans) == 0 {
-		se.statusf("Usage: attach <#channel>[,…] (wildcards work)")
+		se.say("usage.attach")
 		return
 	}
 	for _, ch := range chans {
 		switch {
 		case !se.up.Joined(ch):
-			se.statusf("You're not on %s.", ch)
+			se.say("notOn", "channel", ch)
 		case !se.up.ChannelSettings(ch).Detached:
-			se.statusf("%s isn't detached.", ch)
+			se.say("attach.notDetached", "channel", ch)
 		default:
 			se.attachChannel(ch)
 		}
@@ -69,9 +69,9 @@ func (se *session) setDisabled(args []string, off bool) {
 	chans := splitChans(args)
 	if len(chans) == 0 {
 		if off {
-			se.statusf("Usage: disablechan <#channel>[,…] — leave a channel but keep it saved (enablechan joins it again)")
+			se.say("usage.disablechan")
 		} else {
-			se.statusf("Usage: enablechan <#channel>[,…]")
+			se.say("usage.enablechan")
 		}
 		return
 	}
@@ -87,29 +87,29 @@ func (se *session) setDisabled(args []string, off bool) {
 			}
 		}
 		if !known {
-			se.statusf("%s isn't one of %s's channels.", ch, se.net.Name)
+			se.say("chan.notSaved", "channel", ch, "network", se.net.Name)
 			continue
 		}
 		if err := se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Disabled = off }); err != nil {
-			se.statusf("Couldn't save %s: %v", ch, err)
+			se.say("chan.saveFailed", "channel", ch, "error", err)
 			continue
 		}
 		online := se.up != nil && se.srv.b.Status(se.net.ID) == upstream.StatusConnected
 		switch {
 		case off && online && se.up.Joined(ch):
 			se.up.SendRaw("PART " + ch)
-			se.statusf("Disabled %s: left it, kept it saved. enablechan %s joins it again.", ch, ch)
+			se.say("chan.disabledLeft", "channel", ch)
 		case off:
-			se.statusf("Disabled %s: it won't be joined.", ch)
+			se.say("chan.disabled", "channel", ch)
 		case online && !se.up.Joined(ch):
 			if key := se.up.ChannelSettings(ch).Key; key != "" {
 				se.up.SendRaw("JOIN " + ch + " " + key)
 			} else {
 				se.up.SendRaw("JOIN " + ch)
 			}
-			se.statusf("Enabled %s: joining it.", ch)
+			se.say("chan.enabledJoining", "channel", ch)
 		default:
-			se.statusf("Enabled %s.", ch)
+			se.say("chan.enabled", "channel", ch)
 		}
 	}
 }
@@ -119,14 +119,14 @@ func (se *session) cmdDisableChan(args []string) { se.setDisabled(args, true) }
 
 func (se *session) cmdListNicks(args []string) {
 	if len(args) != 1 {
-		se.statusf("Usage: listnicks <#channel>")
+		se.say("usage.listnicks")
 		return
 	}
 	if !se.online() {
 		return
 	}
 	if !se.up.Joined(args[0]) {
-		se.statusf("You're not on %s.", args[0])
+		se.say("notOn", "channel", args[0])
 		return
 	}
 	var nicks []string
@@ -138,7 +138,7 @@ func (se *session) cmdListNicks(args []string) {
 		se.statusf("%s", strings.Join(nicks[:n], " "))
 		nicks = nicks[n:]
 	}
-	se.statusf("%s: %s.", args[0], plural(se.up.MemberCount(args[0]), "nick"))
+	se.say("listnicks.count", "channel", args[0], "nicks", se.tr("count.nicks", "count", se.up.MemberCount(args[0])))
 }
 
 func (se *session) cmdTopics([]string) {
@@ -151,58 +151,58 @@ func (se *session) cmdTopics([]string) {
 			continue
 		}
 		any = true
-		se.statusf("%-20s %s", ch, orElse(se.up.Topic(ch), "(no topic)"))
+		se.statusf("%-20s %s", ch, orElse(se.up.Topic(ch), se.tr("topics.none")))
 	}
 	if !any {
-		se.statusf("You're on no channels on %s.", se.net.Name)
+		se.say("topics.noChannels", "network", se.net.Name)
 	}
 }
 
 func (se *session) cmdShowChan(args []string) {
 	if len(args) != 1 {
-		se.statusf("Usage: showchan <#channel>")
+		se.say("usage.showchan")
 		return
 	}
 	ch := args[0]
 	var cs store.ChannelSettings
-	state := "not saved"
+	state := se.tr("showchan.notSaved")
 	if se.up != nil {
 		cs = se.up.ChannelSettings(ch)
 		for _, s := range se.up.Channels() {
 			if strings.EqualFold(s, ch) {
-				ch, state = s, "saved, not joined"
+				ch, state = s, se.tr("showchan.savedNotJoined")
 			}
 		}
 		if se.up.Joined(ch) {
-			state = fmt.Sprintf("joined, %s", plural(se.up.MemberCount(ch), "nick"))
+			state = se.tr("showchan.joined", "nicks", se.tr("count.nicks", "count", se.up.MemberCount(ch)))
 		}
 	} else {
 		cs = se.net.Channel(ch)
 	}
 	var flags []string
 	if cs.Detached {
-		flags = append(flags, "detached")
+		flags = append(flags, se.tr("showchan.detached"))
 	}
 	if cs.Disabled {
-		flags = append(flags, "disabled")
+		flags = append(flags, se.tr("showchan.disabled"))
 	}
 	if cs.Key != "" {
-		flags = append(flags, "key set")
+		flags = append(flags, se.tr("showchan.keySet"))
 	}
-	se.statusf("%s on %s — %s%s", ch, se.net.Name, state, prefixed(" · ", strings.Join(flags, " · ")))
+	se.say("showchan.header", "channel", ch, "network", se.net.Name, "state", state, "flags", prefixed(" · ", strings.Join(flags, " · ")))
 	if se.up != nil && se.up.Joined(ch) {
-		se.statusf("  topic: %s", orElse(se.up.Topic(ch), "(none)"))
+		se.statusf("  %s", se.tr("showchan.topic", "topic", orElse(se.up.Topic(ch), se.tr("showchan.noTopic"))))
 	}
 	p := se.playRules()
-	mode := "keeps its buffer"
+	mode := se.tr("showchan.keeps")
 	if p.AutoClears(ch) {
-		mode = "auto-clears"
+		mode = se.tr("showchan.autoClears")
 	}
 	cleared := ""
 	if at := p.ClearedAt(ch); !at.IsZero() {
-		cleared = " · cleared " + at.Local().Format("2006-01-02 15:04")
+		cleared = " · " + se.tr("showchan.cleared", "time", at.Local().Format("2006-01-02 15:04"))
 	}
-	se.statusf("  buffer: plays back %d lines · %s%s", p.Lines(ch), mode, cleared)
+	se.statusf("  %s", se.tr("showchan.buffer", "lines", p.Lines(ch), "mode", mode, "cleared", cleared))
 }
 
 func prefixed(p, s string) string {
@@ -215,7 +215,7 @@ func prefixed(p, s string) string {
 func (se *session) cmdListClients([]string) {
 	clients := se.srv.b.ClientsOf(se.uid)
 	if len(clients) == 0 {
-		se.statusf("No clients attached.")
+		se.say("clients.none")
 		return
 	}
 	for _, c := range clients {
@@ -223,20 +223,20 @@ func (se *session) cmdListClients([]string) {
 		if se.att != nil && c.ID == se.att.ID() {
 			me = "* "
 		}
-		what := orElse(c.Software, "IRC client")
+		what := orElse(c.Software, se.tr("clients.ircClient"))
 		if c.Kind == "web" {
-			what = "web app · " + orElse(c.Software, "browser")
+			what = se.tr("clients.webApp", "software", orElse(c.Software, se.tr("clients.browser")))
 		}
 		if c.Device != "" {
 			what += " (" + c.Device + ")"
 		}
-		se.statusf("%s%-36s %-16s %-15s since %s", me, what, orElse(strings.Join(c.Networks, ","), "-"), c.IP, c.Since.Local().Format("Jan 2 15:04"))
+		se.statusf("%s%-36s %-16s %-15s %s", me, what, orElse(strings.Join(c.Networks, ","), "-"), c.IP, se.tr("clients.since", "time", c.Since.Local().Format("Jan 2 15:04")))
 	}
-	se.statusf("%s. * = this one.", plural(len(clients), "client"))
+	se.say("clients.footer", "clients", se.tr("count.clients", "count", len(clients)))
 }
 
 func (se *session) cmdUptime([]string) {
-	se.statusf("evrd has been running for %s (since %s).", roundUp(time.Since(started)), started.Local().Format("2006-01-02 15:04"))
+	se.say("uptime", "duration", roundUp(time.Since(started)), "since", started.Local().Format("2006-01-02 15:04"))
 }
 
 func roundUp(d time.Duration) string {
@@ -251,10 +251,10 @@ func roundUp(d time.Duration) string {
 
 func (se *session) cmdTraffic([]string) {
 	if se.srv.publicURL == "" {
-		se.statusf("Traffic per network is on each network's health page in the web app.")
+		se.say("traffic.web")
 		return
 	}
-	se.statusf("Traffic for %s: %s/networks/%d/health", se.net.Name, se.srv.publicURL, se.net.ID)
+	se.say("traffic.url", "network", se.net.Name, "url", fmt.Sprintf("%s/networks/%d/health", se.srv.publicURL, se.net.ID))
 }
 
 // cmdJump is ZNC's Jump: with no argument, reconnect to the next server; with
@@ -262,7 +262,7 @@ func (se *session) cmdTraffic([]string) {
 // instead (JumpNetwork, as before).
 func (se *session) cmdJump(args []string) {
 	if len(args) > 1 {
-		se.statusf("Usage: jump [server|network]")
+		se.say("usage.jump")
 		return
 	}
 	if len(args) == 1 {
@@ -278,7 +278,7 @@ func (se *session) cmdJump(args []string) {
 		return
 	}
 	if se.srv.b.Status(n.ID) == upstream.StatusDisconnected {
-		se.statusf("%s isn't connected — connect brings it up.", n.Name)
+		se.say("jump.notConnected", "network", n.Name)
 		return
 	}
 	servers := n.ServerList()
@@ -301,25 +301,25 @@ func (se *session) cmdJump(args []string) {
 			}
 		}
 		if next < 0 {
-			se.statusf("%q is neither one of your networks nor a server of %s — see networks or listservers.", args[0], n.Name)
+			se.say("jump.unknown", "name", strconv.Quote(args[0]), "network", n.Name)
 			return
 		}
 	}
 	sv := servers[next]
 	if err := se.srv.b.JumpServer(n.ID, next); err != nil {
-		se.statusf("Couldn't jump: %v", err)
+		se.say("jump.failed", "error", err)
 		return
 	}
-	se.statusf("Reconnecting %s to %s:%d…", n.Name, sv.Host, sv.Port)
+	se.say("jump.reconnecting", "network", n.Name, "host", sv.Host, "port", sv.Port)
 }
 
 func (se *session) cmdJumpNetwork(args []string) {
 	if se.web != nil {
-		se.statusf("In the web app, pick a network from the Networks page instead.")
+		se.say("web.jumpnetwork")
 		return
 	}
 	if len(args) != 1 {
-		se.statusf("Usage: jumpnetwork <network>")
+		se.say("usage.jumpnetwork")
 		return
 	}
 	n, ok := se.network(args)
@@ -327,11 +327,11 @@ func (se *session) cmdJumpNetwork(args []string) {
 		return
 	}
 	if n.ID == se.net.ID {
-		se.statusf("You're already on %s.", n.Name)
+		se.say("jumpnetwork.already", "network", n.Name)
 		return
 	}
 	if err := se.jump(n); err != nil {
-		se.statusf("Couldn't jump to %s: %v", n.Name, err)
+		se.say("jumpnetwork.failed", "network", n.Name, "error", err)
 	}
 }
 
@@ -339,7 +339,7 @@ func (se *session) cmdJumpNetwork(args []string) {
 
 func (se *session) cmdSetBindHost(args []string) {
 	if len(args) != 1 {
-		se.statusf("Usage: setbindhost <host> — this network's local address (clearbindhost goes back to your account's)")
+		se.say("usage.setbindhost")
 		return
 	}
 	se.cmdSet([]string{"bindhost", args[0]})
@@ -349,13 +349,13 @@ func (se *session) cmdClearBindHost([]string) { se.cmdSet([]string{"bindhost", "
 
 func (se *session) cmdShowBindHost([]string) {
 	u := se.account()
-	se.statusf("This network's bind host: %s · your account's: %s", orElse(se.net.BindHost, "(not set)"), orElse(u.BindHost, "(not set)"))
+	se.say("bindhost.show", "network", orElse(se.net.BindHost, se.tr("bindhost.notSet")), "account", orElse(u.BindHost, se.tr("bindhost.notSet")))
 }
 
 func (se *session) setUserBindHost(host string) {
 	u := se.account()
 	if u.ID == 0 {
-		se.statusf("Couldn't load your account.")
+		se.say("accountFailedPlain")
 		return
 	}
 	if err := se.srv.acc.CheckBindHost(u, host); err != nil {
@@ -364,20 +364,20 @@ func (se *session) setUserBindHost(host string) {
 	}
 	u.BindHost = host
 	if err := se.srv.acc.UpdateUser(context.Background(), u); err != nil {
-		se.statusf("Couldn't save: %v", err)
+		se.say("saveFailed", "error", err)
 		return
 	}
 	se.acct = u
 	if host == "" {
-		se.statusf("Cleared your account's bind host. Networks use it when they next connect.")
+		se.say("bindhost.userCleared")
 	} else {
-		se.statusf("Your account's bind host is %s. Networks without their own use it when they next connect.", host)
+		se.say("bindhost.userSet", "host", host)
 	}
 }
 
 func (se *session) cmdSetUserBindHost(args []string) {
 	if len(args) != 1 {
-		se.statusf("Usage: setuserbindhost <host>")
+		se.say("usage.setuserbindhost")
 		return
 	}
 	se.setUserBindHost(args[0])
@@ -389,7 +389,7 @@ func (se *session) cmdClearUserBindHost([]string) { se.setUserBindHost("") }
 
 func (se *session) admin() bool {
 	if !se.account().IsAdmin() {
-		se.statusf("Admins only.")
+		se.say("adminsOnly")
 		return false
 	}
 	return true
@@ -401,7 +401,7 @@ func (se *session) cmdListUsers([]string) {
 	}
 	users, err := se.srv.acc.ListUsers(context.Background())
 	if err != nil {
-		se.statusf("Couldn't list users: %v", err)
+		se.say("listUsersFailed", "error", err)
 		return
 	}
 	nets, _ := se.srv.acc.AllNetworks(context.Background())
@@ -413,11 +413,11 @@ func (se *session) cmdListUsers([]string) {
 	for _, u := range users {
 		flag := ""
 		if u.Suspended {
-			flag = " · suspended"
+			flag = " · " + se.tr("users.suspended")
 		}
-		se.statusf("  %-20s %-6s %s · %s attached%s", u.Username, u.Role, plural(count[u.ID], "network"), strconv.Itoa(clients[u.ID]), flag)
+		se.statusf("  %-20s %-6s %s · %s%s", u.Username, se.tr("role."+u.Role), se.tr("count.networks", "count", count[u.ID]), se.tr("users.attached", "count", clients[u.ID]), flag)
 	}
-	se.statusf("%s.", plural(len(users), "user"))
+	se.say("users.footer", "users", se.tr("count.users", "count", len(users)))
 }
 
 func (se *session) cmdListAllUserNetworks([]string) {
@@ -426,7 +426,7 @@ func (se *session) cmdListAllUserNetworks([]string) {
 	}
 	users, err := se.srv.acc.ListUsers(context.Background())
 	if err != nil {
-		se.statusf("Couldn't list users: %v", err)
+		se.say("listUsersFailed", "error", err)
 		return
 	}
 	names := map[int64]string{}
@@ -435,30 +435,19 @@ func (se *session) cmdListAllUserNetworks([]string) {
 	}
 	nets, err := se.srv.acc.AllNetworks(context.Background())
 	if err != nil {
-		se.statusf("Couldn't list networks: %v", err)
+		se.say("listNetworksFailed", "error", err)
 		return
 	}
 	for _, n := range nets {
-		se.statusf("  %-20s %-16s %-12s %s:%d", names[n.UserID], n.Name, se.srv.b.Status(n.ID), n.Host, n.Port)
+		se.statusf("  %-20s %-16s %-12s %s:%d", names[n.UserID], n.Name, se.state(se.srv.b.Status(n.ID)), n.Host, n.Port)
 	}
-	se.statusf("%s.", plural(len(nets), "network"))
+	se.say("networks.total", "networks", se.tr("count.networks", "count", len(nets)))
 }
 
-// notHere answers ZNC commands that evrd does another way.
-var notHere = map[string]string{
-	"reloadmod":   "Modules are built into evrd and always current — nothing to reload.",
-	"updatemod":   "Modules are built into evrd and always current — nothing to update.",
-	"rehash":      "evrd applies settings as they're saved; evrd.conf is read at start (restart evrd to re-read it).",
-	"saveconfig":  "evrd saves every change as it's made.",
-	"restart":     "Restart evrd from the server (rcctl restart evrd, systemctl restart evrd, or docker compose restart) — the holder keeps everyone connected.",
-	"shutdown":    "Stop evrd from the server (rcctl stop evrd, systemctl stop evrd, or docker compose stop).",
-	"listports":   "evrd's ports are in evrd.conf (listen, irc_listen) and on the admin Settings page.",
-	"addport":     "evrd's ports are in evrd.conf (listen, irc_listen) and on the admin Settings page.",
-	"delport":     "evrd's ports are in evrd.conf (listen, irc_listen) and on the admin Settings page.",
-	"showmotd":    "evrd has no message of the day of its own; /motd shows the network's.",
-	"setmotd":     "evrd has no message of the day of its own.",
-	"addmotd":     "evrd has no message of the day of its own.",
-	"clearmotd":   "evrd has no message of the day of its own.",
-	"broadcast":   "evrd can't broadcast to every user yet.",
-	"movenetwork": "Networks can't move between users; add it to the other account instead (the web app's import can copy settings).",
+// notHere are ZNC commands that evrd does another way: the answer is
+// irc.notHere.<command>, saying where.
+var notHere = map[string]bool{
+	"reloadmod": true, "updatemod": true, "rehash": true, "saveconfig": true, "restart": true,
+	"shutdown": true, "listports": true, "addport": true, "delport": true, "showmotd": true,
+	"setmotd": true, "addmotd": true, "clearmotd": true, "broadcast": true, "movenetwork": true,
 }

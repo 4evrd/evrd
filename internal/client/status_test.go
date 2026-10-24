@@ -14,6 +14,7 @@ import (
 
 	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/history"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
 )
@@ -418,8 +419,8 @@ func TestStatusZNCOddsAndEnds(t *testing.T) {
 		ic.status(alias, "loadmod <module>")
 	}
 	ic.status("listbuffers", "#one")
-	for cmd, why := range notHere {
-		ic.status(cmd, why)
+	for cmd := range notHere {
+		ic.status(cmd, messages.English.T("irc.notHere."+cmd))
 	}
 	ic.status("listnicks", "Usage: listnicks <#channel>")
 	ic.status("showchan", "Usage: showchan <#channel>")

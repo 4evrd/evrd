@@ -30,6 +30,7 @@ import (
 	"github.com/4evrd/evrd/internal/languages"
 	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/listen"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/outbound"
 	"github.com/4evrd/evrd/internal/sandbox"
@@ -354,10 +355,14 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		<-irc.Ready()
 		close(clientsBack)
 	}()
+	langs := languages.New(st)
+	msgs := messages.New(langs) // *status in each user's language
+	irc.SetMessages(msgs)
 	srv := evrdhttp.New(b, evrdhttp.Services{
 		Accounts:  acc,
 		Auth:      am,
-		Languages: languages.New(st),
+		Languages: langs,
+		Messages:  msgs,
 		Cluster:   cluster.NewStateService(st),
 	}, cfg, irc, log)
 	srv.SetMetrics(metricsq.New(cfg.Metrics.QueryURL))

@@ -177,6 +177,7 @@ func (s *Handlers) PutLanguage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	s.msgs.Forget()
 	s.log.Info("language pack saved", "admin", admin, "code", p.Code, "messages", len(p.Messages))
 	saved, err := s.langs.LanguagePack(r.Context(), p.Code)
 	if err != nil {
@@ -192,6 +193,7 @@ func (s *Handlers) DeleteLanguage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	s.msgs.Forget()
 	s.log.Info("language pack deleted", "admin", auth.User(r).Username, "code", code)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -228,6 +230,7 @@ func (s *Handlers) PutMyLanguagePack(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	s.msgs.Forget()
 	writeJSON(w, http.StatusOK, s.myPackDTO(id))
 }
 
@@ -236,7 +239,34 @@ func (s *Handlers) DeleteMyLanguagePack(w http.ResponseWriter, r *http.Request) 
 		s.fail(w, err)
 		return
 	}
+	s.msgs.Forget()
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- evrd's IRC texts --------------------------------------------------------
+
+// IRCCoverage is how many of evrd's IRC texts (*status's replies, the irc.*
+// keys of a pack) there are, and how many each language has, built in or
+// from the server's pack. Public, like the packs.
+func (s *Handlers) IRCCoverage(w http.ResponseWriter, r *http.Request) {
+	total, have, err := s.msgs.Coverage(r.Context())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"total": total, "languages": have})
+}
+
+// IRCMessages is a built-in language's IRC texts ("en" has every key: the
+// web app checks packs and makes templates with it). Public.
+func (s *Handlers) IRCMessages(w http.ResponseWriter, r *http.Request) {
+	code := r.PathValue("code")
+	m, ok := s.msgs.Builtin(code)
+	if !ok {
+		writeErr(w, http.StatusNotFound, "no built-in IRC texts for that language")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"code": code, "messages": m})
 }
 
 // languageAllowed says whether u may pick code: a built-in language, a

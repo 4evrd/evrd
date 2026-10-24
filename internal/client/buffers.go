@@ -5,6 +5,7 @@ package client
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"path"
 	"slices"
 	"strconv"
@@ -96,7 +97,7 @@ func (se *session) allBuffers(channels, queries bool) []string {
 
 func (se *session) updatePlayback(buffers []string, f func(*store.BufferPlayback)) bool {
 	if err := se.srv.b.UpdatePlayback(se.net.ID, buffers, f); err != nil {
-		se.statusf("Couldn't save: %v", err)
+		se.say("saveFailed", "error", err)
 		return false
 	}
 	return true
@@ -108,84 +109,88 @@ func (se *session) cmdBuffers([]string) {
 	p := se.playRules()
 	names := se.matchBuffers([]string{"*"})
 	if len(names) == 0 {
-		se.statusf("No buffers on %s yet.", se.net.Name)
+		se.say("buffers.none", "network", se.net.Name)
 		return
 	}
 	for _, n := range names {
-		mode := "keeps"
+		mode := se.tr("buffers.keeps")
 		if p.AutoClears(n) {
-			mode = "auto-clears"
+			mode = se.tr("buffers.autoClears")
 		}
 		own := ""
 		if bp := p.Own(n); bp.Lines != nil || bp.AutoClear != nil {
-			own = " (own settings)"
+			own = " " + se.tr("buffers.own")
 		}
-		se.statusf("  %-24s %4d lines · %-11s · %d to play back%s", n, p.Lines(n), mode, se.srv.b.Waiting(p, se.net.ID, n), own)
+		se.statusf("  %-24s %s · %-11s · %s%s", n, se.tr("buffers.lines", "lines", fmt.Sprintf("%4d", p.Lines(n))), mode, se.tr("buffers.waiting", "count", se.srv.b.Waiting(p, se.net.ID, n)), own)
 	}
-	se.statusf("setbuffer <buffer|*> <lines> · autoclear <buffer> on|off · clearbuffer <buffer> · playbuffer <buffer>")
+	se.say("buffers.footer")
 }
 
 func (se *session) cmdPlayBuffer(args []string) {
 	if se.web != nil {
-		se.statusf("The web chat already shows each buffer's history — scroll up.")
+		se.say("web.history")
 		return
 	}
 	if len(args) != 1 {
-		se.statusf("Usage: playbuffer <channel|nick> — or playback <channel|nick> [lines] for everything saved")
+		se.say("usage.playbuffer")
 		return
 	}
 	p := se.playRules()
 	name := se.matchBuffers(args[:1])[0]
 	if sent := se.playbackSince(name, max(p.Lines(name), 1), p.ClearedAt(name)); sent == 0 {
-		se.statusf("The buffer for %s is empty.", name)
+		se.say("playbuffer.empty", "buffer", name)
 	} else {
-		se.statusf("Replayed %d line(s) of %s.", sent, name)
+		se.say("replayed", "count", sent, "buffer", name)
 	}
 }
 
+// clearBuffers clears names; what is their kind: buffers, channelBuffers
+// or queryBuffers.
 func (se *session) clearBuffers(names []string, what string) {
 	if len(names) == 0 {
-		se.statusf("No %s to clear on %s.", what, se.net.Name)
+		se.say("clear.none."+what, "network", se.net.Name)
 		return
 	}
 	if err := se.srv.b.ClearBuffers(se.net.ID, names); err != nil {
-		se.statusf("Couldn't save: %v", err)
+		se.say("saveFailed", "error", err)
 	} else {
-		se.statusf("Cleared %s on %s — playback starts after now. (History still has them: playback <buffer> or the web chat.)", plural(len(names), what), se.net.Name)
+		se.say("clear.done", "buffers", se.tr("count."+what, "count", len(names)), "network", se.net.Name)
 	}
 }
 
 func (se *session) cmdClearBuffer(args []string) {
 	if len(args) == 0 {
-		se.statusf("Usage: clearbuffer <channel|nick>[,…] (wildcards work: clearbuffer #evrd*)")
+		se.say("usage.clearbuffer")
 		return
 	}
 	var pats []string
 	for _, a := range args {
 		pats = append(pats, strings.Split(a, ",")...)
 	}
-	se.clearBuffers(se.matchBuffers(pats), "buffer")
+	se.clearBuffers(se.matchBuffers(pats), "buffers")
 }
 
-func (se *session) cmdClearAllBuffers([]string) { se.clearBuffers(se.allBuffers(true, true), "buffer") }
+func (se *session) cmdClearAllBuffers([]string) {
+	se.clearBuffers(se.allBuffers(true, true), "buffers")
+}
 func (se *session) cmdClearAllChannelBuffers([]string) {
-	se.clearBuffers(se.allBuffers(true, false), "channel buffer")
+	se.clearBuffers(se.allBuffers(true, false), "channelBuffers")
 }
 func (se *session) cmdClearAllQueryBuffers([]string) {
-	se.clearBuffers(se.allBuffers(false, true), "query buffer")
+	se.clearBuffers(se.allBuffers(false, true), "queryBuffers")
 }
 
 func (se *session) cmdSetBuffer(args []string) {
 	if len(args) == 0 || len(args) > 2 {
-		se.statusf("Usage: setbuffer <channel|nick|*> [lines|-] — * is this network's default; - goes back to the default")
+		se.say("usage.setbuffer")
 		return
 	}
 	whole := args[0] == "*"
 	if len(args) == 1 {
 		if p := se.playRules(); whole {
-			se.statusf("%s plays back %d lines per buffer.", se.net.Name, p.NetworkLines())
+			se.say("setbuffer.network", "network", se.net.Name, "lines", p.NetworkLines())
 		} else {
-			se.statusf("%s plays back %d lines.", args[0], p.Lines(args[0]))
+			se.say("setbuffer.buffer", "buffer", args[0], "lines", p.Lines(args[0]))
 		}
 		return
 	}
@@ -193,7 +198,7 @@ func (se *session) cmdSetBuffer(args []string) {
 	if args[1] != "-" {
 		v, err := strconv.Atoi(args[1])
 		if err != nil || v < 0 || v > maxPlayback {
-			se.statusf("Lines is a number from 0 to %d (or - for the default).", maxPlayback)
+			se.say("setbuffer.badLines", "max", maxPlayback)
 			return
 		}
 		lines = &v
@@ -207,17 +212,17 @@ func (se *session) cmdSetBuffer(args []string) {
 	}
 	p := se.playRules()
 	if whole {
-		se.statusf("Buffers on %s play back %d lines unless they have their own setting.", se.net.Name, p.NetworkLines())
+		se.say("setbuffer.networkSet", "network", se.net.Name, "lines", p.NetworkLines())
 		return
 	}
 	for _, t := range targets {
-		se.statusf("%s plays back %d lines.", t, p.Lines(t))
+		se.say("setbuffer.buffer", "buffer", t, "lines", p.Lines(t))
 	}
 }
 
 func (se *session) cmdAutoClear(args []string) {
 	if len(args) != 2 {
-		se.statusf("Usage: autoclear <channel|nick>[,…] on|off|- — on plays only what's new since a client was last here; - goes back to your account's setting")
+		se.say("usage.autoclear")
 		return
 	}
 	var v *bool
@@ -230,7 +235,7 @@ func (se *session) cmdAutoClear(args []string) {
 		v = &f
 	case "-", "default":
 	default:
-		se.statusf("autoclear is on, off or - (your account's setting).")
+		se.say("autoclear.bad")
 		return
 	}
 	targets := se.matchBuffers(strings.Split(args[0], ","))
@@ -240,9 +245,9 @@ func (se *session) cmdAutoClear(args []string) {
 	p := se.playRules()
 	for _, t := range targets {
 		if p.AutoClears(t) {
-			se.statusf("%s auto-clears: playback is only what's new.", t)
+			se.say("autoclear.on", "buffer", t)
 		} else {
-			se.statusf("%s keeps its buffer: playback is its last %d lines.", t, p.Lines(t))
+			se.say("autoclear.off", "buffer", t, "lines", p.Lines(t))
 		}
 	}
 }

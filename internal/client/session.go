@@ -18,6 +18,7 @@ import (
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/irc"
 	"github.com/4evrd/evrd/internal/links"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/telemetry"
 	"github.com/4evrd/evrd/internal/upstream"
@@ -61,7 +62,8 @@ type session struct {
 	// Attached state. After registration, only the bridge goroutine touches
 	// these, so jumping networks needs no locking.
 	uid      int64
-	acct     store.User // as loaded at attach (LastSeenAt is the previous visit)
+	acct     store.User        // as loaded at attach (LastSeenAt is the previous visit)
+	pr       *messages.Printer // *status's language, for the command running (printer)
 	net      store.Network
 	up       *upstream.Conn
 	unick    string
@@ -558,7 +560,7 @@ func (se *session) jump(n store.Network) error {
 	if se.att != nil {
 		se.att.Update(func(ci *bouncer.ClientInfo) { ci.Networks = []string{n.Name} })
 	}
-	se.statusf("Jumped from %s to %s.", oldName, n.Name)
+	se.say("jumped", "from", oldName, "to", n.Name)
 	se.syncCaps()
 	se.startMarks()
 	se.joinChannels()
@@ -722,7 +724,7 @@ func lineChannel(m irc.Message) string {
 func (se *session) detach(chans []string) {
 	for _, ch := range chans {
 		if !se.up.Joined(ch) {
-			se.statusf("You're not on %s.", ch)
+			se.say("notOn", "channel", ch)
 			continue
 		}
 		se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Detached = true })

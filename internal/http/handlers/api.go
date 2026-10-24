@@ -30,6 +30,7 @@ import (
 	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/http/middleware"
 	"github.com/4evrd/evrd/internal/languages"
+	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/settings"
 	"github.com/4evrd/evrd/internal/store"
@@ -52,6 +53,7 @@ type Handlers struct {
 	acc     accounts.AccountServiceImpl
 	auth    auth.AuthServiceImpl
 	langs   languages.LanguageServiceImpl
+	msgs    messages.MessageServiceImpl
 	state   cluster.StateServiceImpl
 	cfgp    atomic.Pointer[config.Config]
 	// settings, when set, edits the server settings (Admin → Settings).
@@ -68,15 +70,20 @@ type Services struct {
 	Accounts  accounts.AccountServiceImpl
 	Auth      auth.AuthServiceImpl
 	Languages languages.LanguageServiceImpl
-	Cluster   cluster.StateServiceImpl // nodes and leases (with or without a cluster)
+	// Messages is evrd's IRC texts; nil: ones on Languages' packs.
+	Messages messages.MessageServiceImpl
+	Cluster  cluster.StateServiceImpl // nodes and leases (with or without a cluster)
 }
 
 // New makes the handlers on b and svc; status, when set, runs *status
 // commands for the web chat.
 func New(b *bouncer.Bouncer, svc Services, cfg *config.Config, status StatusRunner, log *slog.Logger) *Handlers {
 	s := &Handlers{
-		b: b, acc: svc.Accounts, auth: svc.Auth, langs: svc.Languages, state: svc.Cluster, status: status, log: log,
+		b: b, acc: svc.Accounts, auth: svc.Auth, langs: svc.Languages, msgs: svc.Messages, state: svc.Cluster, status: status, log: log,
 		up: websocket.Upgrader{CheckOrigin: middleware.CheckWebSocketOrigin},
+	}
+	if s.msgs == nil {
+		s.msgs = messages.New(svc.Languages)
 	}
 	s.cfgp.Store(cfg)
 	return s
