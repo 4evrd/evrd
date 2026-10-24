@@ -53,7 +53,7 @@ func (r *UserRepository) DeleteUser(ctx context.Context, id int64) error {
 			return err
 		}
 		if len(netIDs) > 0 {
-			for _, m := range []any{&ReadMarker{}, &BufferPlayback{}} {
+			for _, m := range []any{&ReadMarker{}, &BufferPlayback{}, &DevicePosition{}} {
 				if err := tx.Where("network_id IN ?", netIDs).Delete(m).Error; err != nil {
 					return err
 				}

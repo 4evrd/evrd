@@ -325,6 +325,15 @@ type ReadMarker struct {
 	ReadAt    time.Time
 }
 
+// DevicePosition is how far a device (an IRC client password) has been
+// given a network's lines: where its auto-clearing buffers play back from
+// when it attaches again (bouncer.Playback.From).
+type DevicePosition struct {
+	NetworkID int64  `gorm:"primaryKey;autoIncrement:false"`
+	DeviceKey string `gorm:"primaryKey;size:200"`
+	At        time.Time
+}
+
 // BufferPlayback is a buffer's playback settings and how far it's been
 // cleared, like ZNC's per-channel buffers. Buffer "" holds the network's own:
 // its default line count, and when an IRC client was last on it.

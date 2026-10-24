@@ -182,6 +182,13 @@ type PendingSignInRepositoryImpl interface {
 	DeleteExpiredSignIns(ctx context.Context, now time.Time) error
 }
 
+// DevicePositionRepositoryImpl keeps how far each device has been given each
+// network's lines. DevicePosition's ok is false when there's none.
+type DevicePositionRepositoryImpl interface {
+	DevicePosition(ctx context.Context, networkID int64, deviceKey string) (at time.Time, ok bool, err error)
+	SetDevicePosition(ctx context.Context, networkID int64, deviceKey string, at time.Time) error
+}
+
 // ClientDisconnectRepositoryImpl keeps IRC client disconnects.
 type ClientDisconnectRepositoryImpl interface {
 	// AddClientDisconnect records d, and marks the same device's last
@@ -212,6 +219,7 @@ type Store interface {
 	MFARepositoryImpl
 	PendingSignInRepositoryImpl
 	ClientDisconnectRepositoryImpl
+	DevicePositionRepositoryImpl
 
 	// EncryptSecrets re-encrypts network secrets under the current key.
 	EncryptSecrets(ctx context.Context) (int, error)

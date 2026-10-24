@@ -136,9 +136,17 @@ func TestSetBufferLines(t *testing.T) {
 func TestZNCChannelCommands(t *testing.T) {
 	r := newRig(t)
 	ic := r.attached()
-	eventually(t, "joined #one", func() bool {
+	eventually(t, "joined #one, with its names", func() bool {
 		c, ok := r.b.ConnFor(r.network("one").ID)
-		return ok && c.Joined("#one")
+		if !ok || !c.Joined("#one") {
+			return false
+		}
+		for _, m := range c.Members("#one") {
+			if m.Nick == "op" {
+				return true
+			}
+		}
+		return false
 	})
 	ic.status("listnicks #one", "@op")
 	ic.status("listnicks #nope", "You're not on #nope.")

@@ -19,7 +19,7 @@ func (se *session) drop(reason string) {
 	se.dropMu.Lock()
 	defer se.dropMu.Unlock()
 	if se.dropped == "" {
-		se.dropped = reason
+		se.dropped, se.droppedAt = reason, time.Now()
 	}
 }
 

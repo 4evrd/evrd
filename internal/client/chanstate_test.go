@@ -99,7 +99,16 @@ func TestNamesFromEvrdsStateFitTheClient(t *testing.T) {
 	full.expect("MODE #one +ov bob bob")
 
 	// every prefix and the hosts evrd knows (its own from its JOIN, op's
-	// from evrd's own WHO)
+	// from evrd's own WHO, once that's answered)
+	eventually(t, "op's host known", func() bool {
+		conn, _ := r.b.ConnFor(r.network("one").ID)
+		for _, m := range conn.Members("#one") {
+			if m.Nick == "op" {
+				return m.Host != ""
+			}
+		}
+		return false
+	})
 	full.send("NAMES #one")
 	full.expect(":evrd 353 alice_one = #one :@+bob!b@hostb @op!o@oh alice_one!u@h")
 

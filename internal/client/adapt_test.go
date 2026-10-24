@@ -66,8 +66,16 @@ func TestLinkCapsComeAndGo(t *testing.T) {
 func TestPassThroughAndTranslation(t *testing.T) {
 	r := newRigCaps(t, everyLinkCap)
 	full := r.full()
+	// the fake network gives the topic only when asked: have evrd learn it,
+	// so the plain client's attach burst (from evrd's state) carries it
+	full.send("TOPIC #one")
+	full.until(" 332 ")
+	eventually(t, "topic known", func() bool {
+		c, ok := r.b.ConnFor(r.network("one").ID)
+		return ok && c.Topic("#one") != ""
+	})
 	plain := r.attached()
-	// its channel's names and topic, asked for after 376, before reading on
+	// its channel's names and topic, before reading on
 	plain.until(" 332 ")
 	sim := func(l string) { full.send("SIMULATE " + l) }
 	both := func(l, wantFull, wantPlain string) {
