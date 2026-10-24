@@ -189,6 +189,11 @@ func TestZNCMigration(t *testing.T) {
 	if _, err := e.acc.PasswordLogin("taken", "whatever"); err == nil {
 		t.Error("an existing account's password was replaced by ZNC's")
 	}
+	// a plaintext ZNC password too short for evrd: kept, to be changed
+	_, out = admin.do("POST", "/api/admin/znc/accounts", map[string]any{"text": "<User shorty>\n Pass = tiny\n</User>\n", "users": []map[string]any{{"znc": "shorty", "account": "shorty"}}})
+	if u, err := e.acc.PasswordLogin("shorty", "tiny"); err != nil || !u.MustChangePassword {
+		t.Errorf("a short plaintext ZNC password: %v, must change %v (%v)", err, u.MustChangePassword, out)
+	}
 
 	// then the networks, as the admin, on carol's node
 	id := int64(acc[0].(map[string]any)["id"].(float64))

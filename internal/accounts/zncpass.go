@@ -3,20 +3,85 @@ package accounts
 // Passwords brought over from ZNC: an account made from a ZNC config keeps
 // its owner's ZNC password. ZNC's hash is stored as it was, tagged (zncHash),
 // checked at the first sign-in (web or IRC client) and then replaced with
-// evrd's own bcrypt hash, so it's only ever checked once.
+// evrd's own bcrypt hash, so it's only ever checked once. One that's never
+// used goes after znc_password_days (ExpireZNCPasswords), so ZNC's weaker
+// hashes don't stay in the database.
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/4evrd/evrd/internal/store"
 )
+
+// SetZNCPasswordDays sets how long a ZNC password brought over keeps
+// working before its first use: days from when the account was made.
+func (s *Service) SetZNCPasswordDays(days int) {
+	s.mu.Lock()
+	s.zncTTL = time.Duration(days) * 24 * time.Hour
+	s.mu.Unlock()
+}
+
+// zncExpired reports whether u's password is a ZNC hash past its time.
+func (s *Service) zncExpired(u store.User) bool {
+	s.mu.RLock()
+	ttl := s.zncTTL
+	s.mu.RUnlock()
+	return ttl > 0 && IsZNCHash(u.PasswordHash) && s.now().Sub(u.CreatedAt) > ttl
+}
+
+// ExpireZNCPasswords clears the ZNC passwords no one signed in with in time.
+// Those accounts sign in with SSO (if they were made claimable) or a
+// password an admin sets.
+func (s *Service) ExpireZNCPasswords(ctx context.Context) (int, error) {
+	users, err := s.users.ListUsers(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, u := range users {
+		if s.zncExpired(u) {
+			u.PasswordHash = ""
+			if err := s.users.UpdateUser(ctx, u); err != nil {
+				return n, err
+			}
+			n++
+		}
+	}
+	return n, nil
+}
+
+// ZNCExpiryLoop runs ExpireZNCPasswords every interval while leader says
+// this node is the one to (nil: always).
+func (s *Service) ZNCExpiryLoop(ctx context.Context, interval time.Duration, leader func() bool, log *slog.Logger) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		if leader == nil || leader() {
+			if n, err := s.ExpireZNCPasswords(ctx); err != nil {
+				log.Warn("expire ZNC passwords", "err", err)
+			} else if n > 0 {
+				log.Info("expired unused ZNC passwords", "accounts", n)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
 
 // zncPrefix marks a PasswordHash that's ZNC's: "znc$md5$salt$hex",
 // "znc$sha256$salt$hex" or "znc$argon2id$<the PHC string>".

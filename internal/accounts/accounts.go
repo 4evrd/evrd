@@ -149,6 +149,7 @@ type Service struct {
 	mu        sync.RWMutex // settings that can change at runtime
 	defaults  config.Limits
 	bindHosts []string
+	zncTTL    time.Duration // how long a ZNC password brought over lasts unused
 }
 
 // SetBindHosts sets the bind hosts users may choose from.
@@ -274,7 +275,7 @@ func (s *Service) Create(in CreateInput) (store.User, error) {
 		}
 		u.MustChangePassword = in.Temporary
 	} else if in.PasswordHash != "" {
-		u.PasswordHash = in.PasswordHash
+		u.PasswordHash, u.MustChangePassword = in.PasswordHash, in.Temporary
 	}
 	if in.Subject != "" {
 		sub := in.Subject
@@ -353,12 +354,22 @@ func (s *Service) PasswordLogin(username, password string) (store.User, error) {
 }
 
 // matchPassword checks pw against u's password. A ZNC hash it matches is
-// replaced with evrd's own (best effort: it still matched if saving fails).
+// replaced with evrd's own (best effort: it still matched if saving fails),
+// and one too short for evrd's policy must be changed at the next web
+// sign-in. A ZNC hash past its time (zncExpired) matches nothing, and goes.
 func (s *Service) matchPassword(u *store.User, pw string) bool {
+	if s.zncExpired(*u) {
+		u.PasswordHash = ""
+		_ = s.users.UpdateUser(context.Background(), *u)
+		return false
+	}
 	ok, upgrade := matchHash(u.PasswordHash, pw)
 	if upgrade {
 		if h, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost); err == nil {
 			u.PasswordHash = string(h)
+			if CheckPassword(pw) != nil {
+				u.MustChangePassword = true
+			}
 			_ = s.users.UpdateUser(context.Background(), *u)
 		}
 	}

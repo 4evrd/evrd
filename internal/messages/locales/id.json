@@ -663,6 +663,8 @@
     "irc.settingHelp.irc_link_signin": "Klien IRC tanpa kata sandi yang bisa dipakai mendapat tautan untuk diizinkan di sini, setelah masuk (dengan SSO dan MFA-nya). Butuh URL publik.",
     "irc.settingLabel.irc_remember_days": "Perangkat IRC yang diingat berlaku",
     "irc.settingHelp.irc_remember_days": "Hari sebuah perangkat yang diizinkan lewat tautan dan diingat tetap masuk tanpa bertanya (1–365).",
+    "irc.settingLabel.znc_password_days": "Kata sandi ZNC berlaku",
+    "irc.settingHelp.znc_password_days": "Hari sebuah akun yang dibuat dari konfigurasi ZNC tetap memakai kata sandi ZNC-nya kalau tidak ada yang masuk dengannya (1–3650). Login pertama menggantinya dengan milik evrd; kalau tidak dipakai, dihapus.",
     "irc.web.importTooBig": "file itu terlalu besar untuk diimpor (paling besar {max})",
     "irc.web.importUnknown": "itu bukan file jaringan evrd atau konfigurasi ZNC",
     "irc.web.importUnreadable": "file tidak bisa dibaca: {error}",

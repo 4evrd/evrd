@@ -5,7 +5,7 @@ export default {
   'zncMove.title': 'Impor dari ZNC',
   'zncMove.intro': 'Pindahkan pengguna server ZNC: masing-masing masuk ke akun evrd, dibuat di sini kalau belum ada, dengan network yang kamu pilih.',
   'zncMove.choose': 'Pilih znc.conf',
-  'zncMove.passwords': 'Akun baru tetap memakai kata sandi ZNC pengguna: evrd memeriksa hash ZNC saat dia pertama masuk, lalu menggantinya dengan milik evrd. Hash itu tidak pernah ditampilkan atau diekspor. Akun yang sudah ada tetap memakai kata sandinya sendiri.',
+  'zncMove.passwords': 'Akun baru tetap memakai kata sandi ZNC pengguna: evrd memeriksa hash ZNC saat dia pertama masuk, lalu menggantinya dengan milik evrd. Hash itu tidak pernah ditampilkan atau diekspor. Akun yang sudah ada tetap memakai kata sandinya sendiri. Kalau tidak dipakai, dihapus setelah jumlah hari di Pengaturan → Masuk; yang lebih pendek dari yang diizinkan evrd tetap berlaku, tapi harus diganti saat login web berikutnya.',
   'zncMove.noUsers': 'Tidak ada blok <User> di konfigurasi ini.',
   'zncMove.includeUser': 'Pindahkan {name}',
   'zncMove.account': 'Akun evrd untuk {name}',

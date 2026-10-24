@@ -5,7 +5,7 @@ export default {
   'zncMove.title': 'Importa da ZNC',
   'zncMove.intro': 'Porta qui gli utenti di un server ZNC: ognuno va in un account evrd, creato qui se non esiste ancora, con le reti che scegli.',
   'zncMove.choose': 'Scegli znc.conf',
-  'zncMove.passwords': 'Un account nuovo mantiene la password ZNC dell’utente: evrd verifica l’hash di ZNC al primo accesso, poi lo sostituisce con il proprio. Non viene mai mostrato né esportato. Un account che esiste già mantiene la sua password.',
+  'zncMove.passwords': 'Un account nuovo mantiene la password ZNC dell’utente: evrd verifica l’hash di ZNC al primo accesso, poi lo sostituisce con il proprio. Non viene mai mostrato né esportato. Un account che esiste già mantiene la sua password. Se non usata, viene cancellata dopo i giorni impostati in Impostazioni → Accesso; una più corta di quanto evrd permette continua a funzionare, ma va cambiata al prossimo accesso web.',
   'zncMove.noUsers': 'In questa configurazione non ci sono blocchi <User>.',
   'zncMove.includeUser': 'Porta qui {name}',
   'zncMove.account': 'Account evrd per {name}',

@@ -686,6 +686,8 @@
     "irc.settingHelp.irc_link_signin": "Un client IRC senza una password utilizzabile riceve un link per permetterlo qui, dopo l'accesso (con SSO e il suo MFA). Serve l'URL pubblico.",
     "irc.settingLabel.irc_remember_days": "I dispositivi IRC ricordati valgono",
     "irc.settingHelp.irc_remember_days": "Giorni in cui un dispositivo permesso tramite link e ricordato continua ad accedere senza chiedere (1–365).",
+    "irc.settingLabel.znc_password_days": "Le password ZNC valgono",
+    "irc.settingHelp.znc_password_days": "Giorni in cui un account creato da una configurazione ZNC mantiene la sua password ZNC se nessuno accede con essa (1–3650). Il primo accesso la sostituisce con quella di evrd; se non usata, viene cancellata.",
     "irc.web.importTooBig": "il file è troppo grande da importare (al massimo {max})",
     "irc.web.importUnknown": "non è un file di reti di evrd né una configurazione di ZNC",
     "irc.web.importUnreadable": "impossibile leggere il file: {error}",

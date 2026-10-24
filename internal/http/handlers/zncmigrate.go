@@ -143,6 +143,10 @@ func (s *Handlers) AdminCreateZNCAccounts(w http.ResponseWriter, r *http.Request
 		if zu.Pass != nil {
 			if h, err := accounts.ZNCPasswordHash(zu.Pass.Method, zu.Pass.Hash, zu.Pass.Salt); err == nil {
 				ci.PasswordHash = h
+				// one ZNC kept in plaintext is known now: too short, and
+				// it's changed at the first web sign-in (a hash is checked
+				// at the first sign-in instead)
+				ci.Temporary = zu.Pass.Method == "plain" && accounts.CheckPassword(zu.Pass.Hash) != nil
 			} else {
 				res["note"] = p.T(messages.Area + "znc.passwordUnusable")
 			}

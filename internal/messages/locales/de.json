@@ -686,6 +686,8 @@
     "irc.settingHelp.irc_link_signin": "Ein IRC-Client ohne brauchbares Passwort bekommt einen Link, um ihn hier nach der Anmeldung (mit SSO und dessen MFA) zu erlauben. Braucht die öffentliche URL.",
     "irc.settingLabel.irc_remember_days": "Gemerkte IRC-Geräte gelten",
     "irc.settingHelp.irc_remember_days": "Tage, die ein per Link erlaubtes und gemerktes Gerät sich ohne Nachfrage anmeldet (1–365).",
+    "irc.settingLabel.znc_password_days": "ZNC-Passwörter gelten",
+    "irc.settingHelp.znc_password_days": "Tage, die ein aus einer ZNC-Konfiguration angelegtes Konto sein ZNC-Passwort behält, wenn sich niemand damit anmeldet (1–3650). Die erste Anmeldung ersetzt es durch evrds eigenes; ungenutzt wird es gelöscht.",
     "irc.web.importTooBig": "die Datei ist zu groß zum Importieren (höchstens {max})",
     "irc.web.importUnknown": "das ist weder eine evrd-Netzwerkdatei noch eine ZNC-Konfiguration",
     "irc.web.importUnreadable": "die Datei konnte nicht gelesen werden: {error}",

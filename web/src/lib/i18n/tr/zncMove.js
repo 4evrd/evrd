@@ -5,7 +5,7 @@ export default {
   'zncMove.title': 'ZNC’den içe aktar',
   'zncMove.intro': 'Bir ZNC sunucusunun kullanıcılarını taşı: her biri, yoksa burada açılan bir evrd hesabına, seçtiğin ağlarla birlikte gider.',
   'zncMove.choose': 'znc.conf seç',
-  'zncMove.passwords': 'Yeni bir hesap kullanıcının ZNC parolasını korur: evrd ilk girişte ZNC’nin özetini doğrular, sonra kendi özetiyle değiştirir. Hiçbir zaman gösterilmez ya da dışa aktarılmaz. Zaten var olan bir hesap kendi parolasını korur.',
+  'zncMove.passwords': 'Yeni bir hesap kullanıcının ZNC parolasını korur: evrd ilk girişte ZNC’nin özetini doğrular, sonra kendi özetiyle değiştirir. Hiçbir zaman gösterilmez ya da dışa aktarılmaz. Zaten var olan bir hesap kendi parolasını korur. Kullanılmazsa Ayarlar → Giriş altında belirlenen gün sonra silinir; evrd’nin izin verdiğinden kısa olan çalışmaya devam eder, ama bir sonraki web girişinde değiştirilmesi gerekir.',
   'zncMove.noUsers': 'Bu yapılandırmada <User> bloğu yok.',
   'zncMove.includeUser': '{name} kullanıcısını taşı',
   'zncMove.account': '{name} için evrd hesabı',

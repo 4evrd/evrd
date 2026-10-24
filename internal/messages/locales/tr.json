@@ -658,6 +658,8 @@
     "irc.settingHelp.irc_link_signin": "Kullanılabilir parolası olmayan bir IRC istemcisi, giriş yaptıktan sonra (SSO ve onun MFA'sıyla) buradan izin vermek için bir bağlantı alır. Genel URL gerekir.",
     "irc.settingLabel.irc_remember_days": "Hatırlanan IRC cihazlarının süresi",
     "irc.settingHelp.irc_remember_days": "Bağlantıyla izin verilip hatırlanan bir cihazın sormadan giriş yapmaya devam ettiği gün sayısı (1–365).",
+    "irc.settingLabel.znc_password_days": "ZNC parolalarının süresi",
+    "irc.settingHelp.znc_password_days": "Bir ZNC yapılandırmasından açılan hesabın, kimse onunla giriş yapmazsa ZNC parolasını koruduğu gün sayısı (1–3650). İlk giriş onu evrd'nin kendi parolasıyla değiştirir; kullanılmazsa silinir.",
     "irc.web.importTooBig": "dosya içe aktarmak için çok büyük (en fazla {max})",
     "irc.web.importUnknown": "bu bir evrd ağ dosyası ya da ZNC yapılandırması değil",
     "irc.web.importUnreadable": "dosya okunamadı: {error}",

@@ -663,6 +663,8 @@
     "irc.settingHelp.irc_link_signin": "使えるパスワードを持たない IRC クライアントにリンクを送り、サインイン後（SSO とその MFA で）ここで許可できるようにします。公開 URL が必要です。",
     "irc.settingLabel.irc_remember_days": "記憶した IRC 端末の有効期間",
     "irc.settingHelp.irc_remember_days": "リンクで許可して記憶した端末が、確認なしでサインインし続けられる日数（1–365）。",
+    "irc.settingLabel.znc_password_days": "ZNC パスワードの有効期間",
+    "irc.settingHelp.znc_password_days": "ZNC の設定から作成したアカウントが、誰もサインインしない場合に ZNC パスワードを保持する日数（1–3650）。最初のサインインで evrd 自身のものに置き換わり、使われなければ消去されます。",
     "irc.web.importTooBig": "インポートするにはファイルが大きすぎます(最大 {max})",
     "irc.web.importUnknown": "evrd のネットワークファイルでも ZNC の設定でもありません",
     "irc.web.importUnreadable": "ファイルを読めませんでした: {error}",
