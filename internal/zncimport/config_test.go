@@ -120,10 +120,37 @@ func TestParseConfig(t *testing.T) {
 		t.Errorf("notes %v", x.Notes())
 	}
 
+	if p := users[0].Pass; p == nil || *p != (Pass{Method: "sha256", Hash: "0123abcd", Salt: "salt"}) {
+		t.Errorf("admin's pass %+v", p)
+	}
+	if p := users[1].Pass; p == nil || *p != (Pass{Method: "md5", Hash: "x", Salt: "y"}) {
+		t.Errorf("bob's pass %+v", p)
+	}
+
 	// ZNC before 1.0: the user's servers and channels are its one network
 	bob := users[1].Networks
 	if len(bob) != 1 || bob[0].Name != "default" || bob[0].Nick != "bob" || bob[0].Servers[0].Host != "irc.example.net" || bob[0].Channels[0].Name != "#old" {
 		t.Errorf("bob %+v", bob)
+	}
+}
+
+func TestUserPass(t *testing.T) {
+	for conf, want := range map[string]*Pass{
+		"<User a>\n<Pass password>\nMethod = SHA256\nHash = ab\nSalt = s\n</Pass>\n</User>":       {"sha256", "ab", "s"},
+		"<User a>\n<Pass password>\nMethod = Argon2id\nHash = $argon2id$v=19$x\n</Pass>\n</User>": {"argon2id", "$argon2id$v=19$x", ""},
+		"<User a>\nPass = md5#ab\n</User>":           {"md5", "ab", ""},
+		"<User a>\nPass = ab -\n</User>":             {"md5", "ab", ""},
+		"<User a>\nPass = plain#p#w\n</User>":        {"plain", "p#w", ""},
+		"<User a>\nPass = hunter2\n</User>":          {"plain", "hunter2", ""},
+		"<User a>\n<Network n>\n</Network>\n</User>": nil,
+	} {
+		users, err := ParseConfig([]byte(conf))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := users[0].Pass; (got == nil) != (want == nil) || (got != nil && *got != *want) {
+			t.Errorf("%q: %+v, want %+v", conf, got, want)
+		}
 	}
 }
 

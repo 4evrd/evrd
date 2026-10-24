@@ -43,4 +43,10 @@ export default {
   'transfer.result.skipped': 'Atlandı: zaten var',
   'transfer.result.failed': 'İçe aktarılamadı',
   'transfer.toNetworks': 'Ağlarına git',
+  'transfer.merge': 'Dosyayı birleştir',
+  'transfer.mergeHelp': 'Ayarları korunur; eksik kanallar ve sunucular eklenir, boş olanlar doldurulur.',
+  'transfer.result.merged': 'Birleştirildi',
+  'transfer.adminTitle': '{name} için ağları içe aktar',
+  'transfer.adminIntro': 'Bu hesaba bir evrd dışa aktarımından ya da ZNC yapılandırmasından ağ ekle. Yönetici olarak bir bind host getirebilir ve hesabın ağ sınırını aşabilirsin.',
+  'transfer.toAccount': '{name} hesabına dön',
 }

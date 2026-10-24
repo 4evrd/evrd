@@ -33,6 +33,16 @@ async function req(method, path, body) {
   return data
 }
 
+// download fetches a file to save: its blob, its name, and whether its
+// secrets are sealed (X-Evrd-Secrets) rather than left out.
+async function download(path) {
+  const res = await fetch(path, { headers: language ? { 'X-Evrd-Language': language } : {} })
+  if (res.status === 401) throw new Unauthorized('sign in first')
+  if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status)
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1] || 'evrd-networks.yaml'
+  return { blob: await res.blob(), name, sealed: res.headers.get('X-Evrd-Secrets') !== 'omitted' }
+}
+
 const q = (o) => new URLSearchParams(o).toString()
 
 export const api = {
@@ -84,13 +94,7 @@ export const api = {
   updateNetwork: (id, patch) => req('PATCH', `/api/networks/${id}`, patch),
   removeNetwork: (id) => req('DELETE', `/api/networks/${id}`),
   // a networks file (YAML) to save, and importing one or a ZNC config
-  exportNetworks: async () => {
-    const res = await fetch('/api/networks/export', { headers: language ? { 'X-Evrd-Language': language } : {} })
-    if (res.status === 401) throw new Unauthorized('sign in first')
-    if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status)
-    const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1] || 'evrd-networks.yaml'
-    return { blob: await res.blob(), name, sealed: res.headers.get('X-Evrd-Secrets') !== 'omitted' }
-  },
+  exportNetworks: () => download('/api/networks/export'),
   previewImport: (text) => req('POST', '/api/networks/import/preview', { text }),
   importNetworks: (body) => req('POST', '/api/networks/import', body),
   connect: (id) => req('POST', `/api/networks/${id}/connect`),
@@ -150,6 +154,13 @@ export const api = {
     user: (id) => req('GET', `/api/admin/users/${id}`),
     userOverview: (id) => req('GET', `/api/admin/users/${id}/overview`),
     userReconnects: (id) => req('GET', `/api/admin/users/${id}/reconnects`),
+    // a user's networks file, and importing into their account
+    exportNetworks: (id) => download(`/api/admin/users/${id}/networks/export`),
+    previewImport: (id, text) => req('POST', `/api/admin/users/${id}/networks/import/preview`, { text }),
+    importNetworks: (id, body) => req('POST', `/api/admin/users/${id}/networks/import`, body),
+    // bringing a whole ZNC over: its users' accounts, then their networks
+    zncPreview: (text, accounts) => req('POST', '/api/admin/znc/preview', { text, accounts }),
+    zncAccounts: (text, users) => req('POST', '/api/admin/znc/accounts', { text, users }),
     networkLog: (id, nid) => req('GET', `/api/admin/users/${id}/networks/${nid}/log`),
     networkHealth: (id, nid, range) => req('GET', `/api/admin/users/${id}/networks/${nid}/health?${q({ range })}`),
     metrics: (range) => req('GET', `/api/admin/metrics?range=${encodeURIComponent(range)}`),

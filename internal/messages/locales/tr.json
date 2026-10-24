@@ -670,6 +670,7 @@
     "irc.netfile.unknownField": "{field} evrd'nin bildiği bir ağ ayarı değil, bu yüzden atlandı.",
     "irc.znc.loginPassword": "ZNC'nin {module} modülü parolasını yapılandırmanın dışında tutuyor: Kimlik doğrulama altında gir.",
     "irc.znc.moduleData": "ZNC'nin {module} modülü ayarlarını yapılandırmanın dışında tutuyor: Modüller altında aç ve doldur.",
-    "irc.znc.modulesSkipped": "evrd'de bunlar için modül yok, bu yüzden atlandı: {modules}."
+    "irc.znc.modulesSkipped": "evrd'de bunlar için modül yok, bu yüzden atlandı: {modules}.",
+    "irc.znc.passwordUnusable": "Bu kullanıcının ZNC parolası evrd'nin doğrulayamadığı bir biçimde, bu yüzden hesabın henüz parolası yok: bir parola belirle ya da SSO ile girmesine izin ver."
   }
 }

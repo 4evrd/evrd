@@ -238,6 +238,8 @@ type CreateInput struct {
 	Username string
 	Email    string
 	Password string // optional: empty means SSO / client passwords only
+	// PasswordHash is a password hash brought over instead (ZNCPasswordHash).
+	PasswordHash string
 	// Temporary makes the password one the user must change at first sign-in.
 	Temporary bool
 	Role      string
@@ -271,6 +273,8 @@ func (s *Service) Create(in CreateInput) (store.User, error) {
 			return store.User{}, err
 		}
 		u.MustChangePassword = in.Temporary
+	} else if in.PasswordHash != "" {
+		u.PasswordHash = in.PasswordHash
 	}
 	if in.Subject != "" {
 		sub := in.Subject
@@ -325,7 +329,7 @@ func RandomPassword() (string, error) {
 
 // ChangePassword is the self-service change: the current password must match.
 func (s *Service) ChangePassword(u *store.User, current, next string) error {
-	if u.PasswordHash == "" || bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(current)) != nil {
+	if !s.matchPassword(u, current) {
 		return ErrInvalidCredentials
 	}
 	return s.SetPassword(u, next)
@@ -339,13 +343,26 @@ func (s *Service) PasswordLogin(username, password string) (store.User, error) {
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
 		return store.User{}, ErrInvalidCredentials
 	}
-	if u.PasswordHash == "" || bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
+	if !s.matchPassword(&u, password) {
 		return store.User{}, ErrInvalidCredentials
 	}
 	if u.Suspended {
 		return store.User{}, ErrSuspended
 	}
 	return u, nil
+}
+
+// matchPassword checks pw against u's password. A ZNC hash it matches is
+// replaced with evrd's own (best effort: it still matched if saving fails).
+func (s *Service) matchPassword(u *store.User, pw string) bool {
+	ok, upgrade := matchHash(u.PasswordHash, pw)
+	if upgrade {
+		if h, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost); err == nil {
+			u.PasswordHash = string(h)
+			_ = s.users.UpdateUser(context.Background(), *u)
+		}
+	}
+	return ok
 }
 
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("evrd-timing-dummy"), bcrypt.DefaultCost)
@@ -360,7 +377,7 @@ func (s *Service) IRCLogin(username, secret string) (store.User, string, error) 
 		return store.User{}, "", ErrInvalidCredentials
 	}
 	device := ""
-	ok := u.PasswordHash != "" && bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(secret)) == nil
+	ok := s.matchPassword(&u, secret)
 	if !ok {
 		cps, err := s.passwords.ListClientPasswords(context.Background(), u.ID)
 		if err != nil {

@@ -1,0 +1,27 @@
+// Bringing a whole ZNC over (Admin → Users → Import from ZNC): its users
+// become accounts, and their networks come with them.
+export default {
+  'zncMove.button': 'Importa da ZNC',
+  'zncMove.title': 'Importa da ZNC',
+  'zncMove.intro': 'Porta qui gli utenti di un server ZNC: ognuno va in un account evrd, creato qui se non esiste ancora, con le reti che scegli.',
+  'zncMove.choose': 'Scegli znc.conf',
+  'zncMove.passwords': 'Un account nuovo mantiene la password ZNC dell’utente: evrd verifica l’hash di ZNC al primo accesso, poi lo sostituisce con il proprio. Non viene mai mostrato né esportato. Un account che esiste già mantiene la sua password.',
+  'zncMove.noUsers': 'In questa configurazione non ci sono blocchi <User>.',
+  'zncMove.includeUser': 'Porta qui {name}',
+  'zncMove.account': 'Account evrd per {name}',
+  'zncMove.new': 'Nuovo account',
+  'zncMove.existing': 'Account esistente',
+  'zncMove.willKeepPassword': 'Mantiene la password ZNC',
+  'zncMove.noZncPassword': 'Nessuna password nella configurazione: servirà un’email per SSO, o una password da Reimposta',
+  'zncMove.email': 'Email (facoltativa)',
+  'zncMove.emailFor': 'Email per {name}',
+  'zncMove.emailHelp': 'Con un’email, il primo accesso SSO con lo stesso nome utente e la stessa email rivendica l’account.',
+  'zncMove.go': { one: 'Porta qui {count} utente ({networks} reti)', other: 'Porta qui {count} utenti ({networks} reti)' },
+  'zncMove.progress': 'Importazione di {name} ({n} di {count})…',
+  'zncMove.created': 'Account creato',
+  'zncMove.existed': 'Account già presente',
+  'zncMove.keptPassword': 'password ZNC mantenuta',
+  'zncMove.noPassword': 'nessuna password',
+  'zncMove.claimable': 'rivendicabile con SSO',
+  'zncMove.toUsers': 'Vai agli utenti',
+}

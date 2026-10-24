@@ -698,6 +698,7 @@
     "irc.netfile.unknownField": "{field} non è un'impostazione di rete che evrd conosce, quindi è stata tralasciata.",
     "irc.znc.loginPassword": "Il modulo {module} di ZNC tiene la password fuori dalla configurazione: impostala in Autenticazione.",
     "irc.znc.moduleData": "Il modulo {module} di ZNC tiene le impostazioni fuori dalla configurazione: attivalo e compilalo in Moduli.",
-    "irc.znc.modulesSkipped": "evrd non ha un modulo per questi, quindi sono stati tralasciati: {modules}."
+    "irc.znc.modulesSkipped": "evrd non ha un modulo per questi, quindi sono stati tralasciati: {modules}.",
+    "irc.znc.passwordUnusable": "La password di ZNC di questo utente è in una forma che evrd non sa verificare, quindi l'account non ha ancora una password: impostane una, o lascia che entri con SSO."
   }
 }

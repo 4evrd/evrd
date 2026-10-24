@@ -155,3 +155,52 @@ func TestLooksAndParse(t *testing.T) {
 		t.Errorf("no networks: %v", err)
 	}
 }
+
+func TestMerge(t *testing.T) {
+	store.SetSecretKeys(nil)
+	f, err := Parse([]byte(`
+networks:
+  - name: libera
+    nick: filenick
+    realname: From the file
+    servers:
+      - {host: irc.libera.chat, port: 6697, password: fileserverpw}
+      - {host: new.libera.chat}
+    login: {method: sasl, account: x, password: filepw}
+    certificates: {fingerprints: [aa, bb]}
+    playback: {lines: 10}
+    channels:
+      - {name: "#Evrd", key: filekey, playback: {lines: 5}}
+      - {name: "#new", key: newkey, playback: {lines: 7}}
+    modules: {keepnick: {enabled: true}, perform: {enabled: false}}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := sample()
+	before := sample()
+	x := f.Networks[0]
+	pb := x.Merge(&n, map[string]store.BufferPlayback{"": {Lines: lines(200)}})
+	if n.Nick != before.Nick || n.Realname != before.Realname || n.Password != "saslpass" || n.SASLUser != "bobby" {
+		t.Errorf("merge changed what the network had: %+v", n)
+	}
+	if n.Servers[0].Password != "serverpass" || len(n.Servers) != 3 || n.Servers[2].Host != "new.libera.chat" {
+		t.Errorf("servers %+v", n.Servers)
+	}
+	if strings.Join(n.Channels, " ") != "#evrd #go #new" || n.Channel("#evrd").Key != "chankey" || n.Channel("#new").Key != "newkey" {
+		t.Errorf("channels %v %+v", n.Channels, n.ChannelSettings)
+	}
+	if strings.Join(n.Fingerprints, " ") != "ab12 aa bb" || !n.Modules["keepnick"].Enabled || !n.Modules["perform"].Enabled {
+		t.Errorf("fingerprints, modules: %v %+v", n.Fingerprints, n.Modules)
+	}
+	if !reflect.DeepEqual(pb, Settings{"#evrd": {Lines: lines(5)}, "#new": {Lines: lines(7)}}) { // "" has its own already
+		t.Errorf("playback %+v", pb)
+	}
+	empty := store.Network{Name: "libera"}
+	f, _ = Parse([]byte("networks:\n  - name: libera\n    nick: filenick\n    login: {method: sasl, account: x, password: filepw}\n"))
+	x = f.Networks[0]
+	x.Merge(&empty, nil)
+	if empty.Nick != "filenick" || empty.AuthMethod != "sasl" || empty.Password != "filepw" {
+		t.Errorf("empty fields not filled: %+v", empty)
+	}
+}

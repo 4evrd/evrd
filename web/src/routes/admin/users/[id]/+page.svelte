@@ -21,6 +21,16 @@
   import { t } from '$lib/i18n.svelte.js'
 
   const id = $derived(+page.params.id)
+
+  async function exportNets() {
+    try {
+      const { blob, name, sealed } = await api.admin.exportNetworks(id)
+      const url = URL.createObjectURL(blob)
+      Object.assign(document.createElement('a'), { href: url, download: name }).click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast(sealed ? t('transfer.exported', { count: nets.length }) : t('transfer.exportedNoKey'), sealed ? 'ok' : 'bad')
+    } catch (e) { toast(e.message, 'bad') }
+  }
   const isAdmin = $derived(session.me?.role === 'admin')
   let cur = $state(null) // /api/admin/users/{id}
   let ov = $state(null)  // /api/admin/users/{id}/overview
@@ -161,7 +171,11 @@
   <section class="card enter" id="networks" aria-labelledby="nets-h">
     <div class="section-head">
       <div class="od-stack"><span class="caps">{t('adminUsers.colNetworks')}</span><h2 id="nets-h">{t('adminUsers.networksAndChannels')}</h2></div>
-      <span class="chip">{t('adminUsers.nOf', { n: nets.length, max: limit(cur.limits?.maxNetworks ?? 0) })}</span>
+      <div class="od-cluster">
+        <a class="btn btn-ghost btn-sm" href="/admin/users/{id}/import" data-testid="admin-import"><Icon name="upload" class="i-sm" />{t('transfer.import')}</a>
+        <button class="btn btn-ghost btn-sm" type="button" onclick={exportNets} disabled={!nets.length} data-testid="admin-export"><Icon name="download" class="i-sm" />{t('transfer.export')}</button>
+        <span class="chip">{t('adminUsers.nOf', { n: nets.length, max: limit(cur.limits?.maxNetworks ?? 0) })}</span>
+      </div>
     </div>
     <div class="net-list">
       {#each nets as n (n.id)}

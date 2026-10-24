@@ -43,4 +43,10 @@ export default {
   'transfer.result.skipped': 'Übersprungen: schon hinzugefügt',
   'transfer.result.failed': 'Nicht importiert',
   'transfer.toNetworks': 'Zu deinen Netzwerken',
+  'transfer.merge': 'Datei einmischen',
+  'transfer.mergeHelp': 'Ihre Einstellungen bleiben; fehlende Kanäle und Server kommen dazu, Leeres wird ausgefüllt.',
+  'transfer.result.merged': 'Zusammengeführt',
+  'transfer.adminTitle': 'Netzwerke für {name} importieren',
+  'transfer.adminIntro': 'Füg diesem Konto Netzwerke aus einem evrd-Export oder einer ZNC-Konfiguration hinzu. Als Admin kannst du einen Bind-Host übernehmen und über das Netzwerklimit des Kontos hinausgehen.',
+  'transfer.toAccount': 'Zurück zu {name}',
 }

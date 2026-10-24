@@ -4,7 +4,8 @@ package zncimport
 // <Network>s, with their servers, nicks, channels and the modules evrd has.
 // A part of one works too: a <User> block, or just <Network> blocks.
 //
-// The user's own password (Pass = sha256#…) is never read. Server passwords
+// The user's own password is read only as ZNC's hash of it (Pass), for an
+// admin bringing the user over (accounts.ZNCPasswordHash). Server passwords
 // and channel keys are in the config as plaintext and are taken (evrd
 // encrypts them); what modules keep in ZNC's moddata (SASL and NickServ
 // passwords, perform's commands) isn't in it, so those come with a note.
@@ -142,6 +143,48 @@ func parseConfig(text []byte) (*section, error) {
 type User struct {
 	Name     string
 	Networks []netfile.Network
+	// Pass is the user's password as ZNC keeps it (nil: none in the config).
+	// Never sent anywhere: it's only for accounts.ZNCPasswordHash.
+	Pass *Pass
+}
+
+// Pass is a ZNC user's password: Method is md5, sha256, argon2id or plain
+// (a password ZNC kept as it is, in Hash).
+type Pass struct {
+	Method, Hash, Salt string
+}
+
+// userPass reads a <User>'s password, in any of ZNC's forms:
+//
+//	<Pass password> Method = sha256, Hash = …, Salt = … </Pass>  (1.7 on)
+//	Pass = sha256#hash#salt#   Pass = md5#hash   Pass = plain#password
+//	Pass = <md5 hash> -        Pass = password
+func userPass(u *section) *Pass {
+	for _, p := range u.kids("Pass") {
+		if strings.EqualFold(p.name, "password") {
+			m := strings.ToLower(p.str("Method"))
+			if m == "" {
+				m = "md5"
+			}
+			return &Pass{Method: m, Hash: p.str("Hash"), Salt: p.str("Salt")}
+		}
+	}
+	v, ok := u.get("Pass")
+	if !ok || v == "" {
+		return nil
+	}
+	if h, ok := strings.CutSuffix(v, "-"); ok {
+		return &Pass{Method: "md5", Hash: strings.TrimSpace(h)}
+	}
+	method, rest, _ := strings.Cut(v, "#")
+	switch strings.ToLower(method) {
+	case "md5", "sha256":
+		hash, salt, _ := strings.Cut(rest, "#")
+		return &Pass{Method: strings.ToLower(method), Hash: hash, Salt: strings.TrimSuffix(salt, "#")}
+	case "plain":
+		return &Pass{Method: "plain", Hash: rest}
+	}
+	return &Pass{Method: "plain", Hash: v}
 }
 
 // LooksLikeConfig reports whether text looks like (part of) a ZNC config.
@@ -159,7 +202,7 @@ func ParseConfig(text []byte) ([]User, error) {
 	}
 	var users []User
 	for _, u := range root.kids("User") {
-		users = append(users, User{Name: u.name, Networks: userNetworks(u)})
+		users = append(users, User{Name: u.name, Networks: userNetworks(u), Pass: userPass(u)})
 	}
 	// <Network>s (or one network's <Chan>s and Servers) pasted on their own
 	if nets := userNetworks(root); len(nets) > 0 {

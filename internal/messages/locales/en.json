@@ -689,6 +689,7 @@
     "irc.netfile.unknownField": "{field} isn't a network setting evrd knows, so it was left out.",
     "irc.znc.loginPassword": "ZNC's {module} module keeps its password outside the config: set it under Authentication.",
     "irc.znc.moduleData": "ZNC's {module} module keeps its settings outside the config: turn it on and fill it in under Modules.",
-    "irc.znc.modulesSkipped": "evrd has no module for these, so they were left out: {modules}."
+    "irc.znc.modulesSkipped": "evrd has no module for these, so they were left out: {modules}.",
+    "irc.znc.passwordUnusable": "ZNC's password for this user is in a form evrd can't check, so the account has no password yet: set one, or let them sign in with SSO."
   }
 }
