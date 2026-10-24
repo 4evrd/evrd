@@ -447,6 +447,7 @@
     "irc.web.lockout": "その一覧にはいま使っているアドレス({address})が含まれていません。締め出されてしまいます",
     "irc.web.email": "メールアドレスではないようです",
     "irc.web.nick": "nick に空白や , * ? ! @ # : は使えず、30 文字までです",
+    "irc.web.autoAwayDelay": "自動離席までの時間は 0〜{max} 分です。",
     "irc.web.language": "その言語はウェブアプリにありません",
     "irc.web.ssoPassword": "パスワードはサインインのプロバイダーが管理しています",
     "irc.web.confirmDelete": "確認のためにユーザー名を入力してください",

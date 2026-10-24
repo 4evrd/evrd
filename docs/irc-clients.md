@@ -348,7 +348,15 @@ taking what evrd sends for 30 seconds is let go too (*stopped reading*), so it
 can't hold up the network for your other clients; it gets what it missed when
 it attaches again. On evrd's own IRC ports the kernel also gives up on a dead
 connection sooner: keepalive probes after 30 seconds of silence and, on Linux,
-unacknowledged data after a minute. Admins see the day's total by reason on the admin overview; the
+unacknowledged data after a minute.
+
+**Away while no client is attached.** With *Mark me away when no client is
+attached* on (Account → Profile), evrd sets `/away` on every network once
+nothing is attached, and clears it when something attaches again. It waits
+two minutes after the last client goes before setting it (*Mark me away*: as
+soon as the last client goes, or 1, 2, 5 or 15 minutes after), so a phone that
+drops and comes back doesn't flip you away and back on every network — the
+networks hear nothing at all. Admins see the day's total by reason on the admin overview; the
 metrics `evrd.irc.client_disconnects` (by `reason`) and
 `evrd.irc.client_reconnect_gap` (seconds a device was gone) chart it over
 time. Disconnects are kept 30 days.

@@ -463,6 +463,7 @@
     "irc.web.lockout": "quell'elenco non include l'indirizzo che stai usando ora ({address}): resteresti chiuso fuori",
     "irc.web.email": "non sembra un indirizzo email",
     "irc.web.nick": "i nick non possono contenere spazi o , * ? ! @ # : e hanno al massimo 30 caratteri",
+    "irc.web.autoAwayDelay": "Il ritardo dell’assenza automatica va da 0 a {max} minuti.",
     "irc.web.language": "l'app web non ha quella lingua",
     "irc.web.ssoPassword": "la tua password la gestisce il tuo servizio di accesso",
     "irc.web.confirmDelete": "scrivi il tuo nome utente per confermare",

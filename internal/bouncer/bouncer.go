@@ -65,6 +65,9 @@ type Bouncer struct {
 	shipped     string // the hash of the evrd-links shipped with this evrd
 	resumeAfter <-chan struct{}
 
+	// awayAfter is each user's pending auto-away (state.go's refreshAway).
+	awayAfter map[int64]*time.Timer
+
 	holderMu sync.Mutex
 	holder   HolderStatus // as last asked (Holder)
 	holderAt time.Time

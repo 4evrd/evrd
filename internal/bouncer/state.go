@@ -125,14 +125,52 @@ func (b *Bouncer) seen(userID int64) {
 }
 
 // refreshAway applies auto-away: away on every network while the user has
-// auto-away on and nothing attached, back as soon as something attaches.
+// auto-away on and nothing attached — once the user's delay has passed
+// with nothing attached — and back as soon as something attaches. A client
+// back within the delay sends the networks nothing.
 func (b *Bouncer) refreshAway(userID int64) {
 	u, err := b.store.UserByID(context.Background(), userID)
 	if err != nil {
 		return
 	}
+	away := u.AutoAway && b.Attached(userID) == 0
+	delay := u.AwayDelay()
+	b.mu.Lock()
+	if t, pending := b.awayAfter[userID]; pending {
+		if away && delay > 0 {
+			b.mu.Unlock()
+			return // already counting down
+		}
+		t.Stop()
+		delete(b.awayAfter, userID)
+	}
+	if away && delay > 0 {
+		if b.awayAfter == nil {
+			b.awayAfter = map[int64]*time.Timer{}
+		}
+		var t *time.Timer
+		t = time.AfterFunc(delay, func() {
+			b.mu.Lock()
+			if b.awayAfter[userID] != t {
+				b.mu.Unlock()
+				return // cancelled, or replaced
+			}
+			delete(b.awayAfter, userID)
+			b.mu.Unlock()
+			b.setAway(userID, u.AutoAway && b.Attached(userID) == 0)
+		})
+		b.awayAfter[userID] = t
+		b.mu.Unlock()
+		return
+	}
+	b.mu.Unlock()
+	b.setAway(userID, away)
+}
+
+// setAway marks the user away on every network, or back.
+func (b *Bouncer) setAway(userID int64, away bool) {
 	msg := ""
-	if u.AutoAway && b.Attached(userID) == 0 {
+	if away {
 		msg = AwayMessage
 	}
 	b.mu.Lock()

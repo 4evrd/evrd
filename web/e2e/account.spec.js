@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { login, confirm, freshUser, session, BASE } from './helpers.js'
+import { login, confirm, freshUser, session, choose, BASE } from './helpers.js'
 
 let u
 test.beforeEach(async ({ page }) => {
@@ -22,6 +22,10 @@ test('profile: email, nicks and auto-away are saved', async ({ page }) => {
   await page.getByLabel('Alternate nickname').fill(u.name + '_')
   await page.getByLabel('Real name').fill('E2E Person')
   await page.getByRole('switch', { name: /Mark me away/ }).click()
+  // two minutes after the last client by default; five, here
+  const delay = page.getByTestId('away-delay')
+  await expect(delay).toContainText('2 minutes after the last client goes')
+  await choose(page, delay, '5 minutes after')
   await page.getByRole('button', { name: 'Save profile' }).click()
   await expect(page.getByText('Profile saved')).toBeVisible()
 
@@ -31,7 +35,7 @@ test('profile: email, nicks and auto-away are saved', async ({ page }) => {
   await expect(page.getByLabel('Alternate nickname')).toHaveValue(u.name + '_')
   await expect(page.getByLabel('Real name')).toHaveValue('E2E Person')
   await expect(page.getByRole('switch', { name: /Mark me away/ })).toHaveAttribute('aria-checked', 'true')
-  expect(await u.api.get('/api/me')).toMatchObject({ defaultNick: u.name + 'x', defaultAltNick: u.name + '_', autoAway: true })
+  expect(await u.api.get('/api/me')).toMatchObject({ defaultNick: u.name + 'x', defaultAltNick: u.name + '_', autoAway: true, autoAwayDelay: 300 })
 
   // the new default nick pre-fills the add-network form
   await page.goto('/networks#add')

@@ -33,6 +33,8 @@
   let alt = $state(session.me.defaultAltNick)
   let real = $state(session.me.defaultRealname)
   let away = $state(session.me.autoAway)
+  let awayDelay = $state(String(session.me.autoAwayDelay ?? 120))
+  const AWAY_DELAYS = [0, 60, 120, 300, 900]
   let lang = $state(session.me.language || '')
   const langOptions = $derived([{ value: '', label: t('account.languageBrowser', { language: languages().find((l) => l.code === pickLocale(''))?.name }) }, ...languages().map((l) => ({ value: l.code, label: l.name }))])
   let perr = $state({})
@@ -43,7 +45,7 @@
     if (Object.values(perr).some(Boolean)) return
     saving = true
     try {
-      const patch = { defaultNick: nick.trim(), defaultAltNick: alt.trim(), defaultRealname: real.trim(), autoAway: away, language: lang }
+      const patch = { defaultNick: nick.trim(), defaultAltNick: alt.trim(), defaultRealname: real.trim(), autoAway: away, autoAwayDelay: Number(awayDelay), language: lang }
       if (!me.sso) patch.email = email.trim()
       session.me = await api.updateMe(patch)
       await setLocale(pickLocale(session.me.language))
@@ -155,6 +157,11 @@
               <span class="od-field"><span id="away-l">{t('account.autoAway')}</span><span>{t('account.autoAwayHelp')}</span></span>
               <Switch checked={away} labelledby="away-l" onchange={(v) => (away = v)} />
             </div>
+            {#if away}
+              <Field id="p-away-delay" label={t('account.autoAwayDelay')} help={t('account.autoAwayDelayHelp')} span>
+                <Select id="p-away-delay" bind:value={awayDelay} testid="away-delay" options={AWAY_DELAYS.map((s) => ({ value: String(s), label: s ? t('account.afterMinutes', { count: s / 60 }) : t('account.atOnce') }))} />
+              </Field>
+            {/if}
           </div>
         </div>
         <div class="form-foot"><button class="btn btn-primary" type="submit" disabled={saving}>{#if saving}<span class="spinner" aria-hidden="true"></span>{t('account.saving')}{:else}<Icon name="check" />{t('account.saveProfile')}{/if}</button></div>

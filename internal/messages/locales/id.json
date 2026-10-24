@@ -447,6 +447,7 @@
     "irc.web.lockout": "daftar itu tidak mencakup alamat yang sedang kamu pakai ({address}) — kamu akan terkunci di luar",
     "irc.web.email": "itu tidak tampak seperti alamat email",
     "irc.web.nick": "nick tidak boleh berisi spasi atau , * ? ! @ # : dan paling panjang 30 karakter",
+    "irc.web.autoAwayDelay": "Jeda auto-away adalah 0 sampai {max} menit.",
     "irc.web.language": "aplikasi web tidak punya bahasa itu",
     "irc.web.ssoPassword": "kata sandimu dikelola oleh penyedia login-mu",
     "irc.web.confirmDelete": "ketik nama penggunamu untuk mengonfirmasi",

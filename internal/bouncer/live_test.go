@@ -475,7 +475,7 @@ func TestClientsAndClientLimit(t *testing.T) {
 
 func TestAutoAway(t *testing.T) {
 	r := newLiveRig(t)
-	alice := r.user("alice", func(u *store.User) { u.AutoAway = true })
+	alice := r.user("alice", func(u *store.User) { u.AutoAway, u.AutoAwayDelay = true, new(0) })
 	n := r.network(alice, "net", true)
 	r.b.Start(r.ctx)
 	r.connected(n.ID)
@@ -762,4 +762,45 @@ func TestCloseStrayLinks(t *testing.T) {
 	// an unreachable holder is only logged
 	r.b.SetLinks(links.NewClient(filepath.Join(dir, "nobody.sock")))
 	r.b.CloseStrayLinks(r.ctx)
+}
+
+func TestAutoAwayWaits(t *testing.T) {
+	r := newLiveRig(t)
+	alice := r.user("alice", func(u *store.User) { u.AutoAway, u.AutoAwayDelay = true, new(1) })
+	n := r.network(alice, "net", true)
+	att, err := r.b.AttachClient(alice.ID, 0, ClientInfo{}, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.b.Start(r.ctx)
+	r.connected(n.ID)
+	aways := func() int {
+		n := 0
+		for _, l := range r.irc.Lines() {
+			if strings.HasPrefix(l, "AWAY") {
+				n++
+			}
+		}
+		return n
+	}
+
+	// the client drops and is back within the delay: the network hears nothing
+	att.Release()
+	time.Sleep(300 * time.Millisecond)
+	att, _ = r.b.AttachClient(alice.ID, 0, ClientInfo{}, func(string) {})
+	time.Sleep(1500 * time.Millisecond)
+	if aways() != 0 {
+		t.Fatalf("away flapped: %v", r.irc.Lines())
+	}
+
+	// gone for longer than the delay: away then, and back when one attaches
+	att.Release()
+	time.Sleep(300 * time.Millisecond)
+	if aways() != 0 {
+		t.Fatal("away before the delay")
+	}
+	eventually(t, "away after the delay", func() bool { return r.irc.Has("AWAY :" + AwayMessage) })
+	att, _ = r.b.AttachClient(alice.ID, 0, ClientInfo{}, func(string) {})
+	eventually(t, "back", func() bool { return aways() == 2 })
+	att.Release()
 }
