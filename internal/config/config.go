@@ -376,7 +376,16 @@ type Auth struct {
 	// IRCMFAClientPasswords asks for it with IRC client passwords too.
 	IRCMFA                string
 	IRCMFAClientPasswords bool
+	// IRCLinkSignIn sends an IRC client that comes without a password it
+	// can use a link to allow it on the website (it needs public_url).
+	// IRCRememberDays is how long a device remembered there keeps working.
+	IRCLinkSignIn   bool
+	IRCRememberDays int
 }
+
+// LinkSignIn reports whether IRC sign-in by link is on: irc_link_signin,
+// with a public URL to link to.
+func (c *Config) LinkSignIn() bool { return c.Auth.IRCLinkSignIn && c.PublicURL != "" }
 
 // OIDCEnabled reports whether SSO sign-in is configured.
 func (a Auth) OIDCEnabled() bool { return a.OIDCIssuer != "" }
@@ -435,6 +444,8 @@ func Default() *Config {
 			LDAPUserFilter:   "(uid={username})",
 			LDAPLogin:        "username",
 			IRCMFA:           "optional",
+			IRCLinkSignIn:    true,
+			IRCRememberDays:  30,
 		},
 		Limits:   Limits{MaxNetworks: 0, MaxClients: 0, BacklogLines: 2000},
 		Outbound: Outbound{ConnectRate: 5, PreferIPv6: true},
@@ -695,6 +706,13 @@ func (c *Config) set(key, val string) error {
 		c.Auth.IRCMFA, err = oneOf(val, "off", "optional", "required")
 	case "irc_mfa_client_passwords":
 		c.Auth.IRCMFAClientPasswords, err = parseBool(val)
+	case "irc_link_signin":
+		c.Auth.IRCLinkSignIn, err = parseBool(val)
+	case "irc_remember_days":
+		c.Auth.IRCRememberDays, err = strconv.Atoi(val)
+		if err == nil && (c.Auth.IRCRememberDays < 1 || c.Auth.IRCRememberDays > 365) {
+			err = fmt.Errorf("want 1 to 365 days, got %d", c.Auth.IRCRememberDays)
+		}
 	case "logto_m2m_client_id":
 		c.Auth.LogtoM2MClientID = val
 	case "logto_m2m_client_secret":

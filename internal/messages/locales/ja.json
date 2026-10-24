@@ -638,6 +638,24 @@
     "irc.settingLabel.irc_mfa": "IRC の二要素認証",
     "irc.settingHelp.irc_mfa": "パスワードでサインインする IRC クライアントに、認証アプリのコードも求めるタイミング: しない（off）、ユーザーが希望したとき（optional）、常に（required — ユーザーはオフにできません）。",
     "irc.settingLabel.irc_mfa_client_passwords": "クライアントパスワードでも二要素認証",
-    "irc.settingHelp.irc_mfa_client_passwords": "IRC クライアントパスワードはランダムで端末ごと、取り消しもできるため、これがオンでない限り二要素認証は不要です。"
+    "irc.settingHelp.irc_mfa_client_passwords": "IRC クライアントパスワードはランダムで端末ごと、取り消しもできるため、これがオンでない限り二要素認証は不要です。",
+    "irc.signin.tooMany": "開いているサインインリンクが多すぎます。数分後にもう一度お試しください",
+    "irc.signin.gone": "このリンクは期限切れか、すでに使われています",
+    "irc.signin.notYours": "このサインインは別のアカウントのものです",
+    "irc.signin.noSecret": "クライアントは記憶できるシークレットを送っていません",
+    "irc.signin.forbidden": "このアカウントはサインインを許可できません",
+    "irc.signin.link": "接続するにはウェブサイトでサインインしてください: {url}（リンクは 1 回、{minutes} 分間有効です）。",
+    "irc.signin.waiting": "ウェブサイトでの許可を待っています: {url}",
+    "irc.signin.expired": "サインインリンクの期限が切れました。もう一度接続してください。",
+    "irc.signin.denied": "ウェブサイトでサインインが拒否されました。",
+    "irc.signin.allowed": "ウェブサイトで許可されました。ようこそ。",
+    "irc.signin.otherNode": "許可されました。完了するにはもう一度接続してください（あなたのバウンサーはクラスターの別のサーバーで動いています）。",
+    "irc.mfa.challengeOrLink": "{network} に入る前に二要素認証が必要です: /msg {status} otp <コード>、またはウェブサイトでこのサインインを許可してください: {url}",
+    "irc.mfa.linkOnly": "{network} に入る前に、ウェブサイトでこのサインインを許可してください: {url}",
+    "irc.event.attachedLink": "{client} が接続しました（ウェブサイトで許可）",
+    "irc.settingLabel.irc_link_signin": "リンクでの IRC サインイン",
+    "irc.settingHelp.irc_link_signin": "使えるパスワードを持たない IRC クライアントにリンクを送り、サインイン後（SSO とその MFA で）ここで許可できるようにします。公開 URL が必要です。",
+    "irc.settingLabel.irc_remember_days": "記憶した IRC 端末の有効期間",
+    "irc.settingHelp.irc_remember_days": "リンクで許可して記憶した端末が、確認なしでサインインし続けられる日数（1–365）。"
   }
 }

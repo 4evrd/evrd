@@ -113,6 +113,11 @@ type AccountServiceImpl interface {
 	PasswordLogin(username, password string) (store.User, error)
 	IRCLogin(username, secret string) (store.User, string, error)
 	NewClientPassword(userID int64, name string) (store.ClientPassword, string, error)
+	// RememberDevice makes a client password for a device an IRC sign-in
+	// was allowed for on the website, lasting ttl: a new secret (returned,
+	// shown once), or, with hash set, the bcrypt hash of the one the
+	// client sent.
+	RememberDevice(userID int64, name, hash string, ttl time.Duration) (store.ClientPassword, string, error)
 	CanCreateNetwork(u store.User) error
 	GuardAdminChange(before store.User, stillAdmin bool) error
 	CheckNetworkName(userID int64, name string, exceptID int64) error
@@ -362,6 +367,9 @@ func (s *Service) IRCLogin(username, secret string) (store.User, string, error) 
 			return store.User{}, "", err
 		}
 		for _, cp := range cps {
+			if cp.ExpiresAt != nil && !s.now().Before(*cp.ExpiresAt) {
+				continue // a remembered device's, past its time
+			}
 			if bcrypt.CompareHashAndPassword([]byte(cp.Hash), []byte(secret)) == nil {
 				_ = s.passwords.TouchClientPassword(context.Background(), cp.ID, s.now())
 				ok, device = true, cp.Name
@@ -388,22 +396,48 @@ func (s *Service) NewClientPassword(userID int64, name string) (store.ClientPass
 	if name == "" || utf8.RuneCountInString(name) > 64 {
 		return store.ClientPassword{}, "", invalid("clientPasswordName")
 	}
-	b := make([]byte, 20)
-	if _, err := rand.Read(b); err != nil {
-		return store.ClientPassword{}, "", err
-	}
-	secret := strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b))
-	// Grouped for reading aloud / typing: xxxx-xxxx-…
-	var parts []string
-	for i := 0; i < len(secret); i += 4 {
-		parts = append(parts, secret[i:min(i+4, len(secret))])
-	}
-	secret = strings.Join(parts, "-")
-	h, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
+	secret, h, err := newClientSecret()
 	if err != nil {
 		return store.ClientPassword{}, "", err
 	}
-	cp, err := s.passwords.CreateClientPassword(context.Background(), store.ClientPassword{UserID: userID, Name: name, Hash: string(h)})
+	cp, err := s.passwords.CreateClientPassword(context.Background(), store.ClientPassword{UserID: userID, Name: name, Hash: h})
+	return cp, secret, err
+}
+
+// newClientSecret is a new client password and its bcrypt hash: 32 random
+// base32 characters, grouped xxxx-xxxx-… for reading aloud and typing.
+func newClientSecret() (secret, hash string, err error) {
+	b := make([]byte, 20)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", err
+	}
+	raw := strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b))
+	var parts []string
+	for i := 0; i < len(raw); i += 4 {
+		parts = append(parts, raw[i:min(i+4, len(raw))])
+	}
+	secret = strings.Join(parts, "-")
+	h, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
+	return secret, string(h), err
+}
+
+func (s *Service) RememberDevice(userID int64, name, hash string, ttl time.Duration) (store.ClientPassword, string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "IRC client"
+	}
+	if utf8.RuneCountInString(name) > 64 {
+		name = string([]rune(name)[:64])
+	}
+	secret := ""
+	if hash == "" {
+		var err error
+		if secret, hash, err = newClientSecret(); err != nil {
+			return store.ClientPassword{}, "", err
+		}
+	}
+	until := s.now().Add(ttl)
+	cp, err := s.passwords.CreateClientPassword(context.Background(), store.ClientPassword{UserID: userID, Name: name, Hash: hash, Remembered: true, ExpiresAt: &until})
 	return cp, secret, err
 }
 

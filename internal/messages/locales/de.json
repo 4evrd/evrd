@@ -660,6 +660,24 @@
     "irc.settingLabel.irc_mfa": "Zweiter Faktor für IRC",
     "irc.settingHelp.irc_mfa": "Wann IRC-Clients, die sich mit einem Passwort anmelden, zusätzlich einen Code aus einer Authenticator-App brauchen: nie (off), wenn der Nutzer es möchte (optional) oder immer (required — Nutzer können es nicht ausschalten).",
     "irc.settingLabel.irc_mfa_client_passwords": "Zweiter Faktor auch mit Client-Passwörtern",
-    "irc.settingHelp.irc_mfa_client_passwords": "IRC-Client-Passwörter sind zufällig, gelten pro Gerät und lassen sich widerrufen; sie brauchen keinen zweiten Faktor, außer dies ist eingeschaltet."
+    "irc.settingHelp.irc_mfa_client_passwords": "IRC-Client-Passwörter sind zufällig, gelten pro Gerät und lassen sich widerrufen; sie brauchen keinen zweiten Faktor, außer dies ist eingeschaltet.",
+    "irc.signin.tooMany": "zu viele Anmelde-Links sind offen — versuche es in ein paar Minuten noch einmal",
+    "irc.signin.gone": "dieser Link ist abgelaufen oder wurde schon benutzt",
+    "irc.signin.notYours": "diese Anmeldung gehört zu einem anderen Konto",
+    "irc.signin.noSecret": "der Client hat kein Geheimnis gesendet, das man sich merken kann",
+    "irc.signin.forbidden": "dieses Konto kann keine Anmeldungen erlauben",
+    "irc.signin.link": "Melde dich auf der Website an, um zu verbinden: {url} (der Link funktioniert einmal, {minutes} Minuten lang).",
+    "irc.signin.waiting": "Warte auf die Freigabe auf der Website: {url}",
+    "irc.signin.expired": "Der Anmelde-Link ist abgelaufen — verbinde dich neu.",
+    "irc.signin.denied": "Die Anmeldung wurde auf der Website abgelehnt.",
+    "irc.signin.allowed": "Auf der Website erlaubt — willkommen.",
+    "irc.signin.otherNode": "Erlaubt — verbinde dich neu, um fertig zu werden (dein Bouncer läuft auf einem anderen Server des Clusters).",
+    "irc.mfa.challengeOrLink": "Bevor du auf {network} bist, ist ein zweiter Faktor nötig: /msg {status} otp <code>, oder erlaube diese Anmeldung auf der Website: {url}",
+    "irc.mfa.linkOnly": "Erlaube diese Anmeldung auf der Website, bevor du auf {network} bist: {url}",
+    "irc.event.attachedLink": "{client} verbunden, auf der Website erlaubt",
+    "irc.settingLabel.irc_link_signin": "IRC-Anmeldung per Link",
+    "irc.settingHelp.irc_link_signin": "Ein IRC-Client ohne brauchbares Passwort bekommt einen Link, um ihn hier nach der Anmeldung (mit SSO und dessen MFA) zu erlauben. Braucht die öffentliche URL.",
+    "irc.settingLabel.irc_remember_days": "Gemerkte IRC-Geräte gelten",
+    "irc.settingHelp.irc_remember_days": "Tage, die ein per Link erlaubtes und gemerktes Gerät sich ohne Nachfrage anmeldet (1–365)."
   }
 }

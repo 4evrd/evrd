@@ -651,6 +651,24 @@
     "irc.settingLabel.irc_mfa": "Second factor for IRC",
     "irc.settingHelp.irc_mfa": "When IRC clients signing in with a password also need a code from an authenticator app: never (off), when the user asks for it (optional), or always (required — users can't turn it off).",
     "irc.settingLabel.irc_mfa_client_passwords": "Second factor with client passwords too",
-    "irc.settingHelp.irc_mfa_client_passwords": "IRC client passwords are random, per device and revocable, so they don't need a second factor unless this is on."
+    "irc.settingHelp.irc_mfa_client_passwords": "IRC client passwords are random, per device and revocable, so they don't need a second factor unless this is on.",
+    "irc.signin.tooMany": "too many sign-in links are open — try again in a few minutes",
+    "irc.signin.gone": "this link has expired or was already used",
+    "irc.signin.notYours": "this sign-in is for another account",
+    "irc.signin.noSecret": "the client didn't send a secret that can be remembered",
+    "irc.signin.forbidden": "this account can't allow sign-ins",
+    "irc.signin.link": "Sign in on the website to connect: {url} (the link works once, for {minutes} minutes).",
+    "irc.signin.waiting": "Waiting to be allowed on the website: {url}",
+    "irc.signin.expired": "The sign-in link expired — connect again.",
+    "irc.signin.denied": "The sign-in was turned away on the website.",
+    "irc.signin.allowed": "Allowed on the website — welcome.",
+    "irc.signin.otherNode": "Allowed — connect again to finish (your bouncer runs on another server of the cluster).",
+    "irc.mfa.challengeOrLink": "A second factor is needed before you're on {network}: /msg {status} otp <code>, or allow this sign-in on the website: {url}",
+    "irc.mfa.linkOnly": "Allow this sign-in on the website before you're on {network}: {url}",
+    "irc.event.attachedLink": "{client} attached, allowed on the website",
+    "irc.settingLabel.irc_link_signin": "IRC sign-in by link",
+    "irc.settingHelp.irc_link_signin": "An IRC client without a password it can use gets a link to allow it here, after signing in (with SSO and its MFA). Needs the public URL.",
+    "irc.settingLabel.irc_remember_days": "Remembered IRC devices last",
+    "irc.settingHelp.irc_remember_days": "Days a device allowed by link and remembered keeps signing in without asking (1–365)."
   }
 }

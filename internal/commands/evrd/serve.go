@@ -2,6 +2,7 @@ package evrd
 
 import (
 	"context"
+	"github.com/4evrd/evrd/internal/ircsignin"
 	"github.com/4evrd/evrd/internal/mfa"
 	"io"
 	"log/slog"
@@ -362,13 +363,16 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 	irc.SetSignIns(am)     // the lockout, and SSO passwords (sso_irc_password)
 	factors := mfa.New(st) // second factors for IRC sign-ins (irc_mfa)
 	irc.SetSecondFactors(factors, mfa.PolicyOf(cfg.Auth))
+	signIns := ircsignin.New(st, acc) // IRC sign-in by link (irc_link_signin)
+	irc.SetLinkSignIn(signIns, cfg.LinkSignIn())
 	srv := evrdhttp.New(b, evrdhttp.Services{
-		Accounts:  acc,
-		Auth:      am,
-		Languages: langs,
-		Messages:  msgs,
-		Cluster:   cluster.NewStateService(st),
-		MFA:       factors,
+		Accounts:   acc,
+		Auth:       am,
+		Languages:  langs,
+		Messages:   msgs,
+		Cluster:    cluster.NewStateService(st),
+		MFA:        factors,
+		IRCSignIns: signIns,
 	}, cfg, irc, log)
 	srv.SetMetrics(metricsq.New(cfg.Metrics.QueryURL))
 	srv.SetSettings(sm)
@@ -413,6 +417,7 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		acc.SetBindHosts(live.Outbound.BindHosts)
 		am.SetConfig(live.Auth)
 		irc.SetMFAPolicy(mfa.PolicyOf(live.Auth))
+		irc.SetLinkSignInOn(live.LinkSignIn())
 		ob.SetRate(live.Outbound.ConnectRate)
 		ob.SetIPv4First(!live.Outbound.PreferIPv6)
 		b.SetModulesOff(live.ModulesOff)

@@ -660,6 +660,24 @@
     "irc.settingLabel.irc_mfa": "Segundo factor para IRC",
     "irc.settingHelp.irc_mfa": "Cuándo los clientes IRC que entran con contraseña necesitan además un código de una app de autenticación: nunca (off), cuando el usuario lo pide (optional) o siempre (required — los usuarios no pueden desactivarlo).",
     "irc.settingLabel.irc_mfa_client_passwords": "Segundo factor también con contraseñas de cliente",
-    "irc.settingHelp.irc_mfa_client_passwords": "Las contraseñas de cliente IRC son aleatorias, por dispositivo y revocables, así que no necesitan un segundo factor salvo que esto esté activado."
+    "irc.settingHelp.irc_mfa_client_passwords": "Las contraseñas de cliente IRC son aleatorias, por dispositivo y revocables, así que no necesitan un segundo factor salvo que esto esté activado.",
+    "irc.signin.tooMany": "hay demasiados enlaces de inicio de sesión abiertos — vuelve a intentarlo en unos minutos",
+    "irc.signin.gone": "este enlace ha caducado o ya se usó",
+    "irc.signin.notYours": "este inicio de sesión es de otra cuenta",
+    "irc.signin.noSecret": "el cliente no envió un secreto que se pueda recordar",
+    "irc.signin.forbidden": "esta cuenta no puede permitir inicios de sesión",
+    "irc.signin.link": "Inicia sesión en la web para conectarte: {url} (el enlace sirve una vez, durante {minutes} minutos).",
+    "irc.signin.waiting": "Esperando a que se permita en la web: {url}",
+    "irc.signin.expired": "El enlace de inicio de sesión caducó — vuelve a conectarte.",
+    "irc.signin.denied": "El inicio de sesión se rechazó en la web.",
+    "irc.signin.allowed": "Permitido en la web — bienvenido.",
+    "irc.signin.otherNode": "Permitido — vuelve a conectarte para terminar (tu bouncer funciona en otro servidor del clúster).",
+    "irc.mfa.challengeOrLink": "Hace falta un segundo factor antes de entrar en {network}: /msg {status} otp <código>, o permite este inicio de sesión en la web: {url}",
+    "irc.mfa.linkOnly": "Permite este inicio de sesión en la web antes de entrar en {network}: {url}",
+    "irc.event.attachedLink": "{client} conectado, permitido en la web",
+    "irc.settingLabel.irc_link_signin": "Inicio de sesión IRC por enlace",
+    "irc.settingHelp.irc_link_signin": "Un cliente IRC sin una contraseña que sirva recibe un enlace para permitirlo aquí, tras iniciar sesión (con SSO y su MFA). Necesita la URL pública.",
+    "irc.settingLabel.irc_remember_days": "Los dispositivos IRC recordados duran",
+    "irc.settingHelp.irc_remember_days": "Días que un dispositivo permitido por enlace y recordado sigue entrando sin preguntar (1–365)."
   }
 }

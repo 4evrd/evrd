@@ -38,6 +38,7 @@ are stored in the database and win over the file (see below).
 | `oidc_issuer`, `oidc_client_id`, `oidc_client_secret` (`EVRD_OIDC_CLIENT_SECRET`) | — | single sign-on with any OpenID Connect provider |
 | `oidc_label`, `oidc_auto_create`, `oidc_link_existing`, `oidc_admin_role` | `single sign-on`, `yes`, `no`, — | sign-in button text and account rules for SSO |
 | `oidc_roles_claim`, `oidc_scopes` | `roles`, — | where the roles for `oidc_admin_role` are in the ID token (a claim, or a dotted path), and extra scopes to ask for; see [providers](#oidc-providers) |
+| `irc_link_signin`, `irc_remember_days` | `yes` (with `public_url`), `30` | IRC clients without a usable password get a link to allow them on the website, remembering the device for that many days; see [signing in by link](irc-clients.md#signing-in-by-link) |
 | `irc_mfa`, `irc_mfa_client_passwords` | `optional`, `no` | a second factor (authenticator app) for IRC sign-ins with a password: `off`, `optional` (each user's choice on *Account → Security*) or `required` (everyone; users can't turn it off); `irc_mfa_client_passwords` asks for it with IRC client passwords too. See [the IRC clients guide](irc-clients.md#a-second-factor) |
 | `sso_irc_password` | `off` | let SSO accounts use their provider password in IRC clients: `password_grant`, `ldap` or `logto`, each with settings of its own; see [SSO passwords in IRC clients](#sso-passwords-in-irc-clients) |
 | `max_networks`, `max_clients`, `backlog_lines` | `0`, `0`, `2000` | per-user defaults (0 = unlimited); admins override per user |
@@ -156,8 +157,10 @@ The roles claim may hold a list or one space-separated string; a missing one
 ### SSO passwords in IRC clients
 
 An IRC client can't go through the provider's sign-in page, and OpenID Connect
-itself can't check a password, so by default an SSO account uses **IRC client
-passwords** there. `sso_irc_password` lets it use its provider password too,
+itself can't check a password. The recommended way for SSO accounts is
+**[signing in by link](irc-clients.md#signing-in-by-link)** (on by default with
+`public_url`): it works with any provider and its MFA, and needs no settings
+here. **IRC client passwords** work too. `sso_irc_password` lets it use its provider password too,
 checked one of three ways. All of these are in *Admin → Settings → SSO
 passwords in IRC* too, and apply at once.
 

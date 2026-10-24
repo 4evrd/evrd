@@ -118,7 +118,17 @@ func (m *Manager) conf() config.Auth {
 
 type pendingLogin struct {
 	nonce, verifier string
+	next            string // where to go once signed in (a path of the app)
 	expires         time.Time
+}
+
+// SafeNext is next if it's a path of this app ("/irc/approve/…"), else "/":
+// never another site's address (//evil.example, /\evil.example).
+func SafeNext(next string) string {
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/\\") || strings.ContainsAny(next, "\r\n\\") {
+		return "/"
+	}
+	return next
 }
 
 // New builds the manager, discovering the OIDC provider when one is
@@ -393,7 +403,7 @@ func (m *Manager) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 			delete(m.pending, k)
 		}
 	}
-	m.pending[state] = pendingLogin{nonce: nonce, verifier: verifier, expires: now.Add(10 * time.Minute)}
+	m.pending[state] = pendingLogin{nonce: nonce, verifier: verifier, next: SafeNext(r.URL.Query().Get("next")), expires: now.Add(10 * time.Minute)}
 	m.mu.Unlock()
 	http.Redirect(w, r, m.oauth.AuthCodeURL(state, oidc.Nonce(nonce), oauth2.S256ChallengeOption(verifier)), http.StatusFound)
 }
@@ -515,7 +525,7 @@ func (m *Manager) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	m.log.Info("sign-in", "user", u.Username, "method", "oidc")
 	telemetry.WebLogins.Add(r.Context(), 1, telemetry.Attrs("method", "oidc", "result", "ok"))
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, SafeNext(p.next), http.StatusFound)
 }
 
 // provision finds or creates the account for an SSO identity. A non-empty

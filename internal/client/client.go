@@ -58,8 +58,9 @@ type Server struct {
 
 	msgs messages.MessageServiceImpl // *status's texts; nil: English
 
-	signIns SignIns  // nil: no SSO passwords, no lockout (tests)
-	mfa     mfaState // second factors for IRC sign-ins (mfa.go)
+	signIns SignIns   // nil: no SSO passwords, no lockout (tests)
+	mfa     mfaState  // second factors for IRC sign-ins (mfa.go)
+	link    linkState // sign-in by link (link.go)
 
 	// the connection holder, holding clients (hold.go); nil: none
 	holder      *links.Client

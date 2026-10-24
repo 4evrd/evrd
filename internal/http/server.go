@@ -136,6 +136,10 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/me/mfa/totp/confirm", user(h.ConfirmTOTP))
 	mux.HandleFunc("POST /api/me/mfa/totp/remove", user(h.DisableTOTP))
 	mux.HandleFunc("POST /api/me/mfa/recovery", user(h.NewRecoveryCodes))
+	// IRC sign-in by link: the page a client's link opens
+	mux.HandleFunc("GET /api/irc-signins/{token}", user(h.IRCSignIn))
+	mux.HandleFunc("POST /api/irc-signins/{token}/allow", user(h.AllowIRCSignIn))
+	mux.HandleFunc("POST /api/irc-signins/{token}/deny", user(h.DenyIRCSignIn))
 	mux.HandleFunc("GET /api/me/sessions", user(h.ListSessions))
 	mux.HandleFunc("DELETE /api/me/sessions/{id}", user(h.RevokeSession))
 	mux.HandleFunc("POST /api/me/sessions/revoke-others", user(h.RevokeOtherSessions))

@@ -25,6 +25,8 @@ export default {
   'clients.ssoWorksTitle': 'La tua password {sso} funziona anche nei client IRC.',
   'clients.ssoWorks': 'Usala come ultima parte della password del server, {format}, oppure crea una password client per ogni client.',
   'clients.useSsoOrClientPassword': 'Usa la tua password {sso} o una password client qui sotto.',
+  'clients.rememberedUntil': 'ricordato fino al {date}',
+  'clients.rememberedExpired': 'ricordato, scaduto',
   'clients.leaveOut': 'Togli {path} per collegarti alla tua prima rete.',
   'clients.leaveOutNamed': 'Togli {path} per collegarti alla tua prima rete, {network}.',
   'clients.setupGuide': 'Guida',

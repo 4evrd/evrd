@@ -56,7 +56,7 @@
 
       {#if cfg.sso}
         <div class="od-cluster">
-          <a class="btn btn-primary" id="sso-btn" href="/auth/login" data-sveltekit-reload onclick={() => (leaving = true)}>
+          <a class="btn btn-primary" id="sso-btn" href={location.pathname === '/' ? '/auth/login' : '/auth/login?next=' + encodeURIComponent(location.pathname)} data-sveltekit-reload onclick={() => (leaving = true)}>
             {#if leaving}<span class="spinner" aria-hidden="true"></span>{t('shell.redirecting')}{:else}{t('shell.continueWith', { provider: cfg.ssoLabel })}<Icon name="chevron" />{/if}
           </a>
         </div>

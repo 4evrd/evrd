@@ -638,6 +638,24 @@
     "irc.settingLabel.irc_mfa": "Faktor kedua untuk IRC",
     "irc.settingHelp.irc_mfa": "Kapan klien IRC yang masuk dengan kata sandi juga butuh kode dari aplikasi autentikator: tidak pernah (off), jika pengguna memintanya (optional), atau selalu (required — pengguna tidak bisa mematikannya).",
     "irc.settingLabel.irc_mfa_client_passwords": "Faktor kedua juga untuk kata sandi klien",
-    "irc.settingHelp.irc_mfa_client_passwords": "Kata sandi klien IRC acak, per perangkat dan bisa dicabut, jadi tidak butuh faktor kedua kecuali ini dinyalakan."
+    "irc.settingHelp.irc_mfa_client_passwords": "Kata sandi klien IRC acak, per perangkat dan bisa dicabut, jadi tidak butuh faktor kedua kecuali ini dinyalakan.",
+    "irc.signin.tooMany": "terlalu banyak tautan masuk yang terbuka — coba lagi dalam beberapa menit",
+    "irc.signin.gone": "tautan ini sudah kedaluwarsa atau sudah dipakai",
+    "irc.signin.notYours": "masuk ini untuk akun lain",
+    "irc.signin.noSecret": "klien tidak mengirim rahasia yang bisa diingat",
+    "irc.signin.forbidden": "akun ini tidak bisa mengizinkan masuk",
+    "irc.signin.link": "Masuk di situs web untuk tersambung: {url} (tautan berlaku sekali, selama {minutes} menit).",
+    "irc.signin.waiting": "Menunggu diizinkan di situs web: {url}",
+    "irc.signin.expired": "Tautan masuk sudah kedaluwarsa — sambungkan lagi.",
+    "irc.signin.denied": "Masuk ditolak di situs web.",
+    "irc.signin.allowed": "Diizinkan di situs web — selamat datang.",
+    "irc.signin.otherNode": "Diizinkan — sambungkan lagi untuk menyelesaikan (bouncer-mu berjalan di server lain dalam kluster).",
+    "irc.mfa.challengeOrLink": "Faktor kedua diperlukan sebelum kamu masuk ke {network}: /msg {status} otp <kode>, atau izinkan masuk ini di situs web: {url}",
+    "irc.mfa.linkOnly": "Izinkan masuk ini di situs web sebelum kamu masuk ke {network}: {url}",
+    "irc.event.attachedLink": "{client} tersambung, diizinkan di situs web",
+    "irc.settingLabel.irc_link_signin": "Masuk IRC lewat tautan",
+    "irc.settingHelp.irc_link_signin": "Klien IRC tanpa kata sandi yang bisa dipakai mendapat tautan untuk diizinkan di sini, setelah masuk (dengan SSO dan MFA-nya). Butuh URL publik.",
+    "irc.settingLabel.irc_remember_days": "Perangkat IRC yang diingat berlaku",
+    "irc.settingHelp.irc_remember_days": "Hari sebuah perangkat yang diizinkan lewat tautan dan diingat tetap masuk tanpa bertanya (1–365)."
   }
 }

@@ -124,6 +124,37 @@ type ClientPassword struct {
 	Hash       string `gorm:"not null"`
 	CreatedAt  time.Time
 	LastUsedAt *time.Time
+	// A remembered device's (an IRC sign-in allowed on the website, with
+	// "remember this device"): it stops working at ExpiresAt.
+	Remembered bool `gorm:"not null;default:false"`
+	ExpiresAt  *time.Time
+}
+
+// PendingSignIn is an IRC client waiting to be allowed on the website
+// (sign-in by link): the link's token as a SHA-256, what the client said
+// about itself, and the decision. Shared by every node: the website may be
+// served by another one than the client's.
+type PendingSignIn struct {
+	ID        string `gorm:"primaryKey;size:32"`
+	TokenHash string `gorm:"uniqueIndex;size:64;not null"`
+	// Username is who the client said it is ("" when it didn't): only they
+	// can allow it. UserID is who it waits for when it's a second factor.
+	Username string `gorm:"index"`
+	UserID   int64
+	Network  string
+	Nick     string
+	IP       string `gorm:"index"`
+	Software string
+	// SecretHash is the bcrypt of the secret the client sent, when it was
+	// long enough to be remembered as the device's password.
+	SecretHash string
+	CreatedAt  time.Time
+	ExpiresAt  time.Time `gorm:"index"`
+	// State is "pending", "allowed" or "denied"; AllowedUser who allowed it
+	// and Device the remembered password it was given, if any.
+	State       string `gorm:"not null;default:pending"`
+	AllowedUser int64
+	Device      string
 }
 
 // Network is one IRC network configured by a user.

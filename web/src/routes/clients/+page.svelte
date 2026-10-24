@@ -139,7 +139,7 @@ Password        <b>{me.username}/{firstNet}:</b><em>{pwText}</em></pre>
           {#each pws as p (p.id)}
             <div class="row pw-row">
               <span class="pic"><Icon name="key" /></span>
-              <span class="od-field"><span class="name od-truncate">{p.name}</span><span class="sub">{t('clients.createdUsed', { created: date(p.createdAt), used: ago(p.lastUsedAt) })}</span></span>
+              <span class="od-field"><span class="name od-truncate">{p.name}</span><span class="sub">{t('clients.createdUsed', { created: date(p.createdAt), used: ago(p.lastUsedAt) })}{#if p.remembered} · <span data-testid="remembered">{p.expiresAt * 1000 > Date.now() ? t('clients.rememberedUntil', { date: date(p.expiresAt) }) : t('clients.rememberedExpired')}</span>{/if}</span></span>
               <span></span>
               <button class="btn btn-danger-ghost btn-sm" type="button" aria-label={t('clients.revokeName', { name: p.name })} onclick={() => revoke(p)}>{t('clients.revoke')}</button>
             </div>
