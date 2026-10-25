@@ -129,9 +129,10 @@ func StartCaps(t testing.TB, log *Log, caps string) string {
 						if offered(caps, "evrd.test/whox") { // a test hook, not a real cap
 							out(":fake 005 %s WHOX :are supported", nick)
 						}
-					case "JOIN": // as a server answers a join: no topic set, then the names
+					case "JOIN": // as a server answers a join: the topic, then the names
 						out(":%s!u@h JOIN %s", nick, f[1])
-						out(":fake 353 %s = %s :%s", nick, f[1], nick)
+						out(":fake 332 %s %s :the topic", nick, f[1])
+						out(":fake 353 %s = %s :%s @op", nick, f[1], nick)
 						out(":fake 366 %s %s :End of /NAMES list.", nick, f[1])
 					case "PART":
 						out(":%s!u@h PART %s :bye", nick, f[1])

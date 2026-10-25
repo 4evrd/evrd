@@ -245,7 +245,7 @@ func TestLiveNetwork(t *testing.T) {
 		bufs[bm["name"].(string)] = bm
 	}
 	ev := bufs["#evrd"]
-	if ev == nil || ev["joined"] != true || ev["members"] != 2.0 || ev["topic"] != "the #evrd topic" || ev["unread"] != 1.0 || ev["mentions"] != 1.0 {
+	if ev == nil || ev["joined"] != true || ev["members"] != 3.0 || ev["topic"] != "the #evrd topic" || ev["unread"] != 1.0 || ev["mentions"] != 1.0 {
 		t.Fatalf("#evrd buffer: %v (all %v)", ev, bufs)
 	}
 	if d := bufs["dave"]; d == nil || d["unread"] != 1.0 || d["mentions"] != 1.0 || d["members"] != nil {
@@ -253,7 +253,7 @@ func TestLiveNetwork(t *testing.T) {
 	}
 
 	_, ch := c.do("GET", path+"/channel?target=%23EVRD", nil)
-	if ch["joined"] != true || ch["topic"] != "the #evrd topic" || len(ch["members"].([]any)) != 2 {
+	if ch["joined"] != true || ch["topic"] != "the #evrd topic" || len(ch["members"].([]any)) != 3 {
 		t.Fatalf("channel: %v", ch)
 	}
 	if code, _ := c.do("POST", path+"/read", map[string]string{"target": "#evrd"}); code != 204 {
