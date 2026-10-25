@@ -411,6 +411,9 @@ func TestStatusZNCOddsAndEnds(t *testing.T) {
 	other.status("listusers", "alice")
 	other.status("listusers", "1 user.")
 	other.status("listallusernetworks", "2 networks.")
+	other.status("listallusernetworks two", "1 of 2 networks.")
+	other.status("listallusernetworks ali*", "2 of 2 networks.") // the owner's name
+	other.status("listallusernetworks zz*", "No network matches zz*.")
 
 	ic.status("traffic", "on each network's health page")
 	r.srv.SetPublicURL("https://evrd.example/")
@@ -467,5 +470,56 @@ func TestMarkdownTable(t *testing.T) {
 	}, "\n")
 	if got != want {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestNetworksSortedAndFiltered(t *testing.T) {
+	r := newRig(t)
+	for _, name := range []string{"Zeta", "alpha", "libera", "LiberaChat"} {
+		r.st.CreateNetwork(t.Context(), store.Network{UserID: r.user.ID, Name: name, Host: "irc.example.org", Port: 6667})
+	}
+	two := r.network("two")
+	if err := r.b.Connect(two.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "two connected", func() bool { return r.b.Status(two.ID) == upstream.StatusConnected })
+	run := func(cmd string) []string {
+		var out []string
+		r.srv.WebStatus(r.user.ID, "", two, cmd, func(s string) { out = append(out, s) })
+		return out
+	}
+	names := func(lines []string) []string {
+		var got []string
+		for _, l := range lines[:len(lines)-1] {
+			got = append(got, strings.Fields(strings.TrimPrefix(l, "* "))[0])
+		}
+		return got
+	}
+
+	// connected first, then by name, ignoring case
+	out := run("networks")
+	if got := strings.Join(names(out), " "); got != "two alpha libera LiberaChat one Zeta" {
+		t.Errorf("order: %s\n%q", got, out)
+	}
+	if !strings.HasPrefix(out[0], "* two") || !anyHas(out, "6 networks.") {
+		t.Errorf("networks: %q", out)
+	}
+	for filter, want := range map[string]string{
+		"lib*":   "libera LiberaChat",
+		"LIB*":   "libera LiberaChat",
+		"*chat":  "LiberaChat",
+		"o":      "two one",
+		"?eta":   "Zeta",
+		"libera": "libera LiberaChat",
+	} {
+		if got := strings.Join(names(run("networks "+filter)), " "); got != want {
+			t.Errorf("networks %s: %q, want %q", filter, got, want)
+		}
+	}
+	if out := run("networks lib*"); !anyHas(out, "2 of 6 networks.") {
+		t.Errorf("filtered footer: %q", out)
+	}
+	if out := run("networks nope*"); len(out) != 1 || !anyHas(out, "No network matches nope*.") {
+		t.Errorf("no match: %q", out)
 	}
 }

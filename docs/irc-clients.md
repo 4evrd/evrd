@@ -112,7 +112,7 @@ command names stay the same in every language. See
 
 | command | does |
 |---|---|
-| `networks` | your networks, their status, and which one this client is on |
+| `networks [filter]` | your networks, connected ones first then by name, their status, and which one this client is on; `networks lib*` (or `networks lib`, part of a name) shows only the ones that match |
 | `jumpnetwork <network>` | switch this client to another network |
 | `jump [server]` | reconnect to the network's next server, or the one named (`jump <network>` still switches network) |
 | `connect [network]` / `disconnect [network]` | bring a network up or down (default: this one) |
@@ -134,7 +134,7 @@ command names stay the same in every language. See
 | `playbuffer <buffer>` / `playback <buffer> [lines]` | play a buffer back as on attach / replay its last lines from history, cleared or not |
 | `setbindhost <host>` / `clearbindhost` / `showbindhost` / `setuserbindhost <host>` / `clearuserbindhost` | the network's and your account's bind host |
 | `listclients` / `uptime` / `traffic` | attached clients / how long evrd has run / where the network's traffic is |
-| `listusers` / `listallusernetworks` | admins: every user / every user's networks |
+| `listusers` / `listallusernetworks [filter]` | admins: every user / every user's networks (the filter matches a network's name or its owner's) |
 | `info` / `version` | your account and limits / the evrd version |
 
 Buffer names take wildcards (`clearbuffer #evrd*`) and lists (`#a,#b`).
