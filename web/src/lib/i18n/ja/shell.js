@@ -35,6 +35,8 @@ export default {
 
   // top bar
   'shell.openNav': 'ナビゲーションを開く',
+  'shell.collapseNav': 'メニューをたたむ',
+  'shell.expandNav': 'メニューを広げる',
   'shell.search': 'ネットワークとチャンネルを検索',
   'shell.searchPlaceholder': 'ネットワーク、チャンネルを検索…',
   'shell.mentionsUnread': 'メンション — 未読 {count} 件',

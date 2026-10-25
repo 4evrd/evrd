@@ -31,6 +31,8 @@ export default {
   'shell.netsUsed': '{used} di {max} reti usate',
 
   'shell.openNav': 'Apri la navigazione',
+  'shell.collapseNav': 'Comprimi menu',
+  'shell.expandNav': 'Espandi menu',
   'shell.search': 'Cerca reti e canali',
   'shell.searchPlaceholder': 'Cerca reti, canali…',
   'shell.mentionsUnread': 'Menzioni — {count} da leggere',

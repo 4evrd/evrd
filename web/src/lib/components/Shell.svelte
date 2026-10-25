@@ -1,6 +1,7 @@
 <script>
   // Sidebar + top bar around every signed-in screen (mobile: the sidebar is a
-  // drawer). The top bar searches networks and channels, jumps to mentions,
+  // drawer; wider, it can be collapsed to its icons, remembered per browser).
+  // The top bar searches networks and channels, jumps to mentions,
   // and shows recent activity.
   import { onMount, onDestroy } from 'svelte'
   import { page } from '$app/state'
@@ -50,6 +51,16 @@
   })
   $effect(() => { path; open = false })
   function close() { open = false; burger?.focus() }
+
+  // collapsed to icons (not on a phone, where it's a drawer anyway)
+  const COLLAPSED = 'evrd.navCollapsed'
+  let collapsed = $state(false)
+  const slim = $derived(collapsed && !narrow)
+  onMount(() => { try { collapsed = localStorage.getItem(COLLAPSED) === '1' } catch {} })
+  function toggleCollapsed() {
+    collapsed = !collapsed
+    try { localStorage.setItem(COLLAPSED, collapsed ? '1' : '0') } catch {}
+  }
 
   // keep the counts fresh
   let timer
@@ -113,15 +124,15 @@
 
 <svelte:window onkeydown={onKey} onclick={(e) => { if (actOpen && !e.target.closest('.pop-anchor')) actOpen = false }} />
 
-<div class="app">
+<div class="app" class:collapsed={slim}>
   <a class="skip" href="#main">{t('shell.skip')}</a>
   <aside class="sidebar" class:open id="sidebar" aria-label={t('shell.navigation')} inert={narrow && !open}>
-    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">#</span><span class="brand-text"><b>evrd</b><span>{t('shell.tagline')}</span></span></a>
+    <a class="brand" href="/" title={slim ? 'evrd' : undefined}><span class="brand-mark" aria-hidden="true">#</span><span class="brand-text"><b>evrd</b><span>{t('shell.tagline')}</span></span></a>
     {#each NAV as g}
       <nav class="nav-group" aria-label={g.group}>
         <span class="caps">{g.group}</span>
         {#each g.items as n}
-          <a class="nav-link" href={n.href} aria-current={cur(n.href) ? 'page' : undefined}><Icon name={n.ic} /><span>{n.label}</span>{#if n.count}<span class="count {n.cls}">{n.count}</span>{/if}</a>
+          <a class="nav-link" href={n.href} aria-current={cur(n.href) ? 'page' : undefined} title={slim ? n.label : undefined}><Icon name={n.ic} /><span>{n.label}</span>{#if n.count}<span class="count {n.cls}">{n.count}</span>{/if}</a>
         {/each}
       </nav>
     {/each}
@@ -142,7 +153,7 @@
           {/if}
         </div>
       {/if}
-      <button class="btn btn-ghost" type="button" onclick={logout} style="justify-content:flex-start"><Icon name="logout" />{t('shell.signOut')}</button>
+      <button class="btn btn-ghost side-btn" type="button" onclick={logout} title={slim ? t('shell.signOut') : undefined}><Icon name="logout" /><span>{t('shell.signOut')}</span></button>
     </div>
   </aside>
   <div class="scrim" class:show={open} onclick={close} aria-hidden="true"></div>
@@ -150,6 +161,7 @@
   <div class="workspace">
     <header class="topbar">
       <button class="icon-btn burger" type="button" aria-label={t('shell.openNav')} aria-controls="sidebar" aria-expanded={open} bind:this={burger} onclick={() => (open = true)}><Icon name="menu" /></button>
+      <button class="icon-btn side-toggle" type="button" aria-label={slim ? t('shell.expandNav') : t('shell.collapseNav')} title={slim ? t('shell.expandNav') : t('shell.collapseNav')} aria-controls="sidebar" onclick={toggleCollapsed}><Icon name="panel" /></button>
       <div class="search-wrap hide-sm">
         <label class="search" role="search">
           <Icon name="search" /><span class="sr-only">{t('shell.search')}</span>

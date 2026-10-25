@@ -36,6 +36,8 @@ export default {
 
   // top bar
   'shell.openNav': 'Open navigation',
+  'shell.collapseNav': 'Collapse menu',
+  'shell.expandNav': 'Expand menu',
   'shell.search': 'Search networks and channels',
   'shell.searchPlaceholder': 'Search networks, channels…',
   'shell.mentionsUnread': 'Mentions — {count} unread',

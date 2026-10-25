@@ -31,6 +31,8 @@ export default {
   'shell.netsUsed': '{max} ağdan {used} tanesi kullanılıyor',
 
   'shell.openNav': 'Menüyü aç',
+  'shell.collapseNav': 'Menüyü daralt',
+  'shell.expandNav': 'Menüyü genişlet',
   'shell.search': 'Ağlarda ve kanallarda ara',
   'shell.searchPlaceholder': 'Ağ, kanal ara…',
   'shell.mentionsUnread': 'Anılmalar — {count} okunmamış',

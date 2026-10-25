@@ -35,6 +35,8 @@ export default {
 
   // top bar
   'shell.openNav': 'Navigation öffnen',
+  'shell.collapseNav': 'Menü einklappen',
+  'shell.expandNav': 'Menü ausklappen',
   'shell.search': 'Netzwerke und Channels durchsuchen',
   'shell.searchPlaceholder': 'Netzwerke, Channels suchen…',
   'shell.mentionsUnread': 'Erwähnungen — {count} ungelesen',
