@@ -268,7 +268,7 @@ func TestNetworkHealthWithoutMetrics(t *testing.T) {
 		t.Fatalf("channels: %v", chans)
 	}
 	ch := chans[0].(map[string]any)
-	if ch["name"] != "#evrd" || ch["members"] != 2.0 || ch["unread"] != 1.0 || ch["mentions"] != 1.0 {
+	if ch["name"] != "#evrd" || ch["members"] != 3.0 || ch["unread"] != 1.0 || ch["mentions"] != 1.0 {
 		t.Fatalf("joined channel: %v", ch)
 	}
 

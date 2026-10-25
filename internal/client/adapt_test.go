@@ -66,8 +66,8 @@ func TestLinkCapsComeAndGo(t *testing.T) {
 func TestPassThroughAndTranslation(t *testing.T) {
 	r := newRigCaps(t, everyLinkCap)
 	full := r.full()
-	// the fake network gives the topic only when asked: have evrd learn it,
-	// so the plain client's attach burst (from evrd's state) carries it
+	// have evrd learn the topic (asked again), so the plain client's attach
+	// burst (from evrd's state) carries it
 	full.send("TOPIC #one")
 	full.until(" 332 ")
 	eventually(t, "topic known", func() bool {
