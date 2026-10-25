@@ -227,7 +227,8 @@ func TestLiveNetwork(t *testing.T) {
 	eventually(t, "the join", func() bool { return conn.Joined("#evrd") })
 	irc.send(":fake 332 alice #evrd :the #evrd topic")
 	irc.send(":fake 353 alice = #evrd :@alice carol")
-	eventually(t, "the names", func() bool { return conn.MemberCount("#evrd") == 2 })
+	// alice and @op from the join, then carol
+	eventually(t, "the names", func() bool { return conn.MemberCount("#evrd") == 3 })
 	irc.send(":carol!c@h PRIVMSG #evrd :hello alice")
 	irc.send(":dave!d@h PRIVMSG alice :private")
 	eventually(t, "the messages", func() bool {
