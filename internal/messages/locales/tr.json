@@ -348,6 +348,7 @@
     "irc.welcome.motdHelp": "bouncer komutları için /msg {status} help",
     "irc.part.jumped": "{network} ağına geçildi",
     "irc.part.detached": "Ayrıldı - geri dönmek için /join {channel}",
+    "irc.kick.disconnected": "{network} bağlantısı kesildi - evrd geri geldiğinde yeniden katılır",
     "irc.bouncerConnection": "Bu, hiçbir ağda olmayan bir bouncer bağlantısı: BOUNCER BIND ile bir ağ seç",
     "irc.hint.banned": "Sunucu bu bouncer'ın adresinden gelen bağlantıları reddediyor. evrd o sunucuyu yarım saat dinlendiriyor (her seferinde daha uzun, çünkü erken denemek yasakları uzatır) ve bu arada ağın diğer sunucularını deniyor. Bazı sunucular yalnızca belli ülkeleri ya da ağları, ya da ident'i olan istemcileri kabul eder; ağın başka sunucularını ekle ya da nedenini ağın ekibine sor — sunucunun kendi sözleri bağlantı günlüğünde.",
     "irc.hint.throttled": "Sunucu bir adresten ne sıklıkta ya da kaç bağlantı geldiğini sınırlıyor — aynı ağdaki bu bouncer'ın diğer kullanıcıları da sayılır. evrd o sunucuyu en az iki dakika dinlendiriyor ve bu arada ağın diğer sunucularını deniyor.",

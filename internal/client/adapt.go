@@ -19,6 +19,10 @@ import (
 // relay forwards one raw upstream line, keeping the session's view of its
 // nick in step and hiding what only makes sense to the bouncer.
 func (se *session) relay(line upstream.Line) {
+	if len(line.Left) > 0 {
+		se.leftChannels(line.Left)
+		return
+	}
 	m := irc.Parse(line.Text)
 	text := line.Text
 	if strings.HasPrefix(text, "@") {
@@ -50,6 +54,9 @@ func (se *session) relay(line upstream.Line) {
 	}
 	if ch := lineChannel(m); ch != "" && se.up.ChannelSettings(ch).Detached {
 		return // detached: kept and logged, not shown
+	}
+	if !se.tracked(m) {
+		return
 	}
 	if !se.route(m) {
 		return
@@ -151,6 +158,35 @@ func (se *session) localRef(tag, v string) string {
 		}
 	}
 	return v
+}
+
+// tracked follows the channels the client has open as the network takes
+// it in and out, reporting whether m reaches it: not a JOIN of ours for a
+// channel the client has open already (sent its burst by evrd), nor the
+// names after it.
+func (se *session) tracked(m irc.Message) bool {
+	p := m.Params
+	mine := strings.EqualFold(nickFromPrefix(m.Prefix), se.unick)
+	switch {
+	case m.Command == "JOIN" && mine && len(p) > 0:
+		key := strings.ToLower(p[0])
+		if se.open[key] {
+			se.dupNames[key] = true
+			return false
+		}
+		se.open[key] = true
+	case (m.Command == "PART" && mine || m.Command == "KICK" && len(p) > 1 && strings.EqualFold(p[1], se.unick)) && len(p) > 0:
+		delete(se.open, strings.ToLower(p[0]))
+	case m.Command == "353" && len(p) >= 3:
+		return !se.dupNames[strings.ToLower(p[2])]
+	case m.Command == "366" && len(p) >= 2:
+		key := strings.ToLower(p[1])
+		if se.dupNames[key] {
+			delete(se.dupNames, key)
+			return false
+		}
+	}
+	return true
 }
 
 // adapt fits a line to this client's capabilities. keep: send it as it

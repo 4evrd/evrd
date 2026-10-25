@@ -47,21 +47,25 @@ type session struct {
 	advertised     map[string]string // what it was last told it may ask for
 	registered     bool
 	ubatch         map[string]bool // the network's open batches: passed to this client?
-	regLines       []string        // PASS/NICK/USER as sent, replayed when forwarding
-	internal       bool            // forwarded here by another node (already vetted)
-	saslMech       string          // the SASL mechanism under way ("" none)
-	saslBuf        string          // its payload so far
-	saslUser       store.User      // who SASL signed in
-	saslDevice     string
-	saslOTP        string // a second-factor code after SASL's password
-	refusal        string // why the last sign-in was refused (signIn)
-	partial        []byte // a line read so far
-	lsWaiting      bool   // a CAP LS waits for the network to be known
-	lsSince        time.Time
-	lsLine         string         // that CAP LS, passed on if the client is forwarded
-	regKey         string         // what regUp was worked out from
-	regUp          *upstream.Conn // the network a registering client is headed for
-	bindID         string         // BOUNCER BIND's network
+	// open: the channels the client has open (lower case), so a JOIN for
+	// one it's in already, and the names after it, don't reach it (#125)
+	open       map[string]bool
+	dupNames   map[string]bool // a dropped JOIN's names, until they end
+	regLines   []string        // PASS/NICK/USER as sent, replayed when forwarding
+	internal   bool            // forwarded here by another node (already vetted)
+	saslMech   string          // the SASL mechanism under way ("" none)
+	saslBuf    string          // its payload so far
+	saslUser   store.User      // who SASL signed in
+	saslDevice string
+	saslOTP    string // a second-factor code after SASL's password
+	refusal    string // why the last sign-in was refused (signIn)
+	partial    []byte // a line read so far
+	lsWaiting  bool   // a CAP LS waits for the network to be known
+	lsSince    time.Time
+	lsLine     string         // that CAP LS, passed on if the client is forwarded
+	regKey     string         // what regUp was worked out from
+	regUp      *upstream.Conn // the network a registering client is headed for
+	bindID     string         // BOUNCER BIND's network
 
 	// Attached state. After registration, only the bridge goroutine touches
 	// these, so jumping networks needs no locking.
@@ -134,6 +138,7 @@ func newSession(srv *Server, conn net.Conn) *session {
 		w:      bufio.NewWriter(conn),
 		caps:   map[string]bool{},
 		ubatch: map[string]bool{},
+		open:   map[string]bool{}, dupNames: map[string]bool{},
 	}
 }
 
@@ -601,13 +606,17 @@ func (se *session) welcome() {
 
 func (se *session) joinChannels() {
 	for _, ch := range se.up.Channels() {
-		if cs := se.up.ChannelSettings(ch); cs.Detached || cs.Disabled && !se.up.Joined(ch) {
+		// only those evrd is in: the rest open when it joins them (a client
+		// sent our JOIN first would take that one for a channel it's
+		// already in, and keep no names)
+		if se.up.ChannelSettings(ch).Detached || !se.up.Joined(ch) || se.open[strings.ToLower(ch)] {
 			continue
 		}
 		// Make the client open the buffer, then give it the topic and names
 		// a join brings, from evrd's state (or the network's, while evrd
 		// doesn't know them whole).
 		se.send(se.selfJoin(ch))
+		se.open[strings.ToLower(ch)] = true
 		se.joinedMark(ch)
 		se.channelBurst(ch)
 	}
@@ -784,7 +793,8 @@ func (se *session) bridge(ctx context.Context) {
 				continue
 			}
 			se.relay(line)
-			if se.held != nil && (strings.Contains(line.Text, " NICK ") || strings.Contains(line.Text, "BATCH ")) {
+			if se.held != nil && (len(line.Left) > 0 || strings.Contains(line.Text, " NICK ") || strings.Contains(line.Text, "BATCH ") ||
+				strings.Contains(line.Text, " JOIN ") || strings.Contains(line.Text, " PART ") || strings.Contains(line.Text, " KICK ")) {
 				se.saveState()
 			}
 		case m, ok := <-se.msgs:
@@ -809,6 +819,11 @@ func (se *session) bridge(ctx context.Context) {
 				se.up = conn
 				se.raw, se.unsubRaw = conn.SubscribeRaw()
 				se.msgs, se.unsubMsg = conn.Subscribe()
+				// a new connection (switched off and on): its channels,
+				// should it have joined them before this caught up
+				if se.registered {
+					se.joinChannels()
+				}
 			}
 			if se.restored && se.up != nil && se.up.Status() != upstream.StatusConnected && time.Since(se.restoredAt) < 30*time.Second {
 				continue // picked up from the last evrd: the link isn't back yet
@@ -899,6 +914,19 @@ func lineChannel(m irc.Message) string {
 	return ""
 }
 
+// leftChannels takes the client out of channels evrd is no longer in, as
+// its link to the network ended: a KICK from evrd, as ZNC does, keeps the
+// channel's window open for the rejoin. Detached ones it's already out of.
+func (se *session) leftChannels(chans []string) {
+	for _, ch := range chans {
+		if se.up.ChannelSettings(ch).Detached {
+			continue
+		}
+		delete(se.open, strings.ToLower(ch))
+		se.send(fmt.Sprintf(":%s KICK %s %s :%s", serverName, ch, se.unick, ircText(se.tr("kick.disconnected", "network", se.net.Name))))
+	}
+}
+
 // detach hides channels from IRC clients (they stay joined and logged);
 // attach brings them back.
 func (se *session) detach(chans []string) {
@@ -908,6 +936,7 @@ func (se *session) detach(chans []string) {
 			continue
 		}
 		se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Detached = true })
+		delete(se.open, strings.ToLower(ch))
 		se.send(fmt.Sprintf(":%s!%s@%s PART %s :%s", se.unick, se.unick, serverName, ch, ircText(se.tr("part.detached", "channel", ch))))
 	}
 }
@@ -915,6 +944,7 @@ func (se *session) detach(chans []string) {
 func (se *session) attachChannel(ch string) {
 	se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Detached = false })
 	se.send(se.selfJoin(ch))
+	se.open[strings.ToLower(ch)] = true
 	se.joinedMark(ch)
 	se.channelBurst(ch)
 	if !se.caps["draft/chathistory"] {
