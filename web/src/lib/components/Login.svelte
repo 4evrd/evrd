@@ -1,5 +1,6 @@
 <script>
   import Icon from './Icon.svelte'
+  import PasswordInput from './PasswordInput.svelte'
   import Field from './Field.svelte'
   import { api } from '$lib/api.js'
   import { session, load } from '$lib/session.svelte.js'
@@ -70,7 +71,7 @@
             <input id="si-user" class="input mono" autocomplete="username" autocapitalize="none" spellcheck="false" bind:value={username} bind:this={userIn} />
           </Field>
           <Field id="si-pass" label={t('shell.password')}>
-            <input id="si-pass" class="input" type="password" autocomplete="current-password" bind:value={password} />
+            <PasswordInput id="si-pass" autocomplete="current-password" bind:value={password} />
           </Field>
           <div><button class="btn {cfg.sso ? '' : 'btn-primary'}" type="submit" disabled={busy}>
             {#if busy}<span class="spinner" aria-hidden="true"></span>{t('shell.signingIn')}{:else}{t('shell.signIn')}{/if}

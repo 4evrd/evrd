@@ -9,6 +9,20 @@ test('rejects invalid credentials', async ({ page }) => {
   await expect(page.getByText(/wrong username or password/i)).toBeVisible()
 })
 
+test('the eye shows and hides the password', async ({ page }) => {
+  await page.goto('/')
+  const pass = page.getByLabel('Password', { exact: true })
+  await pass.fill('typed-here')
+  await expect(pass).toHaveAttribute('type', 'password')
+  const eye = page.getByRole('button', { name: 'Show password' })
+  await eye.click()
+  await expect(pass).toHaveAttribute('type', 'text')
+  await expect(eye).toHaveAttribute('aria-pressed', 'true')
+  await eye.click()
+  await expect(pass).toHaveAttribute('type', 'password')
+  await expect(pass).toHaveValue('typed-here')
+})
+
 test('signs in, survives a reload, and signs out', async ({ page }) => {
   await login(page)
   await page.reload()

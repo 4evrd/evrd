@@ -3,6 +3,7 @@
   import { page } from '$app/state'
   import { goto } from '$app/navigation'
   import Icon from '$lib/components/Icon.svelte'
+  import PasswordInput from '$lib/components/PasswordInput.svelte'
   import Drawer from '$lib/components/Drawer.svelte'
   import Field from '$lib/components/Field.svelte'
   import Switch from '$lib/components/Switch.svelte'
@@ -134,7 +135,7 @@
       <input class="input mono" id="n-user" autocomplete="off" spellcheck="false" placeholder={t('adminUsers.usernamePlaceholder')} bind:value={nu.username} aria-invalid={!!nuErr.username} />
     </Field>
     <Field id="n-pass" label={t('adminUsers.tempPassword')} required help={t('adminUsers.tempPasswordHelp')} err={nuErr.password}>
-      <input class="input" id="n-pass" type="password" autocomplete="new-password" bind:value={nu.password} aria-invalid={!!nuErr.password} />
+      <PasswordInput id="n-pass" autocomplete="new-password" bind:value={nu.password} aria-invalid={!!nuErr.password} />
     </Field>
     <div class="check-row"><span class="od-field"><span id="n-adm-l">{t('adminUsers.makeAdmin')}</span><span>{t('adminUsers.makeAdminHelp')}</span></span><Switch checked={nu.admin} labelledby="n-adm-l" onchange={(v) => (nu.admin = v)} /></div>
   </form>

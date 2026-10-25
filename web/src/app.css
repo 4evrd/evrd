@@ -941,6 +941,16 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
 }
 .enc:hover::after, .enc:focus-visible::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* a password with an eye to show it (components/PasswordInput.svelte) */
+.pw { position: relative; flex: 1; min-width: 0; }
+.pw .input { padding-right: 44px; }
+.pw-eye {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 36px; height: 36px;
+  border: 0; border-radius: var(--r-field); background: none; color: var(--faint); cursor: pointer;
+  transition: color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out);
+}
+.pw-eye:hover { color: var(--fg); background: var(--row-hover); }
+
 /* phones: iOS zooms in on a text box with text under 16px when it gets
    focus, so on touch screens they're 16px (last, to win over the above) */
 @media (pointer: coarse) {

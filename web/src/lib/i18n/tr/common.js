@@ -7,4 +7,6 @@ export default {
   'common.loading': 'Yükleniyor…',
   'common.saving': 'Kaydediliyor…',
   'common.retry': 'Tekrar dene',
+  'common.showPassword': 'Parolayı göster',
+  'common.hidePassword': 'Parolayı gizle',
 }

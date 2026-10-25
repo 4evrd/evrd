@@ -7,4 +7,6 @@ export default {
   'common.loading': 'Memuat…',
   'common.saving': 'Menyimpan…',
   'common.retry': 'Coba lagi',
+  'common.showPassword': 'Tampilkan kata sandi',
+  'common.hidePassword': 'Sembunyikan kata sandi',
 }

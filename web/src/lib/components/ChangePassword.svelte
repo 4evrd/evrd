@@ -2,6 +2,7 @@
   // The password form, used on the account page and as the forced step after
   // signing in with a temporary password.
   import Icon from './Icon.svelte'
+  import PasswordInput from './PasswordInput.svelte'
   import Field from './Field.svelte'
   import { api } from '$lib/api.js'
   import { refreshMe } from '$lib/session.svelte.js'
@@ -49,13 +50,13 @@
         <ul>{#each summary as [id, m]}<li><a href="#{id}" onclick={(e) => { e.preventDefault(); document.getElementById(id)?.focus() }}>{label[id]}</a> — {m}</li>{/each}</ul>{/if}
     </div>
     <Field id="s-cur" label={label['s-cur']} required err={errs['s-cur']} span>
-      <input class="input" id="s-cur" type="password" autocomplete="current-password" bind:value={cur} onblur={blur('s-cur', () => cur)} oninput={input('s-cur')} aria-invalid={!!errs['s-cur']} />
+      <PasswordInput id="s-cur" autocomplete="current-password" bind:value={cur} onblur={blur('s-cur', () => cur)} oninput={input('s-cur')} aria-invalid={!!errs['s-cur']} />
     </Field>
     <Field id="s-new" label={label['s-new']} required help={t('shell.newPasswordHelp')} err={errs['s-new']}>
-      <input class="input" id="s-new" type="password" autocomplete="new-password" bind:value={next} onblur={blur('s-new', () => next)} oninput={input('s-new')} aria-invalid={!!errs['s-new']} />
+      <PasswordInput id="s-new" autocomplete="new-password" bind:value={next} onblur={blur('s-new', () => next)} oninput={input('s-new')} aria-invalid={!!errs['s-new']} />
     </Field>
     <Field id="s-rep" label={label['s-rep']} required err={errs['s-rep']}>
-      <input class="input" id="s-rep" type="password" autocomplete="new-password" bind:value={rep} onblur={blur('s-rep', () => rep)} oninput={input('s-rep')} aria-invalid={!!errs['s-rep']} />
+      <PasswordInput id="s-rep" autocomplete="new-password" bind:value={rep} onblur={blur('s-rep', () => rep)} oninput={input('s-rep')} aria-invalid={!!errs['s-rep']} />
     </Field>
   </div>
   <div class="form-foot" style="display:flex;justify-content:flex-end"><button class="btn btn-primary" type="submit" disabled={busy}>

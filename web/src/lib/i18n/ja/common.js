@@ -7,4 +7,6 @@ export default {
   'common.loading': '読み込み中…',
   'common.saving': '保存中…',
   'common.retry': '再試行',
+  'common.showPassword': 'パスワードを表示',
+  'common.hidePassword': 'パスワードを隠す',
 }

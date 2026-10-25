@@ -6,6 +6,7 @@
   import { onMount, onDestroy, tick } from 'svelte'
   import { goto } from '$app/navigation'
   import Icon from './Icon.svelte'
+  import PasswordInput from './PasswordInput.svelte'
   import Field from './Field.svelte'
   import Select from './Select.svelte'
   import Switch from './Switch.svelte'
@@ -345,7 +346,7 @@
                 <div class="tls"><span class="label" id="sv-tls-l-{i}">TLS</span><Switch checked={sv.tls} labelledby="sv-tls-l-{i}" onchange={(v) => setTLS(sv, v)} /></div>
                 <Field id="sv-pass-{i}" label={t('networks.serverPassword')} encrypted help={pwState(sv.hasPassword, sv.password) === 'saved' ? t('networks.passSaved') : pwState(sv.hasPassword, sv.password) === 'cleared' ? t('networks.passRemoved') : t('networks.passHelp')}>
                   <div class="input-group">
-                    <input class="input mono" id="sv-pass-{i}" type="password" autocomplete="new-password" placeholder={sv.hasPassword && sv.password === undefined ? t('networks.unchanged') : ''} value={sv.password ?? ''} oninput={(e) => (sv.password = e.currentTarget.value)} />
+                    <PasswordInput class="input mono" id="sv-pass-{i}" autocomplete="new-password" placeholder={sv.hasPassword && sv.password === undefined ? t('networks.unchanged') : ''} value={sv.password ?? ''} oninput={(e) => (sv.password = e.currentTarget.value)} />
                     {#if sv.hasPassword && sv.password !== ''}<button class="btn btn-ghost btn-sm" type="button" onclick={() => (sv.password = '')}>{t('networks.clear')}</button>{/if}
                   </div>
                 </Field>
@@ -404,7 +405,7 @@
               <Field id="saslUser" label={t('networks.account')} help={t('networks.accountHelp')}><input class="input mono" id="saslUser" spellcheck="false" autocomplete="off" placeholder={f.authMethod === 'sasl' || f.authMethod === 'auto' ? f.username || f.nick || t('networks.nickWord') : f.nick || t('networks.nickWord')} bind:value={f.saslUser} /></Field>
               <Field id="saslPass" label={t('networks.password')} encrypted help={pwState(f.hasPassword, f.password) === 'saved' ? t('networks.authPassSaved') : pwState(f.hasPassword, f.password) === 'cleared' ? t('networks.authPassRemoved') : t('networks.authPassHelp')}>
                 <div class="input-group">
-                  <input class="input mono" id="saslPass" type="password" autocomplete="new-password" placeholder={f.hasPassword && f.password === undefined ? t('networks.unchanged') : ''} value={f.password ?? ''} oninput={(e) => (f.password = e.currentTarget.value)} />
+                  <PasswordInput class="input mono" id="saslPass" autocomplete="new-password" placeholder={f.hasPassword && f.password === undefined ? t('networks.unchanged') : ''} value={f.password ?? ''} oninput={(e) => (f.password = e.currentTarget.value)} />
                   {#if f.hasPassword && f.password !== ''}<button class="btn btn-ghost btn-sm" type="button" onclick={() => (f.password = '')}>{t('networks.clear')}</button>{/if}
                 </div>
               </Field>
