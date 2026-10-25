@@ -169,14 +169,9 @@ func TestADroppedLinkTakesClientsOutOfItsChannels(t *testing.T) {
 	if l := ic.expect(" KICK #one alice_one "); !strings.HasPrefix(l, ":evrd KICK #one alice_one :Disconnected from one") {
 		t.Fatalf("kick: %q", l)
 	}
-	// one attaching meanwhile gets no channel evrd isn't in
+	// one attaching meanwhile (which connects the network again) gets
+	// the channel once evrd is in it, and only once
 	late := r.attach("alice/one:alice-password")
-	late.send("PRIVMSG *status :version")
-	if seen := late.until("PRIVMSG alice_one :evrd "); anyHas(seen, " JOIN #one") {
-		t.Fatalf("joined while disconnected: %q", seen)
-	}
-
-	ic.send("PRIVMSG *status :connect")
 	for _, c := range []*ircClient{ic, late} {
 		seen := c.until(" 366 alice_one #one ")
 		if count(seen, " JOIN #one") != 1 || !anyHas(seen, "@op") {
