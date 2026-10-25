@@ -220,7 +220,7 @@ jobs:
       # evrd runs the production image in e2e (docker-compose.e2e.yml) rather
       # than compiling under air at startup.
       - name: Build the evrd image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           tags: evrd-e2e
@@ -424,7 +424,7 @@ jobs:
             type=sha,format=long
             type=semver,pattern={{version}},value=v${{ needs.release.outputs.version }},enable=${{ needs.release.outputs.published == 'true' }}
             type=semver,pattern={{major}}.{{minor}},value=v${{ needs.release.outputs.version }},enable=${{ needs.release.outputs.published == 'true' }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           platforms: linux/amd64,linux/arm64
