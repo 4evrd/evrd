@@ -19,6 +19,11 @@ import (
 //	Authorization: Bearer <provision_token>
 //	{"email": "…", "connect": true, "networks": [{…as for POST /api/networks}]}
 //
+//	GET /api/provision/users/{username}
+//
+// GET reads an account's networks back (name, bind host, status), so a caller
+// can change ones it didn't create, e.g. give them all a new bind host.
+//
 // A missing account is created SSO-only and claimable: the owner's first SSO
 // sign-in with the same username and email takes it over. Networks whose
 // name the account already has are left as they are (so a call can be
@@ -122,6 +127,40 @@ func (s *Handlers) ProvisionUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"username": u.Username, "id": u.ID, "created": created,
 		"claimable": u.SSOClaimable, "networks": out,
+	})
+}
+
+// ProvisionedUser is GET /api/provision/users/{username}: 404 if there's no
+// such account.
+func (s *Handlers) ProvisionedUser(w http.ResponseWriter, r *http.Request) {
+	name, err := accounts.NormalizeUsername(r.PathValue("username"))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	u, err := s.acc.UserByUsername(r.Context(), name)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	nets, err := s.acc.ListNetworks(r.Context(), u.ID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	type network struct {
+		Name     string `json:"name"`
+		ID       int64  `json:"id"`
+		BindHost string `json:"bindHost"`
+		Enabled  bool   `json:"enabled"`
+		Status   string `json:"status"`
+	}
+	out := []network{}
+	for _, n := range nets {
+		out = append(out, network{n.Name, n.ID, n.BindHost, n.Enabled, string(s.b.Status(n.ID))})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"username": u.Username, "id": u.ID, "claimable": u.SSOClaimable, "networks": out,
 	})
 }
 

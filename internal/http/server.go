@@ -97,6 +97,7 @@ func (s *Server) Handler() http.Handler {
 
 	s.routes(mux)
 	mux.HandleFunc("PUT /api/provision/users/{username}", middleware.ProvisionToken(h.ProvisionToken, h.ProvisionUser))
+	mux.HandleFunc("GET /api/provision/users/{username}", middleware.ProvisionToken(h.ProvisionToken, h.ProvisionedUser))
 	if s.webApp != "" {
 		mux.Handle("/api/", http.NotFoundHandler()) // not the app's index.html
 		mux.Handle("/auth/", http.NotFoundHandler())

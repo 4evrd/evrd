@@ -245,7 +245,8 @@ func TestNetworkHealthWithoutMetrics(t *testing.T) {
 	irc.expect("JOIN #evrd")
 	eventually(t, "the join", func() bool { return conn.Joined("#evrd") })
 	irc.send(":fake 353 ivy = #evrd :@ivy carol")
-	eventually(t, "the names", func() bool { return conn.MemberCount("#evrd") == 2 })
+	// ivy and @op from the join, then carol
+	eventually(t, "the names", func() bool { return conn.MemberCount("#evrd") == 3 })
 	irc.send(":carol!c@h PRIVMSG #evrd :hello ivy")
 	eventually(t, "the mention", func() bool {
 		_, n := c.do("GET", path, nil)

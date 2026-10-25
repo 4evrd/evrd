@@ -586,6 +586,12 @@ comes over though it isn't on the `bind_hosts` list. On a network that's
 already there, a `bindHost` in the call replaces its bind host (reconnecting
 it if it's up), so a repeat can fill one in.
 
+`GET /api/provision/users/alice` (same token) reads the account back: its
+networks with their `name`, `id`, `bindHost`, `enabled` and connection
+`status`, or 404 if there's no such account. A tool can use it to change
+networks it didn't create, e.g. give all of them a new bind host by sending
+their names back in a `PUT` with a `bindHost` each.
+
 A new account has no password and is **claimable**: the first SSO sign-in
 with the same username *and* email links to it — so the provider account must
 be the owner's, not a look-alike. After that it's an ordinary SSO account.
