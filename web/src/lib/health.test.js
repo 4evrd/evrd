@@ -8,6 +8,13 @@ test('rangeOf', () => {
   assert.equal(rangeOf('1y'), '24h')
 })
 
+test('slotState with a split', () => {
+  assert.equal(slotState(1, 0.5), 'split')
+  assert.equal(slotState(1, 0.001), 'up')
+  assert.equal(slotState(0, 1), 'down')
+  assert.equal(slotState(null, 1), 'none')
+})
+
 test('slotState', () => {
   assert.equal(slotState(null), 'none')
   assert.equal(slotState(undefined), 'none')
@@ -48,6 +55,8 @@ test('tones', () => {
 })
 
 test('counted', () => {
-  assert.deepEqual(counted([1, 1, 0.5, 0, null]), { up: 2, part: 1, down: 1, none: 1 })
-  assert.deepEqual(counted(undefined), { up: 0, part: 0, down: 0, none: 0 })
+  assert.deepEqual(counted([1, 1, 0.5, 0, null]), { up: 2, part: 1, split: 0, down: 1, none: 1 })
+  assert.deepEqual(counted(undefined), { up: 0, part: 0, split: 0, down: 0, none: 0 })
+  // split only counts while connected
+  assert.deepEqual(counted([1, 0.5, 0, 1, null], [0.25, 0.1, 0.5, 0.001, 1]), { up: 1, part: 0, split: 2, down: 1, none: 1 })
 })

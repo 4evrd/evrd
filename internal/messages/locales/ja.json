@@ -425,6 +425,10 @@
     "irc.event.connected": "{network} に接続しました",
     "irc.event.connectedAs": "{host}:{port}({nick} として)",
     "irc.event.netsplit": "{network} でネットスプリット",
+    "irc.event.splitOff": "{network}: あなたのサーバーがネットワークの他の部分から分断されました",
+    "irc.event.splitOffDetail": "チャンネルにいる {of} 人のうち {lost} 人が一度に抜けました（{reason}）。evrd は接続したまま、皆が戻るまでこの時間を分断として数えます。",
+    "irc.event.rejoined": "{network}: あなたのサーバーがネットワークの他の部分と再びつながりました",
+    "irc.event.rejoinedDetail": "{duration} 分断されていました。",
     "irc.event.attached": "{client} が接続しました",
     "irc.module.log.perform": {
       "other": "perform: {count} 個のコマンドを送信しました"

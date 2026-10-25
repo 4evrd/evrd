@@ -21,7 +21,8 @@
 
   let only = $state(null) // the network the events are filtered to
   const events = $derived((data?.events || []).filter((e) => !only || e.network === only))
-  const KIND = $derived({ disconnected: ['bad', t('overview.rcKindLost')], failed: ['warn', t('overview.rcKindFailed')], connected: ['ok', t('overview.rcKindConnected')], netsplit: ['warn', t('overview.rcKindNetsplit')] })
+  const KIND = $derived({ disconnected: ['bad', t('overview.rcKindLost')], failed: ['warn', t('overview.rcKindFailed')], connected: ['ok', t('overview.rcKindConnected')], netsplit: ['warn', t('overview.rcKindNetsplit')],
+    splitoff: ['bad', t('overview.rcKindSplitOff')], rejoined: ['ok', t('overview.rcKindRejoined')], linesmissed: ['warn', t('overview.rcKindLinesMissed')] })
   const peak = (n) => Math.max(1, ...(n.hourly || []))
 </script>
 

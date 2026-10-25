@@ -425,6 +425,10 @@
     "irc.event.connected": "Tersambung ke {network}",
     "irc.event.connectedAs": "{host}:{port} sebagai {nick}",
     "irc.event.netsplit": "Netsplit di {network}",
+    "irc.event.splitOff": "{network}: server kamu terpisah dari bagian network lainnya",
+    "irc.event.splitOffDetail": "{lost} dari {of} orang di channel kamu keluar bersamaan ({reason}). evrd tetap tersambung dan menghitung waktu ini sebagai terpisah sampai mereka kembali.",
+    "irc.event.rejoined": "{network}: server kamu kembali bersama bagian network lainnya",
+    "irc.event.rejoinedDetail": "Terpisah selama {duration}.",
     "irc.event.attached": "{client} tersambung",
     "irc.module.log.perform": {
       "other": "perform: mengirim {count} perintah"

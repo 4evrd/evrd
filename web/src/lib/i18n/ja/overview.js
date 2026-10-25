@@ -142,4 +142,8 @@ export default {
   'overview.zoomOut': '縮小',
   'overview.zoomIn': '拡大',
   'overview.zoomFit': '全体表示',
+  'overview.rcKindSplitOff': '分断',
+  'overview.rcKindRejoined': '復帰',
+  'overview.rcKindLinesMissed': '取りこぼし',
+  'overview.markerSplitOff': '分断',
 }

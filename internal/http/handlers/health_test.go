@@ -16,14 +16,16 @@ import (
 // fakeHealthVM answers the health page's queries for user uid's network
 // nid. Every past slot: connected the whole time, 50 ms lag on average and
 // 200 at worst, 10 lines, 1 link dropped, 2 failed attempts and 1 counted
-// before kinds. The slot in progress: connected half of it, 100 and 300 ms,
-// 4 lines, nothing lost. It records the range queries' steps.
+// before kinds, split from the network half the time. The slot in progress:
+// connected half of it, 100 and 300 ms, 4 lines, nothing lost, not split.
+// It records the range queries' steps.
 // the metrics the health page asks about
 const (
 	metricUp          = "evrd_upstream_up"
 	metricLag         = "evrd_upstream_lag_seconds"
 	metricLines       = "evrd_irc_lines_total"
 	metricDisconnects = "evrd_upstream_disconnects_total"
+	metricSplit       = "evrd_upstream_split"
 )
 
 func fakeHealthVM(t *testing.T, uid, nid int64) (*httptest.Server, *[]int64) {
@@ -52,6 +54,8 @@ func fakeHealthVM(t *testing.T, uid, nid int64) (*httptest.Server, *[]int64) {
 			rows = [][2]string{{"", pick("0.2", "0.3")}}
 		case strings.Contains(q, metricLines):
 			rows = [][2]string{{"", pick("10", "4")}}
+		case strings.Contains(q, metricSplit):
+			rows = [][2]string{{"", pick("0.5", "0")}}
 		case strings.Contains(q, metricDisconnects):
 			rows = [][2]string{{`"kind":"dropped"`, pick("1", "0")}, {`"kind":"failed"`, pick("2", "0")}, {"", pick("1", "0")}}
 		default:
@@ -149,7 +153,14 @@ func TestNetworkHealth(t *testing.T) {
 	if f := nums(t, se["failed"]); f[0] != 2.0 || f[23] != 0.0 {
 		t.Fatalf("failed: %v", f)
 	}
+	if sp := nums(t, se["split"]); len(sp) != 24 || sp[0] != 0.5 || sp[23] != 0.0 {
+		t.Fatalf("split: %v", sp)
+	}
 	sum := out["summary"].(map[string]any)
+	// split half of 23 slots: 11.5/24
+	if sum["splitPct"] != 47.9 {
+		t.Fatalf("split share: %v", sum["splitPct"])
+	}
 	// 23 slots up, one half: 23.5/24
 	if sum["uptimePct"] != 97.9 || sum["lagAvg"] != 52.0 || sum["lagPeak"] != 300.0 || sum["lines"] != 234.0 || sum["dropped"] != 46.0 || sum["failed"] != 46.0 {
 		t.Fatalf("summary: %v", sum)

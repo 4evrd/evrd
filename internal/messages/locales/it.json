@@ -441,6 +441,10 @@
     "irc.event.connected": "Connesso a {network}",
     "irc.event.connectedAs": "{host}:{port} come {nick}",
     "irc.event.netsplit": "Netsplit su {network}",
+    "irc.event.splitOff": "{network}: il tuo server si è separato dal resto della rete",
+    "irc.event.splitOffDetail": "{lost} delle {of} persone nei tuoi canali sono uscite insieme ({reason}). evrd resta connesso e conta questo tempo come separato finché non tornano.",
+    "irc.event.rejoined": "{network}: il tuo server è di nuovo unito al resto della rete",
+    "irc.event.rejoinedDetail": "Separato per {duration}.",
     "irc.event.attached": "{client} collegato",
     "irc.module.log.perform": {
       "one": "perform: inviato {count} comando",

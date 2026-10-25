@@ -1,18 +1,21 @@
 <script>
   // A network's uptime as a band of slots: connected the whole slot, part
   // of it, not at all, or nothing reported (switched off, or evrd wasn't
-  // running). Hovering a slot shows how much of it was connected.
+  // running), or connected while the server was split from the rest of the
+  // network. Hovering a slot shows how much of it was connected (and split).
   //
-  // points: [fraction connected | null …]
+  // points: [fraction connected | null …]; split: [fraction split | null …]
   // label:  (i) => what slot i covers; axis: [[i, text]]
   import { slotState, counted } from '$lib/health.js'
   import { t } from '$lib/i18n.svelte.js'
 
-  let { points = [], label = (i) => String(i), axis = [] } = $props()
+  let { points = [], split = [], label = (i) => String(i), axis = [] } = $props()
 
   const n = $derived(points.length)
-  const tally = $derived(counted(points))
-  const STATES = $derived([['up', t('health.stateUp')], ['part', t('health.statePart')], ['down', t('health.stateDown')], ['none', t('health.stateNone')]])
+  const tally = $derived(counted(points, split))
+  const STATES = $derived([['up', t('health.stateUp')], ['part', t('health.statePart')], ['split', t('health.stateSplit')], ['down', t('health.stateDown')], ['none', t('health.stateNone')]])
+  // the split state only shows in the legend when there was one
+  const shown = $derived(STATES.filter(([k]) => k !== 'split' || tally.split > 0))
   const name = $derived(Object.fromEntries(STATES))
   const pct = (v) => (v == null ? '—' : Math.round(v * 1000) / 10 + '%')
 
@@ -25,16 +28,17 @@
 
 <div class="uband" data-testid="uptime-band">
   <div class="legend">
-    {#each STATES as [k, l]}<span><i class="sw {k}"></i>{l}<b>{tally[k]}</b></span>{/each}
+    {#each shown as [k, l]}<span><i class="sw {k}"></i>{l}<b>{tally[k]}</b></span>{/each}
   </div>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="band" class:dense={n > 48} style="--n:{n}" onpointermove={move} onpointerleave={() => (hover = null)} aria-hidden="true">
-    {#each points as v, i}<span class="cell {slotState(v)}" class:on={hover === i}></span>{/each}
+    {#each points as v, i}<span class="cell {slotState(v, split[i])}" class:on={hover === i}></span>{/each}
     {#if hover != null}
       {@const left = ((hover + 0.5) / n) * 100}
       <div class="tip" class:flip={left > 60} style="left:{left}%" data-testid="uptime-readout">
         <div class="readout-h">{label(hover)}</div>
         <div class="readout-row"><i class="sw {slotState(points[hover])}"></i><span>{name[slotState(points[hover])]}</span><b>{pct(points[hover])}</b></div>
+        {#if split[hover] >= 0.005 && points[hover] > 0}<div class="readout-row"><i class="sw split"></i><span>{name.split}</span><b>{pct(split[hover])}</b></div>{/if}
       </div>
     {/if}
   </div>
@@ -50,6 +54,8 @@
   .up { background: var(--ok); }
   .part { background: var(--warn); }
   .down { background: var(--bad); }
+  /* connected but split from the network: striped, so it reads apart from "partly" without colour */
+  .split { background: repeating-linear-gradient(135deg, var(--warn) 0 3px, var(--warn-soft) 3px 6px); }
   .none { background: repeating-linear-gradient(135deg, var(--line) 0 2px, transparent 2px 5px); box-shadow: inset 0 0 0 1px var(--line-soft); }
   .band { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 2px; height: 32px; cursor: crosshair; touch-action: pan-y; }
   .band.dense { gap: 1px; }

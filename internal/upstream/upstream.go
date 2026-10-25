@@ -106,11 +106,18 @@ type Health struct {
 	// Auth is how the services login went on this connection (AuthPending,
 	// AuthIdentified…); "" when there was none.
 	Auth string `json:"auth,omitempty"`
+	// SplitOffSince is when this connection's server split away from the
+	// rest of the network (zero while it isn't): connected, but cut off from
+	// most of the people in its channels (cutOff).
+	SplitOffSince time.Time `json:"splitOffSince,omitzero"`
 }
 
 // Event is something worth telling the user about.
 type Event struct {
-	Kind   string // connected | disconnected | failed (couldn't connect) | netsplit
+	// connected | disconnected | failed (couldn't connect) | netsplit |
+	// splitoff (this server split away) | rejoined (and came back) |
+	// linesmissed (a resumed link lost lines while held)
+	Kind   string
 	Title  string // in English
 	Detail string
 	At     time.Time
@@ -176,6 +183,7 @@ type Conn struct {
 	lagToken    string
 	lagSent     time.Time
 	splits      splitTracker
+	cut         cutOff
 	subs        map[chan history.Message]struct{}
 	rawSubs     map[chan Line]struct{}
 	// resync is what a resumed link asked the server about its channels
@@ -641,6 +649,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	c.info = map[string]*chanInfo{}
 	c.people, c.whoAsked, c.serverName = map[string]*person{}, map[string]byte{}, ""
 	c.chanModes = defaultChanModes
+	c.cut, c.health.SplitOffSince = cutOff{}, time.Time{}
 	c.mu.Unlock()
 
 	// Measure lag every pingEvery; the read deadline below turns silence into
@@ -787,7 +796,7 @@ func (c *Conn) resume(r *links.Resumed) {
 	}()
 	c.log.Info("resumed held link", "network", c.net.Name, "nick", r.Nick, "channels", len(saved), "dropped", r.Dropped)
 	if r.Dropped > 0 {
-		c.notify(Event{Kind: "netsplit", TitleText: messages.T("event.linesMissed", "network", c.net.Name),
+		c.notify(Event{Kind: "linesmissed", TitleText: messages.T("event.linesMissed", "network", c.net.Name),
 			DetailText: messages.T("event.linesDropped", "count", r.Dropped)})
 	}
 }
@@ -1010,11 +1019,20 @@ func (c *Conn) handle(m irc.Message) {
 		reason := lastParamIf(m, 1)
 		c.mu.Lock()
 		chans := c.channelsOf(who, false)
+		splitQuit := len(chans) > 0 && isSplitReason(reason)
+		var cutStarted bool
+		if splitQuit {
+			cutStarted = c.cut.quit(who, time.Now(), c.peopleCount())
+			if cutStarted {
+				c.health.SplitOffSince = c.cut.since
+			}
+		}
 		for _, ch := range chans {
 			delete(c.members[strings.ToLower(ch)], strings.ToLower(who))
 		}
 		delete(c.people, strings.ToLower(who))
-		split := len(chans) > 0 && isSplitReason(reason) && c.splits.quit(time.Now())
+		split := splitQuit && c.splits.quit(time.Now())
+		cutLost, cutBefore := len(c.cut.lost), c.cut.before
 		ghost := c.auth.ghosted && strings.EqualFold(who, c.net.Nick)
 		gen := c.auth.gen
 		c.mu.Unlock()
@@ -1024,7 +1042,11 @@ func (c *Conn) handle(m irc.Message) {
 		for _, ch := range chans {
 			c.event("quit", ch, who, reason, "")
 		}
-		if split {
+		if cutStarted {
+			c.log.Warn("this server split from the network", "network", c.net.Name, "lost", cutLost, "of", cutBefore)
+			c.notify(Event{Kind: "splitoff", TitleText: messages.T("event.splitOff", "network", c.net.Name),
+				DetailText: messages.T("event.splitOffDetail", "lost", cutLost, "of", cutBefore, "reason", reason)})
+		} else if split {
 			c.notify(Event{Kind: "netsplit", TitleText: messages.T("event.netsplit", "network", c.net.Name), DetailText: messages.Raw(reason)})
 		}
 	case "JOIN":
@@ -1040,8 +1062,17 @@ func (c *Conn) handle(m irc.Message) {
 		c.mu.Lock()
 		c.addMember(ch, m.Prefix) // nick!user@host
 		c.joinedBy(who, m.Params)
+		cutFor, rejoined := c.cut.join(who, time.Now())
+		if rejoined {
+			c.health.SplitOffSince = time.Time{}
+		}
 		c.mu.Unlock()
 		c.event("join", ch, who, "", "")
+		if rejoined {
+			c.log.Info("this server is back with the network", "network", c.net.Name, "after", cutFor)
+			c.notify(Event{Kind: "rejoined", TitleText: messages.T("event.rejoined", "network", c.net.Name),
+				DetailText: messages.T("event.rejoinedDetail", "duration", durText(cutFor))})
+		}
 	case "PART":
 		if len(m.Params) == 0 {
 			return
@@ -2016,6 +2047,70 @@ func (s *splitTracker) quit(at time.Time) bool {
 		return true
 	}
 	return false
+}
+
+// cutOff notices this server splitting away from the rest of the network:
+// a burst of split QUITs taking most of the people in our channels (rather
+// than some other server going, which takes a few). It's over once half of
+// those people are back.
+type cutOff struct {
+	burst  map[string]bool // who left in the current burst of split QUITs
+	last   time.Time       // the burst's latest QUIT
+	before int             // people in our channels as the burst began
+	since  time.Time       // cut off since (zero: not)
+	lost   map[string]bool // whom the split took, while cut off
+	back   map[string]bool // of those, who has come back
+}
+
+// cutOffMin is the fewest people a split must take to be ours: below it, a
+// channel or two emptying out doesn't count.
+const cutOffMin = 5
+
+// quit counts a split QUIT of nick, people being everyone in our channels
+// before it. started is true when it makes this server's split.
+func (k *cutOff) quit(nick string, at time.Time, people int) (started bool) {
+	if at.Sub(k.last) > 10*time.Second {
+		k.burst, k.before = map[string]bool{}, people
+	}
+	k.last = at
+	k.burst[strings.ToLower(nick)] = true
+	if !k.since.IsZero() || len(k.burst) < cutOffMin || len(k.burst)*2 < k.before {
+		return false
+	}
+	// the rest of this burst counts among those it took (the same map)
+	k.since, k.lost, k.back = at, k.burst, map[string]bool{}
+	return true
+}
+
+// join counts nick joining; rejoined is true when that brings back half
+// of whom the split took, ending it, after cut.
+func (k *cutOff) join(nick string, at time.Time) (cut time.Duration, rejoined bool) {
+	n := strings.ToLower(nick)
+	if k.since.IsZero() || !k.lost[n] {
+		return 0, false
+	}
+	k.back[n] = true
+	if len(k.back)*2 < len(k.lost) {
+		return 0, false
+	}
+	cut = at.Sub(k.since)
+	k.since, k.lost, k.back = time.Time{}, nil, nil
+	return cut, true
+}
+
+// peopleCount is how many people (not counting us) are in our channels.
+// Callers hold c.mu.
+func (c *Conn) peopleCount() int {
+	seen := map[string]bool{}
+	me := strings.ToLower(c.nick)
+	for _, set := range c.members {
+		for n := range set {
+			if n != me {
+				seen[n] = true
+			}
+		}
+	}
+	return len(seen)
 }
 
 // --- helpers -------------------------------------------------------------

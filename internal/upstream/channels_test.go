@@ -1,6 +1,7 @@
 package upstream
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -192,11 +193,12 @@ func TestNetsplitIsReportedOnce(t *testing.T) {
 	s, c := connected(t, store.Network{Name: "Net", Nick: "me"}, Options{OnEvent: events.add})
 	s.send(":me!u@h JOIN #c")
 	var names []string
-	for i := range 8 {
+	for i := range 20 {
 		names = append(names, "u"+string(rune('a'+i)))
 	}
 	s.send(":srv 353 me = #c :me %s", strings.Join(names, " "))
-	for _, n := range names {
+	// another server splitting off: a few of the channel go
+	for _, n := range names[:8] {
 		s.send(":%s!x@h QUIT :hub.example.net leaf.example.net", n)
 	}
 	settle(t, s)
@@ -206,8 +208,84 @@ func TestNetsplitIsReportedOnce(t *testing.T) {
 	if !events.has("netsplit", "Netsplit on Net") {
 		t.Fatal("netsplit title")
 	}
-	if c.MemberCount("#c") != 1 {
+	if events.count("splitoff") != 0 || !c.Health().SplitOffSince.IsZero() {
+		t.Fatal("a minority leaving split this server off")
+	}
+	if c.MemberCount("#c") != 13 {
 		t.Fatalf("split users still listed: %d", c.MemberCount("#c"))
+	}
+}
+
+func TestThisServerSplitsOff(t *testing.T) {
+	var events eventRec
+	s, c := connected(t, store.Network{Name: "Net", Nick: "me"}, Options{OnEvent: events.add})
+	s.send(":me!u@h JOIN #a")
+	s.send(":me!u@h JOIN #b")
+	var names []string
+	for i := range 10 {
+		names = append(names, "u"+string(rune('a'+i)))
+	}
+	s.send(":srv 353 me = #a :me %s", strings.Join(names[:6], " "))
+	s.send(":srv 353 me = #b :me %s", strings.Join(names[4:], " ")) // 10 people over the two
+	// our server is cut off: 7 of the 10 go at once
+	for _, n := range names[:7] {
+		s.send(":%s!x@h QUIT :hub.example.net leaf.example.net", n)
+	}
+	settle(t, s)
+	if events.count("splitoff") != 1 || events.count("netsplit") != 0 {
+		t.Fatalf("events: splitoff %d, netsplit %d", events.count("splitoff"), events.count("netsplit"))
+	}
+	if !events.has("splitoff", "Net: your server split from the rest of the network") {
+		t.Fatal("splitoff title")
+	}
+	if c.Health().SplitOffSince.IsZero() {
+		t.Fatal("not split off")
+	}
+	// some come back: not yet half
+	for _, n := range names[:3] {
+		s.send(":%s!x@h JOIN #a", n)
+	}
+	settle(t, s)
+	if c.Health().SplitOffSince.IsZero() || events.count("rejoined") != 0 {
+		t.Fatalf("back before half of them were: since %v rejoined %d", c.Health().SplitOffSince, events.count("rejoined"))
+	}
+	s.send(":%s!x@h JOIN #a", names[3])
+	settle(t, s)
+	if !c.Health().SplitOffSince.IsZero() || events.count("rejoined") != 1 {
+		t.Fatalf("still split off with half back: rejoined %d", events.count("rejoined"))
+	}
+}
+
+func TestCutOff(t *testing.T) {
+	t0 := time.Now()
+	var k cutOff
+	// 4 of 6 isn't enough people to count, however many it is of the whole
+	for i := range 4 {
+		if k.quit(fmt.Sprint("p", i), t0, 6) {
+			t.Fatal("cut off with 4 gone")
+		}
+	}
+	if !k.quit("p4", t0, 6) {
+		t.Fatal("5 of 6 gone at once isn't a cut-off")
+	}
+	if k.quit("p5", t0, 6) {
+		t.Fatal("reported twice")
+	}
+	// a new burst, spread out: each quit starts over
+	var slow cutOff
+	for i := range 10 {
+		if slow.quit(fmt.Sprint("p", i), t0.Add(time.Duration(i)*11*time.Second), 10) {
+			t.Fatal("spread-out quits cut off")
+		}
+	}
+	// someone who wasn't there joining doesn't count
+	if _, back := k.join("stranger", t0); back {
+		t.Fatal("a stranger ended it")
+	}
+	k.join("P0", t0)
+	k.join("p1", t0)
+	if d, back := k.join("p2", t0.Add(time.Minute)); !back || d != time.Minute {
+		t.Fatalf("3 of 5 back: %v %v", back, d)
 	}
 }
 

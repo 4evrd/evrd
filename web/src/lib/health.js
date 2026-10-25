@@ -9,9 +9,12 @@ export const RANGES = ['24h', '7d', '30d']
 export const rangeOf = (v) => (RANGES.includes(v) ? v : '24h')
 
 // slotState is how a slot's uptime (the fraction of it connected, null
-// when nothing was reported) reads: up, part(ly), down or none.
-export function slotState(v) {
+// when nothing was reported) reads: up, part(ly), down or none; or split
+// when, connected, the server was split from the rest of the network for
+// some of it (split: that fraction).
+export function slotState(v, split = null) {
   if (v == null) return 'none'
+  if (v > 0 && split >= 0.005) return 'split'
   if (v >= 0.995) return 'up'
   if (v > 0) return 'part'
   return 'down'
@@ -49,8 +52,8 @@ export const uptimeTone = (pct) => (pct == null ? '' : pct >= 99 ? 'ok' : pct >=
 export const lagTone = (ms) => (ms == null ? '' : ms < 500 ? 'ok' : ms < 2000 ? 'warn' : 'bad')
 
 // counted tallies the uptime band's slots by state.
-export function counted(uptime) {
-  const out = { up: 0, part: 0, down: 0, none: 0 }
-  for (const v of uptime || []) out[slotState(v)]++
+export function counted(uptime, split = []) {
+  const out = { up: 0, part: 0, split: 0, down: 0, none: 0 }
+  for (const [i, v] of (uptime || []).entries()) out[slotState(v, split?.[i])]++
   return out
 }

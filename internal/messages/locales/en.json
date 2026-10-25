@@ -431,6 +431,10 @@
     "irc.event.connected": "Connected to {network}",
     "irc.event.connectedAs": "{host}:{port} as {nick}",
     "irc.event.netsplit": "Netsplit on {network}",
+    "irc.event.splitOff": "{network}: your server split from the rest of the network",
+    "irc.event.splitOffDetail": "{lost} of the {of} people in your channels left at once ({reason}). evrd stays connected and counts this time as split off until they come back.",
+    "irc.event.rejoined": "{network}: your server is back with the rest of the network",
+    "irc.event.rejoinedDetail": "Split off for {duration}.",
     "irc.module.log.perform": {
       "one": "perform: sent {count} command",
       "other": "perform: sent {count} commands"

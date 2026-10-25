@@ -142,4 +142,8 @@ export default {
   'overview.zoomOut': 'Verkleinern',
   'overview.zoomIn': 'Vergrößern',
   'overview.zoomFit': 'Einpassen',
+  'overview.rcKindSplitOff': 'Abgespalten',
+  'overview.rcKindRejoined': 'Zurück',
+  'overview.rcKindLinesMissed': 'Zeilen verpasst',
+  'overview.markerSplitOff': 'ABGESPALTEN',
 }
