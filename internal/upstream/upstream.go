@@ -720,6 +720,9 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	c.mu.Lock()
 	c.w = nil
 	c.mu.Unlock()
+	if !(held && c.detaching != nil && c.detaching()) { // (kept by the holder: evrd is only restarting)
+		c.leftAll()
+	}
 	h := c.Health()
 	err = sc.Err()
 	var ne net.Error
@@ -1376,6 +1379,27 @@ func (c *Conn) joined(ch string) {
 	}
 }
 
+// leftAll forgets the channels evrd was in, as the link it was in them on
+// has ended, and tells attached clients (Line.Left): a client that kept
+// them open would take the rejoin for one it's already in, and keep no
+// names (#125).
+func (c *Conn) leftAll() {
+	c.mu.Lock()
+	var left []string
+	for ch := range c.channels {
+		left = append(left, ch)
+	}
+	sort.Strings(left)
+	c.channels = map[string]bool{}
+	c.members = map[string]map[string]*Member{}
+	c.topics = map[string]string{}
+	c.info = map[string]*chanInfo{}
+	c.mu.Unlock()
+	if len(left) > 0 {
+		c.broadcastRaw(Line{Left: left})
+	}
+}
+
 // parted records a channel we left; forget drops it from the saved list too.
 func (c *Conn) parted(ch string, forget bool) {
 	c.mu.Lock()
@@ -1787,6 +1811,9 @@ type Line struct {
 	Text   string
 	ID     history.ID
 	Origin string
+	// Left, instead of a line: the channels evrd was in when the link
+	// ended. Clients are taken out of them; the rejoin brings them back.
+	Left []string
 }
 
 // resyncReply reports whether m answers resume's NAMES or TOPIC, noting

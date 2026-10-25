@@ -273,6 +273,7 @@ type heldState struct {
 	NetBatches map[string]bool              `json:"netBatches,omitempty"` // the network's, open
 	NetsSent   map[string]map[string]string `json:"netsSent,omitempty"`
 	Marks      map[string]time.Time         `json:"marks,omitempty"`
+	Open       []string                     `json:"open,omitempty"` // channels the client has open
 	FromIP     string                       `json:"fromIP,omitempty"`
 	Device     string                       `json:"device,omitempty"`
 	Software   string                       `json:"software,omitempty"`
@@ -298,6 +299,10 @@ func (se *session) saveState() {
 		}
 	}
 	sort.Strings(st.Caps)
+	for ch := range se.open {
+		st.Open = append(st.Open, ch)
+	}
+	sort.Strings(st.Open)
 	b, err := json.Marshal(st)
 	if err != nil || bytes.Equal(b, se.savedState) {
 		return
@@ -353,6 +358,9 @@ func (se *session) restore(raw []byte) error {
 		se.ubatch = st.NetBatches
 	}
 	se.netsSent, se.marks, se.fromIP = st.NetsSent, st.Marks, st.FromIP
+	for _, ch := range st.Open {
+		se.open[ch] = true
+	}
 	att, err := se.srv.b.AttachClient(u.ID, 0,
 		bouncer.ClientInfo{Device: st.Device, Networks: bound, IP: se.clientIP(), Software: st.Software},
 		se.kick)

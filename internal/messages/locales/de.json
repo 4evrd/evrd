@@ -355,6 +355,7 @@
     "irc.welcome.motdHelp": "/msg {status} help für die Bouncer-Befehle",
     "irc.part.jumped": "gewechselt zu {network}",
     "irc.part.detached": "Abgekoppelt - /join {channel} holt ihn zurück",
+    "irc.kick.disconnected": "Verbindung zu {network} getrennt - evrd tritt wieder bei, sobald es zurück ist",
     "irc.bouncerConnection": "Das ist eine Bouncer-Verbindung in keinem Netzwerk: wähle eines mit BOUNCER BIND",
     "irc.hint.banned": "Der Server weist Verbindungen von der Adresse dieses Bouncers ab. evrd lässt diesen Server eine halbe Stunde ruhen (jedes Mal länger, weil frühere Versuche Sperren verlängern) und versucht solange die anderen Server des Netzwerks. Manche Server nehmen nur bestimmte Länder oder Netze an, oder Clients mit Ident; füge andere Server des Netzwerks hinzu oder frag dessen Team – die Worte des Servers stehen im Verbindungsprotokoll.",
     "irc.hint.throttled": "Der Server begrenzt, wie oft oder wie viele Verbindungen von einer Adresse kommen – andere Nutzer dieses Bouncers im selben Netzwerk zählen mit. evrd lässt diesen Server mindestens zwei Minuten ruhen und versucht solange die anderen Server des Netzwerks.",

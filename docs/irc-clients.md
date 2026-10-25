@@ -139,6 +139,12 @@ command names stay the same in every language. See
 
 Buffer names take wildcards (`clearbuffer #evrd*`) and lists (`#a,#b`).
 
+When a network disconnects (it dropped, or you ran `disconnect`), evrd
+kicks your client out of that network's channels, as ZNC does, and your
+client stays attached to evrd. Each channel's window stays open. When evrd
+rejoins, the channels fill in again, names and all. A client that attaches
+while the network is down gets its channels as evrd joins them.
+
 ### Playback buffers
 
 Each channel and private message has a buffer, per network. When an IRC

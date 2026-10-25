@@ -145,3 +145,63 @@ func TestLabeledQueryFromEvrdsState(t *testing.T) {
 		t.Fatalf("one line, labeled: %q", l)
 	}
 }
+
+// count is how many of lines have s in them.
+func count(lines []string, s string) int {
+	n := 0
+	for _, l := range lines {
+		if strings.Contains(l, s) {
+			n++
+		}
+	}
+	return n
+}
+
+func TestADroppedLinkTakesClientsOutOfItsChannels(t *testing.T) {
+	r := newRig(t)
+	r.known("one", "#one")
+	ic := r.attach("alice/one:alice-password")
+	ic.until(":evrd 366 alice_one #one ")
+
+	// out of its channels with the link, as ZNC does: the rejoin is then
+	// a join, names and all, and not one into a channel it's in (#125)
+	ic.send("PRIVMSG *status :disconnect")
+	if l := ic.expect(" KICK #one alice_one "); !strings.HasPrefix(l, ":evrd KICK #one alice_one :Disconnected from one") {
+		t.Fatalf("kick: %q", l)
+	}
+	// one attaching meanwhile gets no channel evrd isn't in
+	late := r.attach("alice/one:alice-password")
+	late.send("PRIVMSG *status :version")
+	if seen := late.until("PRIVMSG alice_one :evrd "); anyHas(seen, " JOIN #one") {
+		t.Fatalf("joined while disconnected: %q", seen)
+	}
+
+	ic.send("PRIVMSG *status :connect")
+	for _, c := range []*ircClient{ic, late} {
+		seen := c.until(" 366 alice_one #one ")
+		if count(seen, " JOIN #one") != 1 || !anyHas(seen, "@op") {
+			t.Fatalf("rejoin: %q", seen)
+		}
+		c.send("PRIVMSG *status :version")
+		if seen := c.until("PRIVMSG alice_one :evrd "); anyHas(seen, " JOIN #one") || anyHas(seen, " 353 ") {
+			t.Fatalf("joined twice: %q", seen)
+		}
+	}
+}
+
+func TestAJoinIntoAnOpenChannelDoesntReachTheClient(t *testing.T) {
+	r := newRig(t)
+	r.known("one", "#one")
+	ic := r.attach("alice/one:alice-password")
+	ic.until(":evrd 366 alice_one #one ")
+	ic.send("SIMULATE :alice_one!u@h JOIN #one")
+	ic.send("SIMULATE :fake 353 alice_one = #one :alice_one @op")
+	ic.send("SIMULATE :fake 366 alice_one #one :End of /NAMES list.")
+	ic.send("SIMULATE :bob!b@h PRIVMSG #one :after")
+	if seen := ic.until("PRIVMSG #one :after"); anyHas(seen, " JOIN #one") || anyHas(seen, " 353 ") || anyHas(seen, " 366 ") {
+		t.Fatalf("a JOIN into an open channel: %q", seen)
+	}
+	// asked, the names still come
+	ic.send("NAMES #one")
+	ic.expect(" 366 alice_one #one ")
+}

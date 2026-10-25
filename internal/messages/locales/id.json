@@ -340,6 +340,7 @@
     "irc.welcome.motdHelp": "/msg {status} help untuk perintah bouncer",
     "irc.part.jumped": "pindah ke {network}",
     "irc.part.detached": "Dilepas - /join {channel} untuk kembali",
+    "irc.kick.disconnected": "Terputus dari {network} - evrd bergabung lagi saat tersambung kembali",
     "irc.bouncerConnection": "Ini koneksi bouncer tanpa network: pilih satu dengan BOUNCER BIND",
     "irc.hint.banned": "Server menolak koneksi dari alamat bouncer ini. evrd mengistirahatkan server itu selama setengah jam (lebih lama setiap kali, karena mencoba lebih cepat memperpanjang ban) dan sementara itu mencoba server lain di network. Beberapa server hanya menerima negara atau jaringan tertentu, atau klien dengan ident; tambahkan server lain dari network, atau tanyakan alasannya ke stafnya — kata-kata server ada di log koneksi.",
     "irc.hint.throttled": "Server membatasi seberapa sering, atau berapa banyak, koneksi dari satu alamat — pengguna lain bouncer ini di network yang sama juga dihitung. evrd mengistirahatkan server itu setidaknya dua menit dan sementara itu mencoba server lain di network.",
