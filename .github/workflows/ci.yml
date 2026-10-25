@@ -47,7 +47,7 @@ jobs:
       CGO_ENABLED: "0" # pure Go, like the image
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: gofmt
@@ -342,7 +342,7 @@ jobs:
       contents: write # upload to the release
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           # setup-go's cache is shared with the test jobs, which save it
