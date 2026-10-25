@@ -7,4 +7,6 @@ export default {
   'common.loading': 'Caricamento…',
   'common.saving': 'Salvataggio…',
   'common.retry': 'Riprova',
+  'common.showPassword': 'Mostra password',
+  'common.hidePassword': 'Nascondi password',
 }
