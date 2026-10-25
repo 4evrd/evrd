@@ -26,6 +26,24 @@ test('the sidebar reaches every page', async ({ page }) => {
   await expect(page.getByRole('navigation', { name: 'Your bouncer' }).getByRole('link', { name: /Networks/ }).locator('.count')).toHaveText('1')
 })
 
+test('the sidebar collapses to its icons, and stays so', async ({ page }) => {
+  const nav = page.getByRole('navigation', { name: 'Your bouncer' })
+  const width = async () => (await page.locator('#sidebar').boundingBox()).width
+  expect(await width()).toBeGreaterThan(200)
+  await page.getByRole('button', { name: 'Collapse menu' }).click()
+  await expect.poll(width).toBeLessThan(100)
+  await expect(page.getByTestId('side-card')).toBeHidden()
+  // the links keep their names (for screen readers, and as tooltips)
+  await expect(nav.getByRole('link', { name: 'Networks' })).toHaveAttribute('title', 'Networks')
+  await nav.getByRole('link', { name: 'Networks' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Networks', exact: true })).toBeVisible()
+  await page.reload()
+  await expect.poll(width).toBeLessThan(100)
+  await page.getByRole('button', { name: 'Expand menu' }).click()
+  await expect.poll(width).toBeGreaterThan(200)
+  await expect(page.getByTestId('side-card')).toBeVisible()
+})
+
 test('global search jumps to networks and channels', async ({ page }) => {
   const search = page.getByRole('combobox', { name: 'Search networks and channels' })
   await search.fill(chan.slice(1, 5))

@@ -35,6 +35,8 @@ export default {
 
   // top bar
   'shell.openNav': 'Buka navigasi',
+  'shell.collapseNav': 'Ciutkan menu',
+  'shell.expandNav': 'Bentangkan menu',
   'shell.search': 'Cari network dan channel',
   'shell.searchPlaceholder': 'Cari network, channel…',
   'shell.mentionsUnread': 'Mention — {count} belum dibaca',

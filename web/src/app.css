@@ -244,6 +244,23 @@ button { cursor: pointer; }
 .health-card .version { font-family: var(--font-mono); color: var(--faint); }
 
 .workspace { min-width: 0; display: flex; flex-direction: column; }
+
+/* the sidebar collapsed to its icons (Shell's toggle; not on phones):
+   labels stay for screen readers, and show as tooltips */
+.side-btn { justify-content: flex-start; }
+.app { transition: grid-template-columns var(--t-med) var(--ease-out); }
+.app.collapsed { --sidebar-w: 72px; }
+.app.collapsed .sidebar { padding: var(--s5) var(--s3); overflow-x: hidden; }
+.app.collapsed .brand { justify-content: center; padding: var(--s1) 0; }
+.app.collapsed .brand-text, .app.collapsed .nav-group .caps, .app.collapsed .health-card { display: none; }
+.app.collapsed .nav-group + .nav-group { border-top: 1px solid var(--line-soft); padding-top: var(--s4); }
+.app.collapsed .nav-link, .app.collapsed .side-btn { position: relative; justify-content: center; padding: 0; }
+.app.collapsed .nav-link > span:not(.count), .app.collapsed .side-btn > span {
+  position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+.app.collapsed .nav-link .count { position: absolute; top: 1px; right: 0; height: 16px; margin: 0; padding: 0 5px; }
+.app.collapsed .nav-link .count.calm { display: none; }
+.app.collapsed .nav-link .count::before { display: none; }
 .topbar {
   position: sticky; top: 0; z-index: 20; height: var(--topbar-h);
   display: flex; align-items: center; gap: var(--s3); padding: 0 var(--s6);
@@ -814,6 +831,7 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
     transform: translateX(-100%); visibility: hidden; transition: transform var(--t-exit) var(--ease-in), visibility 0s linear var(--t-exit); }
   .sidebar.open { transform: none; visibility: visible; transition: transform var(--t-med) var(--ease-out), visibility 0s; }
   .burger { display: inline-grid; }
+  .side-toggle { display: none; }
   .topbar { padding: 0 var(--s4); }
   .main { padding: var(--s6) var(--s4) var(--s8); }
   .hide-md { display: none !important; }
