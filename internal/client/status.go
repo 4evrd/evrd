@@ -40,7 +40,7 @@ var statusCmds []statusCmd
 func init() {
 	statusCmds = []statusCmd{
 		{"help", "", (*session).cmdHelp},
-		{"networks", "", (*session).cmdNetworks},
+		{"networks", "[filter]", (*session).cmdNetworks},
 		{"jumpnetwork", "<network>", (*session).cmdJumpNetwork},
 		{"jump", "[server|network]", (*session).cmdJump},
 		{"connect", "[network]", (*session).cmdConnect},
@@ -87,7 +87,7 @@ func init() {
 		{"uptime", "", (*session).cmdUptime},
 		{"traffic", "", (*session).cmdTraffic},
 		{"listusers", "", (*session).cmdListUsers},
-		{"listallusernetworks", "", (*session).cmdListAllUserNetworks},
+		{"listallusernetworks", "[filter]", (*session).cmdListAllUserNetworks},
 		{"version", "", (*session).cmdVersion},
 	}
 
@@ -286,9 +286,18 @@ func (se *session) network(args []string) (store.Network, bool) {
 	return n, ok
 }
 
-func (se *session) cmdNetworks([]string) {
-	nets, ok := se.networks()
+// cmdNetworks lists the user's networks: connected first, then by name.
+// A filter keeps those whose name matches it (* and ? wildcards; without
+// any, a name containing it).
+func (se *session) cmdNetworks(args []string) {
+	all, ok := se.networks()
 	if !ok {
+		return
+	}
+	filter := strings.Join(args, " ")
+	nets := se.sortNetworks(filterNetworks(all, filter, func(n store.Network) []string { return []string{n.Name} }))
+	if filter != "" && len(nets) == 0 {
+		se.say("networks.noMatch", "filter", filter)
 		return
 	}
 	for _, n := range nets {
@@ -306,7 +315,52 @@ func (se *session) cmdNetworks([]string) {
 		}
 		se.statusf("%s%-16s %-12s %s %-14s %s:%s%d · %s", here, n.Name, se.state(se.srv.b.Status(n.ID)), se.tr("networks.as"), nick, n.Host, tls, n.Port, se.tr("count.channels", "count", len(n.Channels)))
 	}
+	if filter != "" {
+		se.say("networks.footerFiltered", "shown", len(nets), "networks", se.tr("count.networks", "count", len(all)))
+		return
+	}
 	se.say("networks.footer", "networks", se.tr("count.networks", "count", len(nets)))
+}
+
+// filterNetworks keeps the networks one of whose names (fields) matches
+// filter, ignoring case: a pattern with * or ?, else a part of the name.
+// An empty filter keeps them all.
+func filterNetworks(nets []store.Network, filter string, fields func(store.Network) []string) []store.Network {
+	if filter == "" {
+		return nets
+	}
+	if !strings.ContainsAny(filter, "*?") {
+		filter = "*" + filter + "*"
+	}
+	var out []store.Network
+	for _, n := range nets {
+		if slices.ContainsFunc(fields(n), func(f string) bool { return modules.Match(filter, f) }) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// sortNetworks orders networks for a listing: connected, then on their way
+// (connecting, reconnecting), then off; by name within each.
+func (se *session) sortNetworks(nets []store.Network) []store.Network {
+	rank := func(n store.Network) int {
+		switch se.srv.b.Status(n.ID) {
+		case upstream.StatusConnected:
+			return 0
+		case upstream.StatusConnecting, upstream.StatusReconnecting:
+			return 1
+		}
+		return 2
+	}
+	out := slices.Clone(nets)
+	slices.SortStableFunc(out, func(a, b store.Network) int {
+		if d := rank(a) - rank(b); d != 0 {
+			return d
+		}
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
+	return out
 }
 
 func (se *session) cmdConnect(args []string) {

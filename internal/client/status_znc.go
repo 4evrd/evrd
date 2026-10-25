@@ -420,7 +420,7 @@ func (se *session) cmdListUsers([]string) {
 	se.say("users.footer", "users", se.tr("count.users", "count", len(users)))
 }
 
-func (se *session) cmdListAllUserNetworks([]string) {
+func (se *session) cmdListAllUserNetworks(args []string) {
 	if !se.admin() {
 		return
 	}
@@ -433,13 +433,24 @@ func (se *session) cmdListAllUserNetworks([]string) {
 	for _, u := range users {
 		names[u.ID] = u.Username
 	}
-	nets, err := se.srv.acc.AllNetworks(context.Background())
+	all, err := se.srv.acc.AllNetworks(context.Background())
 	if err != nil {
 		se.say("listNetworksFailed", "error", err)
 		return
 	}
+	// a filter matches the network's name or its owner's
+	filter := strings.Join(args, " ")
+	nets := se.sortNetworks(filterNetworks(all, filter, func(n store.Network) []string { return []string{n.Name, names[n.UserID]} }))
+	if filter != "" && len(nets) == 0 {
+		se.say("networks.noMatch", "filter", filter)
+		return
+	}
 	for _, n := range nets {
 		se.statusf("  %-20s %-16s %-12s %s:%d", names[n.UserID], n.Name, se.state(se.srv.b.Status(n.ID)), n.Host, n.Port)
+	}
+	if filter != "" {
+		se.say("networks.totalFiltered", "shown", len(nets), "networks", se.tr("count.networks", "count", len(all)))
+		return
 	}
 	se.say("networks.total", "networks", se.tr("count.networks", "count", len(nets)))
 }
