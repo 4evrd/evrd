@@ -627,10 +627,21 @@ metrics_url   http://victoriametrics:8428   # PromQL API the dashboard queries
 (`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` and `EVRD_METRICS_URL` work too.) Run
 VictoriaMetrics with `-opentelemetry.usePrometheusNaming` so names come out as
 `evrd_irc_lines_total{user,network,direction}`, `evrd_upstream_up`,
-`evrd_upstream_lag_seconds`, `evrd_upstream_disconnects_total`,
+`evrd_upstream_split`, `evrd_upstream_lag_seconds`, `evrd_upstream_disconnects_total`,
 `evrd_irc_clients`, `evrd_web_streams`, `evrd_cluster_users`,
 `evrd_history_queue` and friends (`user`/`network` are ids). Without
 `metrics_url` the dashboard still works; the chart says metrics are off.
+
+A network's health page (Networks → the chart icon) shows its uptime: the
+share of the time evrd's link was up. A netsplit elsewhere on the network
+doesn't count against it: evrd's link stays up while another server's
+people quit and come back, and the split shows as an event. When it's
+evrd's own server that splits away (at least 5 people, and half of
+everyone in your channels, quit at once with a split reason), the link is
+still up but cut off from most of the network: `evrd_upstream_split` is 1
+until half of those people are back, the uptime band shows that time as
+**split off**, striped, and its share counts against the network's health
+colour. Both ends are events (**Split off**, **Back**).
 
 Admins see every metric under Admin → Metrics. For Grafana there's a
 ready-made dashboard, `deploy/grafana/evrd.json` (a VictoriaMetrics or

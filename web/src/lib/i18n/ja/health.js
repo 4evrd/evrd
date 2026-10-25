@@ -101,4 +101,10 @@ export default {
   'health.mentionsAria': { one: 'メンション {count} 件', other: 'メンション {count} 件' },
   'health.noChannelsJoined': 'どのチャンネルにも参加していません。',
   'health.noChannels': '保存されたチャンネルはありません。',
+  'health.stateSplit': '分断',
+  'health.splitOff': '分断',
+  'health.splitShare': '{pct}% ネットワークから分断',
+  'health.kindSplitOff': '分断',
+  'health.kindRejoined': '復帰',
+  'health.kindLinesMissed': '取りこぼし',
 }

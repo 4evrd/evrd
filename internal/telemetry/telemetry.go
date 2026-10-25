@@ -197,6 +197,9 @@ type Link struct {
 	User, Network string
 	Up            bool
 	Lag           time.Duration // < 0 while unknown
+	// SplitOff is true while the link's server is split from the rest of
+	// its network: up, but cut off from most people.
+	SplitOff bool
 }
 
 // Gauges are values read when exported (connections open, users owned …).
@@ -226,6 +229,7 @@ func RegisterGauges(g Gauges) error {
 	nodes := gauge("evrd.cluster.nodes", "Live cluster nodes", "{node}")
 	queue := gauge("evrd.history.queue", "History writes waiting", "{line}")
 	up := gauge("evrd.upstream.up", "1 while an upstream connection is registered, per user and network", "")
+	split := gauge("evrd.upstream.split", "1 while an upstream connection's server is split from the rest of its network, per user and network", "")
 	lag, err := meter.Float64ObservableGauge("evrd.upstream.lag", metric.WithDescription("Upstream round-trip lag, per user and network"), metric.WithUnit("s"))
 	if err != nil {
 		return err
@@ -244,6 +248,11 @@ func RegisterGauges(g Gauges) error {
 					v = 1
 				}
 				o.ObserveInt64(up, v, attrs)
+				sv := int64(0)
+				if l.SplitOff {
+					sv = 1
+				}
+				o.ObserveInt64(split, sv, attrs)
 				if l.Lag >= 0 {
 					o.ObserveFloat64(lag, l.Lag.Seconds(), attrs)
 				}
@@ -257,7 +266,7 @@ func RegisterGauges(g Gauges) error {
 			}
 		}
 		return nil
-	}, upstreams, clients, streams, users, nodes, queue, up, lag)
+	}, upstreams, clients, streams, users, nodes, queue, up, split, lag)
 	return err
 }
 

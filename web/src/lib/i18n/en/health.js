@@ -107,4 +107,10 @@ export default {
   'health.mentionsAria': { one: '{count} mention', other: '{count} mentions' },
   'health.noChannelsJoined': 'In no channels.',
   'health.noChannels': 'No channels saved.',
+  'health.stateSplit': 'Split off',
+  'health.splitOff': 'Split off',
+  'health.splitShare': '{pct}% split from the network',
+  'health.kindSplitOff': 'Split off',
+  'health.kindRejoined': 'Back',
+  'health.kindLinesMissed': 'Lines missed',
 }

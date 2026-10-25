@@ -101,4 +101,10 @@ export default {
   'health.mentionsAria': { one: '{count} menzione', other: '{count} menzioni' },
   'health.noChannelsJoined': 'In nessun canale.',
   'health.noChannels': 'Nessun canale salvato.',
+  'health.stateSplit': 'Separato',
+  'health.splitOff': 'Separato',
+  'health.splitShare': '{pct}% separato dalla rete',
+  'health.kindSplitOff': 'Separato',
+  'health.kindRejoined': 'Di nuovo unito',
+  'health.kindLinesMissed': 'Righe perse',
 }

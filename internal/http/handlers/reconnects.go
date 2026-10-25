@@ -21,7 +21,10 @@ import (
 )
 
 // linkEventKinds are the activity entries about a network's link.
-var linkEventKinds = map[string]bool{"disconnected": true, "failed": true, "connected": true, "netsplit": true}
+var linkEventKinds = map[string]bool{
+	"disconnected": true, "failed": true, "connected": true, "netsplit": true,
+	"splitoff": true, "rejoined": true, "linesmissed": true,
+}
 
 func (s *Handlers) Reconnects(w http.ResponseWriter, r *http.Request) {
 	out, err := s.reconnectsOf(r.Context(), s.printer(r), auth.User(r).ID)

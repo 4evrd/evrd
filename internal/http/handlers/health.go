@@ -21,7 +21,10 @@ import (
 	"github.com/4evrd/evrd/internal/store"
 )
 
-const metricLag = "evrd_upstream_lag_seconds"
+const (
+	metricLag   = "evrd_upstream_lag_seconds"
+	metricSplit = "evrd_upstream_split" // 1 while the server is split from its network
+)
 
 // healthRanges are the ranges the page offers: how far back, and the slot
 // each point covers.
@@ -125,7 +128,7 @@ func (s *Handlers) healthOf(ctx context.Context, p *messages.Printer, n store.Ne
 		return out, nil
 	}
 	out["series"] = map[string]any{
-		"uptime": h.uptime, "lagAvg": h.lagAvg, "lagMax": h.lagMax,
+		"uptime": h.uptime, "split": h.split, "lagAvg": h.lagAvg, "lagMax": h.lagMax,
 		"lines": h.lines, "dropped": h.dropped, "failed": h.failed,
 	}
 	out["summary"] = h.summary()
@@ -198,6 +201,7 @@ func (s *Handlers) healthChannels(n store.Network) []map[string]any {
 type healthMetrics struct {
 	err            string
 	uptime         []*float64 // fraction of each slot connected; nil: no data
+	split          []*float64 // fraction of each slot split from the network (while connected)
 	lagAvg, lagMax []*float64 // ms
 	lines          []float64
 	dropped        []float64
@@ -227,6 +231,7 @@ func (s *Handlers) healthMetrics(ctx context.Context, n store.Network, start tim
 		func(w string) string {
 			return fmt.Sprintf("sum by (kind) (increase_pure(%s%s[%s]))", metricDisconnects, sel, w)
 		},
+		gauge("avg_over_time", metricSplit),
 	}
 	results := make([][]metricsq.Series, len(queries))
 	errs := make([]error, len(queries))
@@ -252,11 +257,14 @@ func (s *Handlers) healthMetrics(ctx context.Context, n store.Network, start tim
 		lagAvg: one(results[1], 1000),
 		lagMax: one(results[2], 1000),
 		lines:  counts(one(results[3], 1)),
+		split:  one(results[5], 1),
 	}
-	for i, v := range h.uptime {
-		if v != nil {
-			u := math.Round(*v*1000) / 1000
-			h.uptime[i] = &u
+	for _, l := range [][]*float64{h.uptime, h.split} {
+		for i, v := range l {
+			if v != nil {
+				u := math.Round(*v*1000) / 1000
+				l[i] = &u
+			}
 		}
 	}
 	for _, l := range [][]*float64{h.lagAvg, h.lagMax} {
@@ -288,6 +296,20 @@ func (h healthMetrics) summary() map[string]any {
 	out := map[string]any{"lines": sum(h.lines), "dropped": sum(h.dropped), "failed": sum(h.failed)}
 	if v, ok := mean(h.uptime); ok {
 		out["uptimePct"] = math.Round(v*1000) / 10
+	}
+	// split time counts over the same slots as uptime: those with data
+	total, n := 0.0, 0
+	for i, u := range h.uptime {
+		if u == nil {
+			continue
+		}
+		n++
+		if i < len(h.split) && h.split[i] != nil {
+			total += *h.split[i]
+		}
+	}
+	if n > 0 {
+		out["splitPct"] = math.Round(total/float64(n)*1000) / 10
 	}
 	if v, ok := mean(h.lagAvg); ok {
 		out["lagAvg"] = math.Round(v)

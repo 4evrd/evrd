@@ -42,9 +42,10 @@
     const i = nets.findIndex((n) => n.id === s.network)
     return { name: s.name, color: i === 0 ? 'var(--ice)' : netColor(Math.max(i, 0)), points: s.points }
   }).sort((a, b) => b.points.reduce((x, y) => x + y, 0) - a.points.reduce((x, y) => x + y, 0)))
-  const markers = $derived((ov?.events || []).filter((e) => ['disconnected', 'netsplit', 'attached'].includes(e.kind)).slice(0, 4).map((e) => ({
-    at: e.at, tone: e.kind === 'disconnected' ? 'bad' : e.kind === 'netsplit' ? 'warn' : 'ok',
-    label: e.title.replace(/ (ping timeout|connection .*|can't .*|attached)$/i, '').toUpperCase() + ' · ' + t(e.kind === 'disconnected' ? 'overview.markerLost' : e.kind === 'netsplit' ? 'overview.markerNetsplit' : 'overview.markerAttach'),
+  const MARK = { disconnected: ['bad', 'overview.markerLost'], netsplit: ['warn', 'overview.markerNetsplit'], splitoff: ['bad', 'overview.markerSplitOff'], attached: ['ok', 'overview.markerAttach'] }
+  const markers = $derived((ov?.events || []).filter((e) => MARK[e.kind]).slice(0, 4).map((e) => ({
+    at: e.at, tone: MARK[e.kind][0],
+    label: (e.kind === 'splitoff' ? e.title.split(':')[0] : e.title.replace(/ (ping timeout|connection .*|can't .*|attached)$/i, '')).toUpperCase() + ' · ' + t(MARK[e.kind][1]),
   })))
   const spark = $derived.by(() => {
     if (!series.length) return ''

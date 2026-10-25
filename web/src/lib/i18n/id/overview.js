@@ -142,4 +142,8 @@ export default {
   'overview.zoomOut': 'Perkecil',
   'overview.zoomIn': 'Perbesar',
   'overview.zoomFit': 'Paskan',
+  'overview.rcKindSplitOff': 'Terpisah',
+  'overview.rcKindRejoined': 'Kembali',
+  'overview.rcKindLinesMissed': 'Baris terlewat',
+  'overview.markerSplitOff': 'TERPISAH',
 }

@@ -101,4 +101,10 @@ export default {
   'health.mentionsAria': { one: '{count} sebutan', other: '{count} sebutan' },
   'health.noChannelsJoined': 'Tidak di kanal mana pun.',
   'health.noChannels': 'Tidak ada kanal tersimpan.',
+  'health.stateSplit': 'Terpisah',
+  'health.splitOff': 'Terpisah',
+  'health.splitShare': '{pct}% terpisah dari network',
+  'health.kindSplitOff': 'Terpisah',
+  'health.kindRejoined': 'Kembali',
+  'health.kindLinesMissed': 'Baris terlewat',
 }

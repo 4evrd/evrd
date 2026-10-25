@@ -101,4 +101,10 @@ export default {
   'health.mentionsAria': { one: '{count} anılma', other: '{count} anılma' },
   'health.noChannelsJoined': 'Hiçbir kanalda değil.',
   'health.noChannels': 'Kayıtlı kanal yok.',
+  'health.stateSplit': 'Ayrıldı',
+  'health.splitOff': 'Ayrıldı',
+  'health.splitShare': '%{pct} ağdan ayrı',
+  'health.kindSplitOff': 'Ayrıldı',
+  'health.kindRejoined': 'Geri döndü',
+  'health.kindLinesMissed': 'Kaçan satırlar',
 }

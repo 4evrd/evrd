@@ -496,6 +496,7 @@ func (b *Bouncer) Links() []telemetry.Link {
 		out = append(out, telemetry.Link{
 			User: strconv.FormatInt(e.userID, 10), Network: strconv.FormatInt(id, 10),
 			Up: h.Status == upstream.StatusConnected, Lag: h.Lag,
+			SplitOff: h.Status == upstream.StatusConnected && !h.SplitOffSince.IsZero(),
 		})
 	}
 	return out

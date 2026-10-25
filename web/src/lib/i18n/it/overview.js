@@ -133,4 +133,8 @@ export default {
   'overview.zoomOut': 'Riduci',
   'overview.zoomIn': 'Ingrandisci',
   'overview.zoomFit': 'Adatta',
+  'overview.rcKindSplitOff': 'Separato',
+  'overview.rcKindRejoined': 'Di nuovo unito',
+  'overview.rcKindLinesMissed': 'Righe perse',
+  'overview.markerSplitOff': 'SEPARATO',
 }

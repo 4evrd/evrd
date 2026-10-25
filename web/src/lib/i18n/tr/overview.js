@@ -133,4 +133,8 @@ export default {
   'overview.zoomOut': 'Uzaklaştır',
   'overview.zoomIn': 'Yakınlaştır',
   'overview.zoomFit': 'Sığdır',
+  'overview.rcKindSplitOff': 'Ayrıldı',
+  'overview.rcKindRejoined': 'Geri döndü',
+  'overview.rcKindLinesMissed': 'Kaçan satırlar',
+  'overview.markerSplitOff': 'AYRILDI',
 }

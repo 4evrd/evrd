@@ -101,4 +101,10 @@ export default {
   'health.mentionsAria': { one: '{count} Erwähnung', other: '{count} Erwähnungen' },
   'health.noChannelsJoined': 'In keinem Kanal.',
   'health.noChannels': 'Keine Kanäle gespeichert.',
+  'health.stateSplit': 'Abgespalten',
+  'health.splitOff': 'Abgespalten',
+  'health.splitShare': '{pct}% vom Netzwerk abgespalten',
+  'health.kindSplitOff': 'Abgespalten',
+  'health.kindRejoined': 'Zurück',
+  'health.kindLinesMissed': 'Zeilen verpasst',
 }

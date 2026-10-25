@@ -49,7 +49,11 @@
   const ms = (v) => (v == null ? '—' : t('health.ms', { ms: Math.round(v).toLocaleString(i18n.intl) }))
   const pct = (v) => (v == null ? '—' : Math.round(v * 1000) / 10 + '%')
 
-  const KIND = $derived({ disconnected: ['bad', t('health.kindLost')], failed: ['warn', t('health.kindFailed')], connected: ['ok', t('health.kindConnected')], netsplit: ['warn', t('health.kindNetsplit')] })
+  const KIND = $derived({ disconnected: ['bad', t('health.kindLost')], failed: ['warn', t('health.kindFailed')], connected: ['ok', t('health.kindConnected')], netsplit: ['warn', t('health.kindNetsplit')],
+    splitoff: ['bad', t('health.kindSplitOff')], rejoined: ['ok', t('health.kindRejoined')], linesmissed: ['warn', t('health.kindLinesMissed')] })
+  // time split from the network counts against the network's health, though
+  // the link was up: the uptime colours go by the time it was really there
+  const reachPct = $derived(sum.uptimePct != null ? Math.max(0, sum.uptimePct - (sum.splitPct || 0)) : null)
   const method = $derived(t(METHODS.find((m) => m[0] === net.authMethod)?.[1] || 'services.method.auto'))
   let table = $state(false)
 </script>
@@ -75,8 +79,8 @@
     </div>
     <div class="tile" data-testid="tile-uptime">
       <div class="tile-top"><span class="caps"><Icon name="check" class="i-sm" />{t('health.uptime')}</span></div>
-      <div class="od-stat"><span class="n">{metrics && sum.uptimePct != null ? sum.uptimePct + '%' : '—'}</span><span class="u">{metrics ? over : t('health.needsMetrics')}</span></div>
-      <span class="ubar {uptimeTone(sum.uptimePct) === 'ok' ? '' : uptimeTone(sum.uptimePct)}" role="img" aria-label={t('health.uptimeAria', { pct: sum.uptimePct ?? 0 })}><span style="transform:scaleX({(sum.uptimePct || 0) / 100})"></span></span>
+      <div class="od-stat"><span class="n">{metrics && sum.uptimePct != null ? sum.uptimePct + '%' : '—'}</span><span class="u">{metrics ? (sum.splitPct > 0 ? t('health.splitShare', { pct: sum.splitPct }) : over) : t('health.needsMetrics')}</span></div>
+      <span class="ubar {uptimeTone(reachPct) === 'ok' ? '' : uptimeTone(reachPct)}" role="img" aria-label={t('health.uptimeAria', { pct: sum.uptimePct ?? 0 })}><span style="transform:scaleX({(sum.uptimePct || 0) / 100})"></span></span>
     </div>
     <div class="tile" data-testid="tile-lag">
       <div class="tile-top"><span class="caps"><Icon name="activity" class="i-sm" />{t('health.lagNow')}</span>{#if lagTone(live.lag) === 'warn' || lagTone(live.lag) === 'bad'}<span class="chip {lagTone(live.lag)}">{t('health.slow')}</span>{/if}</div>
@@ -102,8 +106,8 @@
         <section class="card"><div class="empty"><span class="ic"><Icon name="chart" /></span><h3>{t('health.noCharts')}</h3><p>{t('health.noChartsHelp')}</p></div></section>
       {:else}
         <section class="card" aria-labelledby="h-uptime">
-          <div class="section-head"><div class="od-stack"><span class="caps">{over}</span><h2 id="h-uptime">{t('health.uptimeTitle')}</h2></div>{#if sum.uptimePct != null}<span class="chip {uptimeTone(sum.uptimePct)}">{t('health.uptimePct', { pct: sum.uptimePct })}</span>{/if}</div>
-          <UptimeBand points={se.uptime} label={slotLabel} {axis} />
+          <div class="section-head"><div class="od-stack"><span class="caps">{over}</span><h2 id="h-uptime">{t('health.uptimeTitle')}</h2></div><div class="od-cluster">{#if sum.splitPct > 0}<span class="chip warn" data-testid="split-chip">{t('health.splitShare', { pct: sum.splitPct })}</span>{/if}{#if sum.uptimePct != null}<span class="chip {uptimeTone(reachPct)}">{t('health.uptimePct', { pct: sum.uptimePct })}</span>{/if}</div></div>
+          <UptimeBand points={se.uptime} split={se.split || []} label={slotLabel} {axis} />
         </section>
 
         <section class="card" aria-labelledby="h-lag">
@@ -136,11 +140,11 @@
           {#if table}
             <div class="table-wrap slot-table" id="health-table">
               <table>
-                <thead><tr><th scope="col">{t('health.colWhen')}</th><th scope="col">{t('health.uptime')}</th><th scope="col">{t('health.lagAvg')}</th><th scope="col">{t('health.lagWorst')}</th><th scope="col">{t('health.messages')}</th><th scope="col">{t('health.dropped')}</th><th scope="col">{t('health.failed')}</th></tr></thead>
+                <thead><tr><th scope="col">{t('health.colWhen')}</th><th scope="col">{t('health.uptime')}</th><th scope="col">{t('health.splitOff')}</th><th scope="col">{t('health.lagAvg')}</th><th scope="col">{t('health.lagWorst')}</th><th scope="col">{t('health.messages')}</th><th scope="col">{t('health.dropped')}</th><th scope="col">{t('health.failed')}</th></tr></thead>
                 <tbody>
                   {#each Array(n) as _, i}
                     {@const k = n - 1 - i}
-                    <tr><th scope="row">{slotLabel(k)}</th><td>{pct(se.uptime[k])}</td><td>{ms(se.lagAvg[k])}</td><td>{ms(se.lagMax[k])}</td><td>{se.lines[k]}</td><td>{se.dropped[k]}</td><td>{se.failed[k]}</td></tr>
+                    <tr><th scope="row">{slotLabel(k)}</th><td>{pct(se.uptime[k])}</td><td>{pct(se.split?.[k])}</td><td>{ms(se.lagAvg[k])}</td><td>{ms(se.lagMax[k])}</td><td>{se.lines[k]}</td><td>{se.dropped[k]}</td><td>{se.failed[k]}</td></tr>
                   {/each}
                 </tbody>
               </table>
