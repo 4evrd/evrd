@@ -239,6 +239,7 @@
     "irc.showchan.buffer": "buffer: plays back {lines} lines · {mode}{cleared}",
     "irc.clients.none": "No clients attached.",
     "irc.clients.ircClient": "IRC client",
+    "irc.clients.sharing": "{client} from {ip} is also signed in with the client password \"{device}\" - both stay connected. Give each IRC client its own client password ({page}) so evrd can tell them apart.",
     "irc.clients.webApp": "web app · {software}",
     "irc.clients.browser": "browser",
     "irc.clients.since": "since {time}",

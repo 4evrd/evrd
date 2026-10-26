@@ -230,6 +230,7 @@
     "irc.showchan.buffer": "buffer: memutar ulang {lines} baris · {mode}{cleared}",
     "irc.clients.none": "Tidak ada klien tersambung.",
     "irc.clients.ircClient": "klien IRC",
+    "irc.clients.sharing": "{client} dari {ip} juga masuk dengan kata sandi klien \"{device}\" - keduanya tetap terhubung. Beri setiap klien IRC kata sandi kliennya sendiri ({page}) agar evrd bisa membedakannya.",
     "irc.clients.webApp": "aplikasi web · {software}",
     "irc.clients.browser": "browser",
     "irc.clients.since": "sejak {time}",

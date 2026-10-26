@@ -41,7 +41,14 @@ type ClientInfo struct {
 type client struct {
 	close func(reason string) // reason: a Drop* constant
 	info  ClientInfo
+	// answers reports whether the client is still there, asking it and
+	// waiting up to the given time (nil: can't ask; see Attachment.Answers).
+	answers func(wait time.Duration) bool
 }
+
+// answerWait is how long a client sharing a device with a newcomer has to
+// show it's still there before it's taken for the newcomer's ghost.
+var answerWait = 3 * time.Second
 
 // Attachment is a registered client; Release it when the client goes.
 type Attachment struct {
@@ -51,11 +58,26 @@ type Attachment struct {
 	web    bool
 	// replaced is set when it took over its device's previous connection.
 	replaced bool
+	// sharing is the other, live clients signed in with the same client
+	// password when it attached.
+	sharing []ClientInfo
 }
 
 // Replaced reports whether the client took over its device's previous,
 // still attached connection (AttachClient).
 func (a *Attachment) Replaced() bool { return a.replaced }
+
+// Sharing is the other clients that were signed in with the same client
+// password, on the same network, and still there when this one attached.
+func (a *Attachment) Sharing() []ClientInfo { return a.sharing }
+
+// Answers sets how evrd asks the client whether it's still there, when the
+// same device connects again (AttachClient).
+func (a *Attachment) Answers(f func(wait time.Duration) bool) {
+	a.b.mu.Lock()
+	a.c.answers = f
+	a.b.mu.Unlock()
+}
 
 // ID is the client's id.
 func (a *Attachment) ID() string { return a.c.info.ID }

@@ -447,6 +447,7 @@ func (se *session) attach() bool {
 	}
 	se.att = att
 	se.release = att.Release
+	att.Answers(se.answers)
 
 	se.unick = orElse(se.nick, u.Username)
 	if locked {
@@ -526,6 +527,9 @@ func (se *session) signedIn(onNetwork bool, username, netName, device string) {
 	}
 	if se.quick {
 		return // the same device, back: no new activity entry, nothing new to ask
+	}
+	for _, o := range se.att.Sharing() {
+		se.say("clients.sharing", "device", o.Device, "client", orElse(o.Software, se.tr("clients.ircClient")), "ip", orElse(o.IP, "?"), "page", se.srv.clientsPage())
 	}
 	// Ask the client what it is (shown on the clients page and in the
 	// activity feed); the reply arrives as a NOTICE to *status.
