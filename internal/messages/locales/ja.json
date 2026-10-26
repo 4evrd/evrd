@@ -230,6 +230,7 @@
     "irc.showchan.buffer": "バッファ: {lines} 行を再生 · {mode}{cleared}",
     "irc.clients.none": "接続中のクライアントはありません。",
     "irc.clients.ircClient": "IRC クライアント",
+    "irc.clients.sharing": "{ip} の {client} もクライアントパスワード「{device}」でサインインしています - 両方とも接続したままです。evrd が区別できるよう、IRC クライアントごとに別のクライアントパスワードを使ってください ({page})。",
     "irc.clients.webApp": "ウェブアプリ · {software}",
     "irc.clients.browser": "ブラウザ",
     "irc.clients.since": "{time} から",

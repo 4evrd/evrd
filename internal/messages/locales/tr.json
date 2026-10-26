@@ -238,6 +238,7 @@
     "irc.showchan.buffer": "arabellek: {lines} satır oynatır · {mode}{cleared}",
     "irc.clients.none": "Bağlı istemci yok.",
     "irc.clients.ircClient": "IRC istemcisi",
+    "irc.clients.sharing": "{ip} adresinden {client} de \"{device}\" istemci parolasıyla oturum açmış - ikisi de bağlı kalıyor. evrd'nin onları ayırt edebilmesi için her IRC istemcisine kendi istemci parolasını verin ({page}).",
     "irc.clients.webApp": "web uygulaması · {software}",
     "irc.clients.browser": "tarayıcı",
     "irc.clients.since": "{time} tarihinden beri",

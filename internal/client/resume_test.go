@@ -82,3 +82,54 @@ func TestPlaybackSaysWhatItLeftOut(t *testing.T) {
 		t.Fatalf("replay:\n%s", strings.Join(seen, "\n"))
 	}
 }
+
+func TestTwoClientsSharingAPasswordBothStay(t *testing.T) {
+	r := newRig(t)
+	r.srv.heardJustNow = time.Nanosecond // always ask
+	_, pw, _ := r.acc.NewClientPassword(r.user.ID, "pc")
+	pc := "alice/one:" + pw
+
+	first := r.attach(pc)
+	first.expect(" 376 ")
+	first.expect("\x01VERSION\x01")
+	first.send("NOTICE *status :\x01VERSION mIRC v7.77\x01")
+	eventually(t, "software known", func() bool {
+		cs := r.b.ClientsOf(r.user.ID)
+		return len(cs) == 1 && cs[0].Software != ""
+	})
+	go func() {
+		first.expect("PING :evrd") // asked whether it's still there
+		first.send("PONG :evrd")
+	}()
+
+	// the second client with the same password: told, and both stay
+	second := r.attach(pc)
+	seen := second.until("so evrd can tell them apart")
+	if !anyHas(seen, " 376 ") || !anyHas(seen, `mIRC from 127.0.0.1 is also signed in with the client password "pc"`) {
+		t.Fatalf("second:\n%s", strings.Join(seen, "\n"))
+	}
+	if cs := r.b.ClientsOf(r.user.ID); len(cs) != 2 {
+		t.Fatalf("clients: %+v", cs)
+	}
+	if reasons := r.reasons(); len(reasons) != 0 {
+		t.Fatalf("dropped: %v", reasons)
+	}
+
+	// a third that comes while the second has gone quiet takes over only
+	// that one: it's the second's ghost
+	go func() {
+		first.expect("PING :evrd")
+		first.send("PONG :evrd")
+	}()
+	third := r.attach(pc)
+	if !third.tryExpect(" 422 ", 8*time.Second) { // the slim welcome of a device back, once the ghost didn't answer
+		t.Fatal("the third client wasn't welcomed")
+	}
+	if !second.closed() {
+		t.Fatal("the ghost is still attached")
+	}
+	eventually(t, "replaced", func() bool { return strings.Join(r.reasons(), " ") == bouncer.DropReplaced })
+	if cs := r.b.ClientsOf(r.user.ID); len(cs) != 2 {
+		t.Fatalf("clients: %+v", cs)
+	}
+}

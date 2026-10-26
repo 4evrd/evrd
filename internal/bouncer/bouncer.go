@@ -496,15 +496,57 @@ func (b *Bouncer) Status(networkID int64) upstream.Status {
 // replaces it: the old one is closed as DropReplaced and doesn't count
 // toward max. A device is its client password (ClientInfo.Device) on the
 // same network; clients without one can't be told apart.
+//
+// Two clients sharing a client password look like one device, and would
+// keep replacing each other, each reconnecting in turn. So the old
+// connection is first asked whether it's still there (Attachment.Answers):
+// one that answers is another client, left alone and attached alongside
+// (Attachment.Sharing); only one that doesn't is a ghost.
 func (b *Bouncer) AttachClient(userID int64, max int, info ClientInfo, close func(reason string)) (*Attachment, error) {
+	return b.attach(userID, max, info, close, true)
+}
+
+// ReattachClient registers a client that was attached before evrd
+// restarted (a held connection), as AttachClient but never replacing
+// another: they were all there together.
+func (b *Bouncer) ReattachClient(userID int64, info ClientInfo, close func(reason string)) (*Attachment, error) {
+	return b.attach(userID, 0, info, close, false)
+}
+
+func (b *Bouncer) attach(userID int64, max int, info ClientInfo, close func(reason string), replace bool) (*Attachment, error) {
+	b.mu.Lock()
+	var same []*client
+	var ask []func(time.Duration) bool
+	for c := range b.clients[userID] {
+		if replace && info.Device != "" && c.info.Device == info.Device && slices.Equal(c.info.Networks, info.Networks) {
+			same, ask = append(same, c), append(ask, c.answers)
+		}
+	}
+	b.mu.Unlock()
+
+	alive := make([]bool, len(same))
+	var wg sync.WaitGroup
+	for i, f := range ask {
+		if f != nil {
+			wg.Go(func() { alive[i] = f(answerWait) })
+		}
+	}
+	wg.Wait()
+
 	b.mu.Lock()
 	set := b.clients[userID]
 	var ghosts []*client
-	for c := range set {
-		if info.Device != "" && c.info.Device == info.Device && slices.Equal(c.info.Networks, info.Networks) {
-			ghosts = append(ghosts, c)
-			delete(set, c)
+	var sharing []ClientInfo
+	for i, c := range same {
+		if _, ok := set[c]; !ok {
+			continue // gone meanwhile
 		}
+		if alive[i] {
+			sharing = append(sharing, c.info)
+			continue
+		}
+		ghosts = append(ghosts, c)
+		delete(set, c)
 	}
 	if len(ghosts) > 0 {
 		defer func() {
@@ -530,7 +572,7 @@ func (b *Bouncer) AttachClient(userID int64, max int, info ClientInfo, close fun
 	b.mu.Unlock()
 	b.seen(userID)
 	b.refreshAway(userID)
-	return &Attachment{b: b, userID: userID, c: c, replaced: len(ghosts) > 0}, nil
+	return &Attachment{b: b, userID: userID, c: c, replaced: len(ghosts) > 0, sharing: sharing}, nil
 }
 
 // TrackStream registers an open web chat socket, so StopUser can close it

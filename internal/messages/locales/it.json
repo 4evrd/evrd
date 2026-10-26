@@ -245,6 +245,7 @@
     "irc.showchan.buffer": "buffer: riproduce {lines} righe · {mode}{cleared}",
     "irc.clients.none": "Nessun client collegato.",
     "irc.clients.ircClient": "client IRC",
+    "irc.clients.sharing": "{client} da {ip} ha effettuato l'accesso anche con la password client \"{device}\" - entrambi restano connessi. Dai a ogni client IRC la sua password client ({page}) così evrd può distinguerli.",
     "irc.clients.webApp": "app web · {software}",
     "irc.clients.browser": "browser",
     "irc.clients.since": "dal {time}",

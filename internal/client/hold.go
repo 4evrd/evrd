@@ -361,12 +361,13 @@ func (se *session) restore(raw []byte) error {
 	for _, ch := range st.Open {
 		se.open[ch] = true
 	}
-	att, err := se.srv.b.AttachClient(u.ID, 0,
+	att, err := se.srv.b.ReattachClient(u.ID,
 		bouncer.ClientInfo{Device: st.Device, Networks: bound, IP: se.clientIP(), Software: st.Software},
 		se.kick)
 	if err != nil {
 		return err
 	}
+	att.Answers(se.answers)
 	att.Update(func(ci *bouncer.ClientInfo) {
 		if !st.Since.IsZero() {
 			ci.Since = st.Since

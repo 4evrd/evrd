@@ -245,6 +245,7 @@
     "irc.showchan.buffer": "búfer: reproduce {lines} líneas · {mode}{cleared}",
     "irc.clients.none": "No hay clientes conectados.",
     "irc.clients.ircClient": "cliente IRC",
+    "irc.clients.sharing": "{client} desde {ip} también ha iniciado sesión con la contraseña de cliente \"{device}\" - ambos siguen conectados. Da a cada cliente IRC su propia contraseña de cliente ({page}) para que evrd pueda distinguirlos.",
     "irc.clients.webApp": "app web · {software}",
     "irc.clients.browser": "navegador",
     "irc.clients.since": "desde {time}",

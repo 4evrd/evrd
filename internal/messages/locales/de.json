@@ -245,6 +245,7 @@
     "irc.showchan.buffer": "Puffer: spielt {lines} Zeilen ab · {mode}{cleared}",
     "irc.clients.none": "Keine Clients verbunden.",
     "irc.clients.ircClient": "IRC-Client",
+    "irc.clients.sharing": "{client} von {ip} ist ebenfalls mit dem Client-Passwort \"{device}\" angemeldet - beide bleiben verbunden. Gib jedem IRC-Client ein eigenes Client-Passwort ({page}), damit evrd sie unterscheiden kann.",
     "irc.clients.webApp": "Web-App · {software}",
     "irc.clients.browser": "Browser",
     "irc.clients.since": "seit {time}",
