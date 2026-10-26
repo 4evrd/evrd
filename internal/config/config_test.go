@@ -55,3 +55,49 @@ func TestModulesOff(t *testing.T) {
 		t.Fatal("reset kept them")
 	}
 }
+
+func TestWebChatOrigins(t *testing.T) {
+	c := Default()
+	if len(c.Auth.WebChatOrigins) != 0 || c.Auth.WebChatDays != 30 || c.Auth.WebChatAllowed("https://chat.example") {
+		t.Fatalf("defaults: %+v", c.Auth)
+	}
+	if err := c.set("web_chat_origins", "HTTPS://Chat.Example/ http://localhost:5180"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.set("web_chat_origins", "https://chat.example"); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(c.Auth.WebChatOrigins, " "); got != "https://chat.example http://localhost:5180" {
+		t.Fatalf("origins %q", got)
+	}
+	for o, ok := range map[string]bool{
+		"https://chat.example": true, "https://CHAT.example": true, "http://localhost:5180": true,
+		"http://chat.example": false, "https://chat.example:443": false, "http://localhost:5181": false, "null": false, "": false,
+	} {
+		if c.Auth.WebChatAllowed(o) != ok {
+			t.Errorf("allowed %q: %v", o, !ok)
+		}
+	}
+	for _, bad := range []string{"chat.example", "https://chat.example/chat", "https://chat.example?x", "https://u@chat.example", "ftp://chat.example", "https://", "https://chat.example#x"} {
+		if err := c.set("web_chat_origins", bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+	for v, ok := range map[string]bool{"1": true, "365": true, "0": false, "366": false, "x": false} {
+		if err := c.set("web_chat_days", v); (err == nil) != ok {
+			t.Errorf("web_chat_days %s: %v", v, err)
+		}
+	}
+	// From the admin UI: a list that replaces the file's, cleared by empty.
+	c2, err := c.WithSettings(map[string]string{"web_chat_origins": "https://other.example", "web_chat_network": "IRCForever"})
+	if err != nil || strings.Join(c2.Auth.WebChatOrigins, " ") != "https://other.example" || c2.Auth.WebChatNetwork != "IRCForever" || c2.Value("web_chat_network") != "IRCForever" {
+		t.Fatalf("settings: %+v %v", c2.Auth, err)
+	}
+	c3, err := c2.WithSettings(map[string]string{"web_chat_origins": "", "web_chat_network": ""})
+	if err != nil || len(c3.Auth.WebChatOrigins) != 0 || c3.Auth.WebChatNetwork != "" {
+		t.Fatalf("cleared: %+v %v", c3.Auth, err)
+	}
+	if len(c.Auth.WebChatOrigins) != 2 {
+		t.Fatal("WithSettings changed the base config")
+	}
+}

@@ -39,6 +39,7 @@ are stored in the database and win over the file (see below).
 | `oidc_label`, `oidc_auto_create`, `oidc_link_existing`, `oidc_admin_role` | `single sign-on`, `yes`, `no`, — | sign-in button text and account rules for SSO |
 | `oidc_roles_claim`, `oidc_scopes` | `roles`, — | where the roles for `oidc_admin_role` are in the ID token (a claim, or a dotted path), and extra scopes to ask for; see [providers](#oidc-providers) |
 | `irc_link_signin`, `irc_remember_days` | `yes` (with `public_url`), `30` | IRC clients without a usable password get a link to allow them on the website, remembering the device for that many days; see [signing in by link](irc-clients.md#signing-in-by-link) |
+| `web_chat_origins`, `web_chat_network`, `web_chat_days` | none, empty, `30` | other sites whose web chat may sign users in and use their bouncer with a token per device, the network it's told to use, and how long a token lasts unused; see [a web chat on another site](web-chat.md) |
 | `znc_password_days` | `90` | how long an account made from a ZNC config keeps its unused ZNC password; see [exporting and importing networks](#exporting-and-importing-networks) |
 | `irc_mfa`, `irc_mfa_client_passwords` | `optional`, `no` | a second factor (authenticator app) for IRC sign-ins with a password: `off`, `optional` (each user's choice on *Account → Security*) or `required` (everyone; users can't turn it off); `irc_mfa_client_passwords` asks for it with IRC client passwords too. See [the IRC clients guide](irc-clients.md#a-second-factor) |
 | `sso_irc_password` | `off` | let SSO accounts use their provider password in IRC clients: `password_grant`, `ldap` or `logto`, each with settings of its own; see [SSO passwords in IRC clients](#sso-passwords-in-irc-clients) |
@@ -71,7 +72,7 @@ falling back to evrd.conf or the default.
 **Editable:** `irc_host`, `public_url`, `max_networks`, `max_clients`,
 `backlog_lines`, `connect_rate`, `client_ping_timeout`, `prefer_ipv6`, `bindhost`, `network_directory`, `tls`, `acme_email`, `acme_hosts`,
 `acme_ca`, `tls_cert`, `tls_key`, `password_login`, `session_ttl`,
-`cookie_secure`, the `oidc_*` directives, `otel_endpoint`, `otel_interval`,
+`cookie_secure`, `web_chat_origins`, `web_chat_network`, `web_chat_days`, the `oidc_*` directives, `otel_endpoint`, `otel_interval`,
 `metrics_url`. Most apply live on every node within a few seconds; `public_url`,
 the SSO provider (`oidc_issuer`, `oidc_client_id`, `oidc_client_secret`) and
 metrics export (`otel_*`) and the certificate files (`tls_cert`, `tls_key`)

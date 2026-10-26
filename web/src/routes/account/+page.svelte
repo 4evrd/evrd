@@ -212,7 +212,7 @@
           {#each sessions as s (s.id)}
             <div class="row sess-row">
               <span class="sic"><Icon name={/iPhone|Android/.test(s.userAgent || '') ? 'message' : 'monitor'} /></span>
-              <span class="od-field"><span class="name">{device(s.userAgent)}</span><span class="sub">{s.ip || t('account.unknownAddress')} · {s.method === 'oidc' ? session.config.ssoLabel : t('account.methodPassword')} · {s.current ? t('account.thisSession') : t('account.active', { ago: ago(s.lastSeenAt) })}</span></span>
+              <span class="od-field"><span class="name">{device(s.userAgent)}</span><span class="sub">{s.ip || t('account.unknownAddress')} · {s.method === 'oidc' ? session.config.ssoLabel : s.method === 'webchat' ? t('account.methodWebChat', { site: s.site }) : t('account.methodPassword')} · {s.current ? t('account.thisSession') : t('account.active', { ago: ago(s.lastSeenAt) })}</span></span>
               {#if s.current}<span class="chip ok">{t('account.thisDevice')}</span>{:else}<button class="btn btn-ghost btn-sm" type="button" aria-label={t('account.signOutDevice', { device: device(s.userAgent) })} onclick={() => revoke(s)}>{t('account.signOut')}</button>{/if}
             </div>
           {/each}

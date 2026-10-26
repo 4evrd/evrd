@@ -107,10 +107,12 @@ func (u User) IsAdmin() bool { return u.Role == RoleAdmin }
 // Session is a signed-in web session. ID is the SHA-256 of the cookie token,
 // so a leaked database row can't be replayed as a cookie.
 type Session struct {
-	ID         string `gorm:"primaryKey;size:64"`
-	UserID     int64  `gorm:"index;not null"`
-	Method     string // password | oidc
-	IDToken    string // OIDC id_token, kept only as the logout hint
+	ID      string `gorm:"primaryKey;size:64"`
+	UserID  int64  `gorm:"index;not null"`
+	Method  string // password | oidc | webchat (a web chat's token, internal/auth/webchat.go)
+	IDToken string // OIDC id_token, kept only as the logout hint
+	// Label is what a webchat token is for: the site its web chat is on.
+	Label      string
 	IP         string
 	UserAgent  string
 	CreatedAt  time.Time

@@ -159,3 +159,29 @@ func TestSetters(t *testing.T) {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
 }
+
+func TestWebChatRoute(t *testing.T) {
+	for _, tc := range []struct {
+		method, path string
+		ok           bool
+	}{
+		{"GET", "/api/me", true},
+		{"GET", "/api/networks", true},
+		{"GET", "/api/networks/12", true},
+		{"GET", "/api/networks/12/stream", true},
+		{"GET", "/api/networks/12/messages", true},
+		{"POST", "/api/networks/12/read", true},
+		{"POST", "/auth/web-chat/revoke", true},
+		{"POST", "/api/networks", false},
+		{"PATCH", "/api/networks/12", false},
+		{"GET", "/api/networks/export", false},
+		{"GET", "/api/networks/x/stream", false},
+		{"GET", "/api/networks/12/stream/x", false},
+		{"GET", "/api/me/sessions", false},
+		{"GET", "/auth/web-chat", false},
+	} {
+		if got := WebChatRoute(tc.method, tc.path); got != tc.ok {
+			t.Errorf("%s %s: %v", tc.method, tc.path, got)
+		}
+	}
+}

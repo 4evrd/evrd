@@ -54,6 +54,7 @@ export default {
   'account.signedOut': '{device} oturumu kapatıldı',
   'account.unknownAddress': 'bilinmeyen adres',
   'account.methodPassword': 'parola',
+  'account.methodWebChat': '{site} üzerindeki web sohbeti',
   'account.thisSession': 'Bu oturum',
   'account.active': 'Etkin: {ago}',
   'account.thisDevice': 'Bu cihaz',

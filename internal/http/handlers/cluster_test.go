@@ -13,6 +13,7 @@ import (
 
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/cluster"
+	"github.com/4evrd/evrd/internal/config"
 	"github.com/4evrd/evrd/internal/http/middleware"
 	"github.com/4evrd/evrd/internal/store"
 )
@@ -76,10 +77,10 @@ type twoNodes struct {
 	frontN, backN store.Node
 }
 
-func newTwoNodes(t *testing.T) *twoNodes {
+func newTwoNodes(t *testing.T, mutate ...func(*config.Config)) *twoNodes {
 	t.Helper()
-	front := newEnv(t)
-	back := newEnvOn(t, front.st)
+	front := newEnv(t, mutate...)
+	back := newEnvOn(t, front.st, mutate...)
 	internal := httptest.NewServer(nil)
 	t.Cleanup(internal.Close)
 	frontN := store.Node{ID: "front", HTTPURL: "http://front.invalid", StartedAt: time.Now(), HeartbeatAt: time.Now()}

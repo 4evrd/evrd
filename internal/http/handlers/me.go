@@ -208,6 +208,7 @@ func (s *Handlers) sessionsDTO(userID int64, current string) []map[string]any {
 		out = append(out, map[string]any{
 			"id": x.ID, "current": x.ID == current, "method": x.Method,
 			"ip": x.IP, "userAgent": x.UserAgent,
+			"site":      x.Label, // a web chat's (method webchat)
 			"createdAt": x.CreatedAt.Unix(), "lastSeenAt": x.LastSeenAt.Unix(), "expiresAt": x.ExpiresAt.Unix(),
 		})
 	}

@@ -91,6 +91,10 @@ func (o *Owner) forward(w http.ResponseWriter, r *http.Request, node store.Node)
 			pr.Out.Header.Set(auth.HeaderSecret, o.Secret)
 			pr.Out.Header.Set(auth.HeaderCaller, strconv.FormatInt(caller, 10))
 			pr.Out.Header.Set(auth.HeaderSession, sess)
+			pr.Out.Header.Del(auth.HeaderViaToken)
+			if auth.ViaToken(pr.In) {
+				pr.Out.Header.Set(auth.HeaderViaToken, "1") // a web chat's token signed it in
+			}
 			// the browser's address as this node sees it (the owner can't
 			// tell from X-Forwarded-For whom to believe)
 			pr.Out.Header.Set(auth.HeaderClient, o.ClientIP(pr.In))
