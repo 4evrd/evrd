@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/store"
 )
 
 func TestProvisionUser(t *testing.T) {
@@ -156,5 +157,49 @@ func TestProvisionedUser(t *testing.T) {
 		if m := n.(map[string]any); m["bindHost"] != "2001:db8::2" {
 			t.Fatalf("bind host not replaced: %v", m)
 		}
+	}
+}
+
+func TestProvisionDeleteUser(t *testing.T) {
+	e := newEnv(t, func(c *config.Config) { c.ProvisionToken = "s3cret-token" })
+	call := func(method, token, user string, body any) int {
+		var b []byte
+		if body != nil {
+			b, _ = json.Marshal(body)
+		}
+		req, _ := http.NewRequest(method, e.srv.URL+"/api/provision/users/"+user, bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.StatusCode
+	}
+	call("PUT", "s3cret-token", "bob", map[string]any{
+		"email":    "bob@example.org",
+		"networks": []map[string]any{{"name": "libera", "host": "127.0.0.1", "port": 1}},
+	})
+	if code := call("DELETE", "", "bob", nil); code != 401 {
+		t.Fatalf("no token: %d", code)
+	}
+	if code := call("DELETE", "s3cret-token", "nobody", nil); code != 404 {
+		t.Fatalf("no account: %d", code)
+	}
+	if code := call("DELETE", "s3cret-token", "Bob", nil); code != 200 {
+		t.Fatalf("delete: %d", code)
+	}
+	if code := call("GET", "s3cret-token", "bob", nil); code != 404 {
+		t.Fatalf("bob after delete: %d", code)
+	}
+	e.user("root", store.RoleAdmin)
+	if code := call("DELETE", "s3cret-token", "root", nil); code != 409 {
+		t.Fatalf("admin: %d", code)
+	}
+	if code := call("GET", "s3cret-token", "root", nil); code != 200 {
+		t.Fatalf("admin was deleted: %d", code)
 	}
 }

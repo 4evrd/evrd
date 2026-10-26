@@ -24,6 +24,12 @@ import (
 // GET reads an account's networks back (name, bind host, status), so a caller
 // can change ones it didn't create, e.g. give them all a new bind host.
 //
+//	DELETE /api/provision/users/{username}
+//
+// DELETE removes the account, as an admin's delete does (its networks go off
+// IRC, its history and sessions go): for a caller whose own account went.
+// Admins aren't deleted this way.
+//
 // A missing account is created SSO-only and claimable: the owner's first SSO
 // sign-in with the same username and email takes it over. Networks whose
 // name the account already has are left as they are (so a call can be
@@ -162,6 +168,32 @@ func (s *Handlers) ProvisionedUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"username": u.Username, "id": u.ID, "claimable": u.SSOClaimable, "networks": out,
 	})
+}
+
+// ProvisionDeleteUser is DELETE /api/provision/users/{username}: 404 if
+// there's no such account, 409 for an admin.
+func (s *Handlers) ProvisionDeleteUser(w http.ResponseWriter, r *http.Request) {
+	name, err := accounts.NormalizeUsername(r.PathValue("username"))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	u, err := s.acc.UserByUsername(r.Context(), name)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if u.Role == store.RoleAdmin {
+		writeErr(w, http.StatusConflict, "admins aren't deleted through provisioning")
+		return
+	}
+	if err := s.b.DeleteUser(u.ID); err != nil {
+		s.log.Error("provision: delete user", "user", u.Username, "err", err)
+		s.fail(w, r, err)
+		return
+	}
+	s.log.Info("provision: deleted user", "user", u.Username)
+	writeJSON(w, http.StatusOK, map[string]any{"username": u.Username, "deleted": true})
 }
 
 // asAdmin is u with an admin's say over its networks (any bind host).

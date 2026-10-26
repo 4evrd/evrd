@@ -592,6 +592,12 @@ networks with their `name`, `id`, `bindHost`, `enabled` and connection
 networks it didn't create, e.g. give all of them a new bind host by sending
 their names back in a `PUT` with a `bindHost` each.
 
+`DELETE /api/provision/users/alice` (same token) deletes the account, as an
+admin's delete does: its networks go off IRC and its history and sessions go.
+It's 404 if there's no such account, and admins can't be deleted this way
+(409). For a tool whose own record of the user went, so the bouncer doesn't
+outlive it.
+
 A new account has no password and is **claimable**: the first SSO sign-in
 with the same username *and* email links to it — so the provider account must
 be the owner's, not a look-alike. After that it's an ordinary SSO account.
