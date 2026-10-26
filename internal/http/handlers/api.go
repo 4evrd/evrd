@@ -89,8 +89,11 @@ type Services struct {
 func New(b *bouncer.Bouncer, svc Services, cfg *config.Config, status StatusRunner, log *slog.Logger) *Handlers {
 	s := &Handlers{
 		b: b, acc: svc.Accounts, auth: svc.Auth, langs: svc.Languages, msgs: svc.Messages, state: svc.Cluster, mfa: svc.MFA, signIns: svc.IRCSignIns, status: status, log: log,
-		up: websocket.Upgrader{CheckOrigin: middleware.CheckWebSocketOrigin},
 	}
+	// The chat socket: this site's pages (the cookie), or another site's
+	// web chat with its token (web_chat_origins), which offers the "evrd"
+	// subprotocol.
+	s.up = websocket.Upgrader{CheckOrigin: s.checkOrigin, Subprotocols: []string{auth.WebSocketProtocol}}
 	if s.msgs == nil {
 		s.msgs = messages.New(svc.Languages)
 	}
@@ -275,6 +278,15 @@ func (s *Handlers) cfg() *config.Config { return s.cfgp.Load() }
 
 // ProvisionToken is the provisioning API's bearer token ("" when it's off).
 func (s *Handlers) ProvisionToken() string { return s.cfg().ProvisionToken }
+
+// WebChatAllowed reports whether a page origin is one of web_chat_origins.
+func (s *Handlers) WebChatAllowed(origin string) bool { return s.cfg().Auth.WebChatAllowed(origin) }
+
+// checkOrigin is the chat socket's origin check: this site, or a web chat
+// site signed in with its token (never the cookie).
+func (s *Handlers) checkOrigin(r *http.Request) bool {
+	return middleware.CheckWebSocketOrigin(r) || (auth.ViaToken(r) && s.WebChatAllowed(r.Header.Get("Origin")))
+}
 
 // SetConfig swaps in a changed config.
 func (s *Handlers) SetConfig(c *config.Config) { s.cfgp.Store(c) }

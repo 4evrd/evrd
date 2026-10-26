@@ -24,6 +24,10 @@ func (r *SessionRepository) TouchSession(ctx context.Context, id string, at time
 	return r.db.DB.WithContext(ctx).Model(&Session{}).Where("id = ?", id).Update("last_seen_at", at).Error
 }
 
+func (r *SessionRepository) RenewSession(ctx context.Context, id string, at, expires time.Time) error {
+	return r.db.DB.WithContext(ctx).Model(&Session{}).Where("id = ?", id).Updates(map[string]any{"last_seen_at": at, "expires_at": expires}).Error
+}
+
 func (r *SessionRepository) ListSessions(ctx context.Context, userID int64) ([]Session, error) {
 	var out []Session
 	return out, r.db.DB.WithContext(ctx).Where("user_id = ?", userID).Order("last_seen_at DESC").Find(&out).Error

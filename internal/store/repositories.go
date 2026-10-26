@@ -30,6 +30,8 @@ type SessionRepositoryImpl interface {
 	CreateSession(ctx context.Context, s Session) error
 	SessionByID(ctx context.Context, id string) (Session, error)
 	TouchSession(ctx context.Context, id string, at time.Time) error
+	// RenewSession is TouchSession that also moves the session's end.
+	RenewSession(ctx context.Context, id string, at, expires time.Time) error
 	ListSessions(ctx context.Context, userID int64) ([]Session, error)
 	DeleteSession(ctx context.Context, userID int64, id string) error
 	// DeleteUserSessions signs a user out everywhere except keep ("" = all).

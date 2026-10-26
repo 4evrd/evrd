@@ -146,6 +146,16 @@ var Specs = []Spec{
 	{Key: "irc_mfa_client_passwords", Group: "Sign-in", Label: "Second factor with client passwords too", Kind: "bool",
 		Help: "IRC client passwords are random, per device and revocable, so they don't need a second factor unless this is on.",
 		get:  func(c *Config) string { return fmtBool(c.Auth.IRCMFAClientPasswords) }},
+	{Key: "web_chat_origins", Group: "Sign-in", Label: "Web chats on other sites", Kind: "list",
+		Help:  "Pages of other sites (https://chat.example.org) whose web chat may sign users in here and then use their bouncer, with a token per device (each user can sign one out under Account → Sessions). Space-separated origins: scheme and host, no path. Empty: none.",
+		get:   func(c *Config) string { return strings.Join(c.Auth.WebChatOrigins, " ") },
+		reset: func(c *Config) { c.Auth.WebChatOrigins = nil }},
+	{Key: "web_chat_network", Group: "Sign-in", Label: "Web chats' network", Kind: "string",
+		Help: "The network (by name) another site's web chat is told to use when it doesn't ask for one. Empty: the user's network when they have only one.",
+		get:  func(c *Config) string { return c.Auth.WebChatNetwork }},
+	{Key: "web_chat_days", Group: "Sign-in", Label: "Web chat sign-ins last", Kind: "int",
+		Help: "Days another site's web chat stays signed in unused (1–365); each use starts the time again.",
+		get:  func(c *Config) string { return strconv.Itoa(c.Auth.WebChatDays) }},
 	{Key: "oidc_issuer", Group: "Single sign-on", Label: "OIDC issuer", Kind: "string", Restart: true,
 		Help: "Your provider's issuer URL, e.g. https://id.example.org/oidc. Empty turns single sign-on off.",
 		get:  func(c *Config) string { return c.Auth.OIDCIssuer }},
@@ -253,6 +263,7 @@ func (c *Config) clone() *Config {
 	n.Outbound.Bind = slices.Clone(c.Outbound.Bind)
 	n.Secrets.Old = slices.Clone(c.Secrets.Old)
 	n.TLS.ACMEHosts = slices.Clone(c.TLS.ACMEHosts)
+	n.Auth.WebChatOrigins = slices.Clone(c.Auth.WebChatOrigins)
 	n.fromFile = c.fromFile
 	return &n
 }
@@ -298,6 +309,8 @@ func (c *Config) setEmpty(key string) {
 		c.Auth.OIDCClientSecret = ""
 	case "oidc_label":
 		c.Auth.OIDCLabel = ""
+	case "web_chat_network":
+		c.Auth.WebChatNetwork = ""
 	case "oidc_admin_role":
 		c.Auth.OIDCAdminRole = ""
 	case "oidc_roles_claim":

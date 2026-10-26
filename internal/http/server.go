@@ -4,7 +4,8 @@
 // Every route except /api/config, /api/languages, /api/irc-messages and the
 // sign-in endpoints
 // needs a session cookie (see internal/auth); /api/admin/* also needs the
-// admin role.
+// admin role. Another site's web chat (web_chat_origins) uses a few of them
+// with its token instead, and CORS (webChatRoutes).
 //
 // In a cluster, a request about a user is served by the node that owns that
 // user (see middleware.Owner): any other node forwards it there.
@@ -15,6 +16,8 @@ import (
 	"crypto/tls"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/4evrd/evrd/internal/auth"
@@ -94,6 +97,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /auth/login", s.auth.OIDCLogin)
 	mux.HandleFunc("GET /auth/callback", s.auth.Callback)
 	mux.HandleFunc("POST /auth/logout", s.auth.Logout)
+	// another site's web chat: its sign-in hand-off, and signing its token out
+	mux.HandleFunc("GET /auth/web-chat", s.auth.WebChatSignIn)
+	mux.HandleFunc("POST /auth/web-chat/revoke", s.auth.WebChatRevoke)
 
 	s.routes(mux)
 	mux.HandleFunc("PUT /api/provision/users/{username}", middleware.ProvisionToken(h.ProvisionToken, h.ProvisionUser))
@@ -104,7 +110,52 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/auth/", http.NotFoundHandler())
 		mux.Handle("/", webApp(s.webApp))
 	}
-	return middleware.SameOrigin(middleware.Traced(false, mux))
+	chat := middleware.WebChat{Allowed: s.h.WebChatAllowed, Route: WebChatRoute}
+	return chat.CORS(middleware.SameOriginOr(chat.Exempt, middleware.Traced(false, mux)))
+}
+
+// webChatRoutes are the routes another site's web chat may call with its
+// token (and CORS, from web_chat_origins): who's signed in, the networks,
+// their history and buffers, the chat socket, marking read, and signing the
+// token out. Each is registered with chat() in routes, or above.
+var webChatRoutes = []struct{ method, path string }{
+	{"GET", "/api/me"},
+	{"GET", "/api/networks"},
+	{"GET", "/api/networks/{id}"},
+	{"GET", "/api/networks/{id}/messages"},
+	{"GET", "/api/networks/{id}/buffers"},
+	{"GET", "/api/networks/{id}/channel"},
+	{"GET", "/api/networks/{id}/stream"},
+	{"POST", "/api/networks/{id}/read"},
+	{"POST", "/auth/web-chat/revoke"},
+}
+
+// WebChatRoute reports whether method and path are one of webChatRoutes.
+func WebChatRoute(method, path string) bool {
+	for _, rt := range webChatRoutes {
+		if rt.method == method && matchPath(rt.path, path) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchPath matches a path against a pattern whose {id} is a number.
+func matchPath(pattern, path string) bool {
+	want, got := strings.Split(pattern, "/"), strings.Split(path, "/")
+	if len(want) != len(got) {
+		return false
+	}
+	for i, w := range want {
+		if w == "{id}" {
+			if _, err := strconv.ParseInt(got[i], 10, 64); err != nil {
+				return false
+			}
+		} else if w != got[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // InternalHandler serves requests forwarded from other nodes. It must only be
@@ -125,9 +176,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	user := func(f http.HandlerFunc) http.HandlerFunc { return s.auth.RequireUser(s.owner.At(caller, f)) }
 	admin := func(f http.HandlerFunc) http.HandlerFunc { return s.auth.RequireAdmin(s.owner.At(handlers.PathID, f)) }
 	adminAny := s.auth.RequireAdmin // about every user: served here
+	// webChatRoutes: a web chat's token signs these in too
+	chat := func(f http.HandlerFunc) http.HandlerFunc { return s.auth.RequireWebChat(s.owner.At(caller, f)) }
 
 	// the signed-in user's own account
-	mux.HandleFunc("GET /api/me", user(h.Me))
+	mux.HandleFunc("GET /api/me", chat(h.Me))
 	mux.HandleFunc("PATCH /api/me", user(h.UpdateMe))
 	mux.HandleFunc("DELETE /api/me", user(h.DeleteMe))
 	mux.HandleFunc("POST /api/me/password", user(h.ChangePassword))
@@ -153,12 +206,12 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/me/language-pack", user(h.DeleteMyLanguagePack))
 
 	// networks
-	mux.HandleFunc("GET /api/networks", user(h.ListNetworks))
+	mux.HandleFunc("GET /api/networks", chat(h.ListNetworks))
 	mux.HandleFunc("POST /api/networks", user(h.CreateNetwork))
 	mux.HandleFunc("GET /api/networks/export", user(h.ExportNetworks))
 	mux.HandleFunc("POST /api/networks/import/preview", user(h.PreviewImport))
 	mux.HandleFunc("POST /api/networks/import", user(h.ImportNetworks))
-	mux.HandleFunc("GET /api/networks/{id}", user(h.GetNetwork))
+	mux.HandleFunc("GET /api/networks/{id}", chat(h.GetNetwork))
 	mux.HandleFunc("PATCH /api/networks/{id}", user(h.UpdateNetwork))
 	mux.HandleFunc("GET /api/bindhosts", user(h.BindHosts))
 	mux.HandleFunc("GET /api/modules", s.auth.RequireUser(h.Modules))
@@ -166,12 +219,12 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/networks/{id}", user(h.DeleteNetwork))
 	mux.HandleFunc("POST /api/networks/{id}/connect", user(h.Connect))
 	mux.HandleFunc("POST /api/networks/{id}/disconnect", user(h.Disconnect))
-	mux.HandleFunc("GET /api/networks/{id}/messages", user(h.Messages))
-	mux.HandleFunc("GET /api/networks/{id}/buffers", user(h.Buffers))
+	mux.HandleFunc("GET /api/networks/{id}/messages", chat(h.Messages))
+	mux.HandleFunc("GET /api/networks/{id}/buffers", chat(h.Buffers))
 	mux.HandleFunc("GET /api/networks/{id}/log", user(h.NetworkLog))
 	mux.HandleFunc("GET /api/networks/{id}/health", user(h.NetworkHealth))
-	mux.HandleFunc("GET /api/networks/{id}/channel", user(h.Channel))
-	mux.HandleFunc("POST /api/networks/{id}/read", user(h.MarkRead))
+	mux.HandleFunc("GET /api/networks/{id}/channel", chat(h.Channel))
+	mux.HandleFunc("POST /api/networks/{id}/read", chat(h.MarkRead))
 	mux.HandleFunc("GET /api/networks/{id}/playback", user(h.Playback))
 	mux.HandleFunc("PATCH /api/networks/{id}/playback", user(h.SetPlayback))
 	mux.HandleFunc("POST /api/networks/{id}/playback/clear", user(h.ClearPlayback))
@@ -180,7 +233,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/me/events", user(h.MyEvents))
 	mux.HandleFunc("GET /api/overview", user(h.Overview))
 	mux.HandleFunc("GET /api/reconnects", user(h.Reconnects))
-	mux.HandleFunc("GET /api/networks/{id}/stream", user(h.Stream))
+	mux.HandleFunc("GET /api/networks/{id}/stream", chat(h.Stream))
 
 	// administration
 	mux.HandleFunc("GET /api/admin/overview", adminAny(h.AdminOverview))

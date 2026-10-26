@@ -452,7 +452,21 @@ func isChannelName(s string) bool { return s != "" && strings.ContainsRune("#&+!
 //
 // Others' typing comes back as {type:"typing", target, nick, state}.
 // The session cookie authenticates it; the upgrader refuses other sites'
-// pages.
+// pages, except another site's web chat (web_chat_origins) signed in with
+// its token (internal/auth/webchat.go).
+//
+// With ?raw=1 the socket also carries every line the network sends, for a
+// client that speaks IRC itself:
+//
+//	{type:"raw", line, id?}   a line as the network sent it (tags and all);
+//	                          id is set when evrd saved it, and the same line
+//	                          also comes as the message or event frame with
+//	                          that id
+//	{type:"left", channels}   the link to the network ended: evrd is out of
+//	                          these channels until it's back and rejoins
+//
+// and its ready frame says where things stand: {type:"ready", nick,
+// channels, isupport, connected}.
 func (s *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
 	n, ok := s.ownedNetwork(w, r)
 	if !ok {
@@ -471,17 +485,27 @@ func (s *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
 	defer ws.Close()
 	// Closed when the user is stopped here (suspended, deleted, or moved to
 	// another node); the web chat reconnects and lands on the new owner.
+	software := browserName(r.UserAgent())
+	if auth.ViaToken(r) && auth.SessionOf(r).Label != "" {
+		software += " via " + auth.SessionOf(r).Label // another site's web chat
+	}
 	att := s.b.TrackStream(auth.User(r).ID, bouncer.ClientInfo{
-		Software: browserName(r.UserAgent()), Networks: []string{n.Name}, IP: s.clientAddr(r),
+		Software: software, Networks: []string{n.Name}, IP: s.clientAddr(r),
 	}, func(string) { ws.Close() })
 	defer att.Release()
 
+	wantRaw := r.URL.Query().Get("raw") == "1"
 	sub, unsub := conn.Subscribe()
 	defer unsub()
 	raw, unsubRaw := conn.SubscribeRaw()
 	defer unsubRaw()
 	// Tell the page it's subscribed: nothing sent from now on is missed.
-	if err := ws.WriteJSON(map[string]string{"type": "ready"}); err != nil {
+	ready := map[string]any{"type": "ready"}
+	if wantRaw {
+		ready["nick"], ready["channels"], ready["isupport"] = conn.Nick(), orEmpty(conn.Channels()), orEmpty(conn.ISupport())
+		ready["connected"] = conn.Status() == upstream.StatusConnected
+	}
+	if err := ws.WriteJSON(ready); err != nil {
 		return
 	}
 
@@ -543,6 +567,11 @@ func (s *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
+			if f, ok := rawFrame(l); ok && wantRaw {
+				if err := ws.WriteJSON(f); err != nil {
+					return
+				}
+			}
 		case m := <-replies:
 			if err := ws.WriteJSON(messageDTO(m)); err != nil {
 				return
@@ -551,6 +580,22 @@ func (s *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// rawFrame is a network line for a ?raw=1 socket. Lines evrd's own
+// sessions made (their TAGMSGs) aren't the network's and don't go.
+func rawFrame(l upstream.Line) (map[string]any, bool) {
+	switch {
+	case l.Left != nil:
+		return map[string]any{"type": "left", "channels": l.Left}, true
+	case l.Text == "" || l.Origin != "":
+		return nil, false
+	}
+	f := map[string]any{"type": "raw", "line": l.Text}
+	if !l.ID.IsZero() {
+		f["id"] = l.ID.String()
+	}
+	return f, true
 }
 
 // typingStates are the +typing values (IRCv3 typing client tag).
@@ -656,10 +701,14 @@ func unixT(t time.Time) any {
 }
 
 func messageDTO(m history.Message) map[string]any {
-	return map[string]any{
+	d := map[string]any{
 		"target": m.Target, "sender": m.Sender, "kind": m.Kind,
 		"text": m.Text, "extra": m.Extra, "time": m.Time.Unix(),
 	}
+	if m.Seq != 0 {
+		d["id"] = m.ID().String() // its msgid, as on a raw frame
+	}
+	return d
 }
 
 // browserName is a short name for a web chat client: "Chrome on macOS".

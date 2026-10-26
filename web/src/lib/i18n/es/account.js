@@ -54,6 +54,7 @@ export default {
   'account.signedOut': 'Sesión cerrada en {device}',
   'account.unknownAddress': 'dirección desconocida',
   'account.methodPassword': 'contraseña',
+  'account.methodWebChat': 'chat web en {site}',
   'account.thisSession': 'Esta sesión',
   'account.active': 'Activa {ago}',
   'account.thisDevice': 'Este dispositivo',

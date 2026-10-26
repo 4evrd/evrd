@@ -195,6 +195,14 @@ func TestSessions(t *testing.T) {
 	if err != nil || ids(list) != "[s1 s3 s2 old]" {
 		t.Fatalf("list (newest first): %v %v", ids(list), err)
 	}
+	// Renewing moves its end too, and keeps the label.
+	st.CreateSession(t.Context(), Session{ID: "chat", UserID: 3, Method: "webchat", Label: "chat.example", LastSeenAt: now, ExpiresAt: now.Add(time.Hour)})
+	if err := st.RenewSession(t.Context(), "chat", now.Add(time.Minute), now.Add(48*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.SessionByID(t.Context(), "chat"); !got.ExpiresAt.Equal(now.Add(48*time.Hour)) || !got.LastSeenAt.Equal(now.Add(time.Minute)) || got.Label != "chat.example" {
+		t.Fatalf("renewed: %+v", got)
+	}
 
 	if err := st.DeleteExpiredSessions(t.Context(), now); err != nil {
 		t.Fatal(err)
