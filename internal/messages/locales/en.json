@@ -4,6 +4,7 @@
   "messages": {
     "irc.unknownCommand": "Unknown command {command} — try help.",
     "irc.help.intro": "evrd commands — /msg {status} <command> or /znc <command>:",
+    "irc.help.noMatch": "No command matches {filter} - help lists them all.",
     "irc.help.command": "Command",
     "irc.help.arguments": "Arguments",
     "irc.help.description": "Description",

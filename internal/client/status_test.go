@@ -97,7 +97,7 @@ func TestStatusChannelsAndDetach(t *testing.T) {
 		c, ok := r.b.ConnFor(r.network("one").ID)
 		return ok && c.Joined("#one")
 	})
-	ic.status("listchans", "one: #one")
+	ic.status("listchans", "#one                     joined, 2 nicks")
 	ic.status("detach", "Usage: detach <#channel>")
 	ic.status("detach #nope", "You're not on #nope.")
 	ic.status("detach #one", "PART #one :Detached")
@@ -266,7 +266,7 @@ func TestStatusPlayback(t *testing.T) {
 	ic.status("playback nobody", "Nothing saved for nobody.")
 	ic.send("PRIVMSG *status :playback carol 2")
 	seen := ic.until("Replayed 2 line(s) of carol.")
-	if anyHas(seen, "line 1") || !anyHas(seen, ":carol!carol@one PRIVMSG carol :") || !anyHas(seen, "line 3") {
+	if anyHas(seen, "line 1") || !anyHas(seen, ":carol!carol@one PRIVMSG alice_one :") || !anyHas(seen, "line 3") {
 		t.Fatalf("playback of the last two: %q", seen)
 	}
 }
@@ -281,10 +281,10 @@ func TestStatusServersAndFingerprintErrors(t *testing.T) {
 	ic.status("delserver", "Usage: delserver")
 	ic.status("delserver nope", "one has no server nope.")
 
-	// changing servers of a running network reconnects it
-	ic.status("addserver irc.example.org 6667", "Added irc.example.org:6667 to one. It's used when the link drops. Reconnecting to apply it…")
+	// a server to fall back to doesn't reconnect a running network
+	ic.status("addserver irc.example.org 6667", "Added irc.example.org:6667 to one. It's used when the link drops.")
 	ic.status("delserver irc.example.org 6668", "one has no server irc.example.org.")
-	ic.status("delserver irc.example.org +6667", "Removed irc.example.org from one.")
+	ic.status("delserver irc.example.org +6667", "Removed irc.example.org:6667 from one.")
 
 	ic.status("listfingerprints", "No trusted fingerprints on one.")
 	ic.status("addfingerprint", "Usage: addfingerprint")
@@ -325,7 +325,7 @@ func TestWebStatus(t *testing.T) {
 		t.Fatalf("detach: %q", out)
 	}
 	// not running: the saved channels
-	if out := run(one, "channels"); !has(out, "one: #one") {
+	if out := run(one, "channels"); !has(out, "#one") || !has(out, "saved, not joined") {
 		t.Fatalf("channels: %q", out)
 	}
 	run(one, "addnetwork three irc.example.org")
@@ -558,4 +558,36 @@ func TestClearBufferOnlyClearsBuffersThereAre(t *testing.T) {
 	r := newRig(t)
 	ic := r.attached()
 	ic.status("clearbuffer #nowhere", "No buffer to clear on one.")
+}
+
+func TestHelpFiltersAndChannelsShowTheirState(t *testing.T) {
+	r := newRig(t)
+	ic := r.attached()
+	eventually(t, "joined #one", func() bool {
+		c, ok := r.b.ConnFor(r.network("one").ID)
+		return ok && c.Joined("#one")
+	})
+
+	ic.send("PRIVMSG *status :help buffer")
+	seen := ic.until("SETBUFFER")
+	if anyHas(seen, "NETWORKS") || anyHas(seen, "evrd commands") {
+		t.Fatalf("help buffer:\n%s", strings.Join(seen, "\n"))
+	}
+	ic.status("help nothing-like-it", "No command matches nothing-like-it")
+
+	ic.status("channels", "joined, 2 nicks")
+	ic.send("PRIVMSG *status :detach #one")
+	ic.expect("PART #one :Detached")
+	ic.status("channels", "joined, 2 nicks, detached")
+}
+
+func TestAFallbackServerDoesntReconnect(t *testing.T) {
+	r := newRig(t)
+	ic := r.attached()
+	ic.status("addserver irc.example.org 6668", "It's used when the link drops.")
+	ic.status("listservers", "2. irc.example.org 6668")
+	ic.status("delserver irc.example.org 6668", "Removed irc.example.org:6668 from one.")
+	if ic.tryExpect("KICK #one", time.Second) {
+		t.Fatal("a fallback server reconnected the network")
+	}
 }

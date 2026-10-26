@@ -228,6 +228,33 @@ test('every ZNC *status command has an answer', async () => {
   await cmd(a, 'ClearBuffer #nowhere', 'No buffer to clear on B.') // Jump B moved it
 })
 
+test('help filters, channels show their state, a private message plays back to you, fallback servers keep the link', async () => {
+  const a = await attach('A')
+  // help with a filter: only those commands
+  const from = a.lines.length
+  await cmd(a, 'help buffer', /\| SETBUFFER /)
+  expect(a.lines.slice(from).join('\n')).not.toMatch(/\| NETWORKS /)
+  await cmd(a, 'help zzz', 'No command matches zzz')
+  // channels: one a line, with its state
+  await cmd(a, 'channels', new RegExp(`${esc(chan)}\\s+joined, 2 nicks`))
+  await cmd(a, `disablechan ${chan}`, 'Disabled')
+  await cmd(a, 'channels', new RegExp(`${esc(chan)}\\s+saved, not joined, disabled`))
+  await cmd(a, `enablechan ${chan}`, 'Enabled')
+  // a private message from them replays as sent to me, not to them
+  talk.send(`PRIVMSG ${me.name} :psst`)
+  await a.waitFor(/:psst$/)
+  await expect(async () => { // once it's saved
+    const pm = a.next(new RegExp(`^:${esc(them.name)}!\\S+ PRIVMSG ${esc(me.name)} :.*psst`), 1500)
+    a.send(`PRIVMSG *status :playback ${them.name} 1`)
+    await pm
+  }).toPass({ timeout: 15000 })
+  // a server to fall back to (and removing it) doesn't reconnect: no KICK
+  await cmd(a, 'addserver ircd 6668', "It's used when the link drops.")
+  await cmd(a, 'delserver ircd 6668', 'Removed ircd:6668 from A.')
+  await new Promise((r) => setTimeout(r, 1500))
+  expect(a.lines.some((l) => / KICK /.test(l))).toBe(false)
+})
+
 test('admin listings are for admins only', async () => {
   const a = await attach('A')
   await cmd(a, 'listusers', 'Admins only.')

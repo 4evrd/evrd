@@ -1189,7 +1189,13 @@ func (se *session) formatIn(m history.Message, playback bool, batch string) stri
 	case "action":
 		text = "\x01ACTION " + text + "\x01"
 	}
-	b.WriteString(fmt.Sprintf(":%s %s %s :%s", prefix, cmd, m.Target, text))
+	// a private message is saved under the other side's nick: one they sent
+	// was sent to you, as the network delivered it
+	target := m.Target
+	if !isChannelName(target) && strings.EqualFold(m.Sender, target) && se.unick != "" {
+		target = se.unick
+	}
+	b.WriteString(fmt.Sprintf(":%s %s %s :%s", prefix, cmd, target, text))
 	return b.String()
 }
 

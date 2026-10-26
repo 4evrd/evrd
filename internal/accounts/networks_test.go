@@ -68,13 +68,23 @@ func TestNeedsReconnect(t *testing.T) {
 		t.Fatal("flood, quit message and join delay apply live")
 	}
 	b.Servers = []store.Server{{Host: "h", Port: 1}, {Host: "h2", Port: 1}}
+	if NeedsReconnect(a, b) {
+		t.Fatal("a server to fall back to applies when the link drops")
+	}
+	if NeedsReconnect(b, a) {
+		t.Fatal("removing a server it doesn't connect to first applies live")
+	}
+	b.Servers = []store.Server{{Host: "h", Port: 2}}
 	if !NeedsReconnect(a, b) {
-		t.Fatal("a server change reconnects")
+		t.Fatal("a change to the first server reconnects")
 	}
 	b = a
 	b.Fingerprints = []string{"x"}
-	if !NeedsReconnect(a, b) {
-		t.Fatal("a trust change reconnects")
+	if NeedsReconnect(a, b) {
+		t.Fatal("a newly trusted certificate applies live")
+	}
+	if !NeedsReconnect(b, a) {
+		t.Fatal("a certificate no longer trusted reconnects")
 	}
 }
 
