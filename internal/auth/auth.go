@@ -64,6 +64,10 @@ type AuthServiceImpl interface {
 	OIDCLogin(w http.ResponseWriter, r *http.Request)
 	Callback(w http.ResponseWriter, r *http.Request)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// another site's web chat (webchat.go)
+	RequireWebChat(next http.HandlerFunc) http.HandlerFunc
+	WebChatSignIn(w http.ResponseWriter, r *http.Request)
+	WebChatRevoke(w http.ResponseWriter, r *http.Request)
 	ClientIP(r *http.Request) string
 }
 
@@ -227,7 +231,8 @@ func (m *Manager) Current(r *http.Request) (store.User, store.Session, bool) {
 	}
 	sess, err := m.sess.SessionByID(r.Context(), Hash(c.Value))
 	now := m.now()
-	if err != nil || now.After(sess.ExpiresAt) {
+	// a web chat's token is never a cookie (webchat.go)
+	if err != nil || now.After(sess.ExpiresAt) || sess.Method == MethodWebChat {
 		return store.User{}, store.Session{}, false
 	}
 	u, err := m.users.UserByID(r.Context(), sess.UserID)
@@ -248,6 +253,7 @@ const (
 	sessionKey
 	forwardedKey
 	clientIPKey
+	viaTokenKey
 )
 
 // Headers a node sets when it forwards a signed-in request to the node that
@@ -275,6 +281,9 @@ func (m *Manager) Forwarded(secret string, next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), forwardedKey, true)
 		if ip := r.Header.Get(HeaderClient); ip != "" {
 			ctx = context.WithValue(ctx, clientIPKey, ip)
+		}
+		if r.Header.Get(HeaderViaToken) == "1" {
+			ctx = context.WithValue(ctx, viaTokenKey, true)
 		}
 		if id, err := strconv.ParseInt(r.Header.Get(HeaderCaller), 10, 64); err == nil {
 			u, err := m.users.UserByID(ctx, id)

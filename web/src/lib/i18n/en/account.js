@@ -57,6 +57,7 @@ export default {
   'account.signedOut': 'Signed out {device}',
   'account.unknownAddress': 'unknown address',
   'account.methodPassword': 'password',
+  'account.methodWebChat': 'web chat on {site}',
   'account.thisSession': 'This session',
   'account.active': 'Active {ago}',
   'account.thisDevice': 'This device',

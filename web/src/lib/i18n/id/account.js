@@ -57,6 +57,7 @@ export default {
   'account.signedOut': '{device} sudah dikeluarkan',
   'account.unknownAddress': 'alamat tak dikenal',
   'account.methodPassword': 'password',
+  'account.methodWebChat': 'web chat di {site}',
   'account.thisSession': 'Sesi ini',
   'account.active': 'Aktif {ago}',
   'account.thisDevice': 'Perangkat ini',

@@ -102,7 +102,7 @@ func newEnvStatus(t *testing.T, st store.Store, status evrdhttp.StatusRunner, mu
 		t.Fatal(err)
 	}
 	api.SetSettings(sm)
-	sm.OnChange(func(c *config.Config) { acc.SetDefaults(c.Limits); api.SetConfig(c) })
+	sm.OnChange(func(c *config.Config) { acc.SetDefaults(c.Limits); am.SetConfig(c.Auth); api.SetConfig(c) })
 	srv := httptest.NewServer(api.Handler())
 	t.Cleanup(srv.Close)
 	return &env{t: t, srv: srv, st: st, acc: acc, b: b, api: api}

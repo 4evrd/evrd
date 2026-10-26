@@ -57,6 +57,7 @@ export default {
   'account.signedOut': '{device} をサインアウトしました',
   'account.unknownAddress': '不明なアドレス',
   'account.methodPassword': 'パスワード',
+  'account.methodWebChat': '{site} の Web チャット',
   'account.thisSession': 'このセッション',
   'account.active': '最終利用 {ago}',
   'account.thisDevice': 'このデバイス',

@@ -8,12 +8,16 @@ import (
 
 // SameOrigin refuses cross-site state-changing requests (CSRF), on top of the
 // SameSite=Lax cookie.
-func SameOrigin(next http.Handler) http.Handler {
+func SameOrigin(next http.Handler) http.Handler { return SameOriginOr(nil, next) }
+
+// SameOriginOr is SameOrigin letting through the cross-site requests exempt
+// reports (nil: none) — ones that don't ride the cookie.
+func SameOriginOr(exempt func(*http.Request) bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 		default:
-			if !sameOrigin(r) {
+			if !sameOrigin(r) && (exempt == nil || !exempt(r)) {
 				writeErr(w, http.StatusForbidden, "cross-site request refused")
 				return
 			}

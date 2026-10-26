@@ -387,6 +387,36 @@ type Auth struct {
 	// ZNCPasswordDays is how long a ZNC password an account was made with
 	// (Admin → Users → Import from ZNC) keeps working if it's never used.
 	ZNCPasswordDays int
+
+	// WebChatOrigins are other sites' pages (https://chat.example.org) whose
+	// web chat may sign users in here and use their bouncer: the sign-in
+	// hand-off sends them back there with a token, and the API and chat
+	// socket take it from them (internal/auth/webchat.go). Empty: none.
+	WebChatOrigins []string
+	// WebChatNetwork is the network (by name) the hand-off tells the web
+	// chat to use when it doesn't ask for one. Empty: the user's only one.
+	WebChatNetwork string
+	// WebChatDays is how long a web chat's token lasts unused; each use
+	// moves its end.
+	WebChatDays int
+}
+
+// WebChatAllowed reports whether origin (an Origin header) is one of
+// WebChatOrigins.
+func (a Auth) WebChatAllowed(origin string) bool {
+	o, err := ParseOrigin(origin)
+	return err == nil && slices.Contains(a.WebChatOrigins, o)
+}
+
+// ParseOrigin checks that s is a page origin, scheme://host[:port] (http or
+// https, nothing after the host), and returns it lower-cased.
+func ParseOrigin(s string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(s))
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
+		(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+		return "", fmt.Errorf("%q isn't an origin: want https://host or https://host:port", s)
+	}
+	return strings.ToLower(u.Scheme + "://" + u.Host), nil
 }
 
 // LinkSignIn reports whether IRC sign-in by link is on: irc_link_signin,
@@ -453,6 +483,7 @@ func Default() *Config {
 			IRCLinkSignIn:    true,
 			IRCRememberDays:  30,
 			ZNCPasswordDays:  90,
+			WebChatDays:      30,
 		},
 		Limits:            Limits{MaxNetworks: 0, MaxClients: 0, BacklogLines: 2000},
 		Outbound:          Outbound{ConnectRate: 5, PreferIPv6: true},
@@ -727,6 +758,23 @@ func (c *Config) set(key, val string) error {
 		c.Auth.ZNCPasswordDays, err = strconv.Atoi(val)
 		if err == nil && (c.Auth.ZNCPasswordDays < 1 || c.Auth.ZNCPasswordDays > 3650) {
 			err = fmt.Errorf("want 1 to 3650 days, got %d", c.Auth.ZNCPasswordDays)
+		}
+	case "web_chat_origins": // repeatable, or several per line
+		for _, f := range strings.Fields(val) {
+			o, oerr := ParseOrigin(f)
+			if oerr != nil {
+				return oerr
+			}
+			if !slices.Contains(c.Auth.WebChatOrigins, o) {
+				c.Auth.WebChatOrigins = append(c.Auth.WebChatOrigins, o)
+			}
+		}
+	case "web_chat_network":
+		c.Auth.WebChatNetwork = val
+	case "web_chat_days":
+		c.Auth.WebChatDays, err = strconv.Atoi(val)
+		if err == nil && (c.Auth.WebChatDays < 1 || c.Auth.WebChatDays > 365) {
+			err = fmt.Errorf("want 1 to 365 days, got %d", c.Auth.WebChatDays)
 		}
 	case "logto_m2m_client_id":
 		c.Auth.LogtoM2MClientID = val
