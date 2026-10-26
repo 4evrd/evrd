@@ -5,4 +5,5 @@ export default {
   'ui.copiedToClipboard': 'Panoya kopyalandı',
   'ui.close': 'Kapat',
   'ui.choose': 'Seç…',
+  'ui.noMatches': 'Eşleşme yok',
 }

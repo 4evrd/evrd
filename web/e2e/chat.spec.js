@@ -199,6 +199,41 @@ test('switching networks', async ({ page }) => {
   await expect(pick.locator('.count.mention')).toHaveCount(0) // it's the one you're on now
 })
 
+test('the network picker searches and sorts once there are a few networks', async ({ page }) => {
+  // three more networks, left switched off, next to the connected Dev
+  for (const name of ['Zulu', 'alpha', 'Mike']) await me.api.post('/api/networks', { name, host: 'irc.example.org', port: 6697, tls: true, nick: me.name })
+  await openChat(page)
+  const pick = page.getByLabel('Network', { exact: true })
+  const names = () => page.getByRole('option').locator('.net-opt-name').allTextContents()
+  await pick.click()
+  const box = page.getByRole('combobox', { name: 'Find a network' })
+  await expect(box).toBeFocused()
+  expect(await names()).toEqual(['alpha', 'Dev', 'Mike', 'Zulu'])
+  // by status: the connected one first
+  await page.getByRole('button', { name: 'Status' }).click()
+  await expect(page.getByRole('button', { name: 'Status' })).toHaveAttribute('aria-pressed', 'true')
+  expect(await names()).toEqual(['Dev', 'alpha', 'Mike', 'Zulu'])
+  // typing narrows it (the host matches too), Enter picks
+  await box.fill('zul')
+  expect(await names()).toEqual(['Zulu'])
+  await box.fill('nothing-like-this')
+  await expect(page.getByText('No matches')).toBeVisible()
+  await box.fill('ZU')
+  await box.press('Enter')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+  await expect(pick).toContainText('Zulu')
+  // the order is remembered; Escape closes and hands focus back
+  await page.reload()
+  await pick.click()
+  await expect(page.getByRole('button', { name: 'Status' })).toHaveAttribute('aria-pressed', 'true')
+  expect((await names()).slice(-2)).toEqual(['alpha', 'Mike']) // opening Zulu set it connecting
+  await page.keyboard.press('ArrowDown')
+  await expect(box).toHaveAttribute('aria-activedescendant', /net-pick-opt-\d$/)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+  await expect(pick).toBeFocused()
+})
+
 test('chat with no networks points you at adding one', async ({ page }) => {
   await me.api.del(`/api/networks/${myNet.id}`)
   await page.goto('/chat')

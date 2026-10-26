@@ -946,6 +946,16 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
 .dd-opt[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .dd-opt .sub { color: var(--muted); font-size: var(--fs-xs); }
 .dd-opt .dd-tick { flex: none; margin-left: auto; color: var(--primary); }
+/* a dropdown with a search box (Select's search): the box and its tools
+   sit above the options, which scroll on their own */
+.dd-pop { display: flex; flex-direction: column; gap: var(--s1, 4px); overflow: hidden; max-height: min(400px, 70vh); }
+.dd-head { display: grid; gap: var(--s1, 4px); padding: 2px 2px var(--s1, 4px); border-bottom: 1px solid var(--line-soft); }
+.dd-search.search { width: 100%; height: 36px; }
+.dd-list.dd-in { position: static; max-height: none; min-width: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; overflow-y: auto; }
+.dd-none { margin: 0; padding: var(--s2) var(--s3); color: var(--muted); font-size: var(--fs-sm); }
+.dd-sort { display: flex; align-items: center; gap: var(--s1, 4px); padding-left: 4px; font-size: var(--fs-xs); color: var(--muted); }
+.dd-sort .chip-btn { min-height: 28px; padding: 0 var(--s3); font-size: var(--fs-xs); }
+.dd-sort .chip-btn:first-of-type { margin-left: auto; }
 
 /* a field stored encrypted (components/Encrypted.svelte): a lock with a tooltip */
 .label-row { display: flex; align-items: center; gap: 6px; }
