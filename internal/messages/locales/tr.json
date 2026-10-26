@@ -297,6 +297,8 @@
     "irc.notHere.clearmotd": "evrd'nin kendi günün mesajı yok.",
     "irc.notHere.broadcast": "evrd henüz tüm kullanıcılara duyuru gönderemiyor.",
     "irc.notHere.movenetwork": "Ağlar kullanıcılar arasında taşınamaz; bunun yerine diğer hesaba ekle (web uygulamasının içe aktarması ayarları kopyalayabilir).",
+    "irc.notHere.movechan": "evrd bir kanal sırası tutmaz - IRC istemcin kanal listesini kendisi sıralar.",
+    "irc.notHere.swapchans": "evrd bir kanal sırası tutmaz - IRC istemcin kanal listesini kendisi sıralar.",
     "irc.err.usernameRules": "kullanıcı adları 2–32 karakterdir: a–z, 0–9, - ve _, ve bir harfle başlar",
     "irc.err.passwordText": "parolalar geçerli metin olmalı",
     "irc.err.passwordShort": "en az {min} karakter kullan",

@@ -102,6 +102,11 @@ var statusAliases = map[string]string{
 	"shownetwork": "show", "setnetwork": "set",
 	"addtrustedserverfingerprint": "addfingerprint", "deltrustedserverfingerprint": "delfingerprint",
 	"listtrustedserverfingerprints": "listfingerprints",
+	"remserver":                     "delserver",
+	"listmodules":                   "modules", "loadmodule": "loadmod", "unloadmodule": "unloadmod",
+	"reloadmodule": "reloadmod", "updatemodule": "updatemod",
+	"setvhost": "setbindhost", "clearvhost": "clearbindhost",
+	"motd": "showmotd",
 }
 
 func (se *session) statusCommand(text string) {

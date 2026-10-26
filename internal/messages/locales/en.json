@@ -298,6 +298,8 @@
     "irc.notHere.clearmotd": "evrd has no message of the day of its own.",
     "irc.notHere.broadcast": "evrd can't broadcast to every user yet.",
     "irc.notHere.movenetwork": "Networks can't move between users; add it to the other account instead (the web app's import can copy settings).",
+    "irc.notHere.movechan": "evrd keeps no channel order - your IRC client sorts its own channel list.",
+    "irc.notHere.swapchans": "evrd keeps no channel order - your IRC client sorts its own channel list.",
     "irc.err.usernameRules": "usernames are 2–32 characters: a–z, 0–9, - and _, starting with a letter",
     "irc.err.passwordText": "passwords must be valid text",
     "irc.err.passwordShort": "use at least {min} characters",

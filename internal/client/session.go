@@ -737,6 +737,7 @@ func (se *session) jump(n store.Network) error {
 	for _, ch := range old {
 		se.send(fmt.Sprintf(":%s!%s@%s PART %s :%s", se.unick, se.unick, serverName, ch, ircText(se.tr("part.jumped", "network", n.Name))))
 	}
+	clear(se.open) // the client's in none of them now
 	if nick := orElse(se.up.Nick(), n.Nick); nick != se.unick {
 		se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, serverName, nick))
 		se.unick = nick
@@ -744,6 +745,7 @@ func (se *session) jump(n store.Network) error {
 	if se.att != nil {
 		se.att.Update(func(ci *bouncer.ClientInfo) { ci.Networks = []string{n.Name} })
 	}
+	se.sendISupport() // the new network's name, prefixes, channel types… (mIRC shows NETWORK=)
 	se.say("jumped", "from", oldName, "to", n.Name)
 	se.syncCaps()
 	se.startMarks()

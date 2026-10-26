@@ -204,7 +204,13 @@ func (se *session) cmdClearBuffer(args []string) {
 	for _, a := range args {
 		pats = append(pats, strings.Split(a, ",")...)
 	}
-	se.clearBuffers(se.matchBuffers(pats), "buffers")
+	// only buffers there are: a name with nothing saved has nothing to clear
+	known := map[string]bool{}
+	for _, n := range se.srv.b.BufferNames(se.net) {
+		known[strings.ToLower(n)] = true
+	}
+	names := slices.DeleteFunc(se.matchBuffers(pats), func(n string) bool { return !known[strings.ToLower(n)] })
+	se.clearBuffers(names, "buffers")
 }
 
 func (se *session) cmdClearAllBuffers([]string) {
