@@ -5,4 +5,5 @@ export default {
   'ui.copiedToClipboard': 'クリップボードにコピーしました',
   'ui.close': '閉じる',
   'ui.choose': '選択…',
+  'ui.noMatches': '一致なし',
 }

@@ -5,4 +5,5 @@ export default {
   'ui.copiedToClipboard': 'Tersalin ke papan klip',
   'ui.close': 'Tutup',
   'ui.choose': 'Pilih…',
+  'ui.noMatches': 'Tidak ada yang cocok',
 }

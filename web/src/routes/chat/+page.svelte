@@ -16,12 +16,20 @@
   import { clock, hue } from '$lib/format.js'
   import { parse, describe, isChan, isEvent, COMMANDS, tableCells, isTableRule } from '$lib/chat.js'
   import { t, i18n } from '$lib/i18n.svelte.js'
+  import { sortNets } from '$lib/netsort.js'
 
   let nets = $state([])
   let netId = $state(null)
   let net = $derived(nets.find((n) => n.id === netId) || null)
   // mentions waiting on the networks you're not looking at, on the picker
   const otherMentions = $derived(nets.reduce((a, n) => a + (n.id === netId ? 0 : n.mentions || 0), 0))
+  // the picker lists networks by name or by status (remembered in this
+  // browser), with a search box once there are a few of them
+  const NET_SORT = 'evrd.netSort'
+  let netSort = $state('name')
+  try { if (localStorage.getItem(NET_SORT) === 'status') netSort = 'status' } catch {}
+  function sortBy(by) { netSort = by; try { localStorage.setItem(NET_SORT, by) } catch {} }
+  const netOptions = $derived(sortNets(nets, netSort).map((n) => ({ ...n, value: n.id, label: n.name, find: n.host })))
   let bufs = $state([])            // [{ name, unread, mentions, readAt, joined, members, topic }]
   let buf = $state('')
   let logs = $state({})            // name -> message[]
@@ -322,7 +330,14 @@
         <div class="net-select">
           <label class="sr-only" for="net-pick">{t('chat.network')}</label>
           <Select id="net-pick" strong value={netId} onchange={(v) => switchNet(v)} testid="net-pick"
-            options={nets.map((n) => ({ ...n, value: n.id, label: n.name }))}>
+            options={netOptions} search={nets.length >= 4 ? t('chat.findNetwork') : ''}>
+            {#snippet tools()}
+              <div class="dd-sort" role="group" aria-label={t('chat.sortNets')}>
+                <span aria-hidden="true">{t('chat.sortNets')}</span>
+                <button type="button" class="chip-btn" aria-pressed={netSort === 'name'} onclick={() => sortBy('name')}>{t('chat.sortName')}</button>
+                <button type="button" class="chip-btn" aria-pressed={netSort === 'status'} onclick={() => sortBy('status')}>{t('chat.sortStatus')}</button>
+              </div>
+            {/snippet}
             {#snippet option(n, closed)}
               <span class="net-dot {n.status}" aria-hidden="true"></span>
               <span class="od-truncate net-opt-name">{n.name}</span>

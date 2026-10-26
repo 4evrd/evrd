@@ -30,3 +30,11 @@ export function typeahead(options, query, i) {
 
 // indexOf is the option holding value (-1 when none does).
 export const indexOf = (options, value) => options.findIndex((o) => o.value === value)
+
+// filter keeps the options whose label (or extra search text, o.find)
+// contains query, ignoring case; all of them for an empty query.
+export function filter(options, query) {
+  const q = query.trim().toLowerCase()
+  if (!q) return options
+  return options.filter((o) => `${o.label} ${o.find || ''}`.toLowerCase().includes(q))
+}
