@@ -304,6 +304,8 @@
     "irc.notHere.clearmotd": "evrd non ha un messaggio del giorno suo.",
     "irc.notHere.broadcast": "evrd non può ancora mandare un messaggio a tutti gli utenti.",
     "irc.notHere.movenetwork": "Le reti non si spostano tra utenti; aggiungila invece all'altro account (l'importazione dell'app web può copiare le impostazioni).",
+    "irc.notHere.movechan": "evrd non tiene un ordine dei canali - il tuo client IRC ordina da sé l'elenco dei canali.",
+    "irc.notHere.swapchans": "evrd non tiene un ordine dei canali - il tuo client IRC ordina da sé l'elenco dei canali.",
     "irc.err.usernameRules": "i nomi utente hanno 2–32 caratteri: a–z, 0–9, - e _, e iniziano con una lettera",
     "irc.err.passwordText": "le password devono essere testo valido",
     "irc.err.passwordShort": "usa almeno {min} caratteri",

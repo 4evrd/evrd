@@ -523,3 +523,39 @@ func TestNetworksSortedAndFiltered(t *testing.T) {
 		t.Errorf("no match: %q", out)
 	}
 }
+
+// zncCommands is every *status command ZNC 1.9.1 answers (its
+// src/ClientCommand.cpp): each must do something here too, or say where
+// evrd does it instead.
+var zncCommands = strings.Fields(`AddMOTD AddNetwork AddPort AddServer AddTrustedServerFingerprint
+	Attach Broadcast ClearAllBuffers ClearAllChannelBuffers ClearAllQueryBuffers ClearBindHost
+	ClearBuffer ClearMOTD ClearUserBindHost ClearVHost Connect DelNetwork DelPort DelServer
+	DelTrustedServerFingerprint Detach DisableChan Disconnect EnableChan Help Jump JumpNetwork
+	ListAllUserNetworks ListAvailableModules ListAvailMods ListChans ListClients ListMods
+	ListModules ListNetworks ListNicks ListPorts ListServers ListTrustedServerFingerprints
+	ListUsers LoadMod LoadModule MOTD MoveChan MoveNetwork PlayBuffer Rehash ReloadMod
+	ReloadModule RemServer Restart SaveConfig SetBindHost SetBuffer SetMOTD SetUserBindHost
+	SetVHost ShowBindHost ShowMOTD Shutdown SwapChans Topics Traffic UnloadMod UnloadModule
+	UpdateMod UpdateModule Uptime Version`)
+
+func TestEveryZNCCommandIsKnown(t *testing.T) {
+	for _, c := range zncCommands {
+		name := strings.ToLower(c)
+		if a, ok := statusAliases[name]; ok {
+			name = a
+		}
+		known := notHere[name]
+		for _, sc := range statusCmds {
+			known = known || sc.name == name
+		}
+		if !known {
+			t.Errorf("ZNC's %s is an unknown command", c)
+		}
+	}
+}
+
+func TestClearBufferOnlyClearsBuffersThereAre(t *testing.T) {
+	r := newRig(t)
+	ic := r.attached()
+	ic.status("clearbuffer #nowhere", "No buffer to clear on one.")
+}

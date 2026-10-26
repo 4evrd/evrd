@@ -461,4 +461,5 @@ var notHere = map[string]bool{
 	"reloadmod": true, "updatemod": true, "rehash": true, "saveconfig": true, "restart": true,
 	"shutdown": true, "listports": true, "addport": true, "delport": true, "showmotd": true,
 	"setmotd": true, "addmotd": true, "clearmotd": true, "broadcast": true, "movenetwork": true,
+	"movechan": true, "swapchans": true,
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/testirc"
+	"github.com/4evrd/evrd/internal/upstream"
 )
 
 type rig struct {
@@ -277,6 +278,15 @@ func TestJumpAndNetworkManagement(t *testing.T) {
 		return len(msgs) == 1 && msgs[0].Text == "hi two"
 	})
 
+	// and back: its channels come again (they were left on the way out)
+	ic.send("PRIVMSG *status :jumpnetwork one")
+	ic.expect("PART #two :jumped to one")
+	ic.expect("Jumped from two to one")
+	ic.expect("JOIN #one")
+	ic.expect(" 366 alice_one #one ")
+	ic.send("PRIVMSG *status :jumpnetwork two")
+	ic.expect("JOIN #two")
+
 	ic.send("PRIVMSG *status :delnetwork two")
 	ic.expect("You're on two")
 	ic.send("PRIVMSG *status :addnetwork three irc.example.org 6667")
@@ -395,4 +405,21 @@ func TestModulesFromStatus(t *testing.T) {
 	ic.send("PRIVMSG *status :unloadmod alias")
 	ic.expect("alias is off for one.")
 	eventually(t, "off", func() bool { return !r.network("one").Modules["alias"].Enabled })
+}
+
+func TestAJumpSendsTheNewNetworksISupport(t *testing.T) {
+	r := newRigCaps(t, "evrd.test/whox") // the fake network sends a 005
+	ic := r.attach("alice/one:alice-password")
+	ic.expect("JOIN #one")
+	two := r.network("two").ID
+	r.b.Connect(two)
+	eventually(t, "two's 005 in", func() bool {
+		c, ok := r.b.ConnFor(two)
+		return ok && c.Status() == upstream.StatusConnected && len(c.ISupport()) > 0
+	})
+
+	ic.send("PRIVMSG *status :jumpnetwork two")
+	ic.expect("NICK alice_two")
+	ic.expect(" 005 alice_two WHOX") // mIRC takes the network's name and the like from it
+	ic.expect("Jumped from one to two")
 }

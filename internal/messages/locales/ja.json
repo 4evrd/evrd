@@ -289,6 +289,8 @@
     "irc.notHere.clearmotd": "evrd には独自の MOTD はありません。",
     "irc.notHere.broadcast": "evrd はまだ全ユーザーへの一斉送信ができません。",
     "irc.notHere.movenetwork": "ネットワークはユーザー間で移動できません。代わりに相手のアカウントに追加してください(ウェブアプリのインポートで設定をコピーできます)。",
+    "irc.notHere.movechan": "evrd はチャンネルの順序を保持しません - チャンネル一覧の並びは IRC クライアント側で決まります。",
+    "irc.notHere.swapchans": "evrd はチャンネルの順序を保持しません - チャンネル一覧の並びは IRC クライアント側で決まります。",
     "irc.err.usernameRules": "ユーザー名は 2–32 文字で、a–z、0–9、- と _ が使え、英字で始まります",
     "irc.err.passwordText": "パスワードは有効なテキストにしてください",
     "irc.err.passwordShort": "{min} 文字以上にしてください",

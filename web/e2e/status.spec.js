@@ -162,7 +162,9 @@ test('jump: to the next server, to another network and back', async () => {
   await expect.poll(async () => (await me.api.get(`/api/networks/${netA.id}`)).status, { timeout: 20000 }).toBe('connected')
   await cmd(a, 'jump B', 'Jumped from A to B.')
   await cmd(a, 'networks', '* B')
+  const rejoined = a.next(new RegExp(` JOIN ${esc(chan)}$`, 'i')) // its channels come back
   await cmd(a, 'jumpnetwork A', 'Jumped from B to A.')
+  await rejoined
   await cmd(a, 'jump nowhere', 'neither one of your networks nor a server of A')
 })
 
@@ -187,6 +189,43 @@ test('clients, uptime, traffic, bind hosts, modules, and what evrd does elsewher
   const r = a.next(/:\*status!\S+ PRIVMSG \S+ :.*evrd has been running/)
   a.send('ZNC Uptime')
   await r
+})
+
+// Every *status command ZNC 1.9.1 has, by ZNC's name (the case it writes
+// them in, too), as a ZNC user would type it: none is unknown here. The
+// ones that change things get no arguments (their usage) or the other
+// network, B.
+const ZNC_COMMANDS = [
+  'AddMOTD x', 'AddNetwork', 'AddPort', 'AddServer', 'AddTrustedServerFingerprint', 'Attach',
+  'Broadcast x', 'ClearAllBuffers', 'ClearAllChannelBuffers', 'ClearAllQueryBuffers', 'ClearBindHost',
+  'ClearBuffer', 'ClearMOTD', 'ClearUserBindHost', 'ClearVHost', 'Disconnect B', 'Connect B', 'DelNetwork',
+  'DelPort', 'DelServer', 'DelTrustedServerFingerprint', 'Detach', 'DisableChan', 'EnableChan', 'Help',
+  'Jump B', 'JumpNetwork', 'ListAllUserNetworks', 'ListAvailableModules', 'ListAvailMods', 'ListChans',
+  'ListClients', 'ListMods', 'ListModules', 'ListNetworks', 'ListNicks', 'ListPorts', 'ListServers',
+  'ListTrustedServerFingerprints', 'ListUsers', 'LoadMod', 'LoadModule', 'MOTD', 'MoveChan', 'MoveNetwork',
+  'PlayBuffer', 'Rehash', 'ReloadMod', 'ReloadModule', 'RemServer', 'Restart', 'SaveConfig', 'SetBindHost',
+  'SetBuffer', 'SetMOTD x', 'SetUserBindHost', 'SetVHost', 'ShowBindHost', 'ShowMOTD', 'Shutdown',
+  'SwapChans', 'Topics', 'Traffic', 'UnloadMod', 'UnloadModule', 'UpdateMod', 'UpdateModule', 'Uptime', 'Version',
+]
+
+test('every ZNC *status command has an answer', async () => {
+  const a = await attach('A')
+  for (const [i, c] of ZNC_COMMANDS.entries()) {
+    // a marker after it: everything before the marker's answer is its own
+    const from = a.lines.length
+    a.send(`PRIVMSG *status :${c}`)
+    a.send(`PRIVMSG *status :zzmark${i}`)
+    await a.waitFor(new RegExp(`Unknown command "zzmark${i}"`))
+    const said = a.lines.slice(from).filter((l) => /^:\*status!/.test(l) && !l.includes(`zzmark${i}`))
+    expect(said.length, c).toBeGreaterThan(0)
+    expect(said.join('\n'), c).not.toMatch(/Unknown command/)
+  }
+  // the ones evrd has under its own name do the same thing
+  await cmd(a, 'SetVHost', 'Usage: setbindhost')
+  await cmd(a, 'RemServer', 'Usage: delserver')
+  await cmd(a, 'MOTD', '/motd shows the network')
+  await cmd(a, 'SwapChans #a #b', 'evrd keeps no channel order')
+  await cmd(a, 'ClearBuffer #nowhere', 'No buffer to clear on B.') // Jump B moved it
 })
 
 test('admin listings are for admins only', async () => {

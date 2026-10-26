@@ -289,6 +289,8 @@
     "irc.notHere.clearmotd": "evrd tidak punya pesan hari ini sendiri.",
     "irc.notHere.broadcast": "evrd belum bisa mengirim siaran ke semua pengguna.",
     "irc.notHere.movenetwork": "Network tidak bisa dipindah antar pengguna; tambahkan saja ke akun lain (impor di aplikasi web bisa menyalin pengaturan).",
+    "irc.notHere.movechan": "evrd tidak menyimpan urutan channel - klien IRC-mu mengurutkan daftar channel-nya sendiri.",
+    "irc.notHere.swapchans": "evrd tidak menyimpan urutan channel - klien IRC-mu mengurutkan daftar channel-nya sendiri.",
     "irc.err.usernameRules": "nama pengguna terdiri dari 2–32 karakter: a–z, 0–9, - dan _, diawali huruf",
     "irc.err.passwordText": "kata sandi harus berupa teks yang valid",
     "irc.err.passwordShort": "pakai setidaknya {min} karakter",
