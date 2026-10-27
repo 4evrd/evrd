@@ -174,6 +174,37 @@ func (c *Conn) askModes(channel string) {
 	}()
 }
 
+// ClientAsks notes that a client asked the network about a channel itself
+// (MODE, TOPIC, NAMES or WHO, not answered from evrd's state): the reply is the
+// client's to see, even with evrd's own question still out. evrd's may never
+// be answered (263, too many asked at once) and would otherwise take the
+// client's reply for its own (#141). The reply still updates evrd's state;
+// at worst a client sees it twice, never not at all.
+func (c *Conn) ClientAsks(command, channel string) {
+	kind := map[string]string{"MODE": "mode", "TOPIC": "topic", "NAMES": "names", "WHO": "who"}[command]
+	if kind == "" {
+		return
+	}
+	key := strings.ToLower(channel)
+	c.mu.Lock()
+	if kind == "who" && c.resync["who "+key] {
+		if c.whoAsked[key] == 'x' {
+			// evrd's own replies are 354s with its token: the client's are
+			// told apart, and its 315 counted (isResync)
+			c.clientWho[key]++
+			c.mu.Unlock()
+			return
+		}
+		// a plain WHO's replies look alike: they're the client's, all of
+		// them (evrd still learns from them)
+	}
+	delete(c.resync, kind+" "+key)
+	if kind == "mode" {
+		delete(c.resync, "created "+key)
+	}
+	c.mu.Unlock()
+}
+
 // ChannelState is a joined channel as evrd knows it, to answer IRC clients
 // without asking the network. Each part says whether it's known: a part
 // that isn't (evrd just joined, or picked a held link back up) is the

@@ -1052,10 +1052,16 @@ func (se *session) dispatch(m irc.Message) {
 		se.passOn(m)
 	case "TOPIC", "MODE":
 		if !se.answerLocally(m.Command, m.Params) {
+			if len(m.Params) == 1 && isChannelName(m.Params[0]) {
+				se.up.ClientAsks(m.Command, m.Params[0]) // the reply is the client's
+			}
 			se.passOn(m)
 		}
 	case "WHO":
 		if !se.answerWho(m.Params) {
+			if len(m.Params) > 0 && isChannelName(m.Params[0]) && !strings.Contains(m.Params[0], ",") {
+				se.up.ClientAsks("WHO", m.Params[0]) // the reply is the client's
+			}
 			se.passOn(m)
 		}
 	case "NAMES":
@@ -1068,6 +1074,11 @@ func (se *session) dispatch(m irc.Message) {
 			}
 			for _, ch := range strings.Split(m.Params[0], ",") {
 				se.namesAsked[strings.ToLower(ch)]++
+			}
+		}
+		if len(m.Params) > 0 {
+			for _, ch := range strings.Split(m.Params[0], ",") {
+				se.up.ClientAsks("NAMES", ch)
 			}
 		}
 		se.passOn(m)

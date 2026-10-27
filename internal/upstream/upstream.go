@@ -169,8 +169,11 @@ type Conn struct {
 	// people is what evrd knows of each member beyond user@host (who.go),
 	// by lowercased nick; whoAsked the channels evrd's own WHO is out for
 	// ('x' WHOX, 'w' plain), and serverName the server it's connected to.
-	people     map[string]*person
-	whoAsked   map[string]byte
+	people   map[string]*person
+	whoAsked map[string]byte
+	// clientWho counts clients' WHOs about a channel passed on while evrd's
+	// own (WHOX) is out: their 315s are theirs, not the end of evrd's
+	clientWho  map[string]int
 	serverName string
 	// chanModes are the server's ISUPPORT CHANMODES groups.
 	chanModes [4]string
@@ -336,6 +339,7 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		info:         map[string]*chanInfo{},
 		people:       map[string]*person{},
 		whoAsked:     map[string]byte{},
+		clientWho:    map[string]int{},
 		chanModes:    defaultChanModes,
 		prefixModes:  "ov",
 		prefixChars:  "@+",
@@ -1394,6 +1398,8 @@ func (c *Conn) leftAll() {
 	c.members = map[string]map[string]*Member{}
 	c.topics = map[string]string{}
 	c.info = map[string]*chanInfo{}
+	c.resync = map[string]bool{} // what this connection asked dies with it
+	c.clientWho = map[string]int{}
 	c.mu.Unlock()
 	if len(left) > 0 {
 		c.broadcastRaw(Line{Left: left})
@@ -1845,6 +1851,15 @@ func (c *Conn) resyncReply(m irc.Message) bool {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if ch, ok := strings.CutPrefix(key, "who "); ok {
+		switch {
+		case m.Command == "352" && c.whoAsked[ch] == 'x':
+			return false // evrd asked in WHOX's form (354): a 352 is a client's
+		case m.Command == "315" && c.clientWho[ch] > 0:
+			c.clientWho[ch]-- // one of the clients' WHOs ended (#141)
+			return false
+		}
+	}
 	if !c.resync[key] {
 		return false
 	}
