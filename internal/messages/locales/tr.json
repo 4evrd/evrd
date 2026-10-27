@@ -4,6 +4,7 @@
   "messages": {
     "irc.unknownCommand": "Bilinmeyen komut {command} — help'i dene.",
     "irc.help.intro": "evrd komutları — /msg {status} <komut> ya da /znc <komut>:",
+    "irc.help.noMatch": "{filter} ile eşleşen komut yok - help hepsini listeler.",
     "irc.help.command": "Komut",
     "irc.help.arguments": "Argümanlar",
     "irc.help.description": "Açıklama",

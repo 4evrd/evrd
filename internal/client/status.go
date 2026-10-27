@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -39,7 +40,7 @@ var statusCmds []statusCmd
 
 func init() {
 	statusCmds = []statusCmd{
-		{"help", "", (*session).cmdHelp},
+		{"help", "[filter]", (*session).cmdHelp},
 		{"networks", "[filter]", (*session).cmdNetworks},
 		{"jumpnetwork", "<network>", (*session).cmdJumpNetwork},
 		{"jump", "[server|network]", (*session).cmdJump},
@@ -196,10 +197,25 @@ func (se *session) state(st upstream.Status) string {
 	return se.tr("state." + string(st))
 }
 
-func (se *session) cmdHelp([]string) {
-	se.say("help.intro", "status", statusNick)
+func (se *session) cmdHelp(args []string) {
+	// help set, help *buffer*: only the commands whose name has it (or
+	// matches it, with wildcards), as ZNC's help filters
+	filter := ""
+	if len(args) > 0 {
+		filter = strings.ToLower(args[0])
+	}
+	match := func(name string) bool {
+		if filter == "" || strings.Contains(name, filter) {
+			return true
+		}
+		ok, _ := path.Match(filter, name)
+		return ok
+	}
 	rows := [][]string{{se.tr("help.command"), se.tr("help.arguments"), se.tr("help.description")}}
 	for _, c := range statusCmds {
+		if !match(c.name) {
+			continue
+		}
 		row := []string{strings.ToUpper(c.name), c.args, se.tr("help."+c.name, "max", maxPlayback)}
 		if se.web == nil {
 			for i := range row {
@@ -208,11 +224,22 @@ func (se *session) cmdHelp([]string) {
 		}
 		rows = append(rows, row)
 	}
+	if len(rows) == 1 {
+		se.say("help.noMatch", "filter", args[0])
+		return
+	}
+	if filter == "" {
+		se.say("help.intro", "status", statusNick)
+	}
 	for _, l := range markdownTable(rows) {
 		se.statusf("%s", l)
 	}
-	se.say("help.settings", "settings", strings.Join(settingNames, ", "))
-	se.say("help.caseInsensitive")
+	if filter == "" || match("set") {
+		se.say("help.settings", "settings", strings.Join(settingNames, ", "))
+	}
+	if filter == "" {
+		se.say("help.caseInsensitive")
+	}
 }
 
 // markdownTable lays rows out as a Markdown table, the first row its header,
@@ -751,7 +778,7 @@ func (se *session) cmdSet(args []string) {
 	case field == "password" || field == "authcommand":
 		shown = se.tr("set.hidden")
 	}
-	if accounts.NeedsReconnect(before, n) && se.srv.b.Status(n.ID) != upstream.StatusDisconnected {
+	if accounts.ReconnectFor(before, n, string(se.srv.b.Status(n.ID))) {
 		if err := se.srv.b.Reconnect(n.ID); err != nil {
 			se.say("set.savedReconnectFailed", "setting", field, "value", shown, "error", err)
 			return
@@ -771,7 +798,24 @@ func (se *session) cmdChannels([]string) {
 		se.say("channels.none", "network", se.net.Name)
 		return
 	}
-	se.statusf("%s: %s", se.net.Name, strings.Join(chans, " "))
+	// one a line, as showchan words it: joined (and how many are there) or
+	// not, detached, disabled
+	for _, ch := range chans {
+		state, cs := se.tr("showchan.savedNotJoined"), se.net.Channel(ch)
+		if se.up != nil {
+			cs = se.up.ChannelSettings(ch)
+			if se.up.Joined(ch) {
+				state = se.tr("showchan.joined", "nicks", se.tr("count.nicks", "count", se.up.MemberCount(ch)))
+			}
+		}
+		if cs.Detached {
+			state += ", " + se.tr("showchan.detached")
+		}
+		if cs.Disabled {
+			state += ", " + se.tr("showchan.disabled")
+		}
+		se.statusf("  %-24s %s", ch, state)
+	}
 }
 
 func (se *session) cmdPlayback(args []string) {
@@ -845,7 +889,7 @@ func (se *session) saveNetwork(before, n store.Network, done string) {
 		se.net = n
 	}
 	se.srv.b.Reconfigure(n)
-	if accounts.NeedsReconnect(before, n) && se.srv.b.Status(n.ID) != upstream.StatusDisconnected {
+	if accounts.ReconnectFor(before, n, string(se.srv.b.Status(n.ID))) {
 		if err := se.srv.b.Reconnect(n.ID); err != nil {
 			se.say("saveNetwork.reconnectFailed", "done", done, "error", err)
 			return
@@ -927,7 +971,11 @@ func (se *session) cmdDelServer(args []string) {
 		return
 	}
 	n.Servers = kept
-	se.saveNetwork(before, n, se.tr("delserver.done", "host", args[0], "network", n.Name))
+	gone := args[0]
+	if len(args) == 2 {
+		gone += ":" + strings.TrimPrefix(args[1], "+") // not every server of that host
+	}
+	se.saveNetwork(before, n, se.tr("delserver.done", "host", gone, "network", n.Name))
 }
 
 func (se *session) cmdListFingerprints([]string) {

@@ -358,7 +358,8 @@ func TestWebChatThroughTheFront(t *testing.T) {
 	defer ws.Close()
 	next(t, ws) // ready
 	irc.send(":carol!c@h PRIVMSG #x :via the back")
-	if m := nextWith(t, ws, "type", "raw"); m["line"] != ":carol!c@h PRIVMSG #x :via the back" {
+	// (registration's raw lines may come first)
+	if m := nextWith(t, ws, "line", ":carol!c@h PRIVMSG #x :via the back"); m["type"] != "raw" {
 		t.Fatalf("raw: %v", m)
 	}
 	// A browser can't claim a token it doesn't have by the forwarding header.

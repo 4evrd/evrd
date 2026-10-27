@@ -4,6 +4,7 @@
   "messages": {
     "irc.unknownCommand": "Perintah tidak dikenal {command} — coba help.",
     "irc.help.intro": "Perintah evrd — /msg {status} <perintah> atau /znc <perintah>:",
+    "irc.help.noMatch": "Tidak ada perintah yang cocok dengan {filter} - help menampilkan semuanya.",
     "irc.help.command": "Perintah",
     "irc.help.arguments": "Argumen",
     "irc.help.description": "Keterangan",

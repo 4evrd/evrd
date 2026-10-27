@@ -4,6 +4,7 @@
   "messages": {
     "irc.unknownCommand": "Unbekannter Befehl {command} – versuch help.",
     "irc.help.intro": "evrd-Befehle – /msg {status} <Befehl> oder /znc <Befehl>:",
+    "irc.help.noMatch": "Kein Befehl passt zu {filter} - help listet alle auf.",
     "irc.help.command": "Befehl",
     "irc.help.arguments": "Argumente",
     "irc.help.description": "Beschreibung",

@@ -4,6 +4,7 @@
   "messages": {
     "irc.unknownCommand": "不明なコマンド {command} です。help を試してください。",
     "irc.help.intro": "evrd のコマンド — /msg {status} <コマンド> または /znc <コマンド>:",
+    "irc.help.noMatch": "{filter} に一致するコマンドはありません - help ですべて表示されます。",
     "irc.help.command": "コマンド",
     "irc.help.arguments": "引数",
     "irc.help.description": "説明",

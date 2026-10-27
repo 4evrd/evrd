@@ -207,12 +207,38 @@ func (s *Service) CheckNetworkName(userID int64, name string, exceptID int64) er
 
 // NeedsReconnect reports whether a settings change only applies on a new
 // connection. Names, channels, quit message and flood settings apply live.
+// So do more servers to fall back to (only the first is where it connects:
+// a change to it reconnects) and a certificate newly trusted; one no longer
+// trusted reconnects, so it's no longer relied on.
 func NeedsReconnect(a, b store.Network) bool {
-	return !slices.Equal(a.ServerList(), b.ServerList()) || a.Nick != b.Nick || a.Username != b.Username ||
+	return firstServer(a) != firstServer(b) || a.Nick != b.Nick || a.Username != b.Username ||
 		a.Realname != b.Realname || a.Password != b.Password || a.SASLUser != b.SASLUser ||
 		a.BindHost != b.BindHost || a.TrustAllCerts != b.TrustAllCerts || a.TrustPKI != b.TrustPKI ||
-		!slices.Equal(a.Fingerprints, b.Fingerprints) || a.Encoding != b.Encoding ||
+		slices.ContainsFunc(a.Fingerprints, func(f string) bool { return !slices.Contains(b.Fingerprints, f) }) || a.Encoding != b.Encoding ||
 		a.Auth() != b.Auth() || a.ServicesNick != b.ServicesNick || a.IdentifyArgs != b.IdentifyArgs ||
 		a.IdentifyOn != b.IdentifyOn || a.AuthCommand != b.AuthCommand || a.GhostCmd != b.GhostCmd ||
 		a.JoinAfterAuth != b.JoinAfterAuth || a.AuthTimeout != b.AuthTimeout
+}
+
+// ReconnectFor reports whether saving a's change to b should reconnect a
+// network whose link is status (upstream.Status): a live link only for what
+// NeedsReconnect says; one that's down and retrying for any change to its
+// servers or trust too — that's likely what keeps it down, so it tries again
+// now; one switched off never.
+func ReconnectFor(a, b store.Network, status string) bool {
+	switch status {
+	case "disconnected":
+		return false
+	case "connected":
+		return NeedsReconnect(a, b)
+	}
+	return NeedsReconnect(a, b) || !slices.Equal(a.ServerList(), b.ServerList()) ||
+		!slices.Equal(a.Fingerprints, b.Fingerprints)
+}
+
+func firstServer(n store.Network) store.Server {
+	if l := n.ServerList(); len(l) > 0 {
+		return l[0]
+	}
+	return store.Server{}
 }
