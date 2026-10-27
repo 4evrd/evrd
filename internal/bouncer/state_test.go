@@ -87,6 +87,54 @@ func TestUnreadAndMarkRead(t *testing.T) {
 	}
 }
 
+// Notices (services, bots) are unread but never mentions, and what servers
+// say doesn't count at all: they send connection notices on every reconnect.
+func TestNoticesAndServersAreNotMentions(t *testing.T) {
+	st, err := store.Open("sqlite:" + filepath.Join(t.TempDir(), "evrd.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	hist, err := history.Open(filepath.Join(t.TempDir(), "history"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hist.Close()
+	b := New(st, hist, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	u, _ := st.CreateUser(t.Context(), store.User{Username: "alice"})
+	n, _ := st.CreateNetwork(t.Context(), store.Network{UserID: u.ID, Name: "net"})
+	b.initReads(n)
+
+	now := time.Now()
+	line := func(target, from, kind, text string) {
+		b.observe(n, "alice", history.Message{NetworkID: n.ID, Target: target, Sender: from, Kind: kind, Text: text, Time: now})
+	}
+	line("NickServ", "NickServ", "notice", "This nickname is registered.")
+	line("irc.example.org", "irc.example.org", "notice", "*** Looking up your hostname")
+	line("alice", "irc.example.org", "notice", "*** Found your hostname")
+	line("#go", "bot", "notice", "alice: welcome to #go")
+	line("carol", "carol", "message", "psst")
+
+	got := map[string]BufferState{}
+	for _, s := range b.Buffers(n.ID) {
+		got[s.Name] = s
+	}
+	if s := got["NickServ"]; s.Unread != 1 || s.Mentions != 0 {
+		t.Errorf("NickServ notice: %+v", s)
+	}
+	if s := got["#go"]; s.Unread != 1 || s.Mentions != 0 {
+		t.Errorf("channel notice naming alice: %+v", s)
+	}
+	for _, name := range []string{"irc.example.org", "alice"} {
+		if s := got[name]; s.Unread != 0 || s.Mentions != 0 {
+			t.Errorf("server line in %s: %+v", name, s)
+		}
+	}
+	if s := got["carol"]; s.Unread != 1 || s.Mentions != 1 {
+		t.Errorf("private message: %+v", s)
+	}
+}
+
 func TestBuffersHideTheNameless(t *testing.T) {
 	st, err := store.Open("sqlite:" + filepath.Join(t.TempDir(), "evrd.db"))
 	if err != nil {
