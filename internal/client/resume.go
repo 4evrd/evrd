@@ -9,11 +9,29 @@ package client
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/history"
 )
+
+// signature is how this client introduced itself: its ident, real name and
+// the capabilities it took. Two programs differ in it even on one address
+// with one password (mIRC and HexChat side by side), so a device is only
+// taken to be back when it matches too (bouncer.AttachClient); the program's
+// name (CTCP VERSION) comes too late for that, after signing in.
+func (se *session) signature() string {
+	var caps []string
+	for c, on := range se.caps {
+		if on {
+			caps = append(caps, c)
+		}
+	}
+	slices.Sort(caps)
+	return strings.ToLower(se.user) + "\x00" + se.realname + "\x00" + strings.Join(caps, " ")
+}
 
 // resumeWithin is how soon after dropping a device counts as resuming.
 const resumeWithin = 2 * time.Minute

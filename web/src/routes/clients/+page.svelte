@@ -1,4 +1,5 @@
 <script>
+  import { deviceLabel } from '$lib/clients.js'
   import { onMount, onDestroy } from 'svelte'
   import Icon from '$lib/components/Icon.svelte'
   import Copy from '$lib/components/Copy.svelte'
@@ -188,7 +189,7 @@ Password        <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<
       <div class="rows">
         {#each attached?.clients || [] as c (c.id)}
           <div class="row" style="--cols:minmax(0,1fr) auto">
-            <span class="od-field"><span class="name">{c.kind === 'web' ? t('clients.web') : c.software || t('clients.ircClient')}{c.device ? ' · ' + c.device : c.kind === 'web' ? ' · ' + c.software : ''}</span><span class="sub mono od-truncate">{c.networks.join(', ')}{c.ip ? ' · ' + c.ip : ''}</span></span>
+            <span class="od-field"><span class="name">{c.kind === 'web' ? t('clients.web') : c.software || t('clients.ircClient')}{deviceLabel(c) ? ' · ' + deviceLabel(c) : c.kind === 'web' ? ' · ' + c.software : ''}</span><span class="sub mono od-truncate">{c.networks.join(', ')}{c.ip ? ' · ' + c.ip : ''}</span></span>
             <span class="chip ok live"><span class="dot" aria-hidden="true"></span>{since(c.since)}</span>
           </div>
         {/each}

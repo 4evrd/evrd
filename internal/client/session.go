@@ -41,6 +41,7 @@ type session struct {
 	pass           string
 	nick           string
 	user           string
+	realname       string // USER's last parameter
 	capNegotiating bool
 	capVersion     int               // the client's CAP LS version (302…)
 	caps           map[string]bool   // what it asked for
@@ -239,7 +240,7 @@ func (se *session) register(ctx context.Context) bool {
 			}
 		case "USER":
 			if len(m.Params) > 0 {
-				se.user = m.Params[0]
+				se.user, se.realname = m.Params[0], lastParam(m)
 				se.regLines = append(se.regLines, line)
 			}
 		case "AUTHENTICATE":
@@ -352,8 +353,25 @@ func cutCode(password string) (base, code string, ok bool) {
 }
 
 // ssoDevice is how a sign-in with the SSO password shows among the user's
-// clients.
+// clients — with where it's from (sharedDevice).
 const ssoDevice = "SSO password"
+
+// sharedDevice is the device of a client signed in a way every client of
+// the account can share (the SSO password, a link): one per address, so two
+// clients signed in alike from two places are two clients — not one taking
+// over the other's connection, each in turn (#139) — while one back from
+// the same place still takes over its ghost.
+func sharedDevice(how, ip string) string {
+	if ip == "" {
+		return how
+	}
+	return how + " from " + ip
+}
+
+// isDevice reports whether device is a sign-in of the shared kind how.
+func isDevice(device, how string) bool {
+	return device == how || strings.HasPrefix(device, how+" from ")
+}
 
 // ssoSignIn tries password as the SSO password of username's account, after
 // it wasn't a client password or the account password (failed: why). An
@@ -375,7 +393,7 @@ func (se *session) ssoSignIn(username, password string, failed error) (store.Use
 		return store.User{}, "", accounts.ErrSuspended
 	}
 	se.srv.log.Info("irc sign-in with the SSO password", "user", u.Username, "method", se.srv.signIns.SSOPasswordMethod(), "ip", se.clientIP())
-	return u, ssoDevice, nil
+	return u, sharedDevice(ssoDevice, se.clientIP()), nil
 }
 
 // attach authenticates and binds the session to a network, then sends the
@@ -436,7 +454,7 @@ func (se *session) attach() bool {
 	}
 
 	att, err := se.srv.b.AttachClient(u.ID, se.srv.acc.LimitsFor(u).MaxClients,
-		bouncer.ClientInfo{Device: device, Networks: bound, IP: se.clientIP()},
+		bouncer.ClientInfo{Device: device, Networks: bound, IP: se.clientIP(), Signature: se.signature()},
 		se.kick)
 	if errors.Is(err, bouncer.ErrTooManyClients) {
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("too_many_clients"))

@@ -29,13 +29,17 @@ const AwayMessage = "Away - evrd is keeping my seat"
 
 // ClientInfo describes an attached IRC client or web chat.
 type ClientInfo struct {
-	ID       string    `json:"id"`
-	Kind     string    `json:"kind"`     // irc | web
-	Software string    `json:"software"` // "HexChat", "irssi"… (from CTCP VERSION); web: the browser
-	Device   string    `json:"device"`   // the client password's name, if one was used
-	Networks []string  `json:"networks"`
-	IP       string    `json:"ip"`
-	Since    time.Time `json:"since"`
+	ID       string   `json:"id"`
+	Kind     string   `json:"kind"`     // irc | web
+	Software string   `json:"software"` // "HexChat", "irssi"… (from CTCP VERSION); web: the browser
+	Device   string   `json:"device"`   // the client password's name, if one was used
+	Networks []string `json:"networks"`
+	IP       string   `json:"ip"`
+	// Signature is how the client introduced itself (ident, real name,
+	// capabilities): one device's connections match in it, two programs
+	// sharing a password don't.
+	Signature string    `json:"-"`
+	Since     time.Time `json:"since"`
 }
 
 type client struct {

@@ -94,7 +94,7 @@ func cutLogin(login string) (username, network string, ok bool) {
 
 // clientPassword reports whether device is an IRC client password's name
 // (not the account or SSO password).
-func clientPassword(device string) bool { return device != "" && device != ssoDevice }
+func clientPassword(device string) bool { return device != "" && !isDevice(device, ssoDevice) }
 
 // secondFactor decides whether u's sign-in needs a second factor and checks
 // otp, the code sent after the password, if any: locked when the client

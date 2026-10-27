@@ -69,7 +69,7 @@ func TestSignInByLink(t *testing.T) {
 	ic.expect("JOIN #one") // the first network
 	eventually(t, "attached as allowed by link", func() bool {
 		for _, c := range r.b.ClientsOf(alice.ID) {
-			if c.Device == linkDevice {
+			if isDevice(c.Device, linkDevice) {
 				return true
 			}
 		}

@@ -277,6 +277,7 @@ type heldState struct {
 	FromIP     string                       `json:"fromIP,omitempty"`
 	Device     string                       `json:"device,omitempty"`
 	Software   string                       `json:"software,omitempty"`
+	Signature  string                       `json:"signature,omitempty"`
 	Since      time.Time                    `json:"since"`
 }
 
@@ -291,7 +292,7 @@ func (se *session) saveState() {
 		V: heldStateVersion, User: se.uid, Network: se.net.ID, Nick: se.unick, RegNick: se.nick,
 		CapVersion: se.capVersion, Advertised: se.advertised, Batches: se.batches,
 		NetBatches: se.ubatch, NetsSent: se.netsSent, Marks: se.marks, FromIP: se.fromIP,
-		Device: info.Device, Software: info.Software, Since: info.Since,
+		Device: info.Device, Software: info.Software, Signature: info.Signature, Since: info.Since,
 	}
 	for c, on := range se.caps {
 		if on {
@@ -362,7 +363,7 @@ func (se *session) restore(raw []byte) error {
 		se.open[ch] = true
 	}
 	att, err := se.srv.b.ReattachClient(u.ID,
-		bouncer.ClientInfo{Device: st.Device, Networks: bound, IP: se.clientIP(), Software: st.Software},
+		bouncer.ClientInfo{Device: st.Device, Networks: bound, IP: se.clientIP(), Software: st.Software, Signature: st.Signature},
 		se.kick)
 	if err != nil {
 		return err
