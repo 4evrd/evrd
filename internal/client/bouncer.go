@@ -320,7 +320,7 @@ func (se *session) changeNetwork(id string, attrs map[string]string) {
 		se.net = n
 	}
 	se.srv.b.Reconfigure(n)
-	if accounts.NeedsReconnect(before, n) && se.srv.b.Status(n.ID) != upstream.StatusDisconnected {
+	if accounts.ReconnectFor(before, n, string(se.srv.b.Status(n.ID))) {
 		se.srv.b.Reconnect(n.ID)
 	}
 	se.send(fmt.Sprintf(":%s BOUNCER CHANGENETWORK %s", serverName, id))

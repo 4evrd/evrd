@@ -220,6 +220,22 @@ func NeedsReconnect(a, b store.Network) bool {
 		a.JoinAfterAuth != b.JoinAfterAuth || a.AuthTimeout != b.AuthTimeout
 }
 
+// ReconnectFor reports whether saving a's change to b should reconnect a
+// network whose link is status (upstream.Status): a live link only for what
+// NeedsReconnect says; one that's down and retrying for any change to its
+// servers or trust too — that's likely what keeps it down, so it tries again
+// now; one switched off never.
+func ReconnectFor(a, b store.Network, status string) bool {
+	switch status {
+	case "disconnected":
+		return false
+	case "connected":
+		return NeedsReconnect(a, b)
+	}
+	return NeedsReconnect(a, b) || !slices.Equal(a.ServerList(), b.ServerList()) ||
+		!slices.Equal(a.Fingerprints, b.Fingerprints)
+}
+
 func firstServer(n store.Network) store.Server {
 	if l := n.ServerList(); len(l) > 0 {
 		return l[0]

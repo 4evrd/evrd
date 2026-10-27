@@ -318,7 +318,7 @@ func (s *Handlers) importNetwork(ctx context.Context, u store.User, x *netfile.N
 			return "failed", err
 		}
 		s.b.Reconfigure(n)
-		if accounts.NeedsReconnect(*before, n) && s.b.Status(n.ID) != "disconnected" {
+		if accounts.ReconnectFor(*before, n, string(s.b.Status(n.ID))) {
 			if err := s.b.Reconnect(n.ID); err != nil {
 				return "failed", err
 			}

@@ -252,7 +252,7 @@ func (s *Handlers) UpdateNetwork(w http.ResponseWriter, r *http.Request) {
 	}
 	s.b.Reconfigure(n)
 	reconnected := false
-	if accounts.NeedsReconnect(before, n) && s.b.Status(n.ID) != "disconnected" {
+	if accounts.ReconnectFor(before, n, string(s.b.Status(n.ID))) {
 		if err := s.b.Reconnect(n.ID); err != nil {
 			s.fail(w, r, err)
 			return

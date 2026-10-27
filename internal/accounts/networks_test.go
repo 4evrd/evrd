@@ -86,6 +86,10 @@ func TestNeedsReconnect(t *testing.T) {
 	if !NeedsReconnect(b, a) {
 		t.Fatal("a certificate no longer trusted reconnects")
 	}
+	// a link that's down tries again at once with what might bring it up
+	if ReconnectFor(a, b, "connected") || !ReconnectFor(a, b, "error") || !ReconnectFor(a, b, "reconnecting") || ReconnectFor(a, b, "disconnected") {
+		t.Fatal("a newly trusted certificate: reconnect a link that's down, not a live or switched-off one")
+	}
 }
 
 func TestHostAllowed(t *testing.T) {

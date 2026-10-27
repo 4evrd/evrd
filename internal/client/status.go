@@ -778,7 +778,7 @@ func (se *session) cmdSet(args []string) {
 	case field == "password" || field == "authcommand":
 		shown = se.tr("set.hidden")
 	}
-	if accounts.NeedsReconnect(before, n) && se.srv.b.Status(n.ID) != upstream.StatusDisconnected {
+	if accounts.ReconnectFor(before, n, string(se.srv.b.Status(n.ID))) {
 		if err := se.srv.b.Reconnect(n.ID); err != nil {
 			se.say("set.savedReconnectFailed", "setting", field, "value", shown, "error", err)
 			return
@@ -889,7 +889,7 @@ func (se *session) saveNetwork(before, n store.Network, done string) {
 		se.net = n
 	}
 	se.srv.b.Reconfigure(n)
-	if accounts.NeedsReconnect(before, n) && se.srv.b.Status(n.ID) != upstream.StatusDisconnected {
+	if accounts.ReconnectFor(before, n, string(se.srv.b.Status(n.ID))) {
 		if err := se.srv.b.Reconnect(n.ID); err != nil {
 			se.say("saveNetwork.reconnectFailed", "done", done, "error", err)
 			return
