@@ -206,6 +206,11 @@ func TestWebChatStream(t *testing.T) {
 	path, irc, _ := e.liveNetwork(c, "fake")
 	irc.send(":evrd.test 005 alice CHANTYPES=# PREFIX=(ov)@+ :are supported")
 	irc.send(":alice!a@h JOIN #evrd")
+	// the ready frame is a snapshot: wait until the join has landed
+	eventually(t, "the join", func() bool {
+		_, ch := c.do("GET", path+"/channel?target=%23evrd", nil)
+		return ch["joined"] == true
+	})
 	tok := c.webChatToken("").Get("token")
 
 	// The real address comes from the trusted proxy in front.
