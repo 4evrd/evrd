@@ -100,3 +100,33 @@ func TestClientsSharingAPasswordDontReplaceEachOther(t *testing.T) {
 		t.Fatalf("reattach: %v %v %d", err, why, b.Clients(alice.ID))
 	}
 }
+
+func TestAnotherProgramOnTheSamePasswordIsntAGhost(t *testing.T) {
+	st, err := store.Open("sqlite:" + filepath.Join(t.TempDir(), "evrd.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	hist, err := history.Open(filepath.Join(t.TempDir(), "history"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hist.Close()
+	b := New(st, hist, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	alice, _ := st.CreateUser(t.Context(), store.User{Username: "alice"})
+	why := map[string]string{}
+	closer := func(name string) func(string) { return func(r string) { why[name] = r } }
+	at := func(sig string) ClientInfo {
+		return ClientInfo{Device: "SSO password from 192.0.2.1", Networks: []string{"libera"}, Signature: sig}
+	}
+
+	mirc, _ := b.AttachClient(alice.ID, 0, at("mirc\x00real\x00server-time"), closer("mirc"))
+	mirc.Answers(func(time.Duration) bool { return false }) // even one gone quiet
+	if _, err := b.AttachClient(alice.ID, 0, at("hexchat\x00real\x00away-notify"), closer("hexchat")); err != nil || why["mirc"] != "" {
+		t.Fatalf("another program took over: %v %v", err, why)
+	}
+	// the same program back is its ghost's replacement
+	if _, err := b.AttachClient(alice.ID, 0, at("mirc\x00real\x00server-time"), closer("again")); err != nil || why["mirc"] != DropReplaced || why["hexchat"] != "" {
+		t.Fatalf("same program: %v %v", err, why)
+	}
+}

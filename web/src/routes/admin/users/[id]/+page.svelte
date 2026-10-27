@@ -1,6 +1,7 @@
 <script>
   // One user, for admins: their overview as they see it, then their networks
   // and channels, attached clients and sign-ins, and the account controls.
+  import { deviceLabel } from '$lib/clients.js'
   import { onMount, onDestroy } from 'svelte'
   import { page } from '$app/state'
   import { goto } from '$app/navigation'
@@ -221,7 +222,7 @@
         <span class="caps">{t('adminUsers.attachedNow')}</span>
         {#each [...ircClients, ...webClients] as c (c.id)}
           <div class="row" style="--cols:minmax(0,1fr) auto">
-            <span class="od-field"><span class="name">{c.kind === 'web' ? t('adminUsers.webClient', { software: c.software || t('adminUsers.browser') }) : c.software || t('adminUsers.ircClient')}</span><span class="sub mono od-truncate">{c.networks.join(', ') || t('adminUsers.noNetwork')}{c.ip ? ' · ' + c.ip : ''}{c.device ? ' · ' + c.device : ''}</span></span>
+            <span class="od-field"><span class="name">{c.kind === 'web' ? t('adminUsers.webClient', { software: c.software || t('adminUsers.browser') }) : c.software || t('adminUsers.ircClient')}</span><span class="sub mono od-truncate">{c.networks.join(', ') || t('adminUsers.noNetwork')}{c.ip ? ' · ' + c.ip : ''}{deviceLabel(c) ? ' · ' + deviceLabel(c) : ''}</span></span>
             <span class="chip ok">{since(c.since)}</span>
           </div>
         {:else}<p class="desc" style="font-size:var(--fs-sm)">{t('adminUsers.nothingAttached')}</p>{/each}

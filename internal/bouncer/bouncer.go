@@ -495,7 +495,8 @@ func (b *Bouncer) Status(networkID int64) upstream.Status {
 // attached (a phone that lost signal and came back before evrd noticed)
 // replaces it: the old one is closed as DropReplaced and doesn't count
 // toward max. A device is its client password (ClientInfo.Device) on the
-// same network; clients without one can't be told apart.
+// same network, introducing itself the same way (ClientInfo.Signature);
+// clients without one can't be told apart.
 //
 // Two clients sharing a client password look like one device, and would
 // keep replacing each other, each reconnecting in turn. So the old
@@ -518,7 +519,8 @@ func (b *Bouncer) attach(userID int64, max int, info ClientInfo, close func(reas
 	var same []*client
 	var ask []func(time.Duration) bool
 	for c := range b.clients[userID] {
-		if replace && info.Device != "" && c.info.Device == info.Device && slices.Equal(c.info.Networks, info.Networks) {
+		if replace && info.Device != "" && c.info.Device == info.Device && slices.Equal(c.info.Networks, info.Networks) &&
+			(info.Signature == "" || c.info.Signature == "" || info.Signature == c.info.Signature) {
 			same, ask = append(same, c), append(ask, c.answers)
 		}
 	}

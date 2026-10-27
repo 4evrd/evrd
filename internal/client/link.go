@@ -166,7 +166,7 @@ func (se *session) finishLink(userID int64) {
 		bound = []string{chosen.Name}
 	}
 	att, err := se.srv.b.AttachClient(u.ID, se.srv.acc.LimitsFor(u).MaxClients,
-		bouncer.ClientInfo{Device: linkDevice, Networks: bound, IP: se.clientIP()}, se.kick)
+		bouncer.ClientInfo{Device: sharedDevice(linkDevice, se.clientIP()), Networks: bound, IP: se.clientIP(), Signature: se.signature()}, se.kick)
 	if err != nil {
 		fail(fmt.Sprintf("Too many clients attached (limit %d) — detach one first", se.srv.acc.LimitsFor(u).MaxClients))
 		return
@@ -188,7 +188,7 @@ func (se *session) finishLink(userID int64) {
 	se.srv.log.Info("irc sign-in allowed by link", "user", u.Username, "ip", se.clientIP())
 	se.say("signin.allowed")
 	se.syncCaps()
-	se.signedIn(!unbound, u.Username, chosen.Name, linkDevice)
+	se.signedIn(!unbound, u.Username, chosen.Name, sharedDevice(linkDevice, se.clientIP()))
 }
 
 // linkDevice is how a client allowed by link shows among the user's
@@ -211,10 +211,10 @@ func (se *session) dropLink() {
 
 // eventTitle is the activity entry for a client signing in with device.
 func eventTitle(device, client, method string) messages.Text {
-	switch device {
-	case ssoDevice:
+	switch {
+	case isDevice(device, ssoDevice):
 		return messages.T("event.attachedSSO", "client", client, "method", messages.T("ssoMethod."+method))
-	case linkDevice:
+	case isDevice(device, linkDevice):
 		return messages.T("event.attachedLink", "client", client)
 	}
 	return messages.T("event.attached", "client", client)

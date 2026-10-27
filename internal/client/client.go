@@ -60,6 +60,7 @@ type Server struct {
 	pingQuiet    time.Duration
 	writeStall   time.Duration
 	heardJustNow time.Duration
+	justAttached time.Duration
 
 	sts stsState
 

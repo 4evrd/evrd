@@ -67,6 +67,11 @@ func (se *session) answers(wait time.Duration) bool {
 	if time.Since(time.Unix(0, se.lastRead.Load())) < orDefault(se.srv.heardJustNow, heardJustNow) {
 		return true
 	}
+	// one that only just signed in is busy with its welcome (channels,
+	// backlog) and reads nothing till that's sent: not a ghost
+	if se.att != nil && time.Since(se.att.Info().Since) < orDefault(se.srv.justAttached, justAttached) {
+		return true
+	}
 	go se.send("PING :" + pingToken) // a ghost's write may stall
 	for end := asked.Add(wait); time.Now().Before(end); time.Sleep(50 * time.Millisecond) {
 		if time.Unix(0, se.lastRead.Load()).After(asked) {
@@ -79,6 +84,10 @@ func (se *session) answers(wait time.Duration) bool {
 // heardJustNow is how recently a client must have said something to count
 // as there without asking.
 const heardJustNow = 2 * time.Second
+
+// justAttached is how recently a client must have signed in to count as
+// there without asking.
+const justAttached = 30 * time.Second
 
 // kick ends the connection, noting why.
 func (se *session) kick(reason string) {

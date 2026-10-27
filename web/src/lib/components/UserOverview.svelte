@@ -2,6 +2,7 @@
   // A user's overview: tiles, networks → channels, traffic, link health,
   // recent events and attached clients. The user's own dashboard, and an
   // admin's view of any user (admin: links stay on the admin page).
+  import { deviceLabel } from '$lib/clients.js'
   import Icon from '$lib/components/Icon.svelte'
   import StatusChip from '$lib/components/StatusChip.svelte'
   import Ticks from '$lib/components/Ticks.svelte'
@@ -199,7 +200,7 @@
         {#each clients as c (c.id)}
           <div class="row client-row" style="--cols:36px minmax(0,1fr) auto">
             <span class="cic"><Icon name={clientIcon(c)} /></span>
-            <span class="od-field"><span class="name">{c.kind === 'web' ? t('overview.web') : c.software || t('overview.ircClient')}</span><span class="sub od-truncate">{c.networks.join(', ')}{c.kind === 'web' ? ' · ' + (c.software || t('overview.browser')) : c.device ? ' · ' + c.device : ''}</span></span>
+            <span class="od-field"><span class="name">{c.kind === 'web' ? t('overview.web') : c.software || t('overview.ircClient')}</span><span class="sub od-truncate">{c.networks.join(', ')}{c.kind === 'web' ? ' · ' + (c.software || t('overview.browser')) : deviceLabel(c) ? ' · ' + deviceLabel(c) : ''}{c.ip ? ' · ' + c.ip : ''}</span></span>
             <span class="chip ok">{since(c.since)}</span>
           </div>
         {:else}

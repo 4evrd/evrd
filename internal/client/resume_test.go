@@ -86,6 +86,7 @@ func TestPlaybackSaysWhatItLeftOut(t *testing.T) {
 func TestTwoClientsSharingAPasswordBothStay(t *testing.T) {
 	r := newRig(t)
 	r.srv.heardJustNow = time.Nanosecond // always ask
+	r.srv.justAttached = time.Nanosecond
 	_, pw, _ := r.acc.NewClientPassword(r.user.ID, "pc")
 	pc := "alice/one:" + pw
 
@@ -131,5 +132,36 @@ func TestTwoClientsSharingAPasswordBothStay(t *testing.T) {
 	eventually(t, "replaced", func() bool { return strings.Join(r.reasons(), " ") == bouncer.DropReplaced })
 	if cs := r.b.ClientsOf(r.user.ID); len(cs) != 2 {
 		t.Fatalf("clients: %+v", cs)
+	}
+}
+
+// A client still in its welcome reads nothing yet, so it can't answer: one
+// that only just signed in isn't taken for a ghost (#139).
+func TestAClientJustSignedInIsntAGhost(t *testing.T) {
+	r := newRig(t)
+	r.srv.heardJustNow = time.Nanosecond
+	_, pw, _ := r.acc.NewClientPassword(r.user.ID, "pc")
+	pc := "alice/one:" + pw
+
+	first := r.attach(pc)
+	first.expect(" 376 ") // and then says nothing, not even to a PING
+	second := r.attach(pc)
+	second.expect("is also signed in with the client password")
+	if cs := r.b.ClientsOf(r.user.ID); len(cs) != 2 {
+		t.Fatalf("clients: %+v", cs)
+	}
+}
+
+// Signing in with the SSO password or by link, every client of the account
+// signs in alike: each address is a device of its own.
+func TestSharedSignInsAreADevicePerAddress(t *testing.T) {
+	if d := sharedDevice(ssoDevice, "203.0.113.5"); d != "SSO password from 203.0.113.5" || !isDevice(d, ssoDevice) || isDevice(d, linkDevice) || clientPassword(d) {
+		t.Fatalf("sso: %q", d)
+	}
+	if d := sharedDevice(linkDevice, "2001:db8::1"); !isDevice(d, linkDevice) || !clientPassword(d) {
+		t.Fatalf("link: %q", d)
+	}
+	if sharedDevice(ssoDevice, "203.0.113.5") == sharedDevice(ssoDevice, "198.51.100.7") {
+		t.Fatal("two addresses, one device")
 	}
 }
