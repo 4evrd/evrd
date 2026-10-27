@@ -1066,7 +1066,9 @@ func (se *session) dispatch(m irc.Message) {
 	case "TAGMSG":
 		// typing notifications and the like: on to the network if it takes
 		// tags (else dropped), and to the user's other clients
-		if len(m.Params) > 0 {
+		// — not mIRC's typing in the *status window: the network has no
+		// *status and would answer No such nick (#137)
+		if len(m.Params) > 0 && !strings.EqualFold(m.Params[0], statusNick) {
 			se.up.SendTagMsg(se.id, se.clientTags(m), m.Params[0])
 		}
 	case "NICK":

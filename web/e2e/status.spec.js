@@ -255,6 +255,16 @@ test('help filters, channels show their state, a private message plays back to y
   expect(a.lines.some((l) => / KICK /.test(l))).toBe(false)
 })
 
+test("typing in the *status window doesn't bring the network's No such nick (#137)", async () => {
+  const c = await IRC.connect({ user: me.name, network: 'A', password: me.password, caps: ['message-tags'] })
+  clients.push(c)
+  await c.waitFor(/ 376 /)
+  for (const state of ['active', 'paused', 'done']) c.send(`@+typing=${state} TAGMSG *status`)
+  await cmd(c, 'uptime', 'evrd has been running') // anything the network said back is in by now
+  await new Promise((r) => setTimeout(r, 1000))
+  expect(c.lines.filter((l) => / 401 \S+ \*status /.test(l))).toEqual([])
+})
+
 test('admin listings are for admins only', async () => {
   const a = await attach('A')
   await cmd(a, 'listusers', 'Admins only.')

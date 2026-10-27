@@ -36,3 +36,21 @@ func TestOwnNicksStayOffTheNetwork(t *testing.T) {
 		}
 	}
 }
+
+// mIRC sends typing notifications in the *status query too: they stay here,
+// or the network's "No such nick" fills the window as you type (#137).
+func TestTypingToStatusStaysOffTheNetwork(t *testing.T) {
+	r := newRigCaps(t, "message-tags")
+	ic := r.attach("alice/one:alice-password", "message-tags")
+	ic.expect("JOIN #one")
+	eventually(t, "the network takes tags", func() bool {
+		c, ok := r.b.ConnFor(r.network("one").ID)
+		return ok && c.HasCap("message-tags")
+	})
+	ic.send("@+typing=active TAGMSG *status")
+	ic.send("@+typing=active TAGMSG #one")
+	eventually(t, "typing in #one reached the network", func() bool { return r.irc.Has("TAGMSG #one") })
+	if r.irc.Has("TAGMSG *status") {
+		t.Fatal("typing to *status went to the network")
+	}
+}
