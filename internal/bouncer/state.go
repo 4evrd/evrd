@@ -305,13 +305,10 @@ func (b *Bouncer) initReads(n store.Network) {
 			if m.Time.After(st.LastAt) {
 				st.LastAt = m.Time
 			}
-			if !m.Time.After(readAt) || !isChat(m.Kind) || strings.EqualFold(m.Sender, n.Nick) {
+			if !m.Time.After(readAt) {
 				continue
 			}
-			st.Unread++
-			if !isChannelName(name) || mentions(m.Text, n.Nick) {
-				st.Mentions++
-			}
+			st.count(name, m, n.Nick)
 		}
 		nr.bufs[key] = st
 	}
@@ -339,16 +336,11 @@ func (b *Bouncer) observe(n store.Network, me string, m history.Message) {
 	}
 	st.LastAt = m.Time
 	mark := false
-	switch {
-	case !isChat(m.Kind):
-	case strings.EqualFold(m.Sender, me):
+	if isChat(m.Kind) && strings.EqualFold(m.Sender, me) {
 		// Saying something in a buffer means you've read it.
 		st.Unread, st.Mentions, st.ReadAt, mark = 0, 0, m.Time, true
-	default:
-		st.Unread++
-		if !isChannelName(m.Target) || mentions(m.Text, me) {
-			st.Mentions++
-		}
+	} else {
+		st.count(m.Target, m, me)
 	}
 	b.rmu.Unlock()
 	if mark {
@@ -450,18 +442,39 @@ func (b *Bouncer) MarkReadAt(networkID int64, buffer string, at time.Time) (time
 	if st := b.reads[networkID].buf(key); st != nil {
 		st.ReadAt, st.Unread, st.Mentions = at, 0, 0
 		for _, m := range msgs {
-			if !m.Time.After(at) || !isChat(m.Kind) || strings.EqualFold(m.Sender, me) {
-				continue
-			}
-			st.Unread++
-			if !isChannelName(buffer) || mentions(m.Text, me) {
-				st.Mentions++
+			if m.Time.After(at) {
+				st.count(buffer, m, me)
 			}
 		}
 	}
 	b.rmu.Unlock()
 	return at, nil
 }
+
+// count adds a line in buffer to the unread state, me being the user's nick.
+// Chat lines from others are unread. Mentions are what asks for the user:
+// a private message, or their nick in a channel. Notices never are (they
+// come from services and bots: NickServ, welcome messages), and nothing a
+// server says counts at all: its connection notices arrive on every
+// reconnect. Nicks can't contain dots, so a server is any sender or
+// private buffer with one.
+func (st *BufferState) count(buffer string, m history.Message, me string) {
+	if !isChat(m.Kind) || strings.EqualFold(m.Sender, me) || isServerName(m.Sender) {
+		return
+	}
+	if !isChannelName(buffer) && isServerName(buffer) {
+		return
+	}
+	st.Unread++
+	if m.Kind == "notice" {
+		return
+	}
+	if !isChannelName(buffer) || mentions(m.Text, me) {
+		st.Mentions++
+	}
+}
+
+func isServerName(s string) bool { return s == "" || strings.Contains(s, ".") }
 
 // buf is a buffer's state, nil when there's none (nr may be nil).
 func (nr *netReads) buf(key string) *BufferState {
