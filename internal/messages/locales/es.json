@@ -685,6 +685,7 @@
     "irc.signin.notYours": "este inicio de sesión es de otra cuenta",
     "irc.signin.noSecret": "el cliente no envió un secreto que se pueda recordar",
     "irc.signin.forbidden": "esta cuenta no puede permitir inicios de sesión",
+    "irc.signin.format": "Tu cliente envió la contraseña del servidor (PASS) como {format} - la forma completa es {full}, p. ej. en ZNC o mIRC.",
     "irc.signin.link": "Inicia sesión en la web para conectarte: {url} (el enlace sirve una vez, durante {minutes} minutos).",
     "irc.signin.waiting": "Esperando a que se permita en la web: {url}",
     "irc.signin.expired": "El enlace de inicio de sesión caducó — vuelve a conectarte.",

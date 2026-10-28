@@ -662,6 +662,7 @@
     "irc.signin.notYours": "masuk ini untuk akun lain",
     "irc.signin.noSecret": "klien tidak mengirim rahasia yang bisa diingat",
     "irc.signin.forbidden": "akun ini tidak bisa mengizinkan masuk",
+    "irc.signin.format": "Klienmu mengirim kata sandi server (PASS) sebagai {format} - bentuk lengkapnya {full}, mis. di ZNC atau mIRC.",
     "irc.signin.link": "Masuk di situs web untuk tersambung: {url} (tautan berlaku sekali, selama {minutes} menit).",
     "irc.signin.waiting": "Menunggu diizinkan di situs web: {url}",
     "irc.signin.expired": "Tautan masuk sudah kedaluwarsa — sambungkan lagi.",

@@ -396,20 +396,83 @@ func (se *session) ssoSignIn(username, password string, failed error) (store.Use
 	return u, sharedDevice(ssoDevice, se.clientIP()), nil
 }
 
+// fullLogin is the PASS that names everything.
+const fullLogin = "<username>/<network>:<password>"
+
+// passFormat is the shape of what a client sent in PASS — never what it
+// sent: login and password as cut at the first colon (colon: there was
+// one); passwordOnly when login was a password on its own.
+func passFormat(login string, colon bool, password string, passwordOnly bool) string {
+	user := "<username>"
+	if strings.Contains(login, "/") {
+		user += "/<network>"
+	}
+	switch {
+	case passwordOnly:
+		return "<password>"
+	case !colon && login == "":
+		return "nothing"
+	case !colon:
+		return user
+	case login == "" && password == "":
+		return ":"
+	case login == "":
+		return ":<password>"
+	case password == "":
+		return user + ":"
+	}
+	return user + ":<password>"
+}
+
+// noteFormat logs the shape of the client's PASS (and whose account it
+// names, if one: anything else may be a password) and, when it isn't the
+// full form, tells the client what it sent and what it should.
+func (se *session) noteFormat(login string, colon bool, password string, passwordOnly bool) {
+	format := passFormat(login, colon, password, passwordOnly)
+	user := ""
+	if username, _, _ := cutLogin(login); !passwordOnly && se.namesAccount(username) {
+		user = strings.ToLower(username)
+	}
+	se.srv.log.Info("irc sign-in format", "format", format, "user", user, "ip", se.clientIP())
+	if format != fullLogin {
+		se.send(fmt.Sprintf(":%s NOTICE * :%s", serverName, ircText(se.tr("signin.format", "format", format, "full", fullLogin))))
+	}
+}
+
+// namesAccount reports whether login (user or user/network) names an
+// account.
+func (se *session) namesAccount(login string) bool {
+	username, _, _ := cutLogin(login)
+	_, err := se.srv.acc.UserByUsername(context.Background(), strings.ToLower(username))
+	return err == nil
+}
+
 // attach authenticates and binds the session to a network, then sends the
 // welcome burst, channel state, and backlog. A sign-in that needs a second
 // factor first waits for it on no network (mfa.go).
 func (se *session) attach() bool {
 	login, password, ok := strings.Cut(se.pass, ":")
+	// Without a colon, PASS is a user (or user/network) to sign in by link
+	// — or, when it names no account, the password alone (ZNC's "server
+	// password"): never shown, logged or asked for on the website.
+	passwordOnly := !ok && login != "" && !se.namesAccount(login)
+	se.noteFormat(login, ok, password, passwordOnly)
+	if passwordOnly {
+		login = ""
+	}
 	if (!ok || password == "") && se.srv.linkSignInOn() && !strings.ContainsAny(login, " ") {
 		// no password: sign in on the website instead (user, user/network
 		// or nothing at all)
-		return se.waitForLink(login, "")
+		return se.waitForLink(login, "", passwordOnly)
 	}
 	if !ok || password == "" {
 		// Never log PASS itself: without a colon it may be just the password.
-		se.srv.log.Info("irc sign-in without a password", "ip", se.clientIP(), "pass_sent", se.pass != "")
-		se.numeric("464", ":Password required — use PASS <user>[/<network>]:<password>")
+		se.srv.log.Info("irc sign-in without a password", "ip", se.clientIP(), "pass_sent", se.pass != "", "password_only", passwordOnly)
+		if passwordOnly {
+			se.numeric("464", ":A password alone doesn't say whose it is — use PASS <user>/<network>:<password>")
+		} else {
+			se.numeric("464", ":Password required — use PASS <user>[/<network>]:<password>")
+		}
 		return false
 	}
 	username, network, _ := strings.Cut(login, "/")
@@ -420,7 +483,7 @@ func (se *session) attach() bool {
 			if se.linkAfterRefusal(password) {
 				// a long secret evrd doesn't know: allowed on the website, it
 				// can be remembered as this device's password
-				return se.waitForLink(login, password)
+				return se.waitForLink(login, password, false)
 			}
 			se.numeric(code, ":"+why)
 			return false
@@ -1289,6 +1352,9 @@ func (se *session) clientIP() string {
 // loginFailed logs a refused IRC sign-in, one line per attempt (never the
 // password).
 func (se *session) loginFailed(username, network, reason string) {
+	if !se.namesAccount(username) {
+		username = "" // not an account: maybe a password in the wrong place
+	}
 	se.srv.log.Warn("irc sign-in failed", "user", username, "network", network, "ip", se.clientIP(), "reason", reason)
 }
 

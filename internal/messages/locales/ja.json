@@ -662,6 +662,7 @@
     "irc.signin.notYours": "このサインインは別のアカウントのものです",
     "irc.signin.noSecret": "クライアントは記憶できるシークレットを送っていません",
     "irc.signin.forbidden": "このアカウントはサインインを許可できません",
+    "irc.signin.format": "クライアントはサーバーパスワード (PASS) を {format} の形で送りました - 完全な形は {full} です (例: ZNC や mIRC)。",
     "irc.signin.link": "接続するにはウェブサイトでサインインしてください: {url}（リンクは 1 回、{minutes} 分間有効です）。",
     "irc.signin.waiting": "ウェブサイトでの許可を待っています: {url}",
     "irc.signin.expired": "サインインリンクの期限が切れました。もう一度接続してください。",

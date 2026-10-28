@@ -96,14 +96,14 @@ func TestSignInFailuresAreLogged(t *testing.T) {
 			t.Errorf("%s: %q", pass, line)
 		}
 	}
-	logged("user=nobody", "reason=invalid")
+	logged("user=\"\"", "reason=invalid") // nobody: not an account, so not logged
 	logged("user=alice", "network=two", "reason=invalid")
 
 	// A client password still works for the SSO account.
 	_, secret, _ := r.acc.NewClientPassword(sam.ID, "laptop")
 	r.attach("sam:" + secret).expect("No networks configured")
 
-	r.attach("secret-5").expect("Password required")
+	r.attach("secret-5").expect("A password alone doesn't say whose it is")
 	logged("without a password", "pass_sent=true")
 
 	sam.Suspended = true
@@ -366,4 +366,25 @@ func TestSmallHelpers(t *testing.T) {
 
 func accountsInput(name string) accounts.CreateInput {
 	return accounts.CreateInput{Username: name, Password: name + "-password"}
+}
+
+func TestPassFormat(t *testing.T) {
+	for _, c := range []struct {
+		pass, want string
+		alone      bool
+	}{
+		{"", "nothing", false},
+		{"hunter2hunter2", "<password>", true},
+		{"alice", "<username>", false},
+		{"alice/net", "<username>/<network>", false},
+		{"alice:pw", "<username>:<password>", false},
+		{"alice/net:pw", "<username>/<network>:<password>", false},
+		{"alice/net:", "<username>/<network>:", false},
+		{":pw", ":<password>", false},
+	} {
+		login, pw, colon := strings.Cut(c.pass, ":")
+		if got := passFormat(login, colon, pw, c.alone); got != c.want {
+			t.Errorf("%q: %q, want %q", c.pass, got, c.want)
+		}
+	}
 }

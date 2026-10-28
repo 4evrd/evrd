@@ -657,6 +657,7 @@
     "irc.signin.notYours": "bu giriş başka bir hesaba ait",
     "irc.signin.noSecret": "istemci hatırlanabilecek bir sır göndermedi",
     "irc.signin.forbidden": "bu hesap girişlere izin veremez",
+    "irc.signin.format": "İstemcin sunucu parolasını (PASS) {format} olarak gönderdi - tam biçimi {full}, örn. ZNC veya mIRC'de.",
     "irc.signin.link": "Bağlanmak için web sitesinde giriş yap: {url} (bağlantı bir kez, {minutes} dakika boyunca çalışır).",
     "irc.signin.waiting": "Web sitesinde izin verilmesi bekleniyor: {url}",
     "irc.signin.expired": "Giriş bağlantısının süresi doldu — yeniden bağlan.",

@@ -685,6 +685,7 @@
     "irc.signin.notYours": "questo accesso è di un altro account",
     "irc.signin.noSecret": "il client non ha inviato un segreto che si possa ricordare",
     "irc.signin.forbidden": "questo account non può permettere accessi",
+    "irc.signin.format": "Il tuo client ha inviato la password del server (PASS) come {format} - la forma completa è {full}, ad es. in ZNC o mIRC.",
     "irc.signin.link": "Accedi al sito per collegarti: {url} (il link vale una volta, per {minutes} minuti).",
     "irc.signin.waiting": "In attesa del permesso sul sito: {url}",
     "irc.signin.expired": "Il link di accesso è scaduto — collegati di nuovo.",

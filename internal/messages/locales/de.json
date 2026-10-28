@@ -685,6 +685,7 @@
     "irc.signin.notYours": "diese Anmeldung gehört zu einem anderen Konto",
     "irc.signin.noSecret": "der Client hat kein Geheimnis gesendet, das man sich merken kann",
     "irc.signin.forbidden": "dieses Konto kann keine Anmeldungen erlauben",
+    "irc.signin.format": "Dein Client hat das Server-Passwort (PASS) als {format} gesendet - vollständig lautet es {full}, z. B. in ZNC oder mIRC.",
     "irc.signin.link": "Melde dich auf der Website an, um zu verbinden: {url} (der Link funktioniert einmal, {minutes} Minuten lang).",
     "irc.signin.waiting": "Warte auf die Freigabe auf der Website: {url}",
     "irc.signin.expired": "Der Anmelde-Link ist abgelaufen — verbinde dich neu.",

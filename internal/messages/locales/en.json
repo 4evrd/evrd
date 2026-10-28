@@ -676,6 +676,7 @@
     "irc.signin.notYours": "this sign-in is for another account",
     "irc.signin.noSecret": "the client didn't send a secret that can be remembered",
     "irc.signin.forbidden": "this account can't allow sign-ins",
+    "irc.signin.format": "Your client sent the server password (PASS) as {format} - the full form is {full}, e.g. in ZNC or mIRC.",
     "irc.signin.link": "Sign in on the website to connect: {url} (the link works once, for {minutes} minutes).",
     "irc.signin.waiting": "Waiting to be allowed on the website: {url}",
     "irc.signin.expired": "The sign-in link expired — connect again.",
