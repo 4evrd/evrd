@@ -239,6 +239,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/overview", adminAny(h.AdminOverview))
 	mux.HandleFunc("GET /api/admin/metrics", adminAny(h.AdminMetrics))
 	mux.HandleFunc("GET /api/admin/client-drops", adminAny(h.AdminClientDrops))
+	mux.HandleFunc("GET /api/admin/irc-signins", adminAny(h.AdminIRCSignIns))
 	mux.HandleFunc("GET /api/admin/settings", adminAny(h.GetSettings))
 	mux.HandleFunc("PATCH /api/admin/settings", adminAny(h.SaveSettings))
 	mux.HandleFunc("POST /api/admin/directory/refresh", adminAny(h.RefreshDirectory))

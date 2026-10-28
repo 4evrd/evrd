@@ -145,4 +145,5 @@ export default {
   'adminUsers.dropsSeeAll': 'すべての切断を見る',
   'adminUsers.dropsNone': '直近 1 日の切断はありません。',
   'adminUsers.dropsMostly': { other: '{count} 回切断、主に{reason}' },
+  'adminUsers.signInsSeeAll': 'IRC サインイン',
 }

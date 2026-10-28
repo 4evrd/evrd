@@ -32,6 +32,7 @@
       { href: '/admin/users', label: t('shell.navUsers'), ic: 'users' },
       { href: '/admin/metrics', label: t('shell.navMetrics'), ic: 'activity' },
       { href: '/admin/drops', label: t('shell.navDrops'), ic: 'monitor' },
+      { href: '/admin/signins', label: t('shell.navSignIns'), ic: 'key' },
       { href: '/admin/settings', label: t('shell.navSettings'), ic: 'sliders' },
     ] }] : []),
     { group: t('shell.groupAccount'), items: [{ href: '/account', label: t('shell.navAccount'), ic: 'user' }] },

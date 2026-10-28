@@ -85,4 +85,5 @@ export default {
   'shell.fixThings': { other: 'Kaydetmeden önce {count} şeyi düzelt:' },
   'shell.changePassword': 'Parolayı değiştir',
   'shell.navDrops': 'Kopmalar',
+  'shell.navSignIns': 'IRC girişleri',
 }

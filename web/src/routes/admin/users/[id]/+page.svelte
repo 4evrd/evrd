@@ -250,7 +250,10 @@
   <section class="card enter" id="drops" aria-labelledby="drops-h" data-testid="user-drops">
     <div class="section-head">
       <div class="od-stack"><span class="caps">{t('adminUsers.dropsCaps')}</span><h2 id="drops-h">{t('adminUsers.dropsTitle')}</h2></div>
-      <a class="btn btn-ghost btn-sm" href="/admin/drops?user={id}">{t('adminUsers.dropsSeeAll')}</a>
+      <span class="od-cluster" style="gap:8px">
+        <a class="btn btn-ghost btn-sm" href="/admin/signins?user={id}" data-testid="user-signins">{t('adminUsers.signInsSeeAll')}</a>
+        <a class="btn btn-ghost btn-sm" href="/admin/drops?user={id}">{t('adminUsers.dropsSeeAll')}</a>
+      </span>
     </div>
     {#each drops?.top || [] as x (x.device + '/' + x.software + '/' + x.network)}
       <div class="row" style="--cols:minmax(0,1fr) auto">

@@ -85,4 +85,5 @@ export default {
   'shell.fixThings': { one: 'Corrige {count} cosa antes de guardar:', other: 'Corrige {count} cosas antes de guardar:' },
   'shell.changePassword': 'Cambiar contraseña',
   'shell.navDrops': 'Cortes',
+  'shell.navSignIns': 'Accesos IRC',
 }
