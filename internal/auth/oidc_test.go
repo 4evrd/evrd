@@ -517,3 +517,30 @@ func TestSSOOff(t *testing.T) {
 		}
 	}
 }
+
+// An account named before it was linked keeps its name, and the provider's
+// is remembered for IRC sign-ins (#143).
+func TestOIDCRemembersTheSSOUsername(t *testing.T) {
+	p := newFakeIdP(t)
+	m, st, _ := newOIDCManager(t, p, config.Auth{OIDCAutoCreate: true})
+	sub := "logto-venin"
+	venin, _ := st.CreateUser(t.Context(), store.User{Username: "venin", OIDCSubject: &sub})
+	sso := func() *string {
+		u, _ := st.UserByID(t.Context(), venin.ID)
+		if u.Username != "venin" {
+			t.Fatalf("renamed: %q", u.Username)
+		}
+		return u.SSOUsername
+	}
+	signIn(t, m, p, map[string]any{"sub": sub, "username": "NightFridayReserved"})
+	if got := sso(); got == nil || *got != "nightfridayreserved" {
+		t.Fatalf("sso username: %v", got)
+	}
+	if u, err := st.UserByLoginName(t.Context(), "nightfridayreserved"); err != nil || u.ID != venin.ID {
+		t.Fatalf("by login name: %+v %v", u, err)
+	}
+	signIn(t, m, p, map[string]any{"sub": sub, "username": "venin"})
+	if got := sso(); got != nil {
+		t.Fatalf("the same name: %v", *got)
+	}
+}

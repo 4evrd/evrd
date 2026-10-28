@@ -647,3 +647,49 @@ func TestClosedStoreReturnsErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestSSOUsernames(t *testing.T) {
+	st := open(t)
+	ctx := t.Context()
+	venin, _ := st.CreateUser(ctx, User{Username: "venin"})
+	other, _ := st.CreateUser(ctx, User{Username: "other"})
+	name := "nightfridayreserved"
+	if err := st.SetSSOUsername(ctx, venin.ID, &name); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"venin", name} {
+		if got, err := st.UserByLoginName(ctx, n); err != nil || got.ID != venin.ID {
+			t.Fatalf("%s: %+v %v", n, got, err)
+		}
+	}
+	// a stale copy saved doesn't take it back
+	if err := st.UpdateUser(ctx, venin); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.UserByID(ctx, venin.ID); got.SSOUsername == nil || *got.SSOUsername != name {
+		t.Fatalf("after UpdateUser: %v", got.SSOUsername)
+	}
+	// it moves to whoever has it now
+	if err := st.SetSSOUsername(ctx, other.ID, &name); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := st.UserByLoginName(ctx, name); err != nil || got.ID != other.ID {
+		t.Fatalf("moved: %+v %v", got, err)
+	}
+	if got, _ := st.UserByID(ctx, venin.ID); got.SSOUsername != nil {
+		t.Fatalf("still venin's: %v", *got.SSOUsername)
+	}
+	// an account's own username comes first
+	if _, err := st.CreateUser(ctx, User{Username: name}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.UserByLoginName(ctx, name); got.Username != name {
+		t.Fatalf("username first: %+v", got)
+	}
+	if err := st.SetSSOUsername(ctx, other.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.UserByLoginName(ctx, "nobody"); err != ErrNotFound {
+		t.Fatalf("missing: %v", err)
+	}
+}

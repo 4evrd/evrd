@@ -377,7 +377,7 @@ func isDevice(device, how string) bool {
 // it wasn't a client password or the account password (failed: why). An
 // account not linked to the provider keeps failed.
 func (se *session) ssoSignIn(username, password string, failed error) (store.User, string, error) {
-	u, err := se.srv.acc.UserByUsername(context.Background(), strings.ToLower(username))
+	u, err := se.srv.acc.UserForLogin(context.Background(), username)
 	if err != nil || u.OIDCSubject == nil {
 		return store.User{}, "", failed
 	}

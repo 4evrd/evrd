@@ -13,6 +13,7 @@
 package auth
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -591,6 +592,7 @@ func (m *Manager) provision(c Claims) (store.User, string) {
 	if u.Suspended {
 		return store.User{}, "suspended"
 	}
+	m.noteSSOUsername(u, c)
 	changed := false
 	if c.Email != "" && c.Email != u.Email {
 		u.Email, changed = c.Email, true
@@ -608,6 +610,22 @@ func (m *Manager) provision(c Claims) (store.User, string) {
 		_ = m.users.UpdateUser(context.Background(), u)
 	}
 	return u, ""
+}
+
+// noteSSOUsername records the provider's username for u when it isn't u's
+// own, so IRC clients can sign in with the name the website is signed in
+// with (store.User.SSOUsername).
+func (m *Manager) noteSSOUsername(u store.User, c Claims) {
+	var want *string
+	if name, err := accounts.NormalizeUsername(cmp.Or(c.Username, c.PreferredUsername)); err == nil && name != u.Username {
+		want = &name
+	}
+	if (want == nil) == (u.SSOUsername == nil) && (want == nil || *want == *u.SSOUsername) {
+		return
+	}
+	if err := m.users.SetSSOUsername(context.Background(), u.ID, want); err != nil {
+		m.log.Warn("record sso username", "user", u.Username, "err", err)
+	}
 }
 
 // claims reports whether an SSO identity may take over an account made for

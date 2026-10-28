@@ -100,7 +100,7 @@ func (se *session) forwardIfElsewhere(ctx context.Context) bool {
 	}
 	login, _, _ := strings.Cut(se.pass, ":")
 	username, _, _ := strings.Cut(login, "/")
-	u, err := se.srv.acc.UserByUsername(ctx, strings.ToLower(username))
+	u, err := se.srv.acc.UserForLogin(ctx, username)
 	if err != nil || se.srv.cl.Owns(u.ID) {
 		return false // unknown user (attach refuses it) or ours
 	}

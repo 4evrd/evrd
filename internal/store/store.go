@@ -33,6 +33,11 @@ type User struct {
 	// OIDCSubject links the account to its identity-provider user (the ID
 	// token's "sub"). Nil for local-only accounts.
 	OIDCSubject *string `gorm:"column:oidc_subject;uniqueIndex"`
+	// SSOUsername is the account's username at the identity provider, when
+	// it isn't Username (the account was named before it was linked, or the
+	// name changed there). IRC clients may sign in with it too: it's the
+	// name its owner signs in to the website with. Nil when they're the same.
+	SSOUsername *string `gorm:"column:sso_username;uniqueIndex"`
 	Role        string  `gorm:"not null;default:user"`
 	// SSOClaimable marks an account made ahead of its owner's first sign-in
 	// (by the provisioning API): the first SSO sign-in with the same username

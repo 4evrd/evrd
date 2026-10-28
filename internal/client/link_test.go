@@ -86,6 +86,20 @@ func TestSignInByLink(t *testing.T) {
 	}
 	ic.expect("ERROR :The sign-in was turned away on the website.")
 
+	// asked for by alice's SSO username: still alice's to allow (#143)
+	sso := "aliceatlogto"
+	if err := r.st.SetSSOUsername(ctx, alice.ID, &sso); err != nil {
+		t.Fatal(err)
+	}
+	ic = r.connect("AliceAtLogto")
+	tok = token(t, ic.expect("/irc/approve/"))
+	if _, err := svc.Allow(ctx, tok, alice, ircsignin.RememberNone, time.Hour); err != nil {
+		t.Fatalf("allowing a link asked for by the SSO username: %v", err)
+	}
+	ic.expect("Allowed on the website")
+	ic.c.Close()
+	eventually(t, "the client is gone", func() bool { return len(r.b.ClientsOf(alice.ID)) == 0 })
+
 	// a link for alice can't be allowed by bob
 	bob, _ := r.acc.Create(accounts.CreateInput{Username: "bob", Password: "bob-password"})
 	ic = r.connect("alice/two")

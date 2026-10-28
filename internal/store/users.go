@@ -35,15 +35,35 @@ func (r *UserRepository) UserBySubject(ctx context.Context, subject string) (Use
 	return u, notFound(r.db.DB.WithContext(ctx).Where("oidc_subject = ?", subject).First(&u).Error)
 }
 
+func (r *UserRepository) UserByLoginName(ctx context.Context, name string) (User, error) {
+	u, err := r.UserByUsername(ctx, name)
+	if err != ErrNotFound {
+		return u, err
+	}
+	return u, notFound(r.db.DB.WithContext(ctx).Where("sso_username = ?", name).First(&u).Error)
+}
+
+func (r *UserRepository) SetSSOUsername(ctx context.Context, userID int64, name *string) error {
+	return r.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if name != nil {
+			if err := tx.Model(&User{}).Where("sso_username = ? AND id <> ?", *name, userID).Update("sso_username", nil).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Model(&User{}).Where("id = ?", userID).Update("sso_username", name).Error
+	})
+}
+
 func (r *UserRepository) ListUsers(ctx context.Context) ([]User, error) {
 	var users []User
 	return users, r.db.DB.WithContext(ctx).Order("username").Find(&users).Error
 }
 
 // UpdateUser saves every field, including zero values (Select("*")), so
-// clearing a limit or un-suspending sticks.
+// clearing a limit or un-suspending sticks — but the SSO username, which
+// only SetSSOUsername changes (a stale copy could take it back).
 func (r *UserRepository) UpdateUser(ctx context.Context, u User) error {
-	return r.db.DB.WithContext(ctx).Model(&u).Select("*").Omit("created_at").Updates(&u).Error
+	return r.db.DB.WithContext(ctx).Model(&u).Select("*").Omit("created_at", "sso_username").Updates(&u).Error
 }
 
 func (r *UserRepository) DeleteUser(ctx context.Context, id int64) error {

@@ -76,6 +76,9 @@ func (se *session) waitForLink(login, secret string) bool {
 	username, network, _ := cutLogin(login)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if u, err := se.srv.acc.UserForLogin(ctx, username); err == nil {
+		username = u.Username // asked for by their SSO username
+	}
 	links := se.srv.links()
 	id, token, err := links.Begin(ctx, ircsignin.Request{Username: username, Network: network, Nick: se.nick, IP: se.clientIP(), Secret: secret})
 	if errors.Is(err, ircsignin.ErrTooMany) {

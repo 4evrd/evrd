@@ -367,3 +367,19 @@ func TestSmallHelpers(t *testing.T) {
 func accountsInput(name string) accounts.CreateInput {
 	return accounts.CreateInput{Username: name, Password: name + "-password"}
 }
+
+// A client may sign in with the name its owner signs in to the website
+// with, when that isn't the account's (#143).
+func TestSignInWithTheSSOUsername(t *testing.T) {
+	r := newRig(t)
+	name := "nightfridayreserved"
+	if err := r.st.SetSSOUsername(t.Context(), r.user.ID, &name); err != nil {
+		t.Fatal(err)
+	}
+	_, secret, err := r.acc.NewClientPassword(r.user.ID, "phone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.attach("NightFridayReserved:" + secret).expect(" 376 ")
+	eventually(t, "attached as alice", func() bool { return len(r.b.ClientsOf(r.user.ID)) == 1 })
+}

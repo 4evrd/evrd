@@ -124,6 +124,7 @@ type AccountServiceImpl interface {
 
 	UserByID(ctx context.Context, id int64) (store.User, error)
 	UserByUsername(ctx context.Context, username string) (store.User, error)
+	UserForLogin(ctx context.Context, name string) (store.User, error)
 	ListUsers(ctx context.Context) ([]store.User, error)
 	UpdateUser(ctx context.Context, u store.User) error
 	DeleteUser(ctx context.Context, id int64) error
@@ -382,7 +383,7 @@ var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("evrd-timing-dummy"), bcry
 // local password, or one of their client passwords. It also returns the
 // client password's name ("" for the account password).
 func (s *Service) IRCLogin(username, secret string) (store.User, string, error) {
-	u, err := s.users.UserByUsername(context.Background(), strings.ToLower(username))
+	u, err := s.UserForLogin(context.Background(), username)
 	if err != nil {
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(secret))
 		return store.User{}, "", ErrInvalidCredentials

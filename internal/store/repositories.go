@@ -15,6 +15,12 @@ type UserRepositoryImpl interface {
 	UserByID(ctx context.Context, id int64) (User, error)
 	UserByUsername(ctx context.Context, username string) (User, error)
 	UserBySubject(ctx context.Context, subject string) (User, error)
+	// UserByLoginName is the user whose username is name or, when none's
+	// is, whose SSO username is.
+	UserByLoginName(ctx context.Context, name string) (User, error)
+	// SetSSOUsername records a user's SSO username (nil: none), taking it
+	// from whoever had it before.
+	SetSSOUsername(ctx context.Context, userID int64, name *string) error
 	ListUsers(ctx context.Context) ([]User, error)
 	UpdateUser(ctx context.Context, u User) error
 	// DeleteUser removes the user and everything they own: networks, their

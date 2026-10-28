@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -21,6 +22,14 @@ func (s *Service) UserByUsername(ctx context.Context, username string) (store.Us
 	ctx, span := tracer.Start(ctx, "AccountService.UserByUsername", trace.WithAttributes(attribute.String("user.name", username)))
 	defer span.End()
 	return s.users.UserByUsername(ctx, username)
+}
+
+// UserForLogin is the user an IRC client signing in as name means: the one
+// with that username or, failing that, that SSO username.
+func (s *Service) UserForLogin(ctx context.Context, name string) (store.User, error) {
+	ctx, span := tracer.Start(ctx, "AccountService.UserForLogin", trace.WithAttributes(attribute.String("user.name", name)))
+	defer span.End()
+	return s.users.UserByLoginName(ctx, strings.ToLower(strings.TrimSpace(name)))
 }
 
 func (s *Service) ListUsers(ctx context.Context) ([]store.User, error) {
