@@ -71,8 +71,9 @@ func (se *session) linkAfterRefusal(secret string) bool {
 // waitForLink registers the client on no network and sends it a link to
 // allow it on the website. login is what it said in PASS (user,
 // user/network or nothing); secret what it sent as a password, if anything
-// (it may become the device's password).
-func (se *session) waitForLink(login, secret string) bool {
+// (it may become the device's password). passwordOnly: PASS was a password
+// without the user (noteFormat told them).
+func (se *session) waitForLink(login, secret string, passwordOnly bool) bool {
 	username, network, _ := cutLogin(login)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -88,7 +89,7 @@ func (se *session) waitForLink(login, secret string) bool {
 		return false
 	}
 	telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("link"))
-	se.srv.log.Info("irc sign-in by link", "user", username, "ip", se.clientIP())
+	se.srv.log.Info("irc sign-in by link", "user", username, "ip", se.clientIP(), "password_only", passwordOnly)
 	se.unick = orElse(se.nick, "*")
 	se.welcome()
 	l := &lockedSignIn{link: true, pendingID: id, url: se.srv.linkURL(token), username: username, net: networkNamed(network)}

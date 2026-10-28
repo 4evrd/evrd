@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -165,4 +166,45 @@ func TestSecondFactorOnTheWebsite(t *testing.T) {
 		_, err := svc.Lookup(ctx, tok)
 		return errors.Is(err, ircsignin.ErrGone)
 	})
+}
+
+// A PASS without a colon that names no account is a password on its own
+// (ZNC's server password): the client is told how to send both, and the
+// password isn't taken for a username — not logged, not on the website.
+func TestAPasswordAloneIsntAUsername(t *testing.T) {
+	r, svc := linkRig(t)
+	ctx := context.Background()
+	alice, _ := r.st.UserByID(ctx, r.user.ID)
+	const secret = "QuietMondayLantern"
+
+	ic := r.connect(secret)
+	ic.expect("NOTICE * :Your client sent the server password (PASS) as <password> - the full form is <username>/<network>:<password>")
+	tok := token(t, ic.expect("/irc/approve/"))
+	p, err := svc.Lookup(ctx, tok)
+	if err != nil || p.Username != "" || p.SecretHash != "" {
+		t.Fatalf("pending sign-in: %q, secret kept %v, %v", p.Username, p.SecretHash != "", err)
+	}
+	if _, err := svc.Allow(ctx, tok, alice, ircsignin.RememberNone, time.Hour); err != nil {
+		t.Fatalf("anyone signed in may allow it: %v", err)
+	}
+	ic.expect("Allowed on the website")
+	ic.c.Close()
+	if strings.Contains(r.logs.String(), secret) {
+		t.Fatal("the password was logged")
+	}
+
+	// a user's name is still a link for them
+	ic = r.connect("alice")
+	tok = token(t, ic.expect("/irc/approve/"))
+	if p, _ := svc.Lookup(ctx, tok); p.Username != "alice" {
+		t.Fatalf("PASS alice: %q", p.Username)
+	}
+	ic.c.Close()
+
+	// without links, the refusal says what's missing
+	r.srv.SetLinkSignInOn(false)
+	r.connect(secret).expect(" 464 alice :A password alone doesn't say whose it is")
+	if strings.Contains(r.logs.String(), secret) {
+		t.Fatal("the password was logged")
+	}
 }
