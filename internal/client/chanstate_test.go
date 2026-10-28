@@ -61,9 +61,14 @@ func TestAttachAndQueriesComeFromEvrdsState(t *testing.T) {
 	// modes evrd doesn't know yet are the network's to answer…
 	ic.send("MODE #one")
 	eventually(t, "the MODE passed on", func() bool { return r.asked("MODE #one") >= 2 }) // evrd's own, then the client's
-	// …until it says them (to evrd's own question, kept from clients)
+	// …and a client that asked gets the answer, even with evrd's own
+	// question still out: a network that doesn't answer that (263, too
+	// many channels at once) would otherwise leave the client without
+	// modes, its answer taken for evrd's (#141)
 	ic.send("SIMULATE :fake 324 alice_one #one +ntk sesame")
 	ic.send("SIMULATE :fake 329 alice_one #one 1600000000")
+	ic.expect(":fake 324 alice_one #one +ntk sesame")
+	ic.expect(":fake 329 alice_one #one 1600000000")
 	conn, _ := r.b.ConnFor(r.network("one").ID)
 	eventually(t, "the modes known", func() bool {
 		st, _ := conn.ChannelState("#one")
