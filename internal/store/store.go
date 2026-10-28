@@ -154,6 +154,27 @@ type ClientDisconnect struct {
 	ReconnectedAt *time.Time
 }
 
+// IRCSignIn is an IRC client's sign-in, for admins to see why one fails:
+// the shape of its PASS (Format, e.g. "<username>:<password>") and never
+// what it sent. UserID is the account it named, or the one a password
+// sent alone matched (0: none known); Network only one of that account's.
+type IRCSignIn struct {
+	ID      int64     `gorm:"primaryKey"`
+	UserID  int64     `gorm:"index"`
+	At      time.Time `gorm:"index"`
+	IP      string
+	Nick    string
+	Ident   string // USER's username
+	Format  string `gorm:"size:64"`
+	Network string
+	Result  string `gorm:"size:32"` // ok, link, second_factor, or why it was refused
+	// Matched is which of the account's passwords a password sent alone
+	// is (a client password's name, or "account"), and PasswordLen its
+	// length: enough to tell what the user typed, nothing of it.
+	Matched     string
+	PasswordLen int
+}
+
 // PendingSignIn is an IRC client waiting to be allowed on the website
 // (sign-in by link): the link's token as a SHA-256, what the client said
 // about itself, and the decision. Shared by every node: the website may be

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/bouncer"
@@ -57,6 +58,7 @@ type session struct {
 	saslMech   string          // the SASL mechanism under way ("" none)
 	saslBuf    string          // its payload so far
 	saslUser   store.User      // who SASL signed in
+	signInID   int64           // this sign-in's record (store.IRCSignIn)
 	saslDevice string
 	saslOTP    string // a second-factor code after SASL's password
 	refusal    string // why the last sign-in was refused (signIn)
@@ -425,18 +427,80 @@ func passFormat(login string, colon bool, password string, passwordOnly bool) st
 }
 
 // noteFormat logs the shape of the client's PASS (and whose account it
-// names, if one: anything else may be a password) and, when it isn't the
-// full form, tells the client what it sent and what it should.
-func (se *session) noteFormat(login string, colon bool, password string, passwordOnly bool) {
+// names, if one: anything else may be a password) and, when it sent one
+// that isn't the full form, tells the client what it sent and what it
+// should. It returns the start of the sign-in's record.
+func (se *session) noteFormat(login string, colon bool, password string, passwordOnly bool) store.IRCSignIn {
 	format := passFormat(login, colon, password, passwordOnly)
+	if se.saslUser.ID != 0 && format == "nothing" {
+		format = "sasl"
+	}
+	rec := store.IRCSignIn{At: time.Now(), IP: se.clientIP(), Nick: se.nick, Ident: se.user, Format: format}
 	user := ""
-	if username, _, _ := cutLogin(login); !passwordOnly && se.namesAccount(username) {
-		user = strings.ToLower(username)
+	if username, network, _ := cutLogin(login); !passwordOnly && username != "" {
+		if u, err := se.srv.acc.UserByUsername(context.Background(), strings.ToLower(username)); err == nil {
+			user, rec.UserID = u.Username, u.ID
+			if network != "" && se.hasNetwork(u.ID, network) {
+				rec.Network = network
+			}
+		}
 	}
 	se.srv.log.Info("irc sign-in format", "format", format, "user", user, "ip", se.clientIP())
-	if format != fullLogin {
+	if format != fullLogin && format != "nothing" && format != "sasl" {
 		se.send(fmt.Sprintf(":%s NOTICE * :%s", serverName, ircText(se.tr("signin.format", "format", format, "full", fullLogin))))
 	}
+	return rec
+}
+
+// hasNetwork reports whether user has a network called name.
+func (se *session) hasNetwork(userID int64, name string) bool {
+	nets, err := se.srv.acc.ListNetworks(context.Background(), userID)
+	if err != nil {
+		return false
+	}
+	for _, n := range nets {
+		if strings.EqualFold(n.Name, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// recordSignIn keeps how the sign-in went (rec, from noteFormat). A
+// password sent alone (alone) is checked against the passwords of the
+// account the client's ident or nick names, to tell the admin whose it is
+// and which — never kept itself.
+func (se *session) recordSignIn(rec store.IRCSignIn, attached bool, alone string) {
+	switch l := se.locked; {
+	case l != nil && l.link:
+		rec.Result = "link"
+	case l != nil:
+		rec.Result = "second_factor"
+	case attached:
+		rec.Result = "ok"
+	default:
+		rec.Result = orElse(se.refusal, "refused")
+	}
+	if se.uid != 0 {
+		rec.UserID = se.uid
+	}
+	if alone != "" {
+		rec.PasswordLen = utf8.RuneCountInString(alone)
+		for _, name := range []string{strings.TrimPrefix(se.user, "~"), se.nick} {
+			u, err := se.srv.acc.UserByUsername(context.Background(), strings.ToLower(name))
+			if name == "" || err != nil {
+				continue
+			}
+			if rec.UserID == 0 {
+				rec.UserID = u.ID
+			}
+			if m, device, err := se.srv.acc.IRCLogin(u.Username, alone); err == nil && m.ID == u.ID {
+				rec.Matched = orElse(device, "account")
+			}
+			break
+		}
+	}
+	se.signInID = se.srv.b.RecordSignIn(rec)
 }
 
 // namesAccount reports whether login (user or user/network) names an
@@ -450,13 +514,18 @@ func (se *session) namesAccount(login string) bool {
 // attach authenticates and binds the session to a network, then sends the
 // welcome burst, channel state, and backlog. A sign-in that needs a second
 // factor first waits for it on no network (mfa.go).
-func (se *session) attach() bool {
+func (se *session) attach() (attached bool) {
 	login, password, ok := strings.Cut(se.pass, ":")
 	// Without a colon, PASS is a user (or user/network) to sign in by link
 	// — or, when it names no account, the password alone (ZNC's "server
 	// password"): never shown, logged or asked for on the website.
 	passwordOnly := !ok && login != "" && !se.namesAccount(login)
-	se.noteFormat(login, ok, password, passwordOnly)
+	rec := se.noteFormat(login, ok, password, passwordOnly)
+	alone := ""
+	if passwordOnly {
+		alone = login
+	}
+	defer func() { se.recordSignIn(rec, attached, alone) }()
 	if passwordOnly {
 		login = ""
 	}

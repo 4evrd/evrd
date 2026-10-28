@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"regexp"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/ircsignin"
 	"github.com/4evrd/evrd/internal/mfa"
+	"github.com/4evrd/evrd/internal/store"
 )
 
 // connect is a client that sends pass (none when "") and registers.
@@ -206,5 +208,52 @@ func TestAPasswordAloneIsntAUsername(t *testing.T) {
 	r.connect(secret).expect(" 464 alice :A password alone doesn't say whose it is")
 	if strings.Contains(r.logs.String(), secret) {
 		t.Fatal("the password was logged")
+	}
+}
+
+// Every sign-in is recorded for admins with the shape of its PASS, whose
+// it was and how it went — never what was sent (#143).
+func TestSignInsAreRecordedWithoutWhatWasSent(t *testing.T) {
+	r, svc := linkRig(t)
+	ctx := context.Background()
+	alice, _ := r.st.UserByID(ctx, r.user.ID)
+	_, secret, err := r.acc.NewClientPassword(alice.ID, "laptop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := func() []store.IRCSignIn {
+		got, err := r.st.IRCSignIns(ctx, 0, time.Time{}, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+
+	r.attach("alice/two:" + secret).expect(" 376 ")
+	r.connect("nobody:not-a-password").expect(" 464 ")
+	// the laptop password alone, from a client whose ident is alice
+	ic := r.connect(secret)
+	tok := token(t, ic.expect("/irc/approve/"))
+	if _, err := svc.Allow(ctx, tok, alice, ircsignin.RememberNone, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	ic.expect("Allowed on the website")
+	eventually(t, "the link settled", func() bool { got := rows(); return len(got) == 3 && got[0].Result == "link_allowed" })
+
+	got := rows()
+	alone, unknown, full := got[0], got[1], got[2]
+	if alone.Format != "<password>" || alone.UserID != alice.ID || alone.Matched != "laptop" || alone.PasswordLen != len(secret) || alone.Ident != "alice" {
+		t.Errorf("password alone: %+v", alone)
+	}
+	if unknown.Format != "<username>:<password>" || unknown.UserID != 0 || unknown.Result != "invalid" {
+		t.Errorf("unknown user: %+v", unknown)
+	}
+	if full.Format != "<username>/<network>:<password>" || full.UserID != alice.ID || full.Network != "two" || full.Result != "ok" {
+		t.Errorf("full form: %+v", full)
+	}
+	for _, x := range got {
+		if s := fmt.Sprintf("%+v", x); strings.Contains(s, secret) || strings.Contains(s, "nobody") || strings.Contains(s, "not-a-password") {
+			t.Errorf("kept what was sent: %s", s)
+		}
 	}
 }

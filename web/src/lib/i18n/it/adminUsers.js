@@ -145,4 +145,5 @@ export default {
   'adminUsers.dropsSeeAll': 'Vedi tutte le sue cadute',
   'adminUsers.dropsNone': 'Nessuna caduta nell’ultimo giorno.',
   'adminUsers.dropsMostly': { one: '{count} caduta, {reason}', other: '{count} cadute, per lo più {reason}' },
+  'adminUsers.signInsSeeAll': 'I suoi accessi IRC',
 }

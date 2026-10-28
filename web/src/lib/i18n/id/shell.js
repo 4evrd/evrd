@@ -93,4 +93,5 @@ export default {
   'shell.fixThings': { other: 'Perbaiki {count} hal sebelum menyimpan:' },
   'shell.changePassword': 'Ganti password',
   'shell.navDrops': 'Terputus',
+  'shell.navSignIns': 'Masuk IRC',
 }

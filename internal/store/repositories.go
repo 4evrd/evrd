@@ -203,6 +203,18 @@ type ClientDisconnectRepositoryImpl interface {
 	DeleteClientDisconnectsBefore(ctx context.Context, before time.Time) error
 }
 
+// IRCSignInRepositoryImpl keeps IRC sign-ins (IRCSignIn).
+type IRCSignInRepositoryImpl interface {
+	AddIRCSignIn(ctx context.Context, s IRCSignIn) (int64, error)
+	// IRCSignIns lists sign-ins after since, newest first, at most limit: a
+	// user's, everyone's for userID 0, or no one's (unknown) for -1.
+	IRCSignIns(ctx context.Context, userID int64, since time.Time, limit int) ([]IRCSignIn, error)
+	// SettleIRCSignIn sets a sign-in's result, and gives it to userID when
+	// nobody was known for it.
+	SettleIRCSignIn(ctx context.Context, id, userID int64, result string) error
+	DeleteIRCSignInsBefore(ctx context.Context, before time.Time) error
+}
+
 // Store is every repository on one database, plus what spans them. It's
 // what Open returns; a service takes only the repositories it uses.
 // Implementations must be safe for concurrent use.
@@ -221,6 +233,7 @@ type Store interface {
 	MFARepositoryImpl
 	PendingSignInRepositoryImpl
 	ClientDisconnectRepositoryImpl
+	IRCSignInRepositoryImpl
 	DevicePositionRepositoryImpl
 
 	// EncryptSecrets re-encrypts network secrets under the current key.

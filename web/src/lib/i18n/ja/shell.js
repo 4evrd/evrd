@@ -93,4 +93,5 @@ export default {
   'shell.fixThings': { other: '保存する前に {count} 件の問題を修正してください:' },
   'shell.changePassword': 'パスワードを変更',
   'shell.navDrops': '切断',
+  'shell.navSignIns': 'IRC サインイン',
 }

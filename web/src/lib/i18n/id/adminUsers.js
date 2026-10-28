@@ -145,4 +145,5 @@ export default {
   'adminUsers.dropsSeeAll': 'Lihat semua putusnya',
   'adminUsers.dropsNone': 'Tidak ada yang terputus dalam sehari terakhir.',
   'adminUsers.dropsMostly': { other: '{count} kali terputus, kebanyakan {reason}' },
+  'adminUsers.signInsSeeAll': 'Masuk IRC-nya',
 }

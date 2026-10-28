@@ -145,4 +145,5 @@ export default {
   'adminUsers.dropsSeeAll': 'Alle Abbrüche ansehen',
   'adminUsers.dropsNone': 'Keine Abbrüche am letzten Tag.',
   'adminUsers.dropsMostly': { one: '{count} Abbruch, {reason}', other: '{count} Abbrüche, meist {reason}' },
+  'adminUsers.signInsSeeAll': 'Ihre IRC-Anmeldungen',
 }

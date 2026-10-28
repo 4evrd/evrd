@@ -93,4 +93,5 @@ export default {
   'shell.fixThings': { one: 'Korrigiere vor dem Speichern {count} Sache:', other: 'Korrigiere vor dem Speichern {count} Sachen:' },
   'shell.changePassword': 'Passwort ändern',
   'shell.navDrops': 'Abbrüche',
+  'shell.navSignIns': 'IRC-Anmeldungen',
 }

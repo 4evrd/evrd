@@ -122,6 +122,7 @@ func (se *session) checkLink() {
 		se.srv.log.Warn("irc sign-in link", "err", err)
 	case p.State == ircsignin.Denied:
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("link_denied"))
+		se.srv.b.SettleSignIn(se.signInID, 0, "link_denied")
 		se.send(fmt.Sprintf("ERROR :%s", ircText(se.tr("signin.denied"))))
 		se.conn.Close()
 	case p.State == ircsignin.Allowed && !l.link:
@@ -186,6 +187,7 @@ func (se *session) finishLink(userID int64) {
 		}
 	}
 	telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("ok"))
+	se.srv.b.SettleSignIn(se.signInID, u.ID, "link_allowed")
 	se.srv.log.Info("irc sign-in allowed by link", "user", u.Username, "ip", se.clientIP())
 	se.say("signin.allowed")
 	se.syncCaps()

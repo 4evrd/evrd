@@ -145,4 +145,5 @@ export default {
   'adminUsers.dropsSeeAll': 'See all their drops',
   'adminUsers.dropsNone': 'No drops in the last day.',
   'adminUsers.dropsMostly': { one: '{count} drop, {reason}', other: '{count} drops, mostly {reason}' },
+  'adminUsers.signInsSeeAll': 'Their IRC sign-ins',
 }

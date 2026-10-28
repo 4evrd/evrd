@@ -145,4 +145,5 @@ export default {
   'adminUsers.dropsSeeAll': 'Tüm kopmalarını gör',
   'adminUsers.dropsNone': 'Son bir günde kopma yok.',
   'adminUsers.dropsMostly': { one: '{count} kopma, {reason}', other: '{count} kopma, çoğu {reason}' },
+  'adminUsers.signInsSeeAll': 'IRC girişleri',
 }
