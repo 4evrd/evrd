@@ -163,7 +163,7 @@ func (se *session) localRef(tag, v string) string {
 // tracked follows the channels the client has open as the network takes
 // it in and out, reporting whether m reaches it: not a JOIN of ours for a
 // channel the client has open already (sent its burst by evrd), nor the
-// names after it.
+// topic and names after it — they'd reach every client.
 func (se *session) tracked(m irc.Message) bool {
 	p := m.Params
 	mine := strings.EqualFold(nickFromPrefix(m.Prefix), se.unick)
@@ -177,6 +177,8 @@ func (se *session) tracked(m irc.Message) bool {
 		se.open[key] = true
 	case (m.Command == "PART" && mine || m.Command == "KICK" && len(p) > 1 && strings.EqualFold(p[1], se.unick)) && len(p) > 0:
 		delete(se.open, strings.ToLower(p[0]))
+	case (m.Command == "332" || m.Command == "333") && len(p) >= 2:
+		return !se.dupNames[strings.ToLower(p[1])]
 	case m.Command == "353" && len(p) >= 3:
 		return !se.dupNames[strings.ToLower(p[2])]
 	case m.Command == "366" && len(p) >= 2:
