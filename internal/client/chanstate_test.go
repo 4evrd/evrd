@@ -164,6 +164,9 @@ func count(lines []string, s string) int {
 
 func TestADroppedLinkTakesClientsOutOfItsChannels(t *testing.T) {
 	r := newRig(t)
+	u := r.user
+	u.QuietRejoin = false // out of them, rather than kept open
+	r.st.UpdateUser(r.ctx, u)
 	r.known("one", "#one")
 	ic := r.attach("alice/one:alice-password")
 	ic.until(":evrd 366 alice_one #one ")

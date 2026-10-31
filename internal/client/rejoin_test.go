@@ -56,6 +56,9 @@ func (ic *ircClient) quiet(d time.Duration) (sent []string) {
 // window up over the one the user is typing in.
 func TestChannelsAreJoinedOncePerClient(t *testing.T) {
 	r := newRig(t)
+	u := r.user
+	u.QuietRejoin = false // the KICK and JOIN as the network reconnects
+	r.st.UpdateUser(r.ctx, u)
 	first := r.attached()
 	eventually(t, "joined #one", func() bool {
 		m, _ := r.hist.Recent(r.network("one").ID, "#one", 10)
@@ -126,5 +129,62 @@ func TestChannelsAreJoinedOncePerClient(t *testing.T) {
 	}
 	if sent := again.quiet(3 * time.Second); len(sent) > 0 {
 		t.Fatalf("sent lines after the reconnect settled:\n%s", strings.Join(sent, "\n"))
+	}
+}
+
+// With QuietRejoin (the default), a network's link dropping leaves the client's channels
+// open: a notice instead of a KICK, and back in, no JOIN of ours — only
+// what changed (bob left meanwhile; the op is still there).
+func TestQuietRejoinKeepsChannelsOpen(t *testing.T) {
+	r := newRig(t)
+	u := r.user
+	u.QuietRejoin = true
+	r.st.UpdateUser(r.ctx, u)
+	ic := r.attached()
+	ic.until(" JOIN #one")
+	ic.send("SIMULATE :bob!b@bobhost JOIN #one")
+	ic.until("bob!b@bobhost JOIN #one")
+	ic.settle()
+
+	ic.send("PRIVMSG *status :disconnect")
+	seen := ic.until(":evrd NOTICE #one :Disconnected from one - this channel stays open")
+	if seen = append(seen, ic.settle()...); anyHas(seen, " KICK ") {
+		t.Fatalf("disconnect:\n%s", strings.Join(seen, "\n"))
+	}
+	ic.send("PRIVMSG *status :connect")
+	seen = ic.until(":evrd NOTICE #one :Back on one")
+	if ownJoins(seen, "#one") != 0 || anyHas(seen, " 353 ") || anyHas(seen, "JOIN #one") {
+		t.Fatalf("rejoined with a JOIN or names:\n%s", strings.Join(seen, "\n"))
+	}
+	if !anyHas(seen, ":bob!b@bobhost PART #one :Left while evrd was away") || anyHas(seen, "op!") || anyHas(seen, " TOPIC ") {
+		t.Fatalf("what changed:\n%s", strings.Join(seen, "\n"))
+	}
+	if sent := ic.quiet(2 * time.Second); len(sent) > 0 {
+		t.Fatalf("sent lines after the rejoin:\n%s", strings.Join(sent, "\n"))
+	}
+	// still in it as far as evrd's concerned: a message goes through
+	ic.send("PRIVMSG #one :still here")
+	eventually(t, "sent", func() bool { return r.irc.Has("PRIVMSG #one :still here") })
+}
+
+// The link dropping on its own (not from *status): the connection evrd
+// reconnects is the one the client follows already.
+func TestQuietRejoinAfterTheLinkDrops(t *testing.T) {
+	r := newRig(t)
+	u := r.user
+	u.QuietRejoin = true
+	r.st.UpdateUser(r.ctx, u)
+	ic := r.attached()
+	ic.until(" JOIN #one")
+	ic.settle()
+
+	r.irc.Drop()
+	seen := ic.until(":evrd NOTICE #one :Disconnected from one - this channel stays open")
+	seen = append(seen, ic.until(":evrd NOTICE #one :Back on one")...)
+	if anyHas(seen, " KICK ") || ownJoins(seen, "#one") != 0 || anyHas(seen, " 353 ") {
+		t.Fatalf("the link dropped and came back:\n%s", strings.Join(seen, "\n"))
+	}
+	if sent := ic.quiet(2 * time.Second); len(sent) > 0 {
+		t.Fatalf("sent lines after the rejoin:\n%s", strings.Join(sent, "\n"))
 	}
 }

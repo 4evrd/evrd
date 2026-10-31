@@ -17,6 +17,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"time"
@@ -273,7 +274,8 @@ type heldState struct {
 	NetBatches map[string]bool              `json:"netBatches,omitempty"` // the network's, open
 	NetsSent   map[string]map[string]string `json:"netsSent,omitempty"`
 	Marks      map[string]time.Time         `json:"marks,omitempty"`
-	Open       []string                     `json:"open,omitempty"` // channels the client has open
+	Open       []string                     `json:"open,omitempty"`      // channels the client has open
+	Rejoining  map[string]rejoin            `json:"rejoining,omitempty"` // kept open while the network's away
 	FromIP     string                       `json:"fromIP,omitempty"`
 	Device     string                       `json:"device,omitempty"`
 	Software   string                       `json:"software,omitempty"`
@@ -293,6 +295,7 @@ func (se *session) saveState() {
 		CapVersion: se.capVersion, Advertised: se.advertised, Batches: se.batches,
 		NetBatches: se.ubatch, NetsSent: se.netsSent, Marks: se.marks, FromIP: se.fromIP,
 		Device: info.Device, Software: info.Software, Signature: info.Signature, Since: info.Since,
+		Rejoining: se.rejoining,
 	}
 	for c, on := range se.caps {
 		if on {
@@ -362,6 +365,7 @@ func (se *session) restore(raw []byte) error {
 	for _, ch := range st.Open {
 		se.open[ch] = true
 	}
+	maps.Copy(se.rejoining, st.Rejoining)
 	att, err := se.srv.b.ReattachClient(u.ID,
 		bouncer.ClientInfo{Device: st.Device, Networks: bound, IP: se.clientIP(), Software: st.Software, Signature: st.Signature},
 		se.kick)

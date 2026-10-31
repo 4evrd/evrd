@@ -22,6 +22,7 @@ type userSettingsInput struct {
 	AppendTimestamp      *bool              `json:"appendTimestamp"`
 	TimestampFormat      *string            `json:"timestampFormat"`
 	Timezone             *string            `json:"timezone"`
+	QuietRejoin          *bool              `json:"quietRejoin"`
 	CTCPReplies          *map[string]string `json:"ctcpReplies"`
 	AllowedHosts         *[]string          `json:"allowedHosts"`
 }
@@ -63,6 +64,7 @@ func (in userSettingsInput) apply(u *store.User) error {
 	set(&u.AutoClearQueryBuffer, in.AutoClearQueryBuffer)
 	set(&u.PrependTimestamp, in.PrependTimestamp)
 	set(&u.AppendTimestamp, in.AppendTimestamp)
+	set(&u.QuietRejoin, in.QuietRejoin)
 	if in.TimestampFormat != nil {
 		v := strings.TrimSpace(*in.TimestampFormat)
 		if v == "" || len(v) > 64 || strings.ContainsAny(v, "\r\n") {
@@ -124,6 +126,6 @@ func settingsDTO(u store.User) map[string]any {
 		"playbackLines":   u.PlaybackLines, "autoClearChanBuffer": u.AutoClearChanBuffer,
 		"autoClearQueryBuffer": u.AutoClearQueryBuffer, "prependTimestamp": u.PrependTimestamp,
 		"appendTimestamp": u.AppendTimestamp, "timestampFormat": u.TimestampFormat, "timezone": u.Timezone,
-		"ctcpReplies": ctcp, "allowedHosts": orEmpty(u.AllowedHosts),
+		"quietRejoin": u.QuietRejoin, "ctcpReplies": ctcp, "allowedHosts": orEmpty(u.AllowedHosts),
 	}
 }

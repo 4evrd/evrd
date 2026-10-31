@@ -95,6 +95,8 @@ export default {
   'account.bouncer.serverDefault': 'Bawaan server',
   'account.bouncer.lockBind': 'Kunci bind host',
   'account.bouncer.lockBindHelp': 'User tidak bisa mengubahnya (DenySetBindHost di ZNC).',
+  'account.bouncer.quietRejoin': "Biarkan kanal tetap terbuka saat jaringan terputus",
+  'account.bouncer.quietRejoinHelp': "Klien IRC mendapat pemberitahuan alih-alih ditendang, dan saat evrd masuk lagi, hanya yang berubah — tanpa JOIN yang memunculkan setiap jendela kanal (mIRC).",
   'account.bouncer.playback': 'Playback',
   'account.bouncer.playbackHelp': 'Apa yang diterima klien IRC saat tersambung. Chat web selalu menampilkan riwayat lengkap.',
   'account.bouncer.lines': 'Baris per buffer',

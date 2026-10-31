@@ -20,7 +20,11 @@ import (
 // nick in step and hiding what only makes sense to the bouncer.
 func (se *session) relay(line upstream.Line) {
 	if len(line.Left) > 0 {
-		se.leftChannels(line.Left)
+		if se.acct.QuietRejoin {
+			se.leftQuietly(line)
+		} else {
+			se.leftChannels(line.Left)
+		}
 		return
 	}
 	m := irc.Parse(line.Text)
@@ -54,6 +58,9 @@ func (se *session) relay(line upstream.Line) {
 	}
 	if ch := lineChannel(m); ch != "" && se.up.ChannelSettings(ch).Detached {
 		return // detached: kept and logged, not shown
+	}
+	if se.notRejoined(m) {
+		return
 	}
 	if !se.tracked(m) {
 		return
@@ -177,14 +184,16 @@ func (se *session) tracked(m irc.Message) bool {
 		se.open[key] = true
 	case (m.Command == "PART" && mine || m.Command == "KICK" && len(p) > 1 && strings.EqualFold(p[1], se.unick)) && len(p) > 0:
 		delete(se.open, strings.ToLower(p[0]))
+		delete(se.rejoining, strings.ToLower(p[0]))
 	case (m.Command == "332" || m.Command == "333") && len(p) >= 2:
-		return !se.dupNames[strings.ToLower(p[1])]
+		return !se.dupNames[strings.ToLower(p[1])] && !se.kept(p[1])
 	case m.Command == "353" && len(p) >= 3:
-		return !se.dupNames[strings.ToLower(p[2])]
+		return !se.dupNames[strings.ToLower(p[2])] && !se.kept(p[2])
 	case m.Command == "366" && len(p) >= 2:
 		key := strings.ToLower(p[1])
-		if se.dupNames[key] {
+		if se.dupNames[key] || se.kept(key) {
 			delete(se.dupNames, key)
+			se.rejoined(p[1]) // a channel kept open: what changed
 			return false
 		}
 	}
