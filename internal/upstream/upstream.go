@@ -1390,8 +1390,15 @@ func (c *Conn) joined(ch string) {
 func (c *Conn) leftAll() {
 	c.mu.Lock()
 	var left []string
+	was := map[string]LeftChannel{}
 	for ch := range c.channels {
 		left = append(left, ch)
+		key := strings.ToLower(ch)
+		lc := LeftChannel{Topic: c.topics[key]}
+		for _, m := range c.members[key] {
+			lc.Members = append(lc.Members, *m)
+		}
+		was[key] = lc
 	}
 	sort.Strings(left)
 	c.channels = map[string]bool{}
@@ -1402,7 +1409,7 @@ func (c *Conn) leftAll() {
 	c.clientWho = map[string]int{}
 	c.mu.Unlock()
 	if len(left) > 0 {
-		c.broadcastRaw(Line{Left: left})
+		c.broadcastRaw(Line{Left: left, Was: was})
 	}
 }
 
@@ -1819,7 +1826,16 @@ type Line struct {
 	Origin string
 	// Left, instead of a line: the channels evrd was in when the link
 	// ended. Clients are taken out of them; the rejoin brings them back.
+	// Was is how each was then (by lower-case name), for a client that
+	// keeps them open and is told only what changed.
 	Left []string
+	Was  map[string]LeftChannel
+}
+
+// LeftChannel is a channel as it was when the link evrd was in it on ended.
+type LeftChannel struct {
+	Members []Member `json:"members,omitempty"`
+	Topic   string   `json:"topic,omitempty"`
 }
 
 // resyncReply reports whether m answers resume's NAMES or TOPIC, noting

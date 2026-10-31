@@ -19,6 +19,7 @@
     defaultIdent: v.defaultIdent || '', quitMsg: v.quitMsg || '', bindHost: v.bindHost || '', denySetBindHost: !!v.denySetBindHost,
     playbackLines: String(v.playbackLines ?? 50), autoClearChanBuffer: !!v.autoClearChanBuffer, autoClearQueryBuffer: !!v.autoClearQueryBuffer,
     prependTimestamp: !!v.prependTimestamp, appendTimestamp: !!v.appendTimestamp, timestampFormat: v.timestampFormat || '[%H:%M:%S]', timezone: v.timezone || '',
+    quietRejoin: !!v.quietRejoin,
     ctcp: Object.entries(v.ctcpReplies || {}).map(([k, r]) => ({ k, r })),
     allowedHosts: [...(v.allowedHosts || [])],
   })
@@ -62,6 +63,7 @@
       defaultIdent: f.defaultIdent.trim(), quitMsg: f.quitMsg.trim(),
       playbackLines: +f.playbackLines, autoClearChanBuffer: f.autoClearChanBuffer, autoClearQueryBuffer: f.autoClearQueryBuffer,
       prependTimestamp: f.prependTimestamp, appendTimestamp: f.appendTimestamp, timestampFormat: f.timestampFormat.trim(), timezone: f.timezone.trim(),
+      quietRejoin: f.quietRejoin,
       ctcpReplies: Object.fromEntries(f.ctcp.filter((c) => c.k.trim()).map((c) => [c.k.trim().toUpperCase(), c.r])),
       allowedHosts: f.allowedHosts,
     }
@@ -94,6 +96,7 @@
           ]} />
         {/if}
       </Field>
+      <div class="check-row span-2"><span class="od-field"><span id="b-quiet-l">{t('account.bouncer.quietRejoin')}</span><span>{t('account.bouncer.quietRejoinHelp')}</span></span><Switch checked={f.quietRejoin} labelledby="b-quiet-l" onchange={(v) => (f.quietRejoin = v)} /></div>
       {#if admin}
         <div class="check-row span-2"><span class="od-field"><span id="b-deny-l">{t('account.bouncer.lockBind')}</span><span>{t('account.bouncer.lockBindHelp')}</span></span><Switch checked={f.denySetBindHost} labelledby="b-deny-l" onchange={(v) => (f.denySetBindHost = v)} /></div>
       {/if}

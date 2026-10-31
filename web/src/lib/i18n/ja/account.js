@@ -95,6 +95,8 @@ export default {
   'account.bouncer.serverDefault': 'サーバーの既定値',
   'account.bouncer.lockBind': 'バインドホストを固定',
   'account.bouncer.lockBindHelp': 'ユーザーは変更できません（ZNC の DenySetBindHost）。',
+  'account.bouncer.quietRejoin': "ネットワーク切断時もチャンネルを開いたままにする",
+  'account.bouncer.quietRejoinHelp': "IRC クライアントはキックされる代わりに通知を受け取り、evrd が戻ると変化した点だけが届きます。すべてのチャンネルウィンドウを前面に出す JOIN は送られません（mIRC）。",
   'account.bouncer.playback': 'プレイバック',
   'account.bouncer.playbackHelp': 'IRC クライアントがアタッチしたときに受け取る内容です。Web チャットには常に全履歴が表示されます。',
   'account.bouncer.lines': 'バッファあたりの行数',

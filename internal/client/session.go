@@ -52,13 +52,14 @@ type session struct {
 	// open: the channels the client has open (lower case), so a JOIN for
 	// one it's in already, and the names after it, don't reach it (#125)
 	open       map[string]bool
-	dupNames   map[string]bool // a dropped JOIN's names, until they end
-	regLines   []string        // PASS/NICK/USER as sent, replayed when forwarding
-	internal   bool            // forwarded here by another node (already vetted)
-	saslMech   string          // the SASL mechanism under way ("" none)
-	saslBuf    string          // its payload so far
-	saslUser   store.User      // who SASL signed in
-	signInID   int64           // this sign-in's record (store.IRCSignIn)
+	dupNames   map[string]bool   // a dropped JOIN's names, until they end
+	rejoining  map[string]rejoin // channels kept open while the network was away (QuietRejoin)
+	regLines   []string          // PASS/NICK/USER as sent, replayed when forwarding
+	internal   bool              // forwarded here by another node (already vetted)
+	saslMech   string            // the SASL mechanism under way ("" none)
+	saslBuf    string            // its payload so far
+	saslUser   store.User        // who SASL signed in
+	signInID   int64             // this sign-in's record (store.IRCSignIn)
 	saslDevice string
 	saslOTP    string // a second-factor code after SASL's password
 	refusal    string // why the last sign-in was refused (signIn)
@@ -141,7 +142,7 @@ func newSession(srv *Server, conn net.Conn) *session {
 		w:      bufio.NewWriter(conn),
 		caps:   map[string]bool{},
 		ubatch: map[string]bool{},
-		open:   map[string]bool{}, dupNames: map[string]bool{},
+		open:   map[string]bool{}, dupNames: map[string]bool{}, rejoining: map[string]rejoin{},
 	}
 }
 
@@ -979,6 +980,7 @@ func (se *session) bridge(ctx context.Context) {
 				// should it have joined them before this caught up
 				if se.registered {
 					se.joinChannels()
+					se.rejoinedAlready()
 				}
 			}
 			if se.restored && se.up != nil && se.up.Status() != upstream.StatusConnected && time.Since(se.restoredAt) < 30*time.Second {

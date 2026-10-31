@@ -35,6 +35,15 @@ func (l *Log) Send(line string) {
 	}
 }
 
+// Drop closes every client's connection, as a network's link drops.
+func (l *Log) Drop() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, c := range l.conns {
+		c.Close()
+	}
+}
+
 // Connections is how many clients have connected so far.
 func (l *Log) Connections() int {
 	l.mu.Lock()

@@ -91,6 +91,8 @@ export default {
   'account.bouncer.serverDefault': 'Sunucu varsayılanı',
   'account.bouncer.lockBind': 'Bind host’u kilitle',
   'account.bouncer.lockBindHelp': 'Kullanıcı bunu değiştiremez (ZNC’nin DenySetBindHost ayarı).',
+  'account.bouncer.quietRejoin': "Bir ağ düştüğünde kanalları açık tut",
+  'account.bouncer.quietRejoinHelp': "IRC istemcileri atılmak yerine bir bildirim alır; evrd geri girdiğinde yalnızca değişenler gelir — her kanal penceresini öne getiren JOIN yok (mIRC).",
   'account.bouncer.playback': 'Geri oynatma',
   'account.bouncer.playbackHelp': 'Bir IRC istemcisinin bağlandığında aldıkları. Web sohbeti her zaman tüm geçmişi gösterir.',
   'account.bouncer.lines': 'Pencere başına satır',

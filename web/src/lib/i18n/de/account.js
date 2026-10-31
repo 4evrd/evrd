@@ -96,6 +96,8 @@ export default {
   'account.bouncer.serverDefault': 'Server-Standard',
   'account.bouncer.lockBind': 'Bind-Host sperren',
   'account.bouncer.lockBindHelp': 'Der Benutzer kann ihn nicht ändern (DenySetBindHost in ZNC).',
+  'account.bouncer.quietRejoin': "Kanäle offen lassen, wenn ein Netzwerk wegbricht",
+  'account.bouncer.quietRejoinHelp': "IRC-Clients bekommen einen Hinweis statt eines Kicks und nach dem Wiederbeitritt nur, was sich geändert hat – kein JOIN, der jedes Kanalfenster nach vorn holt (mIRC).",
   'account.bouncer.playback': 'Wiedergabe',
   'account.bouncer.playbackHelp': 'Was ein IRC-Client beim Andocken bekommt. Der Web-Chat zeigt immer den ganzen Verlauf.',
   'account.bouncer.lines': 'Zeilen pro Buffer',

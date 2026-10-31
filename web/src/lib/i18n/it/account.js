@@ -91,6 +91,8 @@ export default {
   'account.bouncer.serverDefault': 'Predefinito del server',
   'account.bouncer.lockBind': 'Blocca il bind host',
   'account.bouncer.lockBindHelp': 'L’utente non può cambiarlo (DenySetBindHost di ZNC).',
+  'account.bouncer.quietRejoin': "Tieni aperti i canali quando una rete cade",
+  'account.bouncer.quietRejoinHelp': "I client IRC ricevono un avviso invece di un kick e, quando evrd rientra, solo ciò che è cambiato: nessun JOIN che porta in primo piano ogni finestra di canale (mIRC).",
   'account.bouncer.playback': 'Playback',
   'account.bouncer.playbackHelp': 'Cosa riceve un client IRC quando si collega. La chat web mostra sempre tutta la cronologia.',
   'account.bouncer.lines': 'Righe per buffer',
