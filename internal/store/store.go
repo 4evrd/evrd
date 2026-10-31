@@ -86,7 +86,7 @@ type User struct {
 	// QuietRejoin keeps IRC clients' channels open as a network's link
 	// drops, instead of a KICK and a JOIN (which brings mIRC's windows
 	// forward) when evrd is back in: they're told only what changed.
-	QuietRejoin bool `gorm:"not null;default:false"`
+	QuietRejoin bool `gorm:"not null;default:true"`
 	// CTCPReplies answers CTCP requests (VERSION, TIME, …) for every network
 	// with a fixed text; an empty text blocks the request.
 	CTCPReplies map[string]string `gorm:"serializer:json"`

@@ -56,6 +56,9 @@ func (ic *ircClient) quiet(d time.Duration) (sent []string) {
 // window up over the one the user is typing in.
 func TestChannelsAreJoinedOncePerClient(t *testing.T) {
 	r := newRig(t)
+	u := r.user
+	u.QuietRejoin = false // the KICK and JOIN as the network reconnects
+	r.st.UpdateUser(r.ctx, u)
 	first := r.attached()
 	eventually(t, "joined #one", func() bool {
 		m, _ := r.hist.Recent(r.network("one").ID, "#one", 10)
@@ -129,7 +132,7 @@ func TestChannelsAreJoinedOncePerClient(t *testing.T) {
 	}
 }
 
-// With QuietRejoin, a network's link dropping leaves the client's channels
+// With QuietRejoin (the default), a network's link dropping leaves the client's channels
 // open: a notice instead of a KICK, and back in, no JOIN of ours — only
 // what changed (bob left meanwhile; the op is still there).
 func TestQuietRejoinKeepsChannelsOpen(t *testing.T) {
