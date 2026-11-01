@@ -1,0 +1,60 @@
+// Mutarea rețelelor înăuntru și în afară: exportul fișierului de rețele și
+// importul unuia sau al unei configurații ZNC (/networks/import).
+export default {
+  'transfer.export': 'Exportă',
+  'transfer.exportTip': 'Descarcă-ți rețelele ca fișier YAML',
+  'transfer.exported': { one: '{count} rețea exportată', few: '{count} rețele exportate', other: '{count} de rețele exportate' },
+  'transfer.exportedNoKey': 'Exportat fără parole: acest server nu are o cheie secretă cu care să le cripteze.',
+  'transfer.import': 'Importă',
+  'transfer.importTip': 'Adaugă rețele dintr-un export evrd sau dintr-o configurație ZNC',
+
+  'transfer.title': 'Importă rețele',
+  'transfer.intro': 'Adaugă rețele dintr-un fișier: unul exportat din evrd sau o configurație ZNC (znc.conf ori doar partea de care ai nevoie).',
+  'transfer.choose': 'Alege un fișier',
+  'transfer.paste': 'Sau lipește-l aici',
+  'transfer.pastePlaceholder': 'networks:\n  - name: libera\n…\n\nsau\n\n<Network libera>\n  Server = irc.libera.chat +6697\n…',
+  'transfer.read': 'Citește-l',
+  'transfer.reading': 'Se citește…',
+  'transfer.another': 'Folosește alt fișier',
+  'transfer.secrets': 'Un export evrd conține parolele criptate cu cheia serverului său: ele revin pe acest server sau pe unul cu aceeași cheie. Oriunde altundeva va trebui să le setezi din nou.',
+
+  'transfer.formatEvrd': 'Fișier de rețele evrd',
+  'transfer.formatZnc': 'Configurație ZNC',
+  'transfer.zncUser': 'Utilizator ZNC',
+  'transfer.zncUserHelp': 'Configurația are mai mulți utilizatori: alege ale cui rețele să le aduci.',
+  'transfer.noUser': 'Rețele fără utilizator',
+  'transfer.userNetworks': { one: '{count} rețea', few: '{count} rețele', other: '{count} de rețele' },
+
+  'transfer.networks': 'Rețele',
+  'transfer.all': 'Toate',
+  'transfer.none': 'Niciuna',
+  'transfer.empty': 'Nu există rețele în această parte a fișierului.',
+  'transfer.channels': { one: '{count} canal', few: '{count} canale', other: '{count} de canale' },
+  'transfer.exists': 'Deja adăugată',
+  'transfer.off': 'Oprită în fișier',
+
+  'transfer.existing': 'Rețele pe care le ai deja',
+  'transfer.skip': 'Lasă-le cum sunt',
+  'transfer.skipHelp': 'Se adaugă doar rețelele pe care nu le ai încă.',
+  'transfer.merge': 'Îmbină fișierul',
+  'transfer.mergeHelp': 'Își păstrează setările; se adaugă canalele și serverele care le lipsesc și se completează ce e gol.',
+  'transfer.update': 'Actualizează-le din fișier',
+  'transfer.updateHelp': 'Setările și canalele lor devin cele din fișier. Istoricul se păstrează.',
+  'transfer.connect': 'Conectează-le după import',
+  'transfer.connectHelp': 'Lasă opțiunea oprită cât timp ZNC e încă conectat, ca să nu se certe amândouă pe nickul tău.',
+
+  'transfer.go': { one: 'Importă {count} rețea', few: 'Importă {count} rețele', other: 'Importă {count} de rețele' },
+  'transfer.importing': 'Se importă…',
+  'transfer.done': 'Gata',
+  'transfer.result.created': 'Adăugată',
+  'transfer.result.updated': 'Actualizată',
+  'transfer.result.merged': 'Îmbinată',
+  'transfer.result.skipped': 'Omisă: deja adăugată',
+  'transfer.result.failed': 'Neimportată',
+  'transfer.toNetworks': 'Mergi la rețelele tale',
+
+  // un admin care importă în contul altcuiva
+  'transfer.adminTitle': 'Importă rețele pentru {name}',
+  'transfer.adminIntro': 'Adaugă rețele în acest cont dintr-un export evrd sau dintr-o configurație ZNC. Ca admin poți prelua un bind host și poți depăși limita de rețele a contului.',
+  'transfer.toAccount': 'Înapoi la {name}',
+}

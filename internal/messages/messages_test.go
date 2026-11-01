@@ -69,7 +69,7 @@ func TestBuiltinCatalogs(t *testing.T) {
 	if len(en) < 100 {
 		t.Fatalf("English has %d texts", len(en))
 	}
-	for _, code := range []string{"de", "en", "es", "id", "it", "ja", "tr"} {
+	for _, code := range []string{"de", "en", "es", "id", "it", "ja", "ro", "tr"} {
 		msgs, ok := New(nil).Builtin(code)
 		if !ok {
 			t.Fatalf("%s isn't built in", code)
@@ -96,7 +96,7 @@ func TestBuiltinCatalogs(t *testing.T) {
 			}
 		}
 	}
-	if !slices.Equal(Languages(), []string{"de", "en", "es", "id", "it", "ja", "tr"}) {
+	if !slices.Equal(Languages(), []string{"de", "en", "es", "id", "it", "ja", "ro", "tr"}) {
 		t.Errorf("languages %v", Languages())
 	}
 	if keys := Keys(); len(keys) != len(en) || !slices.IsSorted(keys) {
@@ -249,7 +249,7 @@ func TestCoverage(t *testing.T) {
 	if _, _, err := New(f).Coverage(ctx); err == nil {
 		t.Error("no error when the packs can't be listed")
 	}
-	if total, have, err := New(nil).Coverage(ctx); err != nil || have["ja"] != total || len(have) != 7 {
+	if total, have, err := New(nil).Coverage(ctx); err != nil || have["ja"] != total || have["ro"] != total || len(have) != 8 {
 		t.Errorf("no packs: %d %v %v", total, have, err)
 	}
 	if _, ok := New(nil).Builtin("pl"); ok {

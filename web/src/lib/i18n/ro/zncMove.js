@@ -1,0 +1,27 @@
+// Mutarea unui ZNC întreg (Admin → Utilizatori → Importă din ZNC): utilizatorii lui
+// devin conturi, iar rețelele lor vin odată cu ei.
+export default {
+  'zncMove.button': 'Importă din ZNC',
+  'zncMove.title': 'Importă din ZNC',
+  'zncMove.intro': 'Adu aici utilizatorii unui server ZNC: fiecare ajunge într-un cont evrd, creat aici dacă nu există încă, cu rețelele pe care le alegi.',
+  'zncMove.choose': 'Alege znc.conf',
+  'zncMove.passwords': 'Un cont nou păstrează parola ZNC a utilizatorului: evrd verifică hash-ul ZNC la prima autentificare, apoi îl înlocuiește cu al său. Nu e afișat și nici exportat vreodată. Un cont care există deja își păstrează propria parolă. Dacă nu e folosită, e ștearsă după numărul de zile setat în Setări → Autentificare; una mai scurtă decât permite evrd funcționează în continuare, dar trebuie schimbată la următoarea autentificare web.',
+  'zncMove.noUsers': 'În această configurație nu există blocuri <User>.',
+  'zncMove.includeUser': 'Adu aici {name}',
+  'zncMove.account': 'Cont evrd pentru {name}',
+  'zncMove.new': 'Cont nou',
+  'zncMove.existing': 'Cont existent',
+  'zncMove.willKeepPassword': 'Își păstrează parola ZNC',
+  'zncMove.noZncPassword': 'Nicio parolă în configurație: va avea nevoie de un email pentru SSO sau de o parolă din Resetează',
+  'zncMove.email': 'Email (opțional)',
+  'zncMove.emailFor': 'Email pentru {name}',
+  'zncMove.emailHelp': 'Cu un email, prima autentificare SSO cu același nume de utilizator și același email revendică contul.',
+  'zncMove.go': { one: 'Adu aici {count} utilizator ({networks} rețele)', few: 'Adu aici {count} utilizatori ({networks} rețele)', other: 'Adu aici {count} de utilizatori ({networks} rețele)' },
+  'zncMove.progress': 'Se importă {name} ({n} din {count})…',
+  'zncMove.created': 'Cont creat',
+  'zncMove.existed': 'Contul exista deja',
+  'zncMove.keptPassword': 'parola ZNC păstrată',
+  'zncMove.noPassword': 'fără parolă',
+  'zncMove.claimable': 'poate fi revendicat prin SSO',
+  'zncMove.toUsers': 'Mergi la utilizatori',
+}
