@@ -9,6 +9,7 @@ export const LANGUAGES = [
   { code: 'tr', name: 'Türkçe' },
   { code: 'de', name: 'Deutsch' },
   { code: 'id', name: 'Bahasa Indonesia' },
+  { code: 'ro', name: 'Română' },
   { code: 'ja', name: '日本語' },
 ]
 
