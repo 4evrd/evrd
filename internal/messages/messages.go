@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,24 +65,25 @@ func (e *entry) UnmarshalJSON(b []byte) error {
 }
 
 // builtin are the embedded catalogs by language code; raw, their messages
-// as in the files.
-var builtin, raw = load()
+// as in the files; names, each language's name in itself.
+var builtin, raw, names = load()
 
-func load() (map[string]catalog, map[string]map[string]json.RawMessage) {
-	cats, raws := map[string]catalog{}, map[string]map[string]json.RawMessage{}
+func load() (map[string]catalog, map[string]map[string]json.RawMessage, map[string]string) {
+	cats, raws, names := map[string]catalog{}, map[string]map[string]json.RawMessage{}, map[string]string{}
 	files, _ := locales.ReadDir("locales")
 	for _, f := range files {
 		b, _ := locales.ReadFile("locales/" + f.Name())
 		var file struct {
+			Name     string                     `json:"name"`
 			Messages map[string]json.RawMessage `json:"messages"`
 		}
 		if err := json.Unmarshal(b, &file); err != nil {
 			panic(fmt.Sprintf("messages: %s: %v", f.Name(), err))
 		}
 		code := strings.TrimSuffix(f.Name(), path.Ext(f.Name()))
-		cats[code], raws[code] = decode(file.Messages), file.Messages
+		cats[code], raws[code], names[code] = decode(file.Messages), file.Messages, file.Name
 	}
-	return cats, raws
+	return cats, raws, names
 }
 
 // decode reads a pack's messages, keeping the irc.* ones that read as a
@@ -112,6 +114,25 @@ type MessageServiceImpl interface {
 	Coverage(ctx context.Context) (total int, have map[string]int, err error)
 	// Forget drops the packs read so far: this node just changed one.
 	Forget()
+	// Choices are the languages userID can pick: the built-in ones, the
+	// server's packs and their own pack.
+	Choices(ctx context.Context, userID int64) ([]Choice, error)
+}
+
+// Choice is a language to pick: its code and its name in itself. Own is
+// the user's own pack.
+type Choice struct {
+	Code, Name string
+	Own        bool
+}
+
+// BuiltinChoices are the built-in languages, by code.
+func BuiltinChoices() []Choice {
+	var out []Choice
+	for _, code := range Languages() {
+		out = append(out, Choice{Code: code, Name: names[code]})
+	}
+	return out
 }
 
 // Service reads the packs through the language pack service.
@@ -222,6 +243,40 @@ func (s *Service) Coverage(ctx context.Context) (int, map[string]int, error) {
 		have[code] = n
 	}
 	return len(en), have, nil
+}
+
+func (s *Service) Choices(ctx context.Context, userID int64) ([]Choice, error) {
+	ctx, span := tracer.Start(ctx, "MessageService.Choices", trace.WithAttributes(attribute.Int64("user.id", userID)))
+	defer span.End()
+	out := BuiltinChoices()
+	if s.Languages == nil {
+		return out, nil
+	}
+	add := func(c Choice) {
+		if i := slices.IndexFunc(out, func(x Choice) bool { return x.Code == c.Code }); i >= 0 {
+			out[i].Name, out[i].Own = orName(c.Name, out[i].Name), c.Own
+			return
+		}
+		out = append(out, Choice{Code: c.Code, Name: orName(c.Name, c.Code), Own: c.Own})
+	}
+	packs, err := s.Languages.LanguagePacks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range packs {
+		add(Choice{Code: p.Code, Name: p.Name})
+	}
+	if p, err := s.Languages.UserLanguagePack(ctx, userID); err == nil && p.Code != "" {
+		add(Choice{Code: p.Code, Name: p.Name, Own: true})
+	}
+	return out, nil
+}
+
+func orName(name, fallback string) string {
+	if strings.TrimSpace(name) == "" {
+		return fallback
+	}
+	return name
 }
 
 func (s *Service) Forget() {

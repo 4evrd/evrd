@@ -700,6 +700,14 @@
     "irc.znc.loginPassword": "Modul {module} ZNC menyimpan kata sandinya di luar konfigurasi: atur di Autentikasi.",
     "irc.znc.moduleData": "Modul {module} ZNC menyimpan pengaturannya di luar konfigurasi: nyalakan dan isi di Modul.",
     "irc.znc.modulesSkipped": "evrd tidak punya modul untuk ini, jadi dilewati: {modules}.",
-    "irc.znc.passwordUnusable": "Kata sandi ZNC pengguna ini dalam bentuk yang tidak bisa diperiksa evrd, jadi akunnya belum punya kata sandi: atur satu, atau biarkan dia masuk dengan SSO."
+    "irc.znc.passwordUnusable": "Kata sandi ZNC pengguna ini dalam bentuk yang tidak bisa diperiksa evrd, jadi akunnya belum punya kata sandi: atur satu, atau biarkan dia masuk dengan SSO.",
+    "irc.help.language": "Bahasa kamu untuk aplikasi web dan *status, atau pilih satu: kode atau nama; - untuk tidak ada.",
+    "irc.usage.language": "Pemakaian: language [kode|-] - mis. language id; - untuk tidak ada (bahasa browser di web, Inggris di sini)",
+    "irc.language.current": "Bahasa kamu: {language}.",
+    "irc.language.none": "Kamu belum memilih bahasa: aplikasi web mengikuti browser kamu, dan *status berbahasa Inggris.",
+    "irc.language.choices": "Bahasa: {languages}. Ganti dengan language <kode>.",
+    "irc.language.unknown": "Tidak ada bahasa \"{language}\". Bahasa: {languages}.",
+    "irc.language.set": "Bahasa diatur ke {language}, untuk aplikasi web dan *status.",
+    "irc.language.cleared": "Bahasa dihapus: aplikasi web mengikuti browser kamu, dan *status berbahasa Inggris."
   }
 }

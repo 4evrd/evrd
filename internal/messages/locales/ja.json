@@ -700,6 +700,14 @@
     "irc.znc.loginPassword": "ZNC の {module} モジュールはパスワードを設定ファイルの外に保存しています。「認証」で設定してください。",
     "irc.znc.moduleData": "ZNC の {module} モジュールは設定を設定ファイルの外に保存しています。「モジュール」で有効にして入力してください。",
     "irc.znc.modulesSkipped": "evrd にはこれらのモジュールがないため、取り込みませんでした: {modules}。",
-    "irc.znc.passwordUnusable": "このユーザーの ZNC パスワードは evrd が確認できない形式のため、アカウントにはまだパスワードがありません。設定するか、SSO でサインインしてもらってください。"
+    "irc.znc.passwordUnusable": "このユーザーの ZNC パスワードは evrd が確認できない形式のため、アカウントにはまだパスワードがありません。設定するか、SSO でサインインしてもらってください。",
+    "irc.help.language": "Web アプリと *status の言語、または言語を選ぶ: コードか名前で。- で指定なし。",
+    "irc.usage.language": "使い方: language [コード|-] - 例: language ja。- で指定なし (Web ではブラウザーの言語、ここでは英語)",
+    "irc.language.current": "あなたの言語: {language}。",
+    "irc.language.none": "言語を選んでいません: Web アプリはブラウザーの言語に従い、*status は英語で話します。",
+    "irc.language.choices": "言語: {languages}。language <コード> で切り替えます。",
+    "irc.language.unknown": "\"{language}\" という言語はありません。言語: {languages}。",
+    "irc.language.set": "言語を {language} にしました (Web アプリと *status)。",
+    "irc.language.cleared": "言語を解除しました: Web アプリはブラウザーの言語に従い、*status は英語で話します。"
   }
 }

@@ -84,6 +84,7 @@ func init() {
 		{"setuserbindhost", "<host>", (*session).cmdSetUserBindHost},
 		{"clearuserbindhost", "", (*session).cmdClearUserBindHost},
 		{"info", "", (*session).cmdInfo},
+		{"language", "[code|-]", (*session).cmdLanguage},
 		{"listclients", "", (*session).cmdListClients},
 		{"uptime", "", (*session).cmdUptime},
 		{"traffic", "", (*session).cmdTraffic},
@@ -107,7 +108,7 @@ var statusAliases = map[string]string{
 	"listmodules":                   "modules", "loadmodule": "loadmod", "unloadmodule": "unloadmod",
 	"reloadmodule": "reloadmod", "updatemodule": "updatemod",
 	"setvhost": "setbindhost", "clearvhost": "clearbindhost",
-	"motd": "showmotd",
+	"motd": "showmotd", "lang": "language",
 }
 
 func (se *session) statusCommand(text string) {
