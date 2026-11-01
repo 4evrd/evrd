@@ -136,6 +136,7 @@ command names stay the same in every language. See
 | `listclients` / `uptime` / `traffic` | attached clients / how long evrd has run / where the network's traffic is |
 | `listusers` / `listallusernetworks [filter]` | admins: every user / every user's networks (the filter matches a network's name or its owner's) |
 | `info` / `version` | your account and limits / the evrd version |
+| `language [code\|-]` | your language for *status and the web app: show it and the choices, or pick one (`language ro`, or a name); `-` for none |
 
 Buffer names take wildcards (`clearbuffer #evrd*`) and lists (`#a,#b`).
 

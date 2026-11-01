@@ -695,6 +695,14 @@
     "irc.znc.loginPassword": "ZNC'nin {module} modülü parolasını yapılandırmanın dışında tutuyor: Kimlik doğrulama altında gir.",
     "irc.znc.moduleData": "ZNC'nin {module} modülü ayarlarını yapılandırmanın dışında tutuyor: Modüller altında aç ve doldur.",
     "irc.znc.modulesSkipped": "evrd'de bunlar için modül yok, bu yüzden atlandı: {modules}.",
-    "irc.znc.passwordUnusable": "Bu kullanıcının ZNC parolası evrd'nin doğrulayamadığı bir biçimde, bu yüzden hesabın henüz parolası yok: bir parola belirle ya da SSO ile girmesine izin ver."
+    "irc.znc.passwordUnusable": "Bu kullanıcının ZNC parolası evrd'nin doğrulayamadığı bir biçimde, bu yüzden hesabın henüz parolası yok: bir parola belirle ya da SSO ile girmesine izin ver.",
+    "irc.help.language": "Web uygulaması ve *status için dilin, ya da bir dil seç: kod veya ad; hiçbiri için -.",
+    "irc.usage.language": "Kullanım: language [kod|-] - örn. language tr; hiçbiri için - (web'de tarayıcınınki, burada İngilizce)",
+    "irc.language.current": "Dilin: {language}.",
+    "irc.language.none": "Bir dil seçmedin: web uygulaması tarayıcının dilini izler, *status İngilizce konuşur.",
+    "irc.language.choices": "Diller: {languages}. Değiştirmek için language <kod>.",
+    "irc.language.unknown": "\"{language}\" diye bir dil yok. Diller: {languages}.",
+    "irc.language.set": "Dil {language} olarak ayarlandı, web uygulaması ve *status için.",
+    "irc.language.cleared": "Dil kaldırıldı: web uygulaması tarayıcının dilini izler, *status İngilizce konuşur."
   }
 }

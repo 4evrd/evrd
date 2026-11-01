@@ -723,6 +723,14 @@
     "irc.znc.loginPassword": "ZNCs Modul {module} speichert sein Passwort außerhalb der Konfiguration: setz es unter Anmeldung.",
     "irc.znc.moduleData": "ZNCs Modul {module} speichert seine Einstellungen außerhalb der Konfiguration: schalte es unter Module ein und füll es aus.",
     "irc.znc.modulesSkipped": "Dafür hat evrd kein Modul, sie wurden weggelassen: {modules}.",
-    "irc.znc.passwordUnusable": "ZNCs Passwort für diesen Benutzer liegt in einer Form vor, die evrd nicht prüfen kann, also hat das Konto noch kein Passwort: setz eines, oder lass den Benutzer sich per SSO anmelden."
+    "irc.znc.passwordUnusable": "ZNCs Passwort für diesen Benutzer liegt in einer Form vor, die evrd nicht prüfen kann, also hat das Konto noch kein Passwort: setz eines, oder lass den Benutzer sich per SSO anmelden.",
+    "irc.help.language": "Deine Sprache für die Web-App und *status, oder wähle eine: ein Code oder ein Name; - für keine.",
+    "irc.usage.language": "Verwendung: language [Code|-] - z. B. language de; - für keine (im Web die des Browsers, hier Englisch)",
+    "irc.language.current": "Deine Sprache: {language}.",
+    "irc.language.none": "Du hast keine Sprache gewählt: Die Web-App folgt deinem Browser, *status spricht Englisch.",
+    "irc.language.choices": "Sprachen: {languages}. Wechseln mit language <Code>.",
+    "irc.language.unknown": "Keine Sprache \"{language}\". Sprachen: {languages}.",
+    "irc.language.set": "Sprache auf {language} gesetzt, für die Web-App und *status.",
+    "irc.language.cleared": "Sprache entfernt: Die Web-App folgt deinem Browser, *status spricht Englisch."
   }
 }

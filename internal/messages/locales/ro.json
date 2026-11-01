@@ -738,6 +738,14 @@
     "irc.znc.loginPassword": "Modulul ZNC {module} își ține parola în afara config-ului: seteaz-o la Autentificare.",
     "irc.znc.moduleData": "Modulul ZNC {module} își ține setările în afara config-ului: activează-l și completează-l la Module.",
     "irc.znc.modulesSkipped": "evrd nu are module pentru acestea, așa că au fost omise: {modules}.",
-    "irc.znc.passwordUnusable": "Parola ZNC a acestui utilizator e într-o formă pe care evrd n-o poate verifica, deci contul nu are încă parolă: setează una sau lasă-l să se autentifice cu SSO."
+    "irc.znc.passwordUnusable": "Parola ZNC a acestui utilizator e într-o formă pe care evrd n-o poate verifica, deci contul nu are încă parolă: setează una sau lasă-l să se autentifice cu SSO.",
+    "irc.help.language": "Limba ta pentru aplicația web și *status, sau alege una: un cod sau un nume; - pentru niciuna.",
+    "irc.usage.language": "Utilizare: language [cod|-] - de ex. language ro; - pentru niciuna (a browserului pe web, engleza aici)",
+    "irc.language.current": "Limba ta: {language}.",
+    "irc.language.none": "Nu ai ales o limbă: aplicația web urmează limba browserului, iar *status vorbește engleză.",
+    "irc.language.choices": "Limbi: {languages}. Schimbă cu language <cod>.",
+    "irc.language.unknown": "Nu există limba \"{language}\". Limbi: {languages}.",
+    "irc.language.set": "Limba setată la {language}, pentru aplicația web și *status.",
+    "irc.language.cleared": "Limba ștearsă: aplicația web urmează limba browserului, iar *status vorbește engleză."
   }
 }
