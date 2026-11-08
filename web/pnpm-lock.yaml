@@ -24,8 +24,8 @@ importers:
         specifier: ^5.57.2
         version: 5.57.2
       svelte-check:
-        specifier: 4.7.7
-        version: 4.7.7(picomatch@4.0.4)(svelte@5.57.2)(typescript@6.0.3)
+        specifier: 4.7.8
+        version: 4.7.8(picomatch@4.0.4)(svelte@5.57.2)(typescript@6.0.3)
       vite:
         specifier: ^6.2.0
         version: 6.4.3(jiti@2.7.0)(lightningcss@1.32.0)
@@ -639,8 +639,8 @@ packages:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
 
-  svelte-check@4.7.7:
-    resolution: {integrity: sha512-Ge2IMdeTpbJuzNFGRiiMg0RWgbScysKQu7xwcyFJ22+DU9F5nPX51+Q3gHmGqRxYQMx2knreVWt5oCtfe0vf2g==}
+  svelte-check@4.7.8:
+    resolution: {integrity: sha512-laZ49GFHZ3b0z2PWinJWL0syehc/PTR8aHaUaTiBkWJ+4Y38nhxjmXsSz7CbGa3VdKopViVbrBH3bGNqIAI0bQ==}
     engines: {node: '>= 18.0.0'}
     hasBin: true
     peerDependencies:
@@ -814,7 +814,7 @@ snapshots:
   '@jridgewell/trace-mapping@0.3.31':
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
-      '@jridgewell/sourcemap-codec': 1.5.5
+      '@jridgewell/sourcemap-codec': 1.6.0
 
   '@playwright/test@1.64.1':
     dependencies:
@@ -1157,7 +1157,7 @@ snapshots:
 
   source-map-js@1.2.1: {}
 
-  svelte-check@4.7.7(picomatch@4.0.4)(svelte@5.57.2)(typescript@6.0.3):
+  svelte-check@4.7.8(picomatch@4.0.4)(svelte@5.57.2)(typescript@6.0.3):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@sveltejs/load-config': 0.2.3
