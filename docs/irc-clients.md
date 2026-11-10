@@ -99,8 +99,14 @@ replay never confuses their nick lists. Either way the backlog's line count
 counts only what's replayed.
 
 The web chat understands `/join`, `/part`, `/msg`, `/query`, `/me`, `/notice`,
-`/nick`, `/topic`, `/mode`, `/kick`, `/close`, `/quote` and `/help`, and runs
-`*status` commands too (`/msg *status help`, or `/status help`).
+`/nick`, `/topic`, `/mode`, `/kick`, `/op`, `/deop`, `/voice`, `/devoice`,
+`/ban`, `/unban`, `/invite`, `/whois`, `/away`, `/back`, `/ctcp`, `/ns`,
+`/cs` (and `/ms`, `/hs`, `/bs`, `/os`), `/close`, `/quote` and `/help`, and runs
+`*status` commands too (`/msg *status help`, or `/status help`). Any other
+command goes to the network as typed (`/list`, `/who`, `/stats`…), and the
+network's replies show in the open buffer. Your aliases (a network's
+**alias** module) run there too, ahead of the built-in commands; `/quit` is
+refused, since it would end the bouncer's connection.
 
 `/msg *status help` lists the bouncer's own commands. ZNC's names work too
 (`ListNetworks`, `JumpNetwork`, `AddNetwork`…), and so does ZNC's raw command:

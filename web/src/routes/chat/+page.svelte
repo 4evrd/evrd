@@ -105,10 +105,10 @@
     try { chan = await api.channel(netId, buf) } catch { chan = null }
   }
 
-  function local(t) {
+  function local(t, bad = false) {
     const target = buf || '*status'
     ensure(target)
-    logs[target] = [...logs[target], { kind: 'local', text: t, time: Date.now() / 1000 }]
+    logs[target] = [...logs[target], { kind: 'local', text: t, time: Date.now() / 1000, bad }]
     scrollTo(false)
   }
 
@@ -186,7 +186,7 @@
     stream = api.openStream(id, onMsg, () => {
       live = false
       if (!closed && id === netId) setTimeout(() => !closed && id === netId && openStream(), 3000)
-    }, () => { if (id === netId) live = true }, onTyping)
+    }, () => { if (id === netId) live = true }, onTyping, (r) => { if (id === netId) local(r.text, Number(r.code) >= 400) })
   }
 
   // want: a buffer to open instead of the first unread one (opening a buffer
@@ -409,7 +409,7 @@
         {#each lines as m}
           {#if m.sep}<div class="day-sep">{m.sep}</div>
           {:else if m.backlog}<div class="day-sep backlog" id="backlog-mark">{m.backlog}</div>
-          {:else if m.kind === 'local' || m.kind === 'system'}<div class="msg event"><time></time><span class="nick">·</span><span class="text">{m.text}</span></div>
+          {:else if m.kind === 'local' || m.kind === 'system'}<div class="msg event" class:bad={m.bad}><time></time><span class="nick">·</span><span class="text">{m.text}</span></div>
           {:else if isEvent(m.kind)}<div class="msg event ev-{m.kind}"><time>{clock(m.time)}</time><span class="nick">{m.kind === 'join' ? '→' : ['part', 'quit', 'kick'].includes(m.kind) ? '←' : '•'}</span><span class="text">{describe(m)}</span></div>
           {:else if m.kind === 'action'}<div class="msg" class:self={same(m.sender, nick)}><time>{clock(m.time)}</time><span class="nick" style="--c:{hue(m.sender)}">*</span><span class="text"><span style="color:var(--c, {hue(m.sender)})">{m.sender}</span> {m.text}</span></div>
           {:else if m.table}<div class="msg" data-testid="status-table"><time>{clock(m.time)}</time><span class="nick" style="--c:{hue(m.sender)}">{m.sender}</span><div class="text md-wrap"><table class="md-table"><thead><tr>{#each m.table[0] as c}<th scope="col">{c}</th>{/each}</tr></thead><tbody>{#each m.table.slice(1) as r}<tr>{#each r as c, i}<td class:cmd={i < 2}>{c}</td>{/each}</tr>{/each}</tbody></table></div></div>

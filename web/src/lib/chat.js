@@ -18,11 +18,26 @@ export const COMMANDS = [
   ['/topic [text]', 'chat.cmd.topic'],
   ['/mode [target] modes', 'chat.cmd.mode'],
   ['/kick nick [reason]', 'chat.cmd.kick'],
+  ['/op /deop /voice /devoice nick…', 'chat.cmd.op'],
+  ['/ban /unban nick|mask', 'chat.cmd.ban'],
+  ['/invite nick [#channel]', 'chat.cmd.invite'],
+  ['/whois nick', 'chat.cmd.whois'],
+  ['/away [message]', 'chat.cmd.away'],
+  ['/back', 'chat.cmd.back'],
+  ['/ctcp nick command', 'chat.cmd.ctcp'],
+  ['/ns /cs text', 'chat.cmd.services'],
   ['/close', 'chat.cmd.close'],
   ['/quote line', 'chat.cmd.quote'],
   ['/status command', 'chat.cmd.status'],
   ['/help', 'chat.cmd.help'],
+  ['/anything else', 'chat.cmd.other'],
 ]
+
+// modeFor are the commands that set a mode on nicks: [sign and letter].
+const modeFor = { op: '+o', deop: '-o', voice: '+v', devoice: '-v' }
+
+// services are the shortcuts for messaging a network's services.
+const services = { ns: 'NickServ', cs: 'ChanServ', ms: 'MemoServ', hs: 'HostServ', bs: 'BotServ', os: 'OperServ' }
 
 // parse returns one of:
 //   { say: text }                       a message to the current buffer
@@ -32,8 +47,10 @@ export const COMMANDS = [
 //   { status: command }                 a *status command
 //   { close: true } | { help: true }
 //   { error: '…' }
-// aliases are the network's own commands (aliasesOf): /name sends the line
-// on and evrd's alias module expands it, as for an IRC client.
+// Any other /command goes to the network as typed, as from an IRC client
+// (its replies come back as reply frames). aliases are the network's own
+// commands (aliasesOf): they win over the built-in ones, and evrd's alias
+// module expands them.
 export function parse(input, target, aliases = {}) {
   const line = input.trim()
   if (!line) return null
@@ -44,8 +61,18 @@ export function parse(input, target, aliases = {}) {
   const args = rest.split(/\s+/).filter(Boolean)
   const here = isChan(target) ? target : ''
   const need = (ok, usage) => (ok ? null : { error: t('chat.usage', { usage }) })
+  const name = cmd.toLowerCase()
+  const asTyped = { raw: rest ? `${cmd.toUpperCase()} ${rest}` : cmd.toUpperCase() }
+  if (Object.hasOwn(aliases, name) && !['help', 'commands', 'close', 'status', 'znc'].includes(name)) return asTyped
 
-  switch (cmd.toLowerCase()) {
+  if (modeFor[name]) {
+    if (!here) return { error: t('chat.inChannel', { command: '/' + name }) }
+    if (!args.length) return { error: t('chat.usage', { usage: `/${name} nick…` }) }
+    return { raw: `MODE ${here} ${modeFor[name][0]}${modeFor[name][1].repeat(args.length)} ${args.join(' ')}` }
+  }
+  if (services[name]) return need(rest, `/${name} text`) || { send: { target: services[name], text: rest } }
+
+  switch (name) {
     case 'join': case 'j':
       return need(args[0], '/join #channel') || { raw: `JOIN ${isChan(args[0]) ? args[0] : '#' + args[0]}${args[1] ? ' ' + args[1] : ''}` }
     case 'part': case 'leave': {
@@ -86,6 +113,30 @@ export function parse(input, target, aliases = {}) {
       const [nick, ...why] = args
       return need(nick, '/kick nick [reason]') || { raw: `KICK ${here} ${nick}${why.length ? ' :' + why.join(' ') : ''}` }
     }
+    case 'ban': case 'unban': {
+      if (!here) return { error: t('chat.inChannel', { command: '/' + name }) }
+      if (!args.length) return { error: t('chat.usage', { usage: `/${name} nick|mask` }) }
+      const masks = args.map((a) => (/[!@*]/.test(a) ? a : `${a}!*@*`))
+      return { raw: `MODE ${here} ${name === 'ban' ? '+' : '-'}${'b'.repeat(masks.length)} ${masks.join(' ')}` }
+    }
+    case 'invite': {
+      const ch = isChan(args[1]) ? args[1] : here
+      if (!args[0] || !ch) return { error: t('chat.usage', { usage: '/invite nick [#channel]' }) }
+      return { raw: `INVITE ${args[0]} ${ch}` }
+    }
+    case 'whois': case 'wi':
+      return need(args[0], '/whois nick') || { raw: `WHOIS ${args.join(' ')}` }
+    case 'away':
+      return { raw: rest ? `AWAY :${rest}` : 'AWAY' }
+    case 'back':
+      return { raw: 'AWAY' }
+    case 'ctcp': {
+      const [nick, what, ...more] = args
+      if (!nick || !what) return { error: t('chat.usage', { usage: '/ctcp nick command' }) }
+      return { raw: `PRIVMSG ${nick} :\x01${[what.toUpperCase(), ...more].join(' ')}\x01` }
+    }
+    case 'quit': case 'disconnect':
+      return { error: t('chat.noQuit') }
     case 'close':
       return { close: true }
     case 'quote': case 'raw':
@@ -93,8 +144,7 @@ export function parse(input, target, aliases = {}) {
     case 'help': case 'commands':
       return { help: true }
   }
-  if (Object.hasOwn(aliases, cmd.toLowerCase())) return { raw: rest ? `${cmd} ${rest}` : cmd }
-  return { error: t('chat.unsupported', { command: '/' + cmd }) }
+  return asTyped
 }
 
 // aliasesOf is a network's aliases, name → commands, when its alias module
