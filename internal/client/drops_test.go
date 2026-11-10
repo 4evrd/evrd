@@ -32,7 +32,7 @@ func TestDisconnectReasons(t *testing.T) {
 				return
 			}
 		}
-		t.Fatalf("recorded %v, want %v", got, reasons)
+		t.Fatalf("recorded %v, want %v; evrd's log:\n%s", got, reasons, r.logs.String())
 	}
 
 	quits := r.attach("alice/one:alice-password")
