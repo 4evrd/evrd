@@ -302,7 +302,7 @@ test('the web chat runs the buffer commands too', async ({ page }) => {
   await expect(page.locator('.log').getByText(/evrd has been running/)).toBeVisible({ timeout: 5000 })
   await input.fill('/clearbuffer #x')
   await input.press('Enter')
-  await expect(page.getByText(/\/clearbuffer isn’t supported here/)).toBeVisible()
+  await expect(page.locator('.log').getByText('CLEARBUFFER Unknown command')).toBeVisible({ timeout: 5000 })
   await input.fill(`playbuffer ${chan}`)
   await input.press('Enter')
   await expect(page.locator('.log').getByText(/already shows each buffer's history/)).toBeVisible({ timeout: 5000 })

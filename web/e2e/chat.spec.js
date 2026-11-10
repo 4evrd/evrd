@@ -146,7 +146,8 @@ test('chat commands: /join, /me, /nick, /part and events', async ({ page }) => {
 
   await input.fill('/bogus')
   await input.press('Enter')
-  await expect(log(page).getByText(/\/bogus isn’t supported/)).toBeVisible()
+  // any other command goes to the network as typed; its answer shows here
+  await expect(log(page).getByText('BOGUS Unknown command')).toBeVisible({ timeout: 5000 })
 
   await input.fill(`/part ${other} bye`)
   await input.press('Enter')
