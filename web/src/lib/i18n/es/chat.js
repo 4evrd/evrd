@@ -70,6 +70,7 @@ export default {
   'chat.whichChannel': '¿Qué canal? /part #channel',
   'chat.inChannel': 'Usa {command} en un canal.',
   'chat.unsupported': '{command} no está disponible aquí — prueba /help o usa un cliente IRC.',
+  'chat.aliases': 'Tus alias (ajustes de la red → Módulos → Alias):',
 
   'chat.ev.join': '{nick} ha entrado',
   'chat.ev.part': '{nick} ha salido',

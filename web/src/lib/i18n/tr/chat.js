@@ -70,6 +70,7 @@ export default {
   'chat.whichChannel': 'Hangi kanal? /part #channel',
   'chat.inChannel': '{command} komutunu bir kanalda kullan.',
   'chat.unsupported': '{command} burada desteklenmiyor — /help dene ya da bir IRC istemcisi kullan.',
+  'chat.aliases': 'Takma komutların (ağ ayarları → Modüller → Takma adlar):',
 
   'chat.ev.join': '{nick} katıldı',
   'chat.ev.part': '{nick} ayrıldı',

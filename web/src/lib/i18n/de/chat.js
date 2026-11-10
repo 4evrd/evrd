@@ -71,6 +71,7 @@ export default {
   'chat.whichChannel': 'Welcher Channel? /part #channel',
   'chat.inChannel': 'Nutze {command} in einem Channel.',
   'chat.unsupported': '{command} wird hier nicht unterstützt — probier /help oder nutze einen IRC-Client.',
+  'chat.aliases': 'Deine Aliase (Netzwerk-Einstellungen → Module → Aliase):',
 
   // channel events
   'chat.ev.join': '{nick} ist beigetreten',

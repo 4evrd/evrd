@@ -71,6 +71,7 @@ export default {
   'chat.whichChannel': 'どのチャンネルですか？ /part #channel',
   'chat.inChannel': '{command} はチャンネル内で使ってください。',
   'chat.unsupported': '{command} はここでは使えません。/help を試すか、IRC クライアントを使ってください。',
+  'chat.aliases': 'あなたのエイリアス(ネットワーク設定 → モジュール → エイリアス):',
 
   // channel events
   'chat.ev.join': '{nick} が参加しました',

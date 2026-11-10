@@ -14,7 +14,7 @@
   import { session, refreshNets } from '$lib/session.svelte.js'
   import { toast } from '$lib/ui.svelte.js'
   import { clock, hue } from '$lib/format.js'
-  import { parse, describe, isChan, isEvent, COMMANDS, tableCells, isTableRule } from '$lib/chat.js'
+  import { parse, describe, isChan, isEvent, COMMANDS, aliasesOf, tableCells, isTableRule } from '$lib/chat.js'
   import { t, i18n } from '$lib/i18n.svelte.js'
   import { sortNets } from '$lib/netsort.js'
 
@@ -212,11 +212,19 @@
 
   async function send(e) {
     e.preventDefault()
-    const cmd = parse(text, buf)
+    const aliases = aliasesOf(net)
+    const cmd = parse(text, buf, aliases)
     if (!cmd) return
     const fail = () => { toast(t('chat.notConnected'), 'bad'); return false }
     if (cmd.error) { local(cmd.error); return }
-    if (cmd.help) { text = ''; for (const [c, d] of COMMANDS) local(`${c} — ${t(d)}`); return }
+    if (cmd.help) {
+      text = ''
+      for (const [c, d] of COMMANDS) local(`${c} — ${t(d)}`)
+      const own = Object.entries(aliases)
+      if (own.length) local(t('chat.aliases'))
+      for (const [name, def] of own) local(`/${name} — ${def}`)
+      return
+    }
     if (cmd.close) {
       text = ''
       if (isChan(buf)) { local(t('chat.closeChannel')); return }

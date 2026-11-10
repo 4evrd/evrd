@@ -32,7 +32,9 @@ export const COMMANDS = [
 //   { status: command }                 a *status command
 //   { close: true } | { help: true }
 //   { error: '…' }
-export function parse(input, target) {
+// aliases are the network's own commands (aliasesOf): /name sends the line
+// on and evrd's alias module expands it, as for an IRC client.
+export function parse(input, target, aliases = {}) {
   const line = input.trim()
   if (!line) return null
   const plain = !line.startsWith('/') || line.startsWith('//')
@@ -91,7 +93,23 @@ export function parse(input, target) {
     case 'help': case 'commands':
       return { help: true }
   }
+  if (Object.hasOwn(aliases, cmd.toLowerCase())) return { raw: rest ? `${cmd} ${rest}` : cmd }
   return { error: t('chat.unsupported', { command: '/' + cmd }) }
+}
+
+// aliasesOf is a network's aliases, name → commands, when its alias module
+// is on (one "name = commands" per line, the same as the bouncer reads them).
+export function aliasesOf(net) {
+  const out = {}
+  const m = net?.modules?.alias
+  if (!m?.enabled) return out
+  for (const l of (m.settings?.aliases || '').split('\n')) {
+    const at = l.indexOf('=')
+    if (at < 0) continue
+    const name = l.slice(0, at).trim().replace(/^\//, '').toLowerCase()
+    if (name && !/\s/.test(name)) out[name] = l.slice(at + 1).trim()
+  }
+  return out
 }
 
 // tableCells splits a Markdown table row ("| a | b|c | d") into its cells,

@@ -123,6 +123,40 @@ func TestStream(t *testing.T) {
 	})
 }
 
+// The web chat's command lines go through the network's aliases, the same
+// as an IRC client's.
+func TestStreamAliases(t *testing.T) {
+	e := newEnv(t)
+	e.user("alice", store.RoleUser)
+	c := e.login("alice")
+	path, irc, _ := e.liveNetwork(c, "fake")
+	if code, out := c.do("PATCH", path, map[string]any{"modules": map[string]any{
+		"alias": map[string]any{"enabled": true, "settings": map[string]string{"aliases": "op = /mode %1 +o %2; /msg %2 opped by %nick%"}},
+	}}); code != 200 {
+		t.Fatalf("modules: %d %v", code, out)
+	}
+	ws, _, err := c.stream(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.Close()
+	if m := next(t, ws); m["type"] != "ready" {
+		t.Fatalf("first frame: %v", m)
+	}
+	ws.WriteJSON(map[string]string{"raw": "op #evrd bob"})
+	if l := irc.expect("MODE "); l != "MODE #evrd +o bob" {
+		t.Fatalf("alias: %q", l)
+	}
+	if l := irc.expect("PRIVMSG "); !strings.HasPrefix(l, "PRIVMSG bob :opped by ") {
+		t.Fatalf("alias's second command: %q", l)
+	}
+	// anything else still goes as it is
+	ws.WriteJSON(map[string]string{"raw": "AWAY :lunch"})
+	if l := irc.expect("AWAY"); l != "AWAY :lunch" {
+		t.Fatalf("raw line: %q", l)
+	}
+}
+
 func TestStreamRefusals(t *testing.T) {
 	e := newEnv(t)
 	e.user("alice", store.RoleUser)
