@@ -58,7 +58,7 @@ func NewDatabase(dsn string) (*DB, error) {
 	case strings.HasPrefix(dsn, "postgres://"), strings.HasPrefix(dsn, "postgresql://"):
 		dialector = postgres.Open(dsn)
 	default:
-		dialector = sqlite.Open(strings.TrimPrefix(dsn, "sqlite:"))
+		dialector = sqlite.Open(sqliteDSN(strings.TrimPrefix(dsn, "sqlite:")))
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{
@@ -84,6 +84,17 @@ func NewDatabase(dsn string) (*DB, error) {
 		}
 	}
 	return &DB{DB: db}, nil
+}
+
+// sqliteDSN makes concurrent writers wait their turn instead of failing
+// with SQLITE_BUSY: a busy timeout, and transactions that take the write
+// lock up front (a read that turns into a write can't wait for it).
+func sqliteDSN(path string) string {
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	return path + sep + "_pragma=busy_timeout(5000)&_txlock=immediate"
 }
 
 // newStore builds every repository on db.

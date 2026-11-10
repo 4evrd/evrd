@@ -1,6 +1,8 @@
 package store
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
@@ -55,5 +57,32 @@ func TestClientDisconnects(t *testing.T) {
 	}
 	if all, _ := st.ClientDisconnects(ctx, 0, t0); len(all) != 1 || all[0].UserID != u.ID {
 		t.Fatalf("a deleted user's go with them: %+v", all)
+	}
+}
+
+// Writers at once wait their turn: none is lost to SQLITE_BUSY (a drop
+// recorded while other writes run used to be, now and then).
+func TestClientDisconnectsAtOnce(t *testing.T) {
+	st := open(t)
+	ctx := t.Context()
+	u, _ := st.CreateUser(ctx, User{Username: "alice"})
+	errs := make(chan error, 8*25)
+	var wg sync.WaitGroup
+	for g := range 8 {
+		wg.Go(func() {
+			for range 25 {
+				now := time.Now()
+				_, err := st.AddClientDisconnect(ctx, ClientDisconnect{UserID: u.ID, DeviceKey: fmt.Sprint("device", g), Reason: "quit",
+					ConnectedAt: now, EndedAt: now}, now.Add(-time.Hour))
+				if err != nil {
+					errs <- err
+				}
+			}
+		})
+	}
+	wg.Wait()
+	close(errs)
+	if n := len(errs); n > 0 {
+		t.Fatalf("%d of 200 writes failed, the first: %v", n, <-errs)
 	}
 }
