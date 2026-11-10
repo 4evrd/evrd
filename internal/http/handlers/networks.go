@@ -530,7 +530,8 @@ func (s *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if raw := strings.TrimSpace(in.Raw); raw != "" {
-				if !strings.ContainsAny(raw, "\r\n") {
+				// as from an IRC client: an alias may take it
+				if !strings.ContainsAny(raw, "\r\n") && !conn.ClientLine(raw) {
 					conn.SendRaw(raw)
 				}
 				continue

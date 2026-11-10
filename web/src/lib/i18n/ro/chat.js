@@ -79,6 +79,7 @@ export default {
   'chat.whichChannel': 'Care canal? /part #channel',
   'chat.inChannel': 'Folosește {command} într-un canal.',
   'chat.unsupported': '{command} nu e suportată aici — încearcă /help sau folosește un client IRC.',
+  'chat.aliases': 'Aliasurile tale (setările rețelei → Module → Aliasuri):',
 
   // evenimente din canale
   'chat.ev.join': '{nick} a intrat',

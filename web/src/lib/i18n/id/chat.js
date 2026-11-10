@@ -71,6 +71,7 @@ export default {
   'chat.whichChannel': 'Channel yang mana? /part #channel',
   'chat.inChannel': 'Gunakan {command} di dalam channel.',
   'chat.unsupported': '{command} tidak didukung di sini — coba /help, atau gunakan klien IRC.',
+  'chat.aliases': 'Alias kamu (pengaturan jaringan → Modul → Alias):',
 
   // channel events
   'chat.ev.join': '{nick} masuk',
