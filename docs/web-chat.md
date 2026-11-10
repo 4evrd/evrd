@@ -131,6 +131,7 @@ Then, as they happen:
 | `{target, sender, kind, text, extra, time, id}` | a saved line: `kind` is `message`, `notice` or `action`, or a channel event (`join`, `part`, `quit`, `kick`, `nick`, `topic`, `mode`). Your own lines come this way too, from any of your clients — the network doesn't echo them. `id` is its msgid. |
 | `{type:"typing", target, nick, state}` | someone's typing (`active`, `paused`, `done`) |
 | `{type:"raw", line, id?}` (`?raw=1`) | a line exactly as the network sent it, tags and all: numerics (`WHOIS`, `LIST`, `NAMES`, `MODE`…), `JOIN`, `PRIVMSG`… The network's `PING`s come too: evrd answers them, so ignore them. CTCP requests evrd answers itself (`VERSION`…) and the replies to evrd's own `NAMES`/`TOPIC`/`WHO` after a reconnect don't come. `id` is set when evrd saved the line: the same line also comes as the saved-line frame with that `id`, so drop one of the two. |
+| `{type:"reply", code, text}` (without `?raw=1`) | a numeric reply from the network (`WHOIS`, `LIST`, errors…), for 30 seconds after the page last sent a `raw` line or got a reply. `text` is the reply without the nick it's for: `311 alice carol c h * :Carol C` is `carol c h * Carol C`. |
 | `{type:"left", channels}` (`?raw=1`) | the link to the network ended: evrd is out of these channels until it reconnects and rejoins them (their `JOIN`s come as raw lines) |
 
 A client that speaks IRC itself can take everything from the raw lines,
@@ -142,7 +143,7 @@ saved-line frames with a `sender` that's the user's nick.
 | Frame | |
 |---|---|
 | `{"target": "#chan", "text": "hi"}` | a message; `"kind": "action"` for `/me`, `"notice"` for a notice |
-| `{"raw": "WHOIS carol"}` | any IRC line (`JOIN`, `PART`, `NICK`, `TOPIC`, `MODE`, `NAMES`, `LIST`…). Lines with line breaks are dropped. |
+| `{"raw": "WHOIS carol"}` | any IRC line (`JOIN`, `PART`, `NICK`, `TOPIC`, `MODE`, `NAMES`, `LIST`…), handled like an IRC client's: one of the network's aliases (the alias module) runs instead when its name is the first word. Lines with line breaks, and `QUIT`, `CAP`, `PASS`, `USER` and `AUTHENTICATE`, are dropped. |
 | `{"status": "help"}` | a `*status` command; its answers come as lines from `*status` |
 | `{"target": "#chan", "typing": "active"}` | typing (`active`, `paused`, `done`) |
 

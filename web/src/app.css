@@ -744,6 +744,7 @@ dialog.confirm[open] { animation: pop var(--t-med) var(--ease-out); }
 .msg .text { overflow-wrap: anywhere; }
 .msg.event .text { color: var(--faint); font-size: var(--fs-xs); padding-top: 2px; }
 .msg.event .nick { color: var(--faint); }
+.msg.event.bad .text, .msg.event.bad .nick { color: var(--bad); }
 .msg.highlight { background: var(--signal-soft); }
 .msg.self .nick { color: var(--primary); }
 .day-sep { display: flex; align-items: center; gap: var(--s3); margin: var(--s3) 0; font-size: var(--fs-2xs); letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--faint); font-weight: 600; }

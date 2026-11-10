@@ -157,6 +157,51 @@ func TestStreamAliases(t *testing.T) {
 	}
 }
 
+// The network's numeric replies reach the web chat after it sends a command
+// line (not before), and lines that would upset the bouncer don't go.
+func TestStreamReplies(t *testing.T) {
+	e := newEnv(t)
+	e.user("alice", store.RoleUser)
+	c := e.login("alice")
+	path, irc, _ := e.liveNetwork(c, "fake")
+	ws, _, err := c.stream(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.Close()
+	if m := next(t, ws); m["type"] != "ready" {
+		t.Fatalf("first frame: %v", m)
+	}
+	irc.send(":evrd.test 251 alice :There are 3 users") // nobody asked
+	irc.send(":carol!c@h PRIVMSG #evrd :after the 251")
+	nextWith(t, ws, "text", "after the 251") // so the 251 was handled
+	ws.WriteJSON(map[string]string{"raw": "QUIT :bye"})
+	ws.WriteJSON(map[string]string{"raw": "CAP REQ :web-cap"})
+	ws.WriteJSON(map[string]string{"raw": "WHOIS carol"})
+	if l := irc.expect("WHOIS"); l != "WHOIS carol" {
+		t.Fatalf("whois: %q", l)
+	}
+	irc.send(":evrd.test 311 alice carol c h * :Carol C")
+	m := nextWith(t, ws, "type", "reply")
+	if m["code"] != "311" || m["text"] != "carol c h * Carol C" {
+		t.Fatalf("reply: %v", m)
+	}
+	irc.send(":evrd.test 401 alice nobody :No such nick/channel")
+	if m := nextWith(t, ws, "type", "reply"); m["code"] != "401" || m["text"] != "nobody No such nick/channel" {
+		t.Fatalf("error reply: %v", m)
+	}
+	// QUIT and CAP never went: the next line upstream is this one
+	ws.WriteJSON(map[string]string{"raw": "AWAY :lunch"})
+	if l := irc.expect("AWAY"); l != "AWAY :lunch" {
+		t.Fatalf("after the refused lines: %q", l)
+	}
+	for _, l := range irc.log.Lines() {
+		if strings.HasPrefix(l, "QUIT") || strings.Contains(l, "web-cap") {
+			t.Fatalf("sent %q", l)
+		}
+	}
+}
+
 func TestStreamRefusals(t *testing.T) {
 	e := newEnv(t)
 	e.user("alice", store.RoleUser)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/4evrd/evrd/internal/accounts"
@@ -465,6 +466,11 @@ func isChannelName(s string) bool { return s != "" && strings.ContainsRune("#&+!
 //	{type:"left", channels}   the link to the network ended: evrd is out of
 //	                          these channels until it's back and rejoins
 //
+// Without it, the network's numeric replies (WHOIS, errors, …) come for a
+// while after the page sends a command line, as
+//
+//	{type:"reply", code, text}  text is the reply without the nick it's for
+//
 // and its ready frame says where things stand: {type:"ready", nick,
 // channels, isupport, connected}.
 func (s *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
@@ -511,6 +517,9 @@ func (s *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
 
 	// *status replies, written by the select loop below (the only writer).
 	replies := make(chan history.Message, 256)
+	// when the page last sent a command line (or a reply to one came), in
+	// unix nanoseconds: the network's replies go to the page for a while
+	var asked atomic.Int64
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -531,8 +540,11 @@ func (s *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
 			}
 			if raw := strings.TrimSpace(in.Raw); raw != "" {
 				// as from an IRC client: an alias may take it
-				if !strings.ContainsAny(raw, "\r\n") && !conn.ClientLine(raw) {
-					conn.SendRaw(raw)
+				if !strings.ContainsAny(raw, "\r\n") && !notFromWeb[strings.ToUpper(irc.Parse(raw).Command)] {
+					asked.Store(time.Now().UnixNano())
+					if !conn.ClientLine(raw) {
+						conn.SendRaw(raw)
+					}
 				}
 				continue
 			}
@@ -573,6 +585,12 @@ func (s *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
+			if f, ok := replyFrame(l); ok && !wantRaw && time.Since(time.Unix(0, asked.Load())) < replyWindow {
+				asked.Store(time.Now().UnixNano()) // a long answer (LIST) keeps coming
+				if err := ws.WriteJSON(f); err != nil {
+					return
+				}
+			}
 		case m := <-replies:
 			if err := ws.WriteJSON(messageDTO(m)); err != nil {
 				return
@@ -597,6 +615,27 @@ func rawFrame(l upstream.Line) (map[string]any, bool) {
 		f["id"] = l.ID.String()
 	}
 	return f, true
+}
+
+// notFromWeb are the commands the web chat can't send: they'd end or upset
+// the bouncer's own connection.
+var notFromWeb = map[string]bool{"QUIT": true, "CAP": true, "PASS": true, "USER": true, "AUTHENTICATE": true}
+
+// replyWindow is how long after a command line the network's replies go to
+// the web chat.
+const replyWindow = 30 * time.Second
+
+// replyFrame is a numeric reply for the web chat, without the nick it's
+// addressed to: "311 alice carol c h * :Carol C" is "carol c h * Carol C".
+func replyFrame(l upstream.Line) (map[string]any, bool) {
+	if l.Text == "" || l.Origin != "" {
+		return nil, false
+	}
+	m := irc.Parse(l.Text)
+	if len(m.Command) != 3 || strings.Trim(m.Command, "0123456789") != "" || len(m.Params) < 2 {
+		return nil, false
+	}
+	return map[string]any{"type": "reply", "code": m.Command, "text": strings.Join(m.Params[1:], " ")}, true
 }
 
 // typingStates are the +typing values (IRCv3 typing client tag).

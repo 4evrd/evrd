@@ -115,8 +115,9 @@ export const api = {
   // the session cookie authenticates it). onMessage gets each message.
   // onReady runs once the server confirms the subscription ({type:
   // "ready"}); only then is nothing missed. onTyping gets others' typing
-  // ({target, nick, state: active|paused|done}).
-  openStream(id, onMessage, onClose, onReady, onTyping) {
+  // ({target, nick, state: active|paused|done}). onReply gets the network's
+  // replies to a command line ({code, text}).
+  openStream(id, onMessage, onClose, onReady, onTyping, onReply) {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(`${proto}//${location.host}/api/networks/${id}/stream${language ? '?lang=' + encodeURIComponent(language) : ''}`)
     ws.onmessage = (e) => {
@@ -124,6 +125,7 @@ export const api = {
       try { m = JSON.parse(e.data) } catch { return /* ignore malformed frames */ }
       if (m.type === 'ready') { onReady?.(); return }
       if (m.type === 'typing') { onTyping?.(m); return }
+      if (m.type === 'reply') { onReply?.(m); return }
       if (m.type) return // other control frames
       onMessage(m)
     }
@@ -132,7 +134,7 @@ export const api = {
     return {
       // kind: undefined (a message) | 'action' | 'notice'
       send: (target, text, kind) => out({ target, text, kind }),
-      // a raw IRC line: JOIN, NICK, TOPIC, …
+      // a raw IRC line: JOIN, NICK, TOPIC, … (an alias's name too)
       raw: (line) => out({ raw: line }),
       // a *status command; replies arrive as messages from *status
       status: (command) => out({ status: command }),
