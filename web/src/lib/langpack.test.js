@@ -33,7 +33,7 @@ test('coverage: English keys any layer has', () => {
 
 test('languages on offer', () => {
   const list = languageList(LANGUAGES, [{ code: 'pl', name: 'Polski' }, { code: 'it', name: 'Italiano (ufficio)' }], { code: 'xx', name: 'Mine' })
-  assert.deepEqual(list.map((l) => l.code), ['en', 'it', 'es', 'tr', 'de', 'id', 'ro', 'ja', 'pl', 'xx'])
+  assert.deepEqual(list.map((l) => l.code), ['en', 'it', 'es', 'tr', 'de', 'id', 'ro', 'ja', 'fr', 'ms', 'pt-BR', 'pl', 'xx'])
   assert.equal(list.find((l) => l.code === 'it').name, 'Italiano (ufficio)')
   assert.equal(LANGUAGES.find((l) => l.code === 'it').name, 'Italiano') // not changed in place
   // the personal pack's name wins; a pack without one keeps the name

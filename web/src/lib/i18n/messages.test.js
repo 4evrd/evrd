@@ -44,4 +44,10 @@ test('pick', () => {
   assert.equal(pick('', ['de-DE', 'es-MX']), 'de')
   assert.equal(pick('', ['pl']), 'en')
   assert.equal(pick('xx', ['it']), 'it')
+  assert.equal(pick('', ['fr-CA', 'en']), 'fr')
+  assert.equal(pick('', ['ms-MY']), 'ms')
+  assert.equal(pick('', ['pt-br']), 'pt-BR')
+  assert.equal(pick('', ['pt-PT', 'en']), 'pt-BR') // the only Portuguese
+  assert.equal(pick('', ['pt']), 'pt-BR')
+  assert.equal(pick('pt-br', ['en']), 'pt-BR')
 })

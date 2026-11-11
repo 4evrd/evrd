@@ -1,0 +1,27 @@
+// Bringing a whole ZNC over (Admin → Users → Import from ZNC): its users
+// become accounts, and their networks come with them.
+export default {
+  'zncMove.button': 'Importer depuis ZNC',
+  'zncMove.title': 'Importer depuis ZNC',
+  'zncMove.intro': 'Faites venir les utilisateurs d’un serveur ZNC : chacun va dans un compte evrd, créé ici s’il n’existe pas encore, avec les réseaux que vous choisissez.',
+  'zncMove.choose': 'Choisir znc.conf',
+  'zncMove.passwords': 'Un nouveau compte garde le mot de passe ZNC de l’utilisateur : evrd vérifie le hachage de ZNC à sa première connexion, puis le remplace par le sien. Il n’est jamais affiché ni exporté. Un compte qui existe déjà garde son propre mot de passe. S’il n’est pas utilisé, il est effacé après le nombre de jours défini dans Réglages → Connexion ; un mot de passe plus court que ce qu’evrd autorise fonctionne quand même, mais devra être changé à la prochaine connexion web.',
+  'zncMove.noUsers': 'Cette configuration ne contient aucun bloc <User>.',
+  'zncMove.includeUser': 'Importer {name}',
+  'zncMove.account': 'Compte evrd pour {name}',
+  'zncMove.new': 'Nouveau compte',
+  'zncMove.existing': 'Compte existant',
+  'zncMove.willKeepPassword': 'Garde son mot de passe ZNC',
+  'zncMove.noZncPassword': 'Pas de mot de passe dans la configuration : il lui faudra un e-mail pour le SSO, ou un mot de passe via Réinitialiser',
+  'zncMove.email': 'E-mail (facultatif)',
+  'zncMove.emailFor': 'E-mail de {name}',
+  'zncMove.emailHelp': 'Avec un e-mail, sa première connexion SSO avec le même nom d’utilisateur et le même e-mail revendique le compte.',
+  'zncMove.go': { one: 'Importer {count} utilisateur ({networks} réseaux)', other: 'Importer {count} utilisateurs ({networks} réseaux)' },
+  'zncMove.progress': 'Import de {name} ({n} sur {count})…',
+  'zncMove.created': 'Compte créé',
+  'zncMove.existed': 'Compte déjà présent',
+  'zncMove.keptPassword': 'Mot de passe ZNC gardé',
+  'zncMove.noPassword': 'pas de mot de passe',
+  'zncMove.claimable': 'revendicable par SSO',
+  'zncMove.toUsers': 'Aller aux utilisateurs',
+}

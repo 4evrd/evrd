@@ -1,0 +1,60 @@
+// Moving networks in and out: the networks file export, and importing one
+// or a ZNC config (/networks/import).
+export default {
+  'transfer.export': 'Eksport',
+  'transfer.exportTip': 'Muat turun rangkaian anda sebagai fail YAML',
+  'transfer.exported': { other: '{count} rangkaian dieksport' },
+  'transfer.exportedNoKey': 'Dieksport tanpa kata laluan: pelayan ini tiada kunci rahsia untuk menyulitkannya.',
+  'transfer.import': 'Import',
+  'transfer.importTip': 'Tambah rangkaian daripada eksport evrd atau konfigurasi ZNC',
+
+  'transfer.title': 'Import rangkaian',
+  'transfer.intro': 'Tambah rangkaian daripada fail: fail yang dieksport dari evrd, atau konfigurasi ZNC (znc.conf, atau hanya bahagian yang anda perlukan).',
+  'transfer.choose': 'Pilih fail',
+  'transfer.paste': 'Atau tampalkannya di sini',
+  'transfer.pastePlaceholder': 'networks:\n  - name: libera\n…\n\natau\n\n<Network libera>\n  Server = irc.libera.chat +6697\n…',
+  'transfer.read': 'Baca',
+  'transfer.reading': 'Membaca…',
+  'transfer.another': 'Guna fail lain',
+  'transfer.secrets': 'Eksport evrd membawa kata laluan yang disulitkan dengan kunci pelayannya: kata laluan itu kembali pada pelayan ini, atau pada pelayan dengan kunci yang sama. Dari tempat lain, anda perlu menetapkannya semula.',
+
+  'transfer.formatEvrd': 'Fail rangkaian evrd',
+  'transfer.formatZnc': 'Konfigurasi ZNC',
+  'transfer.zncUser': 'Pengguna ZNC',
+  'transfer.zncUserHelp': 'Konfigurasi ini mempunyai beberapa pengguna: pilih rangkaian pengguna mana yang hendak dibawa masuk.',
+  'transfer.noUser': 'Rangkaian tanpa pengguna',
+  'transfer.userNetworks': { other: '{count} rangkaian' },
+
+  'transfer.networks': 'Rangkaian',
+  'transfer.all': 'Semua',
+  'transfer.none': 'Tiada',
+  'transfer.empty': 'Tiada rangkaian dalam bahagian fail ini.',
+  'transfer.channels': { other: '{count} saluran' },
+  'transfer.exists': 'Sudah ditambah',
+  'transfer.off': 'Dimatikan dalam fail',
+
+  'transfer.existing': 'Rangkaian yang anda sudah ada',
+  'transfer.skip': 'Biarkan seperti sedia ada',
+  'transfer.skipHelp': 'Hanya rangkaian yang anda belum ada akan ditambah.',
+  'transfer.merge': 'Gabungkan fail',
+  'transfer.mergeHelp': 'Kekalkan tetapannya; tambah saluran dan pelayan yang tiada, dan isi yang kosong.',
+  'transfer.update': 'Kemas kini daripada fail',
+  'transfer.updateHelp': 'Tetapan dan salurannya menjadi seperti dalam fail. Sejarah dikekalkan.',
+  'transfer.connect': 'Sambungkannya selepas diimport',
+  'transfer.connectHelp': 'Biarkan ini dimatikan semasa ZNC masih bersambung, supaya kedua-duanya tidak berebut nick anda.',
+
+  'transfer.go': { other: 'Import {count} rangkaian' },
+  'transfer.importing': 'Mengimport…',
+  'transfer.done': 'Selesai',
+  'transfer.result.created': 'Ditambah',
+  'transfer.result.updated': 'Dikemas kini',
+  'transfer.result.merged': 'Digabungkan',
+  'transfer.result.skipped': 'Dilangkau: sudah ditambah',
+  'transfer.result.failed': 'Tidak diimport',
+  'transfer.toNetworks': 'Pergi ke rangkaian anda',
+
+  // an admin importing into someone's account
+  'transfer.adminTitle': 'Import rangkaian untuk {name}',
+  'transfer.adminIntro': 'Tambah rangkaian ke akaun ini daripada eksport evrd atau konfigurasi ZNC. Sebagai pentadbir, anda boleh membawa hos bind dan melebihi had rangkaian akaun itu.',
+  'transfer.toAccount': 'Kembali ke {name}',
+}

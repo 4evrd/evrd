@@ -1,7 +1,7 @@
 # Translating evrd
 
-evrd comes in English, German, Indonesian, Italian, Japanese, Romanian,
-Spanish and Turkish: the web app, and what evrd itself says — to IRC clients, and in
+evrd comes in English, Brazilian Portuguese, French, German, Indonesian,
+Italian, Japanese, Malay, Romanian, Spanish and Turkish: the web app, and what evrd itself says — to IRC clients, and in
 errors, connection logs and events on the website (see [evrd's own
 messages](#evrds-own-messages)). Anyone can add a language or change some of the
 text, without touching the code:
