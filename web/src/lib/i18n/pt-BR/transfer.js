@@ -1,0 +1,60 @@
+// Levando redes para dentro e para fora: a exportação do arquivo de redes, e
+// a importação de um arquivo desses ou de uma config do ZNC (/networks/import).
+export default {
+  'transfer.export': 'Exportar',
+  'transfer.exportTip': 'Baixar suas redes como um arquivo YAML',
+  'transfer.exported': { one: '{count} rede exportada', other: '{count} redes exportadas' },
+  'transfer.exportedNoKey': 'Exportado sem senhas: este servidor não tem uma chave secreta para criptografá-las.',
+  'transfer.import': 'Importar',
+  'transfer.importTip': 'Adicionar redes de uma exportação do evrd ou de uma config do ZNC',
+
+  'transfer.title': 'Importar redes',
+  'transfer.intro': 'Adicione redes a partir de um arquivo: um exportado do evrd, ou uma config do ZNC (znc.conf, ou só a parte que você precisa).',
+  'transfer.choose': 'Escolher um arquivo',
+  'transfer.paste': 'Ou cole aqui',
+  'transfer.pastePlaceholder': 'networks:\n  - name: libera\n…\n\nou\n\n<Network libera>\n  Server = irc.libera.chat +6697\n…',
+  'transfer.read': 'Ler',
+  'transfer.reading': 'Lendo…',
+  'transfer.another': 'Usar outro arquivo',
+  'transfer.secrets': 'Uma exportação do evrd traz as senhas criptografadas com a chave do servidor dela: elas voltam neste servidor, ou em um com a mesma chave. Em qualquer outro lugar, você vai precisar defini-las de novo.',
+
+  'transfer.formatEvrd': 'Arquivo de redes do evrd',
+  'transfer.formatZnc': 'Config do ZNC',
+  'transfer.zncUser': 'Usuário do ZNC',
+  'transfer.zncUserHelp': 'A config tem vários usuários: escolha de quem trazer as redes.',
+  'transfer.noUser': 'Redes sem usuário',
+  'transfer.userNetworks': { one: '{count} rede', other: '{count} redes' },
+
+  'transfer.networks': 'Redes',
+  'transfer.all': 'Todas',
+  'transfer.none': 'Nenhuma',
+  'transfer.empty': 'Não há redes nesta parte do arquivo.',
+  'transfer.channels': { one: '{count} canal', other: '{count} canais' },
+  'transfer.exists': 'Já adicionada',
+  'transfer.off': 'Desligada no arquivo',
+
+  'transfer.existing': 'Redes que você já tem',
+  'transfer.skip': 'Deixá-las como estão',
+  'transfer.skipHelp': 'Só são adicionadas as redes que você ainda não tem.',
+  'transfer.merge': 'Mesclar o arquivo',
+  'transfer.mergeHelp': 'Manter as configurações delas; adicionar os canais e servidores que faltam, e preencher o que estiver vazio.',
+  'transfer.update': 'Atualizá-las a partir do arquivo',
+  'transfer.updateHelp': 'As configurações e canais delas passam a ser os do arquivo. O histórico é mantido.',
+  'transfer.connect': 'Conectá-las depois de importar',
+  'transfer.connectHelp': 'Deixe isto desligado enquanto o ZNC ainda estiver conectado, para os dois não brigarem pelo seu nick.',
+
+  'transfer.go': { one: 'Importar {count} rede', other: 'Importar {count} redes' },
+  'transfer.importing': 'Importando…',
+  'transfer.done': 'Pronto',
+  'transfer.result.created': 'Adicionada',
+  'transfer.result.updated': 'Atualizada',
+  'transfer.result.merged': 'Mesclada',
+  'transfer.result.skipped': 'Ignorada: já adicionada',
+  'transfer.result.failed': 'Não importada',
+  'transfer.toNetworks': 'Ir para suas redes',
+
+  // an admin importing into someone's account
+  'transfer.adminTitle': 'Importar redes para {name}',
+  'transfer.adminIntro': 'Adicione redes a esta conta a partir de uma exportação do evrd ou de uma config do ZNC. Como admin, você pode trazer um bind host e passar do limite de redes da conta.',
+  'transfer.toAccount': 'Voltar para {name}',
+}

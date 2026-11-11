@@ -1,0 +1,27 @@
+// Trazendo um ZNC inteiro (Admin → Usuários → Importar do ZNC): os usuários
+// dele viram contas, e as redes deles vêm junto.
+export default {
+  'zncMove.button': 'Importar do ZNC',
+  'zncMove.title': 'Importar do ZNC',
+  'zncMove.intro': 'Traga os usuários de um servidor ZNC: cada um vai para uma conta do evrd, criada aqui se ainda não existir, com as redes que você escolher.',
+  'zncMove.choose': 'Escolher znc.conf',
+  'zncMove.passwords': 'Uma conta nova mantém a senha do ZNC do usuário: o evrd verifica o hash do ZNC no primeiro login dele e depois o substitui pelo hash do próprio evrd. Ela nunca é mostrada nem exportada. Uma conta que já existe mantém a própria senha. Sem uso, ela é apagada depois dos dias definidos em Configurações → Login; uma mais curta do que o evrd permite ainda funciona, mas precisa ser trocada no próximo login web.',
+  'zncMove.noUsers': 'Não há blocos <User> nesta config.',
+  'zncMove.includeUser': 'Trazer {name}',
+  'zncMove.account': 'Conta do evrd para {name}',
+  'zncMove.new': 'Conta nova',
+  'zncMove.existing': 'Conta existente',
+  'zncMove.willKeepPassword': 'Mantém a senha do ZNC',
+  'zncMove.noZncPassword': 'Sem senha na config: vai precisar de um e-mail para o SSO, ou de uma senha via Redefinir',
+  'zncMove.email': 'E-mail (opcional)',
+  'zncMove.emailFor': 'E-mail de {name}',
+  'zncMove.emailHelp': 'Com um e-mail, o primeiro login por SSO com o mesmo nome de usuário e e-mail assume a conta.',
+  'zncMove.go': { one: 'Trazer {count} usuário ({networks} redes)', other: 'Trazer {count} usuários ({networks} redes)' },
+  'zncMove.progress': 'Importando {name} ({n} de {count})…',
+  'zncMove.created': 'Conta criada',
+  'zncMove.existed': 'A conta já existia',
+  'zncMove.keptPassword': 'Senha do ZNC mantida',
+  'zncMove.noPassword': 'sem senha',
+  'zncMove.claimable': 'pode ser assumida por SSO',
+  'zncMove.toUsers': 'Ir para os usuários',
+}

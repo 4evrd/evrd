@@ -11,16 +11,21 @@ export const LANGUAGES = [
   { code: 'id', name: 'Bahasa Indonesia' },
   { code: 'ro', name: 'Română' },
   { code: 'ja', name: '日本語' },
+  { code: 'fr', name: 'Français' },
+  { code: 'ms', name: 'Bahasa Melayu' },
+  { code: 'pt-BR', name: 'Português (Brasil)' },
 ]
 
 // pick is the language to use: the account's choice, else the first of the
-// browser's languages the app has, else English. codes are the languages
-// on offer (the built-in ones, plus any language packs').
+// browser's languages the app has (pt-PT or pt gets pt-BR when that's the
+// only Portuguese), else English. codes are the languages on offer (the
+// built-in ones, plus any language packs').
 export function pick(chosen, browser = globalThis.navigator?.languages || [], codes = LANGUAGES.map((l) => l.code)) {
   const have = (c) => codes.find((x) => x.toLowerCase() === c.toLowerCase())
+  const base = (c) => c.split('-')[0].toLowerCase()
   if (chosen && have(chosen)) return have(chosen)
   for (const b of browser) {
-    const c = have(String(b)) || have(String(b).split('-')[0])
+    const c = have(String(b)) || have(base(String(b))) || codes.find((x) => base(x) === base(String(b)))
     if (c) return c
   }
   return 'en'

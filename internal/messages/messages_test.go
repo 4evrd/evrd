@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -69,7 +70,7 @@ func TestBuiltinCatalogs(t *testing.T) {
 	if len(en) < 100 {
 		t.Fatalf("English has %d texts", len(en))
 	}
-	for _, code := range []string{"de", "en", "es", "id", "it", "ja", "ro", "tr"} {
+	for _, code := range []string{"de", "en", "es", "fr", "id", "it", "ja", "ms", "pt-BR", "ro", "tr"} {
 		msgs, ok := New(nil).Builtin(code)
 		if !ok {
 			t.Fatalf("%s isn't built in", code)
@@ -96,7 +97,7 @@ func TestBuiltinCatalogs(t *testing.T) {
 			}
 		}
 	}
-	if !slices.Equal(Languages(), []string{"de", "en", "es", "id", "it", "ja", "ro", "tr"}) {
+	if !slices.Equal(Languages(), []string{"de", "en", "es", "fr", "id", "it", "ja", "ms", "pt-BR", "ro", "tr"}) {
 		t.Errorf("languages %v", Languages())
 	}
 	if keys := Keys(); len(keys) != len(en) || !slices.IsSorted(keys) {
@@ -160,6 +161,27 @@ func TestPrinter(t *testing.T) {
 	var nilPrinter *Printer
 	if got := nilPrinter.T("irc.adminsOnly"); got != "Admins only." {
 		t.Errorf("nil printer: %q", got)
+	}
+}
+
+// French and Brazilian Portuguese say 0 in the singular; Malay has no
+// plural forms. "pt-BR" is the code, as the file and the web app name it.
+func TestPluralRules(t *testing.T) {
+	ctx := context.Background()
+	s := New(nil)
+	for _, c := range []struct {
+		code  string
+		count int
+		form  string
+	}{{"fr", 0, "one"}, {"fr", 1, "one"}, {"fr", 2, "other"}, {"pt-BR", 0, "one"}, {"pt-BR", 1, "one"}, {"pt-BR", 5, "other"}, {"ms", 1, "other"}, {"ms", 7, "other"}} {
+		var forms map[string]string
+		if err := json.Unmarshal(raw[c.code]["irc.count.channels"], &forms); err != nil {
+			t.Fatalf("%s: %v", c.code, err)
+		}
+		want := strings.ReplaceAll(forms[c.form], "{count}", strconv.Itoa(c.count))
+		if got := s.For(ctx, store.User{Language: c.code}).T("irc.count.channels", "count", c.count); got != want || want == "" {
+			t.Errorf("%s %d: %q, want %q (%s)", c.code, c.count, got, want, c.form)
+		}
 	}
 }
 
@@ -249,7 +271,7 @@ func TestCoverage(t *testing.T) {
 	if _, _, err := New(f).Coverage(ctx); err == nil {
 		t.Error("no error when the packs can't be listed")
 	}
-	if total, have, err := New(nil).Coverage(ctx); err != nil || have["ja"] != total || have["ro"] != total || len(have) != 8 {
+	if total, have, err := New(nil).Coverage(ctx); err != nil || have["ja"] != total || have["ro"] != total || len(have) != 11 {
 		t.Errorf("no packs: %d %v %v", total, have, err)
 	}
 	if _, ok := New(nil).Builtin("pl"); ok {

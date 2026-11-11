@@ -1,0 +1,27 @@
+// Bringing a whole ZNC over (Admin → Users → Import from ZNC): its users
+// become accounts, and their networks come with them.
+export default {
+  'zncMove.button': 'Import dari ZNC',
+  'zncMove.title': 'Import dari ZNC',
+  'zncMove.intro': 'Bawa masuk pengguna pelayan ZNC: setiap seorang pergi ke akaun evrd, yang dicipta di sini jika belum wujud, bersama rangkaian yang anda pilih.',
+  'zncMove.choose': 'Pilih znc.conf',
+  'zncMove.passwords': 'Akaun baharu mengekalkan kata laluan ZNC pengguna: evrd menyemak hash ZNC semasa log masuk pertama mereka, kemudian menggantikannya dengan hash sendiri. Ia tidak pernah ditunjukkan atau dieksport. Akaun yang sudah wujud mengekalkan kata laluannya sendiri. Jika tidak digunakan, ia dikosongkan selepas bilangan hari yang ditetapkan dalam Tetapan → Log masuk; kata laluan yang lebih pendek daripada yang dibenarkan evrd masih berfungsi, tetapi mesti ditukar pada log masuk web seterusnya.',
+  'zncMove.noUsers': 'Tiada blok <User> dalam konfigurasi ini.',
+  'zncMove.includeUser': 'Bawa masuk {name}',
+  'zncMove.account': 'Akaun evrd untuk {name}',
+  'zncMove.new': 'Akaun baharu',
+  'zncMove.existing': 'Akaun sedia ada',
+  'zncMove.willKeepPassword': 'Mengekalkan kata laluan ZNC mereka',
+  'zncMove.noZncPassword': 'Tiada kata laluan dalam konfigurasi: mereka memerlukan e-mel untuk SSO, atau kata laluan daripada Set semula',
+  'zncMove.email': 'E-mel (pilihan)',
+  'zncMove.emailFor': 'E-mel untuk {name}',
+  'zncMove.emailHelp': 'Dengan e-mel, log masuk SSO pertama mereka dengan nama pengguna dan e-mel yang sama akan menuntut akaun itu.',
+  'zncMove.go': { other: 'Bawa masuk {count} pengguna ({networks} rangkaian)' },
+  'zncMove.progress': 'Mengimport {name} ({n} daripada {count})…',
+  'zncMove.created': 'Akaun dicipta',
+  'zncMove.existed': 'Akaun sudah ada',
+  'zncMove.keptPassword': 'Kata laluan ZNC dikekalkan',
+  'zncMove.noPassword': 'tiada kata laluan',
+  'zncMove.claimable': 'boleh dituntut melalui SSO',
+  'zncMove.toUsers': 'Pergi ke pengguna',
+}
