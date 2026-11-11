@@ -73,7 +73,8 @@ out the one used least recently. The token is never logged.
 
 A token works only on the web chat's routes below. It never works as a
 cookie, and it can't change the account, its passwords, its networks'
-settings or anything an admin does.
+settings or anything an admin does. It can add a network and connect it,
+so a web chat can set one up for someone who has none yet.
 
 ## Using the API
 
@@ -93,6 +94,9 @@ Authorization: Bearer <token>
 | `GET /api/networks/{id}/buffers` | its channels and private chats: `name`, `unread`, `mentions`, `lastAt`, `readAt`, and for channels `joined`, `members` (a count), `topic` |
 | `GET /api/networks/{id}/channel?target=%23chan` | a channel's `topic`, `members` (`[{nick, prefix}]`, highest status first) and `joined` |
 | `GET /api/networks/{id}/messages?target=%23chan` | a buffer's last 200 lines, oldest first: `{id, target, sender, kind, text, extra, time}` |
+| `GET /api/directory` | the networks evrd knows (`networks: [{id, name, description, servers: [{host, port, tls}], sasl, channels}]`), to pick one to add |
+| `POST /api/networks` | add a network: `{"name", "host", "port", "tls"}`, and optionally `nick`, `password` (SASL, with `saslUser`) and `channels`. The rest starts from the account's defaults, the same as the web app; the account's network limit applies. Answers the network, as `GET /api/networks/{id}` does, or `{"error"}` (in the account's language) when it can't. |
+| `POST /api/networks/{id}/connect` | connect it now (a new network waits for this) |
 | `POST /api/networks/{id}/read` | `{"target": "#chan"}`: mark it read (on every client of theirs); no body: the whole network |
 | `GET /api/networks/{id}/stream` | the chat socket (below) |
 | `POST /auth/web-chat/revoke` | sign this token out (`204` whatever it was) |

@@ -1,6 +1,9 @@
 package handlers_test
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -60,6 +63,25 @@ func (e *env) chatReq(method, path, token, origin string) *http.Response {
 	}
 	res.Body.Close()
 	return res
+}
+
+// chatJSON is chatReq with a JSON body, returning the JSON answer.
+func (e *env) chatJSON(method, path, token, origin string, body any) (int, map[string]any) {
+	e.t.Helper()
+	b, _ := json.Marshal(body)
+	req, _ := http.NewRequest(method, e.srv.URL+path, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", origin)
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Authorization", "Bearer "+token)
+	res, err := http.DefaultTransport.RoundTrip(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var out map[string]any
+	json.NewDecoder(res.Body).Decode(&out)
+	return res.StatusCode, out
 }
 
 // chatStream opens the chat socket as the web chat does: its origin, the
@@ -151,11 +173,31 @@ func TestWebChatREST(t *testing.T) {
 		t.Errorf("POST from another site: %d", res.StatusCode)
 	}
 	// The token is for the web chat's routes only, even from its own page.
-	for _, rt := range []string{"GET /api/me/sessions", "GET /api/me/client-passwords", "POST /api/me/client-passwords", "PATCH /api/me", "DELETE /api/me", "POST /api/networks", "PATCH " + path, "DELETE " + path, "GET /api/networks/export"} {
+	for _, rt := range []string{"GET /api/me/sessions", "GET /api/me/client-passwords", "POST /api/me/client-passwords", "PATCH /api/me", "DELETE /api/me", "PATCH " + path, "DELETE " + path, "GET /api/networks/export"} {
 		method, p, _ := strings.Cut(rt, " ")
 		if res := e.chatReq(method, p, tok, ""); res.StatusCode != http.StatusUnauthorized {
 			t.Errorf("%s with the token: %d", rt, res.StatusCode)
 		}
+	}
+	// It can add a network (from the directory, or by hand) and connect it,
+	// so the web chat can set one up without a trip to evrd.
+	if res := e.chatReq("GET", "/api/directory", tok, chatSite); res.StatusCode != 200 || res.Header.Get("Access-Control-Allow-Origin") != chatSite {
+		t.Errorf("the directory with the token: %d %v", res.StatusCode, res.Header)
+	}
+	other := newFakeIRC(t)
+	code, made := e.chatJSON("POST", "/api/networks", tok, chatSite, map[string]any{"name": "other", "host": "127.0.0.1", "port": other.port(), "tls": false})
+	if code != 200 || made["name"] != "other" {
+		t.Fatalf("add a network with the token: %d %v", code, made)
+	}
+	otherPath := fmt.Sprintf("/api/networks/%v", made["id"])
+	t.Cleanup(func() { e.b.Disconnect(int64(made["id"].(float64))) })
+	if res := e.chatReq("POST", otherPath+"/connect", tok, chatSite); res.StatusCode != 200 {
+		t.Fatalf("connect it with the token: %d", res.StatusCode)
+	}
+	other.expect("USER ")
+	// a bad one is refused with why, as for the web app
+	if code, out := e.chatJSON("POST", "/api/networks", tok, chatSite, map[string]any{"name": "", "host": ""}); code < 400 || out["error"] == nil {
+		t.Errorf("a bad network: %d %v", code, out)
 	}
 	if res := e.chatReq("GET", "/api/networks", "not-a-token", chatSite); res.StatusCode != http.StatusUnauthorized {
 		t.Errorf("a wrong token: %d", res.StatusCode)

@@ -116,12 +116,16 @@ func (s *Server) Handler() http.Handler {
 
 // webChatRoutes are the routes another site's web chat may call with its
 // token (and CORS, from web_chat_origins): who's signed in, the networks,
-// their history and buffers, the chat socket, marking read, and signing the
-// token out. Each is registered with chat() in routes, or above.
+// their history and buffers, the chat socket, marking read, adding a network
+// (from the directory or by hand) and connecting it, and signing the token
+// out. Each is registered with chat() in routes, or above.
 var webChatRoutes = []struct{ method, path string }{
 	{"GET", "/api/me"},
 	{"GET", "/api/networks"},
+	{"POST", "/api/networks"},
+	{"GET", "/api/directory"},
 	{"GET", "/api/networks/{id}"},
+	{"POST", "/api/networks/{id}/connect"},
 	{"GET", "/api/networks/{id}/messages"},
 	{"GET", "/api/networks/{id}/buffers"},
 	{"GET", "/api/networks/{id}/channel"},
@@ -207,7 +211,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	// networks
 	mux.HandleFunc("GET /api/networks", chat(h.ListNetworks))
-	mux.HandleFunc("POST /api/networks", user(h.CreateNetwork))
+	mux.HandleFunc("POST /api/networks", chat(h.CreateNetwork))
 	mux.HandleFunc("GET /api/networks/export", user(h.ExportNetworks))
 	mux.HandleFunc("POST /api/networks/import/preview", user(h.PreviewImport))
 	mux.HandleFunc("POST /api/networks/import", user(h.ImportNetworks))
@@ -215,9 +219,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/networks/{id}", user(h.UpdateNetwork))
 	mux.HandleFunc("GET /api/bindhosts", user(h.BindHosts))
 	mux.HandleFunc("GET /api/modules", s.auth.RequireUser(h.Modules))
-	mux.HandleFunc("GET /api/directory", s.auth.RequireUser(h.Directory))
+	mux.HandleFunc("GET /api/directory", s.auth.RequireWebChat(h.Directory))
 	mux.HandleFunc("DELETE /api/networks/{id}", user(h.DeleteNetwork))
-	mux.HandleFunc("POST /api/networks/{id}/connect", user(h.Connect))
+	mux.HandleFunc("POST /api/networks/{id}/connect", chat(h.Connect))
 	mux.HandleFunc("POST /api/networks/{id}/disconnect", user(h.Disconnect))
 	mux.HandleFunc("GET /api/networks/{id}/messages", chat(h.Messages))
 	mux.HandleFunc("GET /api/networks/{id}/buffers", chat(h.Buffers))
