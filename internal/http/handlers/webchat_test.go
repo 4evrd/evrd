@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -195,8 +196,27 @@ func TestWebChatREST(t *testing.T) {
 		t.Fatalf("connect it with the token: %d", res.StatusCode)
 	}
 	other.expect("USER ")
+	// the dialog's "more options" are kept, as from the web app (bob: alice
+	// is at her limit of networks)
+	e.user("bob", store.RoleUser)
+	bobTok := e.login("bob").webChatToken("").Get("token")
+	code, opts := e.chatJSON("POST", "/api/networks", bobTok, chatSite, map[string]any{
+		"name": "opts", "servers": []map[string]any{{"host": "irc.opts.test", "port": 6697, "tls": true, "password": "server-pass"}},
+		"nick": "optnick", "password": "sasl-pass", "saslUser": "optacct", "authMethod": "sasl",
+		"username": "optident", "realname": "Opt Name", "trustAllCerts": true,
+	})
+	if code != 200 {
+		t.Fatalf("add a network with options: %d %v", code, opts)
+	}
+	saved, err := e.acc.NetworkByID(context.Background(), int64(opts["id"].(float64)))
+	sv := saved.ServerList()
+	if err != nil || saved.Nick != "optnick" || saved.Password != "sasl-pass" || saved.SASLUser != "optacct" || saved.AuthMethod != "sasl" ||
+		saved.Username != "optident" || saved.Realname != "Opt Name" || !saved.TrustAllCerts ||
+		len(sv) != 1 || sv[0].Host != "irc.opts.test" || sv[0].Port != 6697 || !sv[0].TLS || sv[0].Password != "server-pass" {
+		t.Errorf("the options weren't all saved: %v %+v", err, saved)
+	}
 	// a bad one is refused with why, as for the web app
-	if code, out := e.chatJSON("POST", "/api/networks", tok, chatSite, map[string]any{"name": "", "host": ""}); code < 400 || out["error"] == nil {
+	if code, out := e.chatJSON("POST", "/api/networks", bobTok, chatSite, map[string]any{"name": "", "host": ""}); code != http.StatusUnprocessableEntity || out["error"] == nil || strings.Contains(fmt.Sprint(out["error"]), "limit") {
 		t.Errorf("a bad network: %d %v", code, out)
 	}
 	if res := e.chatReq("GET", "/api/networks", "not-a-token", chatSite); res.StatusCode != http.StatusUnauthorized {
