@@ -18,8 +18,9 @@ package auth
 //     "evrd.token.<token>" (a browser can't set headers on a WebSocket).
 //
 // A token only works on the web chat's routes (internal/http picks them:
-// reading networks and history, the chat socket, marking read), never for
-// the account itself, and it never works as a cookie. POST
+// reading networks and history, the chat socket, marking read, adding a
+// network and connecting it), never for the account itself or for changing
+// or removing a network, and it never works as a cookie. POST
 // /auth/web-chat/revoke with the token signs it out.
 
 import (
