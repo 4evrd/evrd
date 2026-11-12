@@ -201,7 +201,7 @@ jobs:
         id: buildx
       # Go's module and build caches for the image build, kept between runs:
       # without them every dependency compiles again.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: gocache
         with:
           path: docker-go-cache
@@ -255,7 +255,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       # Chromium, kept between runs (the OS packages it needs still install)
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: chromium
         with:
           path: ~/.cache/ms-playwright
@@ -348,7 +348,7 @@ jobs:
           # setup-go's cache is shared with the test jobs, which save it
           # first, without the release platforms; this job keeps its own
           cache: false
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cache/go-build
@@ -394,7 +394,7 @@ jobs:
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v4
         id: buildx
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         if: matrix.image == 'evrd'
         id: gocache
         with:
