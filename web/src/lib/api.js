@@ -149,6 +149,10 @@ export const api = {
     settings: () => req('GET', '/api/admin/settings'),
     saveSettings: (set, reset) => req('PATCH', '/api/admin/settings', { set, reset }),
     refreshDirectory: () => req('POST', '/api/admin/directory/refresh'),
+    // new releases: check, and install on every node
+    update: () => req('GET', '/api/admin/update'),
+    checkUpdate: () => req('POST', '/api/admin/update/check'),
+    installUpdate: () => req('POST', '/api/admin/update/install'),
     putLanguage: (pack) => req('PUT', `/api/admin/languages/${encodeURIComponent(pack.code)}`, pack),
     deleteLanguage: (code) => req('DELETE', `/api/admin/languages/${encodeURIComponent(code)}`),
     users: () => req('GET', '/api/admin/users'),

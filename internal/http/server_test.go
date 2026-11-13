@@ -142,6 +142,37 @@ func TestHandlerServesTheWebApp(t *testing.T) {
 	}
 }
 
+// An installed update's web app is at /api/webapp/, for the web image's
+// nginx; without one that's a 404, and nginx serves its own copy.
+func TestHandlerServesTheUpdatedWebApp(t *testing.T) {
+	get := func(h http.Handler, path string) (int, string) {
+		srv := httptest.NewServer(h)
+		defer srv.Close()
+		res, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		return res.StatusCode, string(b)
+	}
+	s := newServer(t)
+	if code, _ := get(s.Handler(), "/api/webapp/"); code != 404 {
+		t.Fatalf("no update: %d", code)
+	}
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "index.html"), []byte("<new app>"), 0o644)
+	os.WriteFile(filepath.Join(dir, "x.js"), []byte("js"), 0o644)
+	s.SetUpdatedWebApp(dir)
+	s.SetUpdater(nil)
+	h := s.Handler()
+	for path, want := range map[string]string{"/api/webapp/": "<new app>", "/api/webapp/chat/1": "<new app>", "/api/webapp/x.js": "js"} {
+		if code, body := get(h, path); code != 200 || body != want {
+			t.Errorf("%s: %d %q", path, code, body)
+		}
+	}
+}
+
 // The setters reach the handlers: a changed config is what /api/config
 // answers.
 func TestSetters(t *testing.T) {

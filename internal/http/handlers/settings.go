@@ -35,6 +35,7 @@ func (s *Handlers) settingsDTO(p *messages.Printer) map[string]any {
 		"confs":     nodes,
 		"tls":       s.tlsDTO(c),
 		"directory": s.directoryStatus(),
+		"update":    s.updateStatus(),
 	}
 }
 

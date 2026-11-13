@@ -36,6 +36,7 @@ import (
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/settings"
 	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/update"
 	"github.com/4evrd/evrd/internal/version"
 )
 
@@ -65,6 +66,7 @@ type Handlers struct {
 	settings *settings.Manager
 	certs    *certs.Manager       // nil: no certificate report
 	dir      *directory.Directory // nil: no network directory
+	upd      *update.Updater      // nil: no update checks
 	log      *slog.Logger
 	up       websocket.Upgrader
 }

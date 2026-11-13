@@ -95,6 +95,14 @@ type Config struct {
 	// comes from (internal/directory): an http(s) URL or a local file.
 	// Empty turns it off.
 	NetworkDirectory string
+	// UpdateCheck is where evrd looks for new releases (internal/update):
+	// a GitHub-style "latest release" JSON URL. Empty turns it off.
+	UpdateCheck string
+	// SelfUpdate lets admins install a new release from the web app.
+	SelfUpdate bool
+	// UpdateDir is where installed updates are kept (relative: the working
+	// directory, the data volume in the image).
+	UpdateDir string
 	// IdentFile is an oidentd user config (~/.oidentd.conf of the user evrd
 	// runs as) that evrd keeps up to date from users' bind hosts, so
 	// networks see their idents (internal/identfile). Empty: none.
@@ -491,6 +499,9 @@ func Default() *Config {
 		Metrics:           Metrics{Interval: 15 * time.Second},
 
 		NetworkDirectory: DefaultNetworkDirectory,
+		UpdateCheck:      DefaultUpdateCheck,
+		SelfUpdate:       true,
+		UpdateDir:        DefaultUpdateDir,
 		fromFile:         map[string]bool{},
 	}
 }
@@ -588,6 +599,19 @@ func (c *Config) ApplyEnv() error {
 	}
 	if v := os.Getenv("EVRD_NETWORK_DIRECTORY"); v != "" {
 		c.NetworkDirectory = directorySource(v)
+	}
+	if v := os.Getenv("EVRD_UPDATE_CHECK"); v != "" {
+		c.UpdateCheck = directorySource(v)
+	}
+	if v := os.Getenv("EVRD_SELF_UPDATE"); v != "" {
+		on, err := parseBool(v)
+		if err != nil {
+			return fmt.Errorf("EVRD_SELF_UPDATE: %w", err)
+		}
+		c.SelfUpdate = on
+	}
+	if v := os.Getenv("EVRD_UPDATE_DIR"); v != "" {
+		c.UpdateDir = v
 	}
 	if v := os.Getenv("EVRD_IDENT_FILE"); v != "" {
 		c.IdentFile = v
@@ -802,6 +826,12 @@ func (c *Config) set(key, val string) error {
 		c.Outbound.PreferIPv6, err = parseBool(val)
 	case "network_directory":
 		c.NetworkDirectory = directorySource(val)
+	case "update_check":
+		c.UpdateCheck = directorySource(val)
+	case "self_update":
+		c.SelfUpdate, err = parseBool(val)
+	case "update_dir":
+		c.UpdateDir = val
 	case "ident_file":
 		c.IdentFile = val
 	case "identd_listen":
@@ -845,6 +875,13 @@ func (c *Config) set(key, val string) error {
 // DefaultNetworkDirectory is where the network directory is published (the
 // evrd website).
 const DefaultNetworkDirectory = "https://evrd.sh/api/networks/v1.json"
+
+// DefaultUpdateCheck is where new releases are announced.
+const DefaultUpdateCheck = "https://api.github.com/repos/4evrd/evrd/releases/latest"
+
+// DefaultUpdateDir is where installed updates go, under the working
+// directory.
+const DefaultUpdateDir = "updates"
 
 // directorySource reads a network_directory value: "off" (or "no", "none")
 // turns it off, like leaving it empty.

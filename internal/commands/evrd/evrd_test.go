@@ -67,7 +67,7 @@ func noEnv(t *testing.T) {
 		"EVRD_OIDC_CLIENT_SECRET", "EVRD_CLUSTER_SECRET", "EVRD_SECRET_KEY", "EVRD_SECRET_KEY_FILE",
 		"EVRD_PROVISION_TOKEN", "EVRD_LINKS_SOCKET", "EVRD_NODE_ID", "EVRD_INTERNAL_URL",
 		"EVRD_INTERNAL_IRC_ADDR", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "EVRD_METRICS_URL",
-		"EVRD_NETWORK_DIRECTORY", "EVRD_IDENTD_LISTEN",
+		"EVRD_NETWORK_DIRECTORY", "EVRD_IDENTD_LISTEN", "EVRD_UPDATE_CHECK", "EVRD_SELF_UPDATE", "EVRD_UPDATE_DIR",
 	} {
 		t.Setenv(v, "")
 	}
@@ -147,6 +147,8 @@ func testConfig(t *testing.T, dir string, extra ...string) (path, api, irc strin
 		"listen irc+insecure://" + irc,
 		"secret_key " + testKey,
 		"network_directory off", // tests don't fetch evrd.sh
+		"update_check off",      // …or GitHub
+		"update_dir " + filepath.Join(dir, "updates"),
 	}, extra...)
 	path = filepath.Join(dir, "evrd.conf")
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
@@ -702,6 +704,7 @@ func TestNoSecretKey(t *testing.T) {
 		"history pebble:" + filepath.Join(dir, "history"),
 		"api " + api,
 		"listen irc+insecure://" + freeAddr(t),
+		"update_check off",
 	}, "\n")), 0o600)
 	d := startEvrd(t, api, "-config", conf)
 	if code := d.stop(); code != 0 {
