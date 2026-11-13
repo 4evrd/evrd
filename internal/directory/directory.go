@@ -87,12 +87,14 @@ type Directory struct {
 	kick  chan struct{}
 	fetch sync.Mutex // one fetch at a time
 
-	mu     sync.Mutex
-	iid    string // install ID, once read or made
-	source string
-	doc    *Document
-	saved  cached // what's behind doc: its source, validators and bytes
-	status Status
+	mu      sync.Mutex
+	iid     string // install ID, once read or made
+	usage   func(context.Context) Usage
+	private bool // usage_stats off: nothing about this install goes to evrd.sh
+	source  string
+	doc     *Document
+	saved   cached // what's behind doc: its source, validators and bytes
+	status  Status
 }
 
 // cached is the stored copy.
@@ -297,11 +299,22 @@ func (d *Directory) get(ctx context.Context, src string, prev cached) (data []by
 	if err != nil {
 		return nil, "", "", err
 	}
-	req.Header.Set("User-Agent", userAgent())
-	if req.URL.Hostname() == statsHost {
+	d.mu.Lock()
+	private, usage := d.private, d.usage
+	d.mu.Unlock()
+	switch {
+	case private:
+		req.Header.Set("User-Agent", "evrd (+https://evrd.sh)")
+	case req.URL.Hostname() == statsHost:
+		req.Header.Set("User-Agent", userAgent())
 		if id := d.installID(ctx); id != "" {
 			req.Header.Set("X-Evrd-Install", id)
 		}
+		if usage != nil {
+			req.Header.Set("X-Evrd-Usage", usage(ctx).Header())
+		}
+	default:
+		req.Header.Set("User-Agent", userAgent())
 	}
 	req.Header.Set("Accept", "application/json")
 	if prev.ETag != "" {

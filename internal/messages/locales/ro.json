@@ -595,6 +595,8 @@
     "irc.settingLabel.bindhost": "Bind host-uri",
     "irc.settingLabel.network_directory": "Sursa directorului",
     "irc.settingHelp.network_directory": "De unde vine lista de rețele IRC din care aleg utilizatorii când adaugă una: un URL http(s) (verificat de două ori pe zi) sau un fișier. Gol dezactivează lista.",
+    "irc.settingLabel.usage_stats": "Partajează statistici de utilizare",
+    "irc.settingHelp.usage_stats": "La preluarea directorului de la evrd.sh, trimite și versiunea și platforma acestei instalări, un ID de instalare aleatoriu și numărători: utilizatori, rețele, rețele conectate, clienți IRC, noduri, timp de funcționare, bazele de date folosite și câte rețele sunt pe fiecare rețea din director. Fără nume, adrese sau mesaje. Oprit nu trimite nimic din toate acestea.",
     "irc.settingGroup.networkdirectory": "Director de rețele",
     "irc.settingLabel.tls": "Certificat",
     "irc.settingHelp.tls": "Pentru porturile IRC și pentru aplicația web când evrd servește singur HTTPS. Let's Encrypt (acme) obține și reînnoiește unul automat, acceptând acordul de abonat al CA-ului.",

@@ -567,6 +567,8 @@
     "irc.settingHelp.bindhost": "Alamat lokal (atau nama host) yang bisa dipilih pengguna untuk tersambung. Dipisah spasi.",
     "irc.settingLabel.network_directory": "Sumber direktori",
     "irc.settingHelp.network_directory": "Asal daftar network IRC yang dipilih pengguna saat menambahkan network: URL http(s) (dicek dua kali sehari) atau file. Kosong mematikan daftar.",
+    "irc.settingLabel.usage_stats": "Bagikan statistik penggunaan",
+    "irc.settingHelp.usage_stats": "Saat mengambil direktori dari evrd.sh, kirim juga versi dan platform instalasi ini, ID instalasi acak, dan hitungan: pengguna, jaringan, jaringan tersambung, klien IRC, node, waktu aktif, basis data yang dipakai, dan berapa jaringan pada tiap jaringan direktori. Tanpa nama, alamat, atau pesan. Mati berarti tidak ada yang dikirim.",
     "irc.settingLabel.tls": "Sertifikat",
     "irc.settingHelp.tls": "Untuk port IRC, dan untuk aplikasi web saat evrd menyajikan HTTPS sendiri. Let's Encrypt (acme) mendapatkan dan memperbarui sertifikat otomatis, dengan menyetujui perjanjian pelanggan CA.",
     "irc.settingLabel.acme_email": "Email kontak Let's Encrypt",

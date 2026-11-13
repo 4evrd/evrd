@@ -567,6 +567,8 @@
     "irc.settingHelp.bindhost": "ユーザーが接続元として選べるローカルアドレス(またはホスト名)。空白区切り。",
     "irc.settingLabel.network_directory": "ディレクトリの取得元",
     "irc.settingHelp.network_directory": "ユーザーがネットワークを追加するときに選ぶ IRC ネットワーク一覧の取得元: http(s) の URL(1 日 2 回確認)かファイル。空にすると一覧はオフになります。",
+    "irc.settingLabel.usage_stats": "利用統計を共有",
+    "irc.settingHelp.usage_stats": "evrd.sh からディレクトリを取得するときに、このインストールのバージョンとプラットフォーム、ランダムなインストール ID、件数（ユーザー、ネットワーク、接続中のネットワーク、IRC クライアント、ノード、稼働時間、使用中のデータベース、ディレクトリの各ネットワークにあるネットワーク数）も送信します。名前、アドレス、メッセージは送りません。オフにすると何も送りません。",
     "irc.settingLabel.tls": "証明書",
     "irc.settingHelp.tls": "IRC のポート用、および evrd が自分で HTTPS を提供するときのウェブアプリ用。Let's Encrypt(acme)は CA の利用規約に同意したうえで、自動で取得・更新します。",
     "irc.settingLabel.acme_email": "Let's Encrypt の連絡先メール",

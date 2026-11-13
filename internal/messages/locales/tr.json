@@ -561,6 +561,8 @@
     "irc.settingHelp.bindhost": "Kullanıcıların bağlanmak için seçebileceği yerel adresler (ya da host adları). Boşlukla ayrılmış.",
     "irc.settingLabel.network_directory": "Dizin kaynağı",
     "irc.settingHelp.network_directory": "Kullanıcıların ağ eklerken seçtiği IRC ağları listesinin geldiği yer: bir http(s) URL'si (günde iki kez kontrol edilir) ya da bir dosya. Boş bırakmak listeyi kapatır.",
+    "irc.settingLabel.usage_stats": "Kullanım istatistiklerini paylaş",
+    "irc.settingHelp.usage_stats": "evrd.sh'tan dizin alınırken bu kurulumun sürümünü ve platformunu, rastgele bir kurulum kimliğini ve sayıları da gönder: kullanıcılar, ağlar, bağlı ağlar, IRC istemcileri, düğümler, çalışma süresi, kullanılan veritabanları ve her dizin ağında kaç ağ olduğu. Ad, adres veya mesaj yok. Kapalıyken hiçbiri gönderilmez.",
     "irc.settingLabel.tls": "Sertifika",
     "irc.settingHelp.tls": "IRC portları için ve evrd HTTPS'i kendisi sunduğunda web uygulaması için. Let's Encrypt (acme) otomatik olarak bir tane alır ve yeniler, CA'nın abonelik sözleşmesini kabul ederek.",
     "irc.settingLabel.acme_email": "Let's Encrypt iletişim e-postası",
