@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/version"
 )
 
 const good = `{
@@ -345,5 +347,54 @@ func TestCacheProblems(t *testing.T) {
 	d := New(path, &memCache{err: errors.New("read-only")}, quiet)
 	if err := d.Refresh(context.Background()); err != nil || len(d.Networks()) != 2 {
 		t.Fatal(err)
+	}
+}
+
+func TestInstallIDAndUserAgent(t *testing.T) {
+	var got []string
+	var ua string
+	var mu sync.Mutex
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		got = append(got, r.Header.Get("X-Evrd-Install"))
+		ua = r.Header.Get("User-Agent")
+		mu.Unlock()
+		io.WriteString(w, good)
+	}))
+	t.Cleanup(s.Close)
+	ctx := context.Background()
+
+	// another source never sees the ID
+	cache := &memCache{}
+	if err := New(s.URL, cache, quiet).Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got[0] != "" {
+		t.Fatalf("install ID sent to another host: %q", got[0])
+	}
+	if want := "evrd/" + version.Version + " (" + runtime.GOOS + "/" + runtime.GOARCH; !strings.HasPrefix(ua, want) || !strings.HasSuffix(ua, "+https://evrd.sh)") {
+		t.Fatalf("user agent %q", ua)
+	}
+
+	old := statsHost
+	statsHost = "127.0.0.1"
+	t.Cleanup(func() { statsHost = old })
+
+	// the stats host gets one stable ID, shared through the cache
+	for range 2 {
+		if err := New(s.URL, cache, quiet).Refresh(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !validInstallID.MatchString(got[1]) || got[1] != got[2] || cache.data[installKey] != got[1] {
+		t.Fatalf("install IDs %q, cached %q", got[1:], cache.data[installKey])
+	}
+
+	// no cache: no ID rather than a new one every restart
+	if err := New(s.URL, nil, quiet).Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got[3] != "" {
+		t.Fatalf("install ID without a cache: %q", got[3])
 	}
 }

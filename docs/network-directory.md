@@ -29,6 +29,21 @@ pull requests for new networks or changed servers are welcome).
 - *Admin → Settings → Network directory* shows the source, when it was last
   fetched, the last error and skipped entries, and has *Check now*.
 
+## What evrd.sh sees
+
+Fetching the list from evrd.sh is also how installs are counted. Each fetch
+sends a `User-Agent` with the evrd version and platform
+(`evrd/0.56.0 (linux/amd64; docker; +https://evrd.sh)`) and, to evrd.sh only,
+an `X-Evrd-Install` header: a random ID made on first use and kept in the
+database, so a cluster or an install that changes address counts once. It
+says nothing about your users or networks.
+
+evrd.sh keeps, per install and day, a salted hash of that ID (or of the
+address, when there's no ID), the version and platform, and the approximate
+location and network Cloudflare derives from the address (country, region,
+city, ASN). Raw addresses aren't stored, and per-install rows are deleted
+after 90 days. To send nothing, use a file of your own or `off` (below).
+
 ## Configuration
 
 ```
