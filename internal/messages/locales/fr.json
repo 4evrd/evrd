@@ -572,6 +572,8 @@
     "irc.settingLabel.bindhost": "Bind hosts",
     "irc.settingLabel.network_directory": "Source de l’annuaire",
     "irc.settingHelp.network_directory": "D’où vient la liste des réseaux IRC parmi lesquels les utilisateurs choisissent pour en ajouter un : une URL http(s) (vérifiée deux fois par jour) ou un fichier. Vide désactive la liste.",
+    "irc.settingLabel.usage_stats": "Partager les statistiques d'utilisation",
+    "irc.settingHelp.usage_stats": "Lors de la récupération de l'annuaire depuis evrd.sh, envoyer aussi la version et la plateforme de cette installation, un identifiant d'installation aléatoire et des comptes : utilisateurs, réseaux, réseaux connectés, clients IRC, nœuds, temps de fonctionnement, les bases de données utilisées et le nombre de réseaux sur chaque réseau de l'annuaire. Ni noms, ni adresses, ni messages. Désactivé, rien de tout cela n'est envoyé.",
     "irc.settingGroup.networkdirectory": "Annuaire des réseaux",
     "irc.settingLabel.tls": "Certificat",
     "irc.settingHelp.tls": "Pour les ports IRC, et pour l’appli web quand evrd sert lui-même le HTTPS. Let's Encrypt (acme) en obtient et en renouvelle un automatiquement, en acceptant le contrat d’abonné de l’AC.",

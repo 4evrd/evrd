@@ -589,6 +589,8 @@
     "irc.settingHelp.bindhost": "Direcciones locales (o nombres de host) desde las que los usuarios pueden elegir conectarse. Separadas por espacios.",
     "irc.settingLabel.network_directory": "Origen del directorio",
     "irc.settingHelp.network_directory": "De dónde viene la lista de redes IRC entre las que eligen los usuarios al añadir una: una URL http(s) (se comprueba dos veces al día) o un archivo. Vacío desactiva la lista.",
+    "irc.settingLabel.usage_stats": "Compartir estadísticas de uso",
+    "irc.settingHelp.usage_stats": "Al descargar el directorio de evrd.sh, enviar también la versión y plataforma de esta instalación, un ID de instalación aleatorio y recuentos: usuarios, redes, redes conectadas, clientes IRC, nodos, tiempo activo, las bases de datos en uso y cuántas redes hay en cada red del directorio. Sin nombres, direcciones ni mensajes. Desactivado no envía nada de esto.",
     "irc.settingLabel.tls": "Certificado",
     "irc.settingHelp.tls": "Para los puertos IRC y para la app web cuando evrd sirve HTTPS por sí mismo. Let's Encrypt (acme) obtiene y renueva uno automáticamente, aceptando el acuerdo de suscriptor de la CA.",
     "irc.settingLabel.acme_email": "Correo de contacto de Let's Encrypt",

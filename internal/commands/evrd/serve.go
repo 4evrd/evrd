@@ -48,6 +48,7 @@ import (
 // where they happen.
 func serve(parent context.Context, configPath string, stderr io.Writer) int {
 	log := slog.New(slog.NewTextHandler(stderr, nil))
+	started := time.Now()
 
 	// The file (or defaults); the environment and the settings saved in the
 	// admin UI are layered on top (see internal/settings).
@@ -390,6 +391,14 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		jailed := *cfg
 		dir.PathMap = func(p string) string { q, _ := jailed.InChroot(p); return q }
 	}
+	// usage_stats: counts shared with evrd.sh along with that fetch
+	dir.SetSharing(cfg.UsageStats)
+	dir.SetUsage(usageSource{
+		users: acc.ListUsers, networks: acc.AllNetworks, live: b.Usage,
+		nodes: func() int { return len(cl.Nodes()) }, hosts: dir.HostIDs,
+		started: started, db: dbDSN, hist: histDSN, holder: holder != nil,
+		sso: func() bool { return sm.Config().Auth.OIDCEnabled() },
+	}.report)
 	go dir.Run(ctx)
 	srv.SetDirectory(dir)
 	// The oidentd file that gives users with a bind host their ident.
@@ -432,6 +441,7 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		srv.SetConfig(&live)
 		irc.SetSTS(live.IRCSTS, live.IRCHost)
 		dir.SetSource(live.NetworkDirectory)
+		dir.SetSharing(live.UsageStats)
 		if live.Metrics.QueryURL != metricsURL {
 			metricsURL = live.Metrics.QueryURL
 			srv.SetMetrics(metricsq.New(metricsURL))

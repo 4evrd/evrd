@@ -98,6 +98,9 @@ var Specs = []Spec{
 	{Key: "network_directory", Group: "Network directory", Label: "Directory source", Kind: "string", Env: "EVRD_NETWORK_DIRECTORY",
 		Help: "Where the list of IRC networks users pick from when adding one comes from: an http(s) URL (checked twice a day) or a file. Empty turns the list off.",
 		get:  func(c *Config) string { return c.NetworkDirectory }},
+	{Key: "usage_stats", Group: "Network directory", Label: "Share usage statistics", Kind: "bool", Env: "EVRD_USAGE_STATS",
+		Help: "With the directory fetch from evrd.sh, also send this install's version and platform, a random install ID and counts: users, networks, connected networks, IRC clients, nodes, uptime, the databases in use, and how many networks are on each directory network. No names, addresses or messages. Off sends none of it.",
+		get:  func(c *Config) string { return fmtBool(c.UsageStats) }},
 
 	{Key: "tls", Group: "HTTPS & TLS", Label: "Certificate", Kind: "choice", Options: []string{"acme", "selfsigned", "files"},
 		Help: "For the IRC ports, and for the web app when evrd serves HTTPS itself. Let's Encrypt (acme) gets and renews one automatically, accepting the CA's subscriber agreement.",

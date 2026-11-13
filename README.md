@@ -167,6 +167,7 @@ over the file; environment variables win over both). Things you might set:
 | `bindhost` | local addresses users may connect from (vhosts) |
 | `listen` | extra listeners, e.g. plain IRC on 6667 |
 | `network_directory` | the [list of public networks](docs/network-directory.md) offered on *Add network* (evrd.sh's, a file of your own, or `off`) |
+| `usage_stats` | anonymous usage counts sent to evrd.sh with that list ([what's sent](docs/network-directory.md#what-evrdsh-sees)); `no` to opt out |
 
 Every directive, network and account settings, and how the web app's settings
 layer over the file: [docs/configuration.md](docs/configuration.md).

@@ -557,6 +557,8 @@
     "irc.settingLabel.bindhost": "Bind host",
     "irc.settingLabel.network_directory": "Sumber direktori",
     "irc.settingHelp.network_directory": "Sumber senarai rangkaian IRC yang dipilih pengguna semasa menambah rangkaian: URL http(s) (disemak dua kali sehari) atau fail. Kosong mematikan senarai.",
+    "irc.settingLabel.usage_stats": "Kongsi statistik penggunaan",
+    "irc.settingHelp.usage_stats": "Semasa mengambil direktori dari evrd.sh, hantar juga versi dan platform pemasangan ini, ID pemasangan rawak dan kiraan: pengguna, rangkaian, rangkaian bersambung, klien IRC, nod, masa hidup, pangkalan data yang digunakan, dan berapa rangkaian pada setiap rangkaian direktori. Tiada nama, alamat atau mesej. Mati tidak menghantar apa-apa.",
     "irc.settingGroup.networkdirectory": "Direktori rangkaian",
     "irc.settingLabel.tls": "Sijil",
     "irc.settingHelp.tls": "Untuk port IRC, dan untuk aplikasi web apabila evrd menyediakan HTTPS sendiri. Let's Encrypt (acme) mendapatkan dan memperbaharui sijil secara automatik, dengan menerima perjanjian pelanggan CA.",

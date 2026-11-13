@@ -95,6 +95,10 @@ type Config struct {
 	// comes from (internal/directory): an http(s) URL or a local file.
 	// Empty turns it off.
 	NetworkDirectory string
+	// UsageStats shares anonymous usage counts with evrd.sh when fetching
+	// the network directory from it (internal/directory). Off: nothing
+	// about this install is sent.
+	UsageStats bool
 	// IdentFile is an oidentd user config (~/.oidentd.conf of the user evrd
 	// runs as) that evrd keeps up to date from users' bind hosts, so
 	// networks see their idents (internal/identfile). Empty: none.
@@ -491,6 +495,7 @@ func Default() *Config {
 		Metrics:           Metrics{Interval: 15 * time.Second},
 
 		NetworkDirectory: DefaultNetworkDirectory,
+		UsageStats:       true,
 		fromFile:         map[string]bool{},
 	}
 }
@@ -588,6 +593,13 @@ func (c *Config) ApplyEnv() error {
 	}
 	if v := os.Getenv("EVRD_NETWORK_DIRECTORY"); v != "" {
 		c.NetworkDirectory = directorySource(v)
+	}
+	if v := os.Getenv("EVRD_USAGE_STATS"); v != "" {
+		on, err := parseBool(v)
+		if err != nil {
+			return fmt.Errorf("EVRD_USAGE_STATS: %w", err)
+		}
+		c.UsageStats = on
 	}
 	if v := os.Getenv("EVRD_IDENT_FILE"); v != "" {
 		c.IdentFile = v
@@ -802,6 +814,8 @@ func (c *Config) set(key, val string) error {
 		c.Outbound.PreferIPv6, err = parseBool(val)
 	case "network_directory":
 		c.NetworkDirectory = directorySource(val)
+	case "usage_stats":
+		c.UsageStats, err = parseBool(val)
 	case "ident_file":
 		c.IdentFile = val
 	case "identd_listen":

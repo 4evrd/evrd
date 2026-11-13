@@ -572,6 +572,8 @@
     "irc.settingLabel.bindhost": "Bind hosts",
     "irc.settingLabel.network_directory": "Directory source",
     "irc.settingHelp.network_directory": "Where the list of IRC networks users pick from when adding one comes from: an http(s) URL (checked twice a day) or a file. Empty turns the list off.",
+    "irc.settingLabel.usage_stats": "Share usage statistics",
+    "irc.settingHelp.usage_stats": "With the directory fetch from evrd.sh, also send this install's version and platform, a random install ID and counts: users, networks, connected networks, IRC clients, nodes, uptime, the databases in use, and how many networks are on each directory network. No names, addresses or messages. Off sends none of it.",
     "irc.settingGroup.networkdirectory": "Network directory",
     "irc.settingLabel.tls": "Certificate",
     "irc.settingHelp.tls": "For the IRC ports, and for the web app when evrd serves HTTPS itself. Let's Encrypt (acme) gets and renews one automatically, accepting the CA's subscriber agreement.",

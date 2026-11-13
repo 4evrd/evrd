@@ -20,6 +20,7 @@ are stored in the database and win over the file (see below).
 | `chroot`, `user` | — | confine evrd after startup; see [Confinement](#confinement-chroot-and-user) |
 | `modules_off` | — | [modules](modules.md) nobody on this server can use, space-separated |
 | `network_directory` (`EVRD_NETWORK_DIRECTORY`) | `https://evrd.sh/api/networks/v1.json` | the [network directory](network-directory.md) users pick from when adding a network: a URL, a local file, or `off` |
+| `usage_stats` (`EVRD_USAGE_STATS`) | `yes` | share anonymous usage counts with evrd.sh when fetching the directory from it ([what's sent](network-directory.md#what-evrdsh-sees)); `no` sends nothing about the install |
 | `ident_file` (`EVRD_IDENT_FILE`) | — | an oidentd user config evrd keeps up to date so networks see users' idents, not evrd's system user; see [Idents](openbsd.md#idents-oidentd) |
 | `identd_listen` (`EVRD_IDENTD_LISTEN`) | — | evrd answers ident queries (RFC 1413) itself, e.g. `:113`; see [Ident](#ident-identd) |
 | `links_socket` (`EVRD_LINKS_SOCKET`) | — | the [connection holder](#connection-holder)'s socket: IRC connections stay up while evrd restarts (one node only) |
@@ -70,7 +71,7 @@ Environment — those are locked in the UI). **Reset** removes a value set here,
 falling back to evrd.conf or the default.
 
 **Editable:** `irc_host`, `public_url`, `max_networks`, `max_clients`,
-`backlog_lines`, `connect_rate`, `client_ping_timeout`, `prefer_ipv6`, `bindhost`, `network_directory`, `tls`, `acme_email`, `acme_hosts`,
+`backlog_lines`, `connect_rate`, `client_ping_timeout`, `prefer_ipv6`, `bindhost`, `network_directory`, `usage_stats`, `tls`, `acme_email`, `acme_hosts`,
 `acme_ca`, `tls_cert`, `tls_key`, `password_login`, `session_ttl`,
 `cookie_secure`, `web_chat_origins`, `web_chat_network`, `web_chat_days`, the `oidc_*` directives, `otel_endpoint`, `otel_interval`,
 `metrics_url`. Most apply live on every node within a few seconds; `public_url`,

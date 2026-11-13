@@ -31,18 +31,41 @@ pull requests for new networks or changed servers are welcome).
 
 ## What evrd.sh sees
 
-Fetching the list from evrd.sh is also how installs are counted. Each fetch
-sends a `User-Agent` with the evrd version and platform
-(`evrd/0.56.0 (linux/amd64; docker; +https://evrd.sh)`) and, to evrd.sh only,
-an `X-Evrd-Install` header: a random ID made on first use and kept in the
-database, so a cluster or an install that changes address counts once. It
-says nothing about your users or networks.
+Fetching the list from evrd.sh is also how installs are counted, so the
+project knows how evrd is used. Unless an admin turns it off (below), each
+fetch — at start and twice a day — sends, to evrd.sh only:
 
-evrd.sh keeps, per install and day, a salted hash of that ID (or of the
-address, when there's no ID), the version and platform, and the approximate
-location and network Cloudflare derives from the address (country, region,
-city, ASN). Raw addresses aren't stored, and per-install rows are deleted
-after 90 days. To send nothing, use a file of your own or `off` (below).
+- a `User-Agent` with the evrd version and platform
+  (`evrd/0.56.0 (linux/amd64; docker; +https://evrd.sh)`);
+- `X-Evrd-Install`: a random ID made on first use and kept in the
+  database, so a cluster or an install that changes address counts once;
+- `X-Evrd-Usage`: counts and kinds, e.g.
+  `users=12; active=9; networks=30; connected=28; clients=5; nodes=1; uptime=93600; db=postgres; history=pebble; holder=on; sso=off; nets=libera:5,oftc:2`
+
+  | | |
+  |---|---|
+  | `users`, `active` | accounts; those with a network switched on |
+  | `networks`, `connected` | networks across all accounts; those connected now |
+  | `clients` | IRC clients attached now |
+  | `nodes`, `uptime` | evrd nodes; seconds since this one started |
+  | `db`, `history` | the kinds of database: `postgres`/`sqlite`, `scylla`/`pebble` |
+  | `holder`, `sso` | whether the connection holder and single sign-on are in use |
+  | `nets` | how many networks connect to each network *in this directory*, by its id (the 20 most used). Other networks aren't named. |
+
+  `connected`, `clients` and `uptime` are the node that fetched's.
+
+No user names, nicknames, server addresses, channels or messages are sent.
+evrd.sh keeps, per install and day, a salted hash of the install ID (or of
+the address, when there's no ID), what's above, and the approximate location
+and network Cloudflare derives from the address (country, region, city,
+ASN). Raw addresses aren't stored, and per-install rows are deleted after
+90 days.
+
+**To opt out**, switch off *Share usage statistics* in *Admin → Settings →
+Network directory* (`usage_stats no`, or `EVRD_USAGE_STATS=no`): the list is
+still fetched, with a plain `User-Agent: evrd (+https://evrd.sh)` and nothing
+else, and evrd.sh doesn't count it. To not contact evrd.sh at all, use a file
+of your own or `off` (below).
 
 ## Configuration
 
