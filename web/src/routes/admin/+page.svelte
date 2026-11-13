@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte'
   import Icon from '$lib/components/Icon.svelte'
   import Topology from '$lib/components/Topology.svelte'
+  import UpdatePanel from '$lib/components/UpdatePanel.svelte'
   import { api } from '$lib/api.js'
   import { session } from '$lib/session.svelte.js'
   import { ago, since, clock, date, limit, ratio, netColor, nodeBadge } from '$lib/format.js'
@@ -15,7 +16,12 @@
   async function load() {
     try { ov = await api.admin.overview(); err = '' } catch (e) { err = e.message }
   }
-  onMount(() => { if (!isAdmin) return; load(); timer = setInterval(load, 15000) })
+  let upd = $state(null) // a new release, if there's one
+  onMount(() => {
+    if (!isAdmin) return
+    load(); timer = setInterval(load, 15000)
+    api.admin.update().then((s) => (upd = s), () => {})
+  })
   onDestroy(() => clearInterval(timer))
 
   const nodes = $derived((ov?.nodes || []).map((n, i) => ({ ...n, color: netColor(i) })))
@@ -57,6 +63,7 @@
       <a class="btn btn-primary" href="/admin/users#new"><Icon name="plus" />{t('adminUsers.newUser')}</a>
     </div>
   </div>
+  <UpdatePanel bind:status={upd} compact />
 
   {#if err}<div class="callout bad"><Icon name="alert" /><span>{t('admin.loadFailed', { error: err })}</span></div>{/if}
   {#if !ov}

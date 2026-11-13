@@ -14,6 +14,7 @@
   import Msg from '$lib/components/Msg.svelte'
   import PackUpload from '$lib/components/PackUpload.svelte'
   import PackDownload from '$lib/components/PackDownload.svelte'
+  import UpdatePanel from '$lib/components/UpdatePanel.svelte'
   import { t, i18n, LANGUAGES, builtinAll, serverPack, setPacks, setLocale, pick } from '$lib/i18n.svelte.js'
   import { languageList, layered } from '$lib/langpack.js'
 
@@ -162,6 +163,9 @@
       {#each groups as g}
         <section class="card" aria-labelledby="g-{g.name}">
           <h2 id="g-{g.name}" class="group-h">{g.label}</h2>
+          {#if g.name === 'Updates' && data.update}
+            <UpdatePanel bind:status={data.update} />
+          {/if}
           {#if g.name === 'Network directory' && data.directory}
             {@const d = data.directory}
             <div class="rows dir-status" data-testid="directory-status">

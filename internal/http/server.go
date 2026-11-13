@@ -30,6 +30,7 @@ import (
 	"github.com/4evrd/evrd/internal/listen"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/settings"
+	"github.com/4evrd/evrd/internal/update"
 )
 
 // Services are what the handlers work through, besides the bouncer.
@@ -48,7 +49,10 @@ type Server struct {
 	owner  *middleware.Owner
 	secret string // the cluster secret
 	webApp string // web_root: the built web app to serve, or ""
-	log    *slog.Logger
+	// updatedWeb is an installed update's web app, served at /api/webapp/
+	// for the web container to prefer over its own copy ("": none).
+	updatedWeb string
+	log        *slog.Logger
 }
 
 // New builds the handlers on b and svc and the server in front of them.
@@ -79,6 +83,13 @@ func (s *Server) SetCerts(m *certs.Manager) { s.h.SetCerts(m) }
 // SetDirectory offers d's networks when adding one.
 func (s *Server) SetDirectory(d *directory.Directory) { s.h.SetDirectory(d) }
 
+// SetUpdater tells admins about new releases and installs them.
+func (s *Server) SetUpdater(u *update.Updater) { s.h.SetUpdater(u) }
+
+// SetUpdatedWebApp serves an installed update's web app at /api/webapp/,
+// where the web image's nginx looks first. Call before serving.
+func (s *Server) SetUpdatedWebApp(dir string) { s.updatedWeb = dir }
+
 // SetMetrics reads the dashboards' charts from m.
 func (s *Server) SetMetrics(m *metricsq.Client) { s.h.SetMetrics(m) }
 
@@ -105,6 +116,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/provision/users/{username}", middleware.ProvisionToken(h.ProvisionToken, h.ProvisionUser))
 	mux.HandleFunc("GET /api/provision/users/{username}", middleware.ProvisionToken(h.ProvisionToken, h.ProvisionedUser))
 	mux.HandleFunc("DELETE /api/provision/users/{username}", middleware.ProvisionToken(h.ProvisionToken, h.ProvisionDeleteUser))
+	if s.updatedWeb != "" {
+		mux.Handle("GET /api/webapp/", http.StripPrefix("/api/webapp", webApp(s.updatedWeb)))
+	}
 	if s.webApp != "" {
 		mux.Handle("/api/", http.NotFoundHandler()) // not the app's index.html
 		mux.Handle("/auth/", http.NotFoundHandler())
@@ -247,6 +261,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/settings", adminAny(h.GetSettings))
 	mux.HandleFunc("PATCH /api/admin/settings", adminAny(h.SaveSettings))
 	mux.HandleFunc("POST /api/admin/directory/refresh", adminAny(h.RefreshDirectory))
+	mux.HandleFunc("GET /api/admin/update", adminAny(h.UpdateStatus))
+	mux.HandleFunc("POST /api/admin/update/check", adminAny(h.CheckUpdate))
+	mux.HandleFunc("POST /api/admin/update/install", adminAny(h.InstallUpdate))
 	mux.HandleFunc("PUT /api/admin/languages/{code}", adminAny(h.PutLanguage))
 	mux.HandleFunc("DELETE /api/admin/languages/{code}", adminAny(h.DeleteLanguage))
 	mux.HandleFunc("GET /api/admin/users", adminAny(h.AdminListUsers))

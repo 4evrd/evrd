@@ -39,14 +39,36 @@ import (
 	"github.com/4evrd/evrd/internal/settings"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/telemetry"
+	"github.com/4evrd/evrd/internal/update"
 	"github.com/4evrd/evrd/internal/version"
 )
 
 // serve is evrd itself, with the config file at configPath ("" for the
 // defaults), and the result is the exit status. It serves until ctx is
 // cancelled or SIGINT or SIGTERM arrives. Failures are logged to stderr
-// where they happen.
+// where they happen. When an update was installed, evrd then restarts into
+// it (see internal/update).
 func serve(parent context.Context, configPath string, stderr io.Writer) int {
+	var next update.Restart
+	code := serveOnce(parent, configPath, stderr, &next)
+	if code != 0 || next.Mode == "" {
+		return code
+	}
+	log := slog.New(slog.NewTextHandler(stderr, nil))
+	if next.Mode == update.ModeRestart {
+		log.Info("exiting for the container to start the update", "version", next.Version)
+		return update.RestartStatus
+	}
+	log.Info("restarting into the update", "version", next.Version, "program", next.Bin)
+	err := execUpdate(next.Bin, os.Args, next.Version, next.Base)
+	log.Error("restart into the update: it runs at the next start", "err", err)
+	return update.RestartStatus
+}
+
+// execUpdate is update.Exec; tests stand in for it.
+var execUpdate = update.Exec
+
+func serveOnce(parent context.Context, configPath string, stderr io.Writer, next *update.Restart) int {
 	log := slog.New(slog.NewTextHandler(stderr, nil))
 
 	// The file (or defaults); the environment and the settings saved in the
@@ -95,11 +117,20 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		log.Warn("links_socket is for a single node — in a cluster, users move between nodes instead; ignoring it")
 		linksSocket = ""
 	}
+	// Updates installed from the web app (internal/update), under the
+	// working directory unless the path is absolute.
+	updateDir, _ := filepath.Abs(cfg.UpdateDir)
+	if cfg.UpdateDir == "" {
+		updateDir = ""
+	}
+	privileged := os.Geteuid() == 0 // a user switch then can't be undone
+	sandboxed := false
 	var shippedLinks string // read before the chroot hides it
 	if linksSocket != "" {
 		shippedLinks = links.ShippedHash()
 	}
 	if sb := (sandbox.Config{Chroot: cfg.Chroot, User: cfg.User}); sb.Enabled() {
+		sandboxed = cfg.Chroot != "" || privileged
 		// Ports below 1024 need root: bind every port first.
 		ircAddrs := cfg.Listen
 		if linksSocket != "" && !cfg.KeepClientsOut {
@@ -400,6 +431,25 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		go iw.Run(ctx)
 	}
 	irc.SetDirectory(dir)
+	// New releases: told to admins, installed from the web app.
+	updateMode := func(c *config.Config) (string, string) {
+		return update.ModeFor(c.SelfUpdate, updateDir, sandboxed, c.Chroot != "", inDocker)
+	}
+	mode, why := updateMode(cfg)
+	upd := update.New(update.Options{Source: cfg.UpdateCheck, Dir: updateDir, Allowed: cfg.SelfUpdate, Mode: mode, Why: why}, st, log,
+		func(r update.Restart) { *next = r; stop() })
+	go upd.Run(ctx)
+	srv.SetUpdater(upd)
+	if update.Running() {
+		log.Info("running an installed update", "version", version.Version, "over", update.Base(), "dir", updateDir)
+	}
+	if w := update.WebDir(updateDir); w != "" {
+		srv.SetUpdatedWebApp(w) // for the web container to serve
+		if webRoot != "" {
+			log.Info("serving the update's web app instead of web_root", "dir", w, "web_root", webRoot)
+			webRoot = w
+		}
+	}
 	if webRoot != "" {
 		srv.SetWebApp(webRoot)
 		log.Info("serving the web app", "dir", webRoot)
@@ -432,6 +482,9 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 		srv.SetConfig(&live)
 		irc.SetSTS(live.IRCSTS, live.IRCHost)
 		dir.SetSource(live.NetworkDirectory)
+		upd.SetSource(live.UpdateCheck)
+		m, w := updateMode(&live)
+		upd.SetAllowed(live.SelfUpdate, m, w)
 		if live.Metrics.QueryURL != metricsURL {
 			metricsURL = live.Metrics.QueryURL
 			srv.SetMetrics(metricsq.New(metricsURL))
@@ -499,6 +552,10 @@ func serve(parent context.Context, configPath string, stderr io.Writer) int {
 	}
 	return 0
 }
+
+// inDocker is whether evrd runs in a container (whose restart policy
+// starts it again).
+var inDocker = func() bool { _, err := os.Stat("/.dockerenv"); return err == nil }()
 
 // localPath is the file path in an SQLite or Pebble DSN (not a server's).
 func localPath(dsn, scheme string) (string, bool) {

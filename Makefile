@@ -4,7 +4,7 @@ export CGO_ENABLED := 0
 
 LDFLAGS := -s -w -X github.com/4evrd/evrd/internal/version.Version=$(VERSION)
 
-.PHONY: all build core cli web vet test clean up down up-prod down-prod e2e e2e-setup hooks
+.PHONY: all build core cli web vet test clean up down up-prod down-prod e2e e2e-setup e2e-update hooks
 
 all: build web
 
@@ -54,6 +54,10 @@ e2e-setup:
 e2e:
 	docker compose -f docker-compose.dev.yml up -d --build
 	cd web && pnpm exec playwright test
+
+# installing an update from the web app, in Docker (docs/updates.md)
+e2e-update:
+	dev/e2e-update.sh
 
 clean:
 	rm -rf bin web/dist

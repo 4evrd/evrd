@@ -111,6 +111,14 @@ make e2e-setup   # one-time: install web deps + the Playwright browser
 make e2e         # brings up the dev stack and runs the specs
 ```
 
+`make e2e-update` (`dev/e2e-update.sh`) tests [installing an update from the
+web app](updates.md) on its own stack: an evrd 0.1.0 image, a 0.2.0 release
+built by `scripts/dist.sh` behind a fake release feed, evrd-links, the web
+image and ergo. It clicks *Install* in the browser, then checks evrd execs
+into 0.2.0 in the same container without dropping IRC, that the web container
+serves the new web app, that a newer image clears the update, and that an
+evrd started as root (`user evrd`) restarts through Docker instead.
+
 ### CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull

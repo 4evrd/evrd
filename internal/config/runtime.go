@@ -99,6 +99,13 @@ var Specs = []Spec{
 		Help: "Where the list of IRC networks users pick from when adding one comes from: an http(s) URL (checked twice a day) or a file. Empty turns the list off.",
 		get:  func(c *Config) string { return c.NetworkDirectory }},
 
+	{Key: "update_check", Group: "Updates", Label: "Release feed", Kind: "string", Env: "EVRD_UPDATE_CHECK",
+		Help: "Where evrd looks for new releases, twice a day, to tell admins about them. Nothing about this install is sent. Empty turns the check off.",
+		get:  func(c *Config) string { return c.UpdateCheck }},
+	{Key: "self_update", Group: "Updates", Label: "Install from the web app", Kind: "bool", Env: "EVRD_SELF_UPDATE",
+		Help: "Admins can install a new release here: evrd downloads it, checks its checksum and restarts into it. IRC connections stay up when the connection holder runs.",
+		get:  func(c *Config) string { return fmtBool(c.SelfUpdate) }},
+
 	{Key: "tls", Group: "HTTPS & TLS", Label: "Certificate", Kind: "choice", Options: []string{"acme", "selfsigned", "files"},
 		Help: "For the IRC ports, and for the web app when evrd serves HTTPS itself. Let's Encrypt (acme) gets and renews one automatically, accepting the CA's subscriber agreement.",
 		get:  func(c *Config) string { return c.TLSSource() }},
@@ -345,6 +352,8 @@ func (c *Config) setEmpty(key string) {
 		c.Metrics.QueryURL = ""
 	case "network_directory":
 		c.NetworkDirectory = ""
+	case "update_check":
+		c.UpdateCheck = ""
 	case "acme_email":
 		c.TLS.ACMEEmail = ""
 	case "acme_ca":

@@ -204,9 +204,13 @@ Everything works without it; the charts just say metrics are off.
 
 ## Upgrading
 
+When a new release is out, *Admin* says so, and *Install* there downloads it,
+checks it and restarts evrd into it — IRC connections stay up, nothing to
+pull ([how it works](docs/updates.md)).
+
 Releases are listed on the [releases page](https://github.com/4evrd/evrd/releases)
-and published as image tags (`0.1.0`, `0.1`, `latest`). Pin one in `.env` with
-`EVRD_VERSION=0.1.0`, then:
+and published as image tags (`0.1.0`, `0.1`, `latest`). To upgrade the images
+instead, pin one in `.env` with `EVRD_VERSION=0.1.0`, then:
 
 ```sh
 docker compose pull
