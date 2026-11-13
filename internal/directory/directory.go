@@ -2,6 +2,8 @@ package directory
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +11,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -20,6 +24,29 @@ import (
 
 // cacheKey is the directory's row in the store's cache.
 const cacheKey = "network-directory"
+
+// installKey is the cache row holding this install's random ID: shared by
+// every node, so a cluster counts once.
+const installKey = "install-id"
+
+// statsHost is the only host that's sent the install ID, so evrd.sh can
+// count distinct installs. Other sources (your own URL) never see it.
+var statsHost = "evrd.sh"
+
+var validInstallID = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$`)
+
+// inDocker is checked at start, before any chroot.
+var inDocker = func() bool { _, err := os.Stat("/.dockerenv"); return err == nil }()
+
+// userAgent says the version and platform, e.g.
+// "evrd/0.56.0 (linux/amd64; docker; +https://evrd.sh)".
+func userAgent() string {
+	ua := "evrd/" + version.Version + " (" + runtime.GOOS + "/" + runtime.GOARCH
+	if inDocker {
+		ua += "; docker"
+	}
+	return ua + "; +https://evrd.sh)"
+}
 
 // Cache keeps the last good copy (the store implements it).
 type Cache interface {
@@ -61,6 +88,7 @@ type Directory struct {
 	fetch sync.Mutex // one fetch at a time
 
 	mu     sync.Mutex
+	iid    string // install ID, once read or made
 	source string
 	doc    *Document
 	saved  cached // what's behind doc: its source, validators and bytes
@@ -269,7 +297,12 @@ func (d *Directory) get(ctx context.Context, src string, prev cached) (data []by
 	if err != nil {
 		return nil, "", "", err
 	}
-	req.Header.Set("User-Agent", "evrd/"+version.Version+" (+https://evrd.sh)")
+	req.Header.Set("User-Agent", userAgent())
+	if req.URL.Hostname() == statsHost {
+		if id := d.installID(ctx); id != "" {
+			req.Header.Set("X-Evrd-Install", id)
+		}
+	}
 	req.Header.Set("Accept", "application/json")
 	if prev.ETag != "" {
 		req.Header.Set("If-None-Match", prev.ETag)
@@ -290,6 +323,39 @@ func (d *Directory) get(ctx context.Context, src string, prev cached) (data []by
 	}
 	data, err = d.readAll(res.Body)
 	return data, res.Header.Get("ETag"), res.Header.Get("Last-Modified"), err
+}
+
+// installID is this install's random ID from the cache, made on first use.
+// "" without a cache (or when it can't be stored): an ID that changes every
+// restart would only inflate the count.
+func (d *Directory) installID(ctx context.Context) string {
+	d.mu.Lock()
+	id := d.iid
+	d.mu.Unlock()
+	if id != "" || d.cache == nil {
+		return id
+	}
+	id, err := d.cache.Cached(ctx, installKey)
+	if err != nil || !validInstallID.MatchString(id) {
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return ""
+		}
+		b := make([]byte, 16)
+		rand.Read(b)
+		id = base64.RawURLEncoding.EncodeToString(b)
+		if err := d.cache.PutCached(ctx, installKey, id); err != nil {
+			d.log.Warn("network directory: store the install ID", "err", err)
+			return ""
+		}
+		// another node may have raced us: use whatever won
+		if v, err := d.cache.Cached(ctx, installKey); err == nil && validInstallID.MatchString(v) {
+			id = v
+		}
+	}
+	d.mu.Lock()
+	d.iid = id
+	d.mu.Unlock()
+	return id
 }
 
 func (d *Directory) readFile(src string) ([]byte, error) {
