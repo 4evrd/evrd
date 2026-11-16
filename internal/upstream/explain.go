@@ -31,8 +31,12 @@ var (
 	// evrd tries it again (rest.go): a ban or a throttle only gets longer when
 	// retried soon. "Not authorised" is a server with no I-line for this
 	// address: a refusal too.
-	bannedRE    = regexp.MustCompile(`(?i)\b(banned|k-?lined?|g-?lined?|z-?lined?|d-?lined?|akill|autokill|you are not welcome|access denied|not authori[sz]ed|no authori[sz]ation|unauthori[sz]ed connection)\b`)
-	throttledRE = regexp.MustCompile(`(?i)(throttl|too fast|too many (connections|clients|users)|reconnect(ing)? too|wait .* (before|between)|connection limit|session limit|clones)`)
+	bannedRE = regexp.MustCompile(`(?i)\b(banned|k-?lined?|g-?lined?|z-?lined?|d-?lined?|akill|autokill|you are not welcome|access denied|not authori[sz]ed|no authori[sz]ation|unauthori[sz]ed connection)\b`)
+	// earlyDropRE is a connection cut before the server said anything: from
+	// a server that just refused this address, the same refusal (rest.go).
+	earlyDropRE    = regexp.MustCompile(`(?i)(hung up during the TLS handshake|the connection broke|connection reset)`)
+	saslRequiredRE = regexp.MustCompile(`(?i)(sasl (authentication |login )?(is )?required|requires sasl|only .* (with|via|using) sasl|only .* sasl)`)
+	throttledRE    = regexp.MustCompile(`(?i)(throttl|too fast|too many (connections|clients|users)|reconnect(ing)? too|wait .* (before|between)|connection limit|session limit|clones)`)
 )
 
 // hints match a failure to what it means and what to do about it: the
@@ -41,6 +45,9 @@ var hints = []struct {
 	re  *regexp.Regexp
 	key string
 }{
+	// before the ban: a ban that names SASL ("VPNs are only allowed with
+	// SASL") is fixed by logging in, not by asking staff
+	{saslRequiredRE, "saslRequired"},
 	{bannedRE, "banned"},
 	{throttledRE, "throttled"},
 	// services and channels that need a login (see services.go)
@@ -48,7 +55,6 @@ var hints = []struct {
 	{regexp.MustCompile(`(?i)(isn't registered|is not (a )?registered|not a registered|no such account|account does not exist|unknown account)`), "notRegistered"},
 	{regexp.MustCompile(`(?i)(suspended|frozen)`), "suspended"},
 	{regexp.MustCompile(`(?i)(services didn't answer|no services nick|services are (down|unavailable))`), "servicesNoAnswer"},
-	{regexp.MustCompile(`(?i)(sasl (authentication |login )?(is )?required|requires sasl|only .* sasl)`), "saslRequired"},
 	{regexp.MustCompile(`(?i)hung up during the TLS handshake`), "hungUp"},
 	{regexp.MustCompile(`(?i)(doesn't offer SASL|refused the SASL capability)`), "noSASL"},
 	{regexp.MustCompile(`(?i)(password (is )?(incorrect|mismatch|required|wrong)|(bad|invalid|incorrect|wrong) password|invalid (account )?credentials|sasl authentication failed|authentication failed|login (unsuccessful|failed))`), "password"},

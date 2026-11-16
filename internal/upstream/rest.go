@@ -48,7 +48,11 @@ func (r rests) record(key, msg string, now time.Time) time.Duration {
 	s := r[key]
 	var d time.Duration
 	switch {
-	case bannedRE.MatchString(msg):
+	case bannedRE.MatchString(msg), s.banned && earlyDropRE.MatchString(msg):
+		// A server that refused this address often drops the next tries
+		// before a word is said (the ban moved from sign-in to connect):
+		// still the ban, so the rest keeps growing instead of evrd
+		// hammering it every few seconds.
 		s.bans = min(s.bans+1, 8) // (the rest stops growing well before)
 		floor := min(banWait<<(s.bans-1), maxBanWait)
 		d = floor + time.Duration(rand.Int64N(int64(floor/10)))
@@ -81,6 +85,9 @@ func (r rests) pick(servers []store.Server, start int, now time.Time) int {
 	return best
 }
 
+// banned reports whether the server at key last rested for a refusal.
+func (r rests) banned(key string) bool { return r[key].banned }
+
 // allResting reports when the first rest ends if every server is resting,
 // and whether they were all refusals.
 func (r rests) allResting(servers []store.Server, now time.Time) (time.Time, bool, bool) {
@@ -112,7 +119,7 @@ func (r rests) retryWait(backoff time.Duration, servers []store.Server, now time
 
 // restNote is the connection log's line on what evrd does next: with
 // servers of the network to spare, which one rests and for how long.
-func restNote(network, server, msg string, rest, wait time.Duration, servers int, allRest, allBanned bool) messages.Text {
+func restNote(network, server string, banned bool, rest, wait time.Duration, servers int, allRest, allBanned bool) messages.Text {
 	switch {
 	case allRest && servers > 1:
 		key := "rest.allBanned"
@@ -126,7 +133,7 @@ func restNote(network, server, msg string, rest, wait time.Duration, servers int
 			host = server
 		}
 		key := "rest.banned"
-		if !bannedRE.MatchString(msg) {
+		if !banned {
 			key = "rest.limited"
 		}
 		return messages.T(key, "host", host, "rest", durText(rest))

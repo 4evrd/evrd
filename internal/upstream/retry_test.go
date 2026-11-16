@@ -1,6 +1,7 @@
 package upstream
 
 import (
+	"github.com/4evrd/evrd/internal/messages"
 	"strings"
 	"testing"
 	"time"
@@ -160,11 +161,11 @@ func TestRestNote(t *testing.T) {
 		{notAuthorised, 30 * time.Minute, 30 * time.Minute, 1, true, true, "Trying again in 30m"},
 		{"connection refused", 0, 2 * time.Second, 2, false, false, "Trying again in 2s"},
 	} {
-		if got := restNote("EFnet", "irc.du.se:6667", tc.msg, tc.rest, tc.wait, tc.servers, tc.allRest, tc.alBan).English(); !strings.HasPrefix(got, tc.want) {
+		if got := restNote("EFnet", "irc.du.se:6667", bannedRE.MatchString(tc.msg), tc.rest, tc.wait, tc.servers, tc.allRest, tc.alBan).English(); !strings.HasPrefix(got, tc.want) {
 			t.Errorf("%q: %q, want %q", tc.msg, got, tc.want)
 		}
 	}
-	if got := restNote("EFnet", "odd", kLined, time.Minute, time.Second, 2, false, false).English(); !strings.HasPrefix(got, "odd refuses") {
+	if got := restNote("EFnet", "odd", true, time.Minute, time.Second, 2, false, false).English(); !strings.HasPrefix(got, "odd refuses") {
 		t.Errorf("unsplittable server: %q", got)
 	}
 }
@@ -206,5 +207,40 @@ func TestAStableConnectionEndsTheRest(t *testing.T) {
 	// throttled after a stable link: rested, the bans forgotten
 	if d := r.ended(serverKey(duSe), throttled, true, t0); d < throttleWait || r[serverKey(duSe)].bans != 0 {
 		t.Fatalf("throttled after a stable link: %v, %+v", d, r[serverKey(duSe)])
+	}
+}
+
+// A server that banned this address and then hangs up before TLS on the next
+// tries (EuropNet's Z-line moving to connect time) stays resting, its rest
+// growing; a hangup from a server that never refused is a plain failure.
+func TestHangupAfterBanKeepsResting(t *testing.T) {
+	t0 := time.Now()
+	r := rests{}
+	key := serverKey(duSe)
+	if d := r.record(key, "the server hung up during the TLS handshake", t0); d != 0 {
+		t.Fatalf("hangup from a server that never refused rested %v", d)
+	}
+	first := r.record(key, "Closing link: [Z-lined: VPN are only allowed with SASL]", t0)
+	later := t0.Add(first + time.Second)
+	for _, msg := range []string{"the connection broke", "the server hung up during the TLS handshake"} {
+		d := r.record(key, msg, later)
+		if d <= first || !r.banned(key) {
+			t.Fatalf("%q after a ban: rest %v (first %v), banned %v", msg, d, first, r.banned(key))
+		}
+		first = d
+	}
+}
+
+// A ban that names SASL is explained as needing SASL, not as asking staff.
+func TestSASLBanHint(t *testing.T) {
+	msg := "Closing link: (thelion@2a01::1) [Z-lined: VPN are only allowed with SASL (method that allows identification to services (NickServ) during the connection process) • contact scrat@europnet.org]"
+	if got := HintText(msg); got.English() != messages.T("hint.saslRequired").English() {
+		t.Fatalf("hint = %v, want saslRequired", got.English())
+	}
+	if !bannedRE.MatchString(msg) {
+		t.Fatal("still a ban: the server must rest")
+	}
+	if got := HintText("You are banned from this server"); got.English() != messages.T("hint.banned").English() {
+		t.Fatalf("plain ban hint = %v", got.English())
 	}
 }
