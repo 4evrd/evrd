@@ -456,6 +456,7 @@ func (c *Conn) Run(ctx context.Context) {
 		rest := c.rests.ended(server, msg, stable, now)
 		wait := c.rests.retryWait(backoff, servers, now)
 		_, allBanned, allRest := c.rests.allResting(servers, now)
+		banned := rest > 0 && c.rests.banned(server)
 		c.mu.Unlock()
 		hintT := HintText(msg)
 		hint := hintT.English()
@@ -468,7 +469,7 @@ func (c *Conn) Run(ctx context.Context) {
 			c.noteT(false, hintT)
 		}
 		lastHint = hint
-		next := restNote(c.net.Name, server, msg, rest, wait, len(servers), allRest, allBanned)
+		next := restNote(c.net.Name, server, banned, rest, wait, len(servers), allRest, allBanned)
 		c.noteT(false, next)
 		c.update(func(h *Health) {
 			h.Status, h.Lag = StatusReconnecting, -1
