@@ -104,15 +104,15 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: coverage-go
           path: pr
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: coverage-web
           path: pr
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: coverage-scylla
           path: pr
@@ -270,7 +270,7 @@ jobs:
             pnpm exec playwright install --with-deps chromium
           fi
       # the image e2e-image built once for every shard
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: evrd-e2e-image
           path: ${{ runner.temp }}
