@@ -44,6 +44,8 @@ export default {
   'clients.mircSteps': 'Tools → Options → Connect → Servers → Add:',
   'clients.mircCommand': 'Sau conectează-te din orice fereastră (-m deschide una nouă):',
   'clients.mircCommandTls': 'Sau conectează-te din orice fereastră (-m deschide una nouă; + dinaintea portului înseamnă TLS):',
+  'clients.irssiNew': 'irssi 1.0 și mai nou:',
+  'clients.irssiOld': 'Versiunile mai vechi de irssi (înainte de 1.0) numesc opțiunea TLS -ssl:',
   'clients.otherWorks': 'Merge orice client care poate trimite o parolă de server (PASS).',
   'clients.otherUse': 'Folosește hostul {hostname}, portul {portnum} și formatul de parolă de mai sus.',
   'clients.otherUseTls': 'Folosește hostul {hostname}, portul {portnum} cu TLS și formatul de parolă de mai sus.',

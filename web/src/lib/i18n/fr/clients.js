@@ -44,6 +44,8 @@ export default {
   'clients.mircSteps': 'Tools → Options → Connect → Servers → Add :',
   'clients.mircCommand': 'Ou connectez-vous depuis n’importe quelle fenêtre (-m en ouvre une nouvelle) :',
   'clients.mircCommandTls': 'Ou connectez-vous depuis n’importe quelle fenêtre (-m en ouvre une nouvelle ; le + devant le port signifie TLS) :',
+  'clients.irssiNew': 'irssi 1.0 et plus récent :',
+  'clients.irssiOld': 'Les anciennes versions d’irssi (avant 1.0) appellent l’option TLS -ssl :',
   'clients.otherWorks': 'Tout client capable d’envoyer un mot de passe de serveur (PASS) fonctionne.',
   'clients.otherUse': 'Utilisez l’hôte {hostname}, le port {portnum} et le format de mot de passe ci-dessus.',
   'clients.otherUseTls': 'Utilisez l’hôte {hostname}, le port {portnum} avec TLS et le format de mot de passe ci-dessus.',

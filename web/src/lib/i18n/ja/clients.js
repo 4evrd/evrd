@@ -44,6 +44,8 @@ export default {
   'clients.mircSteps': 'Tools → Options → Connect → Servers → Add:',
   'clients.mircCommand': 'または任意のウィンドウから接続します（-m で新しいウィンドウを開きます）:',
   'clients.mircCommandTls': 'または任意のウィンドウから接続します（-m で新しいウィンドウを開きます。ポートの前の + は TLS を意味します）:',
+  'clients.irssiNew': 'irssi 1.0 以降:',
+  'clients.irssiOld': '古い irssi（1.0 より前）では TLS オプションは -ssl です:',
   'clients.otherWorks': 'サーバーパスワード（PASS）を送れるクライアントなら使えます。',
   'clients.otherUse': 'ホスト {hostname}、ポート {portnum}、上のパスワード形式を使ってください。',
   'clients.otherUseTls': 'ホスト {hostname}、ポート {portnum}（TLS）、上のパスワード形式を使ってください。',
