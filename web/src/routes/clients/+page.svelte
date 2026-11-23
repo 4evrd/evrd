@@ -145,7 +145,7 @@ Password        <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<
           </div>
         {:else if tab === 'irssi'}
 <pre class="snippet">/network add <b>evrd-{firstNet}</b>
-/server add {port.tls ? '-tls ' : ''}-network <b>evrd-{firstNet}</b> -password <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if} <b>{host}</b> {port.port}
+/server add {port.tls ? '-tls ' : ''}-network <b>evrd-{firstNet}</b> <b>{host}</b> {port.port} <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if}
 /connect <b>evrd-{firstNet}</b></pre>
         {:else if tab === 'wee'}
 <pre class="snippet">/server add <b>evrd</b> <b>{host}</b>/{port.port}{port.tls ? ' -tls' : ''}
