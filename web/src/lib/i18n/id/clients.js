@@ -44,6 +44,8 @@ export default {
   'clients.mircSteps': 'Tools → Options → Connect → Servers → Add:',
   'clients.mircCommand': 'Atau hubungkan dari jendela mana saja (-m membuka jendela baru):',
   'clients.mircCommandTls': 'Atau hubungkan dari jendela mana saja (-m membuka jendela baru; tanda + sebelum port berarti TLS):',
+  'clients.irssiNew': 'irssi 1.0 dan yang lebih baru:',
+  'clients.irssiOld': 'irssi lama (sebelum 1.0) menamai opsi TLS -ssl:',
   'clients.otherWorks': 'Klien apa pun yang bisa mengirim password server (PASS) bisa dipakai.',
   'clients.otherUse': 'Gunakan host {hostname}, port {portnum}, dan format password di atas.',
   'clients.otherUseTls': 'Gunakan host {hostname}, port {portnum} dengan TLS, dan format password di atas.',

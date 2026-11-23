@@ -44,6 +44,8 @@ export default {
   'clients.mircSteps': 'Tools → Options → Connect → Servers → Add:',
   'clients.mircCommand': 'Ya da herhangi bir pencereden bağlan (-m yeni bir pencere açar):',
   'clients.mircCommandTls': 'Ya da herhangi bir pencereden bağlan (-m yeni bir pencere açar; porttan önceki + TLS demektir):',
+  'clients.irssiNew': 'irssi 1.0 ve sonrası:',
+  'clients.irssiOld': 'Eski irssi sürümleri (1.0 öncesi) TLS seçeneğine -ssl der:',
   'clients.otherWorks': 'Sunucu parolası (PASS) gönderebilen her istemci çalışır.',
   'clients.otherUse': 'Sunucu olarak {hostname}, port olarak {portnum} ve yukarıdaki parola biçimini kullan.',
   'clients.otherUseTls': 'Sunucu olarak {hostname}, port olarak TLS ile {portnum} ve yukarıdaki parola biçimini kullan.',

@@ -144,9 +144,22 @@ Password        <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<
 <pre class="snippet">/server -m <b>{host}</b> {port.tls ? '+' : ''}{port.port} <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if}</pre>
           </div>
         {:else if tab === 'irssi'}
+          {#if port.tls}
+          <div class="od-stack" style="--od-gap:12px">
+            <p class="desc">{t('clients.irssiNew')}</p>
 <pre class="snippet">/network add <b>evrd-{firstNet}</b>
-/server add {port.tls ? '-tls ' : ''}-network <b>evrd-{firstNet}</b> -password <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if} <b>{host}</b> {port.port}
+/server add -tls -network <b>evrd-{firstNet}</b> <b>{host}</b> {port.port} <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if}
 /connect <b>evrd-{firstNet}</b></pre>
+            <p class="desc">{t('clients.irssiOld')}</p>
+<pre class="snippet">/network add <b>evrd-{firstNet}</b>
+/server add -ssl -network <b>evrd-{firstNet}</b> <b>{host}</b> {port.port} <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if}
+/connect <b>evrd-{firstNet}</b></pre>
+          </div>
+          {:else}
+<pre class="snippet">/network add <b>evrd-{firstNet}</b>
+/server add -network <b>evrd-{firstNet}</b> <b>{host}</b> {port.port} <b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if}
+/connect <b>evrd-{firstNet}</b></pre>
+          {/if}
         {:else if tab === 'wee'}
 <pre class="snippet">/server add <b>evrd</b> <b>{host}</b>/{port.port}{port.tls ? ' -tls' : ''}
 /set irc.server.evrd.password "<b>{me.username}/{firstNet}{byLink ? '' : ':'}</b>{#if !byLink}<em>{pwText}</em>{/if}"
