@@ -252,6 +252,9 @@ func (s *Handlers) UpdateNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.b.Reconfigure(n)
+	if in.Channels != nil {
+		s.b.EditChannels(n.ID, before.Channels, n.Channels)
+	}
 	reconnected := false
 	if accounts.ReconnectFor(before, n, string(s.b.Status(n.ID))) {
 		if err := s.b.Reconnect(n.ID); err != nil {

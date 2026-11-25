@@ -376,6 +376,49 @@ func (c *Conn) Reconfigure(n store.Network, defaultQuit string, ctcp map[string]
 	}
 }
 
+// EditChannels applies an edit of the saved channel list made outside IRC
+// (the web app's network settings): channels taken out are parted and
+// forgotten, ones added are saved and joined. Without it the running link
+// kept its own copy of the list, and the next JOIN or PART anywhere saved
+// that copy back, bringing a removed channel back.
+func (c *Conn) EditChannels(removed, added []string) {
+	c.mu.Lock()
+	kept := c.saved[:0]
+	for _, s := range c.saved {
+		if !containsFold(removed, s) {
+			kept = append(kept, s)
+		}
+	}
+	c.saved = kept
+	var join []string
+	for _, ch := range added {
+		if !containsFold(c.saved, ch) {
+			c.saved = append(c.saved, ch)
+		}
+		if !c.channels[ch] {
+			join = append(join, ch)
+		}
+	}
+	var part []string
+	for _, ch := range removed {
+		for k := range c.channels {
+			if strings.EqualFold(k, ch) {
+				part = append(part, k)
+			}
+		}
+	}
+	c.mu.Unlock()
+	if c.Status() != StatusConnected {
+		return // the list is read again on connect
+	}
+	for _, ch := range part {
+		c.sendUser("PART " + ch)
+	}
+	for _, ch := range join {
+		c.sendUser("JOIN " + ch)
+	}
+}
+
 // ChannelSettings returns a channel's options.
 func (c *Conn) ChannelSettings(ch string) store.ChannelSettings {
 	c.mu.Lock()
