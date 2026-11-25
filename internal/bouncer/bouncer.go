@@ -366,6 +366,38 @@ func (b *Bouncer) Reconfigure(n store.Network) {
 	conn.Reconfigure(n, u.QuitMsg, u.CTCPReplies)
 }
 
+// EditChannels applies an edit of a network's saved channel list to its
+// running link (see upstream.Conn.EditChannels).
+func (b *Bouncer) EditChannels(networkID int64, before, after []string) {
+	conn, ok := b.ConnFor(networkID)
+	if !ok {
+		return
+	}
+	var removed, added []string
+	for _, ch := range before {
+		if !containsFold(after, ch) {
+			removed = append(removed, ch)
+		}
+	}
+	for _, ch := range after {
+		if !containsFold(before, ch) {
+			added = append(added, ch)
+		}
+	}
+	if len(removed) > 0 || len(added) > 0 {
+		conn.EditChannels(removed, added)
+	}
+}
+
+func containsFold(list []string, s string) bool {
+	for _, x := range list {
+		if strings.EqualFold(x, s) {
+			return true
+		}
+	}
+	return false
+}
+
 // ReconfigureUser pushes a user's settings (quit message, CTCP replies) to
 // all their running networks.
 func (b *Bouncer) ReconfigureUser(userID int64) {
