@@ -102,7 +102,7 @@ func (in networkInput) apply(n *store.Network) {
 	str(&n.AuthCommand, in.AuthCommand)
 	str(&n.GhostCmd, in.GhostCmd)
 	if in.JoinAfterAuth != nil {
-		n.JoinAfterAuth = *in.JoinAfterAuth
+		n.JoinBeforeAuth = !*in.JoinAfterAuth
 	}
 	if in.AuthTimeout != nil {
 		n.AuthTimeout = *in.AuthTimeout
@@ -724,7 +724,7 @@ func (s *Handlers) networkDTO(p *messages.Printer, n store.Network) map[string]a
 		"altNick":     n.AltNick, "quitMsg": n.QuitMsg, "bindHost": n.BindHost, "saslUser": n.SASLUser,
 		"trustAllCerts": n.TrustAllCerts, "trustPKI": n.TrustPKI, "fingerprints": orEmpty(n.Fingerprints),
 		"authMethod": n.Auth(), "servicesNick": n.ServicesNick, "identifyArgs": n.IdentifyArgs, "identifyOn": n.IdentifyOn,
-		"authCommand": n.AuthCommand, "ghost": n.GhostCmd, "joinAfterAuth": n.JoinAfterAuth, "authTimeout": n.AuthTimeout,
+		"authCommand": n.AuthCommand, "ghost": n.GhostCmd, "joinAfterAuth": !n.JoinBeforeAuth, "authTimeout": n.AuthTimeout,
 		"encoding": n.Encoding, "floodRate": n.FloodRate, "floodBurst": n.FloodBurst, "joinDelay": n.JoinDelay,
 		"channelSettings": orEmptyMap(n.ChannelSettings),
 		"modules":         orEmptyModules(n.Modules),

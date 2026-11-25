@@ -174,8 +174,8 @@ func Export(nets []store.Network, playback map[int64]map[string]store.BufferPlay
 			IdentifyArgs: n.IdentifyArgs, IdentifyOn: n.IdentifyOn, Command: seal(n.AuthCommand), Ghost: n.GhostCmd,
 			Timeout: n.AuthTimeout,
 		}
-		if n.JoinAfterAuth {
-			l.JoinAfterLogin = ptr(true)
+		if n.JoinBeforeAuth { // waiting is the default
+			l.JoinAfterLogin = ptr(false)
 		}
 		x.Login = &l
 		bps := playback[n.ID]
@@ -354,7 +354,7 @@ func (x *Network) Apply(n *store.Network) Settings {
 		}
 		set(&n.GhostCmd, l.Ghost)
 		if l.JoinAfterLogin != nil {
-			n.JoinAfterAuth = *l.JoinAfterLogin
+			n.JoinBeforeAuth = !*l.JoinAfterLogin
 		}
 		if l.Timeout != 0 {
 			n.AuthTimeout = l.Timeout

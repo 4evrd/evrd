@@ -410,6 +410,8 @@
     "irc.log.identifyInstead": "Akan beridentifikasi ke {services} setelah tersambung",
     "irc.log.noPassword": "Kata sandi belum diatur: tidak beridentifikasi ke {services}",
     "irc.log.joinAfterLogin": "Masuk channel begitu layanan mengonfirmasi login",
+    "irc.log.joinAfterOper": "Masuk channel begitu server menjawab OPER",
+    "irc.log.joinAgain": "Masuk lagi ke {channels}: server menolaknya sebelum login atau OPER selesai",
     "irc.log.waitingForPrompt": "Menunggu {services} meminta sebelum beridentifikasi",
     "irc.log.sentLoginCommand": "Perintah login terkirim",
     "irc.log.sentLoginCommandTo": "Perintah login terkirim ke {target}",

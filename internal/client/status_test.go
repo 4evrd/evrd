@@ -228,7 +228,7 @@ func TestStatusSetServicesLogin(t *testing.T) {
 		{"set two identifyon prompt", "Saved identifyon = prompt on two."},
 		{"set two ghost regain", "Saved ghost = regain on two."},
 		{"set two joinafterauth maybe", "joinafterauth is on or off."},
-		{"set two joinafterauth on", "Saved joinafterauth = on on two."},
+		{"set two joinafterauth off", "Saved joinafterauth = off on two."},
 		{"set two authtimeout soon", "authtimeout is a whole number."},
 		{"set two authtimeout 30", "Saved authtimeout = 30 on two."},
 	} {
@@ -236,12 +236,12 @@ func TestStatusSetServicesLogin(t *testing.T) {
 	}
 	n, _ := r.st.NetworkByID(t.Context(), two.ID)
 	if n.AuthMethod != store.AuthCommand || n.ServicesNick != "NickServ@services.dal.net" || n.IdentifyArgs != "password" ||
-		n.IdentifyOn != "prompt" || n.GhostCmd != "regain" || !n.JoinAfterAuth || n.AuthTimeout != 30 ||
+		n.IdentifyOn != "prompt" || n.GhostCmd != "regain" || !n.JoinBeforeAuth || n.AuthTimeout != 30 ||
 		!strings.HasPrefix(n.AuthCommand, "/msg X@") {
 		t.Fatalf("saved: %+v", n)
 	}
 	ic.status("show two", "two — disconnected")
-	ic.expect("auth command · servicesnick NickServ@services.dal.net · identifyargs password · identifyon prompt · ghost regain · joinafterauth on · authtimeout 30s")
+	ic.expect("auth command · servicesnick NickServ@services.dal.net · identifyargs password · identifyon prompt · ghost regain · joinafterauth off · authtimeout 30s")
 	ic.expect("authcommand /msg X@channels.undernet.org LOGIN %account% %password%")
 	ic.status("set two ghost off", "Saved ghost = off on two.")
 	ic.status("set two identifyargs auto", "Saved identifyargs = auto on two.")

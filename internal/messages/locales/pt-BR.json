@@ -418,6 +418,8 @@
     "irc.log.identifyInstead": "Em vez disso, vai se identificar com {services} depois de conectar",
     "irc.log.noPassword": "Nenhuma senha definida: sem identificação com {services}",
     "irc.log.joinAfterLogin": "Entrando nos canais assim que os serviços confirmarem o login",
+    "irc.log.joinAfterOper": "Entrando nos canais assim que o servidor responder ao OPER",
+    "irc.log.joinAgain": "Entrando de novo em {channels}: o servidor recusou antes de o login ou o OPER ser concluído",
     "irc.log.waitingForPrompt": "Esperando {services} pedir antes de se identificar",
     "irc.log.sentLoginCommand": "Comando de login enviado",
     "irc.log.sentLoginCommandTo": "Comando de login enviado para {target}",

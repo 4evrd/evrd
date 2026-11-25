@@ -570,7 +570,7 @@ func (se *session) cmdShow(args []string) {
 	se.statusf("  sasl password %s · sasl user %s · bindhost %s", pw, orElse(n.SASLUser, se.tr("show.byIdent")), orElse(n.BindHost, byDefault))
 	se.statusf("  auth %s · servicesnick %s · identifyargs %s · identifyon %s · ghost %s · joinafterauth %s · authtimeout %ds",
 		n.Auth(), orElse(n.ServicesNick, "NickServ"), orElse(n.IdentifyArgs, "auto"), orElse(n.IdentifyOn, "connect"),
-		orElse(n.GhostCmd, "off"), onOff(n.JoinAfterAuth), cmp.Or(n.AuthTimeout, store.DefaultAuthTimeout))
+		orElse(n.GhostCmd, "off"), onOff(!n.JoinBeforeAuth), cmp.Or(n.AuthTimeout, store.DefaultAuthTimeout))
 	if n.AuthCommand != "" {
 		se.statusf("  authcommand %s", n.AuthCommand)
 	}
@@ -687,9 +687,11 @@ func (se *session) cmdSet(args []string) {
 			n.GhostCmd = ""
 		}
 	case "joinafterauth":
-		if !bool_(&n.JoinAfterAuth) {
+		after := !n.JoinBeforeAuth
+		if !bool_(&after) {
 			return
 		}
+		n.JoinBeforeAuth = !after
 	case "quitmsg":
 		text(&n.QuitMsg)
 	case "encoding":

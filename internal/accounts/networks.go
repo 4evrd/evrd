@@ -217,7 +217,7 @@ func NeedsReconnect(a, b store.Network) bool {
 		slices.ContainsFunc(a.Fingerprints, func(f string) bool { return !slices.Contains(b.Fingerprints, f) }) || a.Encoding != b.Encoding ||
 		a.Auth() != b.Auth() || a.ServicesNick != b.ServicesNick || a.IdentifyArgs != b.IdentifyArgs ||
 		a.IdentifyOn != b.IdentifyOn || a.AuthCommand != b.AuthCommand || a.GhostCmd != b.GhostCmd ||
-		a.JoinAfterAuth != b.JoinAfterAuth || a.AuthTimeout != b.AuthTimeout
+		a.JoinBeforeAuth != b.JoinBeforeAuth || a.AuthTimeout != b.AuthTimeout
 }
 
 // ReconnectFor reports whether saving a's change to b should reconnect a

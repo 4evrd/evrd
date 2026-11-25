@@ -121,7 +121,8 @@ test('NickServ (Atheme/Anope preset): identifies, then joins a registered-only c
       await expect(page.locator('#identifyArgs')).toHaveText(/Account and password/)
       await page.locator('#saslUser').fill(acct)
       await page.locator('#saslPass').fill(pw)
-      await page.getByRole('switch', { name: 'Join channels after identifying' }).click()
+      // on by default
+      await expect(page.getByRole('switch', { name: 'Join channels after identifying' })).toHaveAttribute('aria-checked', 'true')
     },
   })
   await expect.poll(async () => (await status(id)).auth, { timeout: 20000 }).toBe('identified')
@@ -150,7 +151,8 @@ test('a wrong password: refused, explained, and the registered-only channel stay
       await choose(page, page.locator('#authMethod'), 'IDENTIFY to NickServ')
       await page.locator('#saslUser').fill(acct)
       await page.locator('#saslPass').fill('not-the-password')
-      await page.getByRole('switch', { name: 'Join channels after identifying' }).click()
+      // on by default
+      await expect(page.getByRole('switch', { name: 'Join channels after identifying' })).toHaveAttribute('aria-checked', 'true')
     },
   })
   await expect.poll(async () => (await status(id)).auth, { timeout: 20000 }).toBe('failed')

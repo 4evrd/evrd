@@ -418,6 +418,8 @@
     "irc.log.identifyInstead": "S’identifiera plutôt auprès de {services} une fois connecté",
     "irc.log.noPassword": "Aucun mot de passe défini : pas d’identification auprès de {services}",
     "irc.log.joinAfterLogin": "Les canaux seront rejoints une fois l’identification confirmée par les services",
+    "irc.log.joinAfterOper": "Les canaux seront rejoints une fois que le serveur aura répondu à OPER",
+    "irc.log.joinAgain": "Nouvelle tentative pour {channels} : le serveur les a refusés avant que l’identification ou OPER n’aboutisse",
     "irc.log.waitingForPrompt": "Attente de la demande de {services} avant de s’identifier",
     "irc.log.sentLoginCommand": "Commande d’identification envoyée",
     "irc.log.sentLoginCommandTo": "Commande d’identification envoyée à {target}",

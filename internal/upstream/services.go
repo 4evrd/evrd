@@ -3,8 +3,11 @@ package upstream
 // Logging in to the network's services once connected: an IDENTIFY to
 // NickServ (or a line of the user's own, for Undernet's X and the like),
 // whose answer is watched for so the connection log can say whether it
-// worked. Channel joins can wait for the answer (+r channels), and a nick
-// held by a ghost is won back. SASL happens earlier, in handleCap.
+// worked. Channel joins wait for the answer (+r channels), and for an OPER
+// sent on connecting (perform) to be answered (oper-only channels); a join
+// refused all the same is tried once more when the login or OPER goes
+// through. A nick held by a ghost is won back. SASL happens earlier, in
+// handleCap.
 
 import (
 	"fmt"
@@ -23,6 +26,8 @@ var (
 	promptWait = 10 * time.Second // identify anyway when services never ask
 	ghostWait  = 3 * time.Second  // take the nick back if services don't say it's free
 	authUnit   = time.Second      // AuthTimeout's unit
+	operWait   = 10 * time.Second // join anyway when OPER isn't answered
+	rejoinWait = 2 * time.Second  // a join refused after the login went through
 )
 
 // Health.Auth: how the services login went on this connection.
@@ -35,13 +40,22 @@ const (
 
 // authState is one connection's services login. Held under c.mu.
 type authState struct {
-	gen        int      // the connection it belongs to: stale timers check it
-	sent       bool     // the login went out
-	waiting    bool     // and services haven't answered yet
-	prompt     bool     // the login waits for services to ask for it
-	afterNick  bool     // the login waits for the nick back (IDENTIFY password)
-	held       []string // channel joins waiting for the answer
-	holding    bool
+	gen       int      // the connection it belongs to: stale timers check it
+	sent      bool     // the login went out
+	waiting   bool     // and services haven't answered yet
+	prompt    bool     // the login waits for services to ask for it
+	afterNick bool     // the login waits for the nick back (IDENTIFY password)
+	held      []string // channel joins waiting for the answer (and OPER's)
+	holding   bool     // the joins wait for services
+	opering   bool     // OPER went out, unanswered: the joins wait for it too
+	operLate  bool     // and evrd stopped waiting (operWait)
+	oper      bool     // the server said we're an oper (381)
+	// Channels refused (477 needs a login, 520 opers only) before the
+	// login or OPER went through, joined again when it does: each at most
+	// once per connection.
+	retryAuth  []string
+	retryOper  []string
+	retried    map[string]bool
 	ghosted    bool // the ghost command went out
 	nickSent   bool // and NICK after it
 	saslFailed bool // SASL was refused (logged once)
@@ -142,9 +156,9 @@ func (c *Conn) authTimeout() time.Duration {
 	return time.Duration(s) * authUnit
 }
 
-// login starts the services login once registered (001), holding joins
-// for it when the network asks for that; otherwise they're sent at once.
-func (c *Conn) login(moduleLogin bool, joins []string) {
+// login starts the services login once registered (001), holding the
+// channel joins (joinWhenReady) for its answer unless the network opts out.
+func (c *Conn) login(moduleLogin bool) {
 	n := c.net
 	c.mu.Lock()
 	saslOK, nick, gen := c.saslOK, c.nick, c.auth.gen
@@ -152,24 +166,18 @@ func (c *Conn) login(moduleLogin bool, joins []string) {
 	method := n.Auth()
 	switch {
 	case moduleLogin || method == store.AuthNone:
-		c.sendJoins(joins)
 		return
 	case saslOK:
 		c.ghost()
-		c.sendJoins(joins)
 		return
 	case method == store.AuthSASL, method == store.AuthAuto && n.Password == "":
-		c.sendJoins(joins) // SASL failed (and said so) or nothing to log in with
-		return
+		return // SASL failed (and said so) or nothing to log in with
 	case method == store.AuthNickServ && n.Password == "":
 		c.noteT(true, messages.T("log.noPassword", "services", servicesTarget(n)))
-		c.sendJoins(joins)
 		return
 	}
 	c.mu.Lock()
-	if n.JoinAfterAuth && len(joins) > 0 {
-		c.auth.held, c.auth.holding = joins, true
-	}
+	c.auth.holding = !n.JoinBeforeAuth
 	switch {
 	case method != store.AuthCommand && n.IdentifyOn == store.IdentifyOnPrompt:
 		c.auth.prompt = true
@@ -177,13 +185,8 @@ func (c *Conn) login(moduleLogin bool, joins []string) {
 		// IDENTIFY password logs in to the nick in use: get ours back first
 		c.auth.afterNick = true
 	}
-	prompt, afterNick, holding := c.auth.prompt, c.auth.afterNick, c.auth.holding
+	prompt, afterNick := c.auth.prompt, c.auth.afterNick
 	c.mu.Unlock()
-	if holding {
-		c.noteT(false, messages.T("log.joinAfterLogin"))
-	} else {
-		defer c.sendJoins(joins) // after IDENTIFY, at least
-	}
 	switch {
 	case prompt:
 		c.noteT(false, messages.T("log.waitingForPrompt", "services", servicesTarget(n)))
@@ -193,6 +196,28 @@ func (c *Conn) login(moduleLogin bool, joins []string) {
 		time.AfterFunc(2*ghostWait, func() { c.identify(gen) })
 	default:
 		c.identify(gen)
+	}
+}
+
+// joinWhenReady sends the channel joins once registered: at once, or once
+// the services login and an OPER sent on connecting have been answered.
+func (c *Conn) joinWhenReady(joins []string) {
+	if len(joins) == 0 {
+		return
+	}
+	c.mu.Lock()
+	holding, opering := c.auth.holding, c.auth.opering
+	if holding || opering {
+		c.auth.held = append(c.auth.held, joins...)
+	}
+	c.mu.Unlock()
+	switch {
+	case holding:
+		c.noteT(false, messages.T("log.joinAfterLogin"))
+	case opering:
+		c.noteT(false, messages.T("log.joinAfterOper"))
+	default:
+		c.sendJoins(joins)
 	}
 }
 
@@ -231,7 +256,7 @@ func (c *Conn) authExpired(gen int) {
 		c.mu.Unlock()
 		return
 	}
-	c.auth.waiting = false
+	c.auth.waiting, c.auth.holding = false, false
 	c.health.Auth = AuthUnconfirmed
 	held := c.takeHeld()
 	c.mu.Unlock()
@@ -240,20 +265,44 @@ func (c *Conn) authExpired(gen int) {
 	c.sendJoins(held)
 }
 
-// authDone records services' answer: the held joins go out either way.
+// authDone records services' answer: the held joins go out either way, and
+// on a yes the channels refused for want of it are tried again. A yes after
+// evrd stopped waiting (authExpired) still counts.
 func (c *Conn) authDone(gen int, ok bool, said string) {
 	c.mu.Lock()
-	if c.auth.gen != gen || !c.auth.waiting {
+	if c.auth.gen != gen || !c.auth.sent {
 		c.mu.Unlock()
 		return
 	}
-	c.auth.waiting = false
+	if !c.auth.waiting {
+		late := ok && c.health.Auth == AuthUnconfirmed
+		if late {
+			c.health.Auth = AuthIdentified
+		}
+		var retry []string
+		if ok {
+			retry, c.auth.retryAuth = c.auth.retryAuth, nil
+		}
+		c.mu.Unlock()
+		if late {
+			c.noteT(false, messages.T("log.identified", "said", said))
+		}
+		c.rejoin(gen, retry)
+		return
+	}
+	c.auth.waiting, c.auth.holding = false, false
 	c.health.Auth = map[bool]string{true: AuthIdentified, false: AuthFailed}[ok]
 	held := c.takeHeld()
+	var retry []string
+	if ok {
+		retry = c.auth.retryAuth
+	}
+	c.auth.retryAuth = nil
 	c.mu.Unlock()
 	if ok {
 		c.noteT(false, messages.T("log.identified", "said", said))
 		c.ghost()
+		defer c.rejoin(gen, retry)
 	} else {
 		c.noteT(true, messages.T("log.loginRefused", "said", said))
 		if h := HintText(said); !h.IsZero() {
@@ -265,11 +314,145 @@ func (c *Conn) authDone(gen int, ok bool, said string) {
 	c.sendJoins(held)
 }
 
-// takeHeld hands over the held joins. Holds c.mu.
+// takeHeld hands over the held joins once nothing holds them any more.
+// Holds c.mu.
 func (c *Conn) takeHeld() []string {
+	if c.auth.holding || c.auth.opering {
+		return nil
+	}
 	held := c.auth.held
-	c.auth.held, c.auth.holding = nil, false
+	c.auth.held = nil
 	return held
+}
+
+// operSent notes an OPER on its way: joins not yet sent wait for the
+// answer (oper-only channels), for operWait at most.
+func (c *Conn) operSent() {
+	c.mu.Lock()
+	if c.auth.opering || c.auth.oper {
+		c.mu.Unlock()
+		return
+	}
+	c.auth.opering = true
+	gen := c.auth.gen
+	c.mu.Unlock()
+	time.AfterFunc(operWait, func() { c.operExpired(gen) })
+}
+
+// operExpired gives up waiting for OPER's answer: the joins go out. A yes
+// later still counts (operDone).
+func (c *Conn) operExpired(gen int) {
+	c.mu.Lock()
+	if c.auth.gen != gen || !c.auth.opering {
+		c.mu.Unlock()
+		return
+	}
+	c.auth.opering, c.auth.operLate = false, true
+	held := c.takeHeld()
+	c.mu.Unlock()
+	c.sendJoins(held)
+}
+
+// operDone records the answer to OPER (381 yes; 491 or 464 no): the held
+// joins go out, and on a yes the channels refused as oper-only are tried
+// again.
+func (c *Conn) operDone(gen int, ok bool) {
+	c.mu.Lock()
+	if c.auth.gen != gen || (!c.auth.opering && !c.auth.operLate && !ok) {
+		c.mu.Unlock()
+		return
+	}
+	c.auth.opering, c.auth.operLate = false, false
+	var retry []string
+	if ok {
+		c.auth.oper = true
+		retry, c.auth.retryOper = c.auth.retryOper, nil
+	}
+	held := c.takeHeld()
+	c.mu.Unlock()
+	c.sendJoins(held)
+	c.rejoin(gen, retry)
+}
+
+// joinRefused handles a JOIN of a saved channel the server refused: one
+// for logged-in users only (477) or opers only (520). Refused before the
+// login or OPER went through, it's tried again when that does; after, the
+// server may not have caught up yet (services set the account a moment
+// later), so once more shortly. Once per channel per connection.
+func (c *Conn) joinRefused(m irc.Message) {
+	if len(m.Params) < 2 || !isChannel(m.Params[1]) {
+		return
+	}
+	ch := m.Params[1]
+	c.mu.Lock()
+	a := &c.auth
+	if !containsFold(c.saved, ch) || a.retried[strings.ToLower(ch)] || containsFold(a.retryAuth, ch) || containsFold(a.retryOper, ch) {
+		c.mu.Unlock()
+		return
+	}
+	gen, later := a.gen, false
+	switch m.Command {
+	case "477":
+		switch {
+		case a.holding || a.waiting || a.prompt || a.afterNick || c.health.Auth == AuthUnconfirmed:
+			a.retryAuth = append(a.retryAuth, ch) // the login's still to come (or late)
+		case c.health.Auth == AuthIdentified:
+			later = true
+		}
+	case "520":
+		switch {
+		case a.opering || a.operLate:
+			a.retryOper = append(a.retryOper, ch) // OPER's answer is still to come
+		case a.oper:
+			later = true
+		}
+	}
+	c.mu.Unlock()
+	if later {
+		time.AfterFunc(rejoinWait, func() { c.rejoin(gen, []string{ch}) })
+	}
+}
+
+// inChannel reports whether we're in ch. Holds c.mu.
+func (c *Conn) inChannel(ch string) bool {
+	for k := range c.channels {
+		if strings.EqualFold(k, ch) {
+			return true
+		}
+	}
+	return false
+}
+
+// rejoin joins channels refused earlier on this connection again: those
+// still saved and not joined since, each once, with their keys.
+func (c *Conn) rejoin(gen int, chans []string) {
+	if len(chans) == 0 {
+		return
+	}
+	c.mu.Lock()
+	if c.auth.gen != gen || c.w == nil {
+		c.mu.Unlock()
+		return
+	}
+	if c.auth.retried == nil {
+		c.auth.retried = map[string]bool{}
+	}
+	var again []string
+	for _, ch := range chans {
+		key := strings.ToLower(ch)
+		if c.auth.retried[key] || !containsFold(c.saved, ch) || c.inChannel(ch) {
+			continue
+		}
+		c.auth.retried[key] = true
+		again = append(again, ch)
+	}
+	lines := joinLines(again, c.chanSettings)
+	c.mu.Unlock()
+	if len(lines) == 0 {
+		return
+	}
+	c.noteT(false, messages.T("log.joinAgain", "channels", strings.Join(again, ", ")))
+	c.sendJoins(lines)
 }
 
 // servicesSaid looks at a notice or message from services: the prompt to
@@ -284,7 +467,7 @@ func (c *Conn) servicesSaid(m irc.Message) {
 		c.identify(st.gen)
 	case st.waiting && servicesFail.MatchString(text):
 		c.authDone(st.gen, false, text)
-	case st.waiting && servicesOK.MatchString(text):
+	case st.sent && servicesOK.MatchString(text): // late too (authExpired)
 		c.authDone(st.gen, true, text)
 	case st.ghosted && servicesFreed.MatchString(text):
 		c.takeNick(st.gen)
