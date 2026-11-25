@@ -12,7 +12,8 @@ func TestEditChannelsReachesTheLink(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.connected(n.ID)
-	eventually(t, "joined #net", func() bool { return r.irc.Has("JOIN #net") })
+	// in it as far as the link knows (the server's JOIN handled), not just asked
+	eventually(t, "in #net", func() bool { c, ok := r.b.ConnFor(n.ID); return ok && c.Joined("#net") })
 	r.b.EditChannels(n.ID, []string{"#net"}, []string{"#net"}) // no change: nothing sent
 	r.b.EditChannels(n.ID, []string{"#net", "#Kept"}, []string{"#kept", "#new"})
 	eventually(t, "parted and joined", func() bool { return r.irc.Has("PART #net") && r.irc.Has("JOIN #new") })
