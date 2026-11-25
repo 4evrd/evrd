@@ -166,6 +166,29 @@ func (ic *ircClient) expect(want string) string {
 	return ""
 }
 
+// expectAll reads until every one of wants has been seen, in any order.
+func (ic *ircClient) expectAll(wants ...string) {
+	ic.t.Helper()
+	left := map[string]bool{}
+	for _, w := range wants {
+		left[ircText(w)] = true
+	}
+	ic.c.SetReadDeadline(time.Now().Add(3 * time.Second))
+	var seen []string
+	for len(left) > 0 && ic.sc.Scan() {
+		line := ic.sc.Text()
+		for w := range left {
+			if strings.Contains(line, w) {
+				delete(left, w)
+			}
+		}
+		seen = append(seen, line)
+	}
+	if len(left) > 0 {
+		ic.t.Fatalf("never got %v; saw:\n%s", wants, strings.Join(seen, "\n"))
+	}
+}
+
 func (r *rig) network(name string) store.Network {
 	nets, _ := r.st.ListNetworks(context.Background(), 1)
 	n, _ := findNetwork(nets, name)

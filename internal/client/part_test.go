@@ -45,8 +45,9 @@ func TestEditedChannelListApplies(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.b.EditChannels(n.ID, []string{"#one"}, n.Channels)
-	a.expect("PART #one")
-	a.expect("JOIN #two")
+	// #one may still be joining when the edit lands: it is parted then, so
+	// the PART can come before or after the JOIN of #two.
+	a.expectAll("PART #one", "JOIN #two")
 	a.send("JOIN #three")
 	a.expect("JOIN #three")
 	eventually(t, "saved list", func() bool { return strings.Join(r.network("one").Channels, " ") == "#two #three" })

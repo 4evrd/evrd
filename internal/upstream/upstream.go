@@ -157,6 +157,7 @@ type Conn struct {
 	ids         msgids   // the network's msgids for recent lines, and ours
 	caps        map[string]bool
 	saved       []string        // channels to join on (re)connect, in order
+	unwanted    map[string]bool // lowercased: taken out of the list while their JOIN was in flight; parted when it lands
 	channels    map[string]bool // channels currently joined
 	// members is who's in each joined channel (lowercased channel ->
 	// lowercased nick), so a QUIT or NICK — which name no channel — is filed
@@ -401,11 +402,24 @@ func (c *Conn) EditChannels(removed, added []string) {
 	}
 	var part []string
 	for _, ch := range removed {
+		in := false
 		for k := range c.channels {
 			if strings.EqualFold(k, ch) {
 				part = append(part, k)
+				in = true
 			}
 		}
+		if !in {
+			// A JOIN for it may still be on its way (sent, or held for the
+			// services login): part it when it lands instead of keeping it.
+			if c.unwanted == nil {
+				c.unwanted = map[string]bool{}
+			}
+			c.unwanted[strings.ToLower(ch)] = true
+		}
+	}
+	for _, ch := range added {
+		delete(c.unwanted, strings.ToLower(ch))
 	}
 	c.mu.Unlock()
 	if c.Status() != StatusConnected {
@@ -946,6 +960,7 @@ func (c *Conn) handle(m irc.Message) {
 		saved := append([]string(nil), c.saved...)
 		settings := c.chanSettings
 		away := c.away
+		c.unwanted = nil // this connection joins only what's saved
 		c.health.Status, c.health.ConnectedAt = StatusConnected, time.Now()
 		c.health.Attempts, c.health.RetryIn, c.health.Lag = 0, 0, -1
 		c.mu.Unlock()
@@ -1125,6 +1140,14 @@ func (c *Conn) handle(m irc.Message) {
 		}
 		ch, who := m.Params[0], nickOf(m.Prefix)
 		if c.isMe(m.Prefix) {
+			c.mu.Lock()
+			unwanted := c.unwanted[strings.ToLower(ch)]
+			delete(c.unwanted, strings.ToLower(ch))
+			c.mu.Unlock()
+			if unwanted {
+				c.send("PART " + ch)
+				return
+			}
 			c.joined(ch)
 			c.askModes(ch)
 			c.askWho(ch)
@@ -1982,7 +2005,17 @@ func (c *Conn) broadcastRaw(line Line) {
 
 // SendRaw writes a raw line to the upstream server (used to pass through client
 // commands like JOIN/NAMES/WHO/TOPIC).
-func (c *Conn) SendRaw(line string) { c.sendUser(line) }
+func (c *Conn) SendRaw(line string) {
+	// A client joining a channel again wants it, even if an edit took it out.
+	if f := strings.Fields(line); len(f) > 1 && strings.EqualFold(f[0], "JOIN") {
+		c.mu.Lock()
+		for _, ch := range strings.Split(f[1], ",") {
+			delete(c.unwanted, strings.ToLower(ch))
+		}
+		c.mu.Unlock()
+	}
+	c.sendUser(line)
+}
 
 // sendUser sends a line on a user's behalf. Before the server has welcomed us
 // it's held (lines written then would be lost, or land in the middle of
