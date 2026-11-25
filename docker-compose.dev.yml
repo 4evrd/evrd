@@ -59,6 +59,24 @@ services:
         sed -i 's/^        count: true/        count: false/; s/^        throttle: true/        throttle: false/' /ircd/ircd.yaml
         exec /ircd-bin/run.sh
 
+  # A second upstream (inspircd:6667) whose services are their own server,
+  # as on most networks: InspIRCd 3 linked to Anope. Logging in takes a
+  # round trip over the link, and it has oper-only channels. Its config
+  # (with the oper and link passwords) is deploy/inspircd/inspircd.conf.
+  inspircd:
+    image: inspircd/inspircd-docker:3.18.0
+    entrypoint: ["/inspircd/bin/inspircd", "--nofork"]
+    volumes:
+      - ./deploy/inspircd/inspircd.conf:/inspircd/conf/inspircd.conf:ro
+  services:
+    image: anope/anope:2.0.21
+    environment:
+      ANOPE_UPLINK_IP: inspircd
+      ANOPE_UPLINK_PORT: "7000"
+      ANOPE_UPLINK_PASSWORD: evrd-dev-link
+    depends_on:
+      - inspircd
+
   # Two evrd nodes, both live-reloading from the source. Users are spread
   # across them; the load balancer sends anyone anywhere.
   evrd:

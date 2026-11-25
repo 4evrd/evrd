@@ -16,7 +16,7 @@ func sample() store.Network {
 		ID: 7, Name: "libera", Enabled: true, Nick: "bob", AltNick: "bob_", Username: "bob", Realname: "Bob",
 		Servers:  []store.Server{{Host: "irc.libera.chat", Port: 6697, TLS: true, Password: "serverpass"}, {Host: "plain.libera.chat", Port: 6667}},
 		Password: "saslpass", SASLUser: "bobby", AuthMethod: store.AuthSASL, AuthCommand: "PRIVMSG x :login %password%",
-		JoinAfterAuth: true, TrustPKI: true, Fingerprints: []string{"ab12"}, FloodRate: 1.5, FloodBurst: 4, JoinDelay: 3,
+		JoinBeforeAuth: true, TrustPKI: true, Fingerprints: []string{"ab12"}, FloodRate: 1.5, FloodBurst: 4, JoinDelay: 3,
 		Channels:        []string{"#evrd", "#go"},
 		ChannelSettings: map[string]store.ChannelSettings{"#evrd": {Key: "chankey", Detached: true}},
 		Modules:         map[string]store.ModuleConfig{"perform": {Enabled: true, Settings: map[string]string{"commands": "OPER bob operpass"}}},

@@ -82,9 +82,11 @@ func startAuthServer(t *testing.T, sasl bool) (*authServer, string, int) {
 	return s, host, p
 }
 
+// (Opted out of waiting for services, which don't answer here: the joins
+// go out right behind the IDENTIFY.)
 func TestNickServIdentifyWithoutSASL(t *testing.T) {
 	srv, host, port := startAuthServer(t, false)
-	c := New(store.Network{ID: 21, Nick: "thelion", Host: host, Port: port, Password: "s3cret", Channels: []string{"#home"}}, quiet, Options{})
+	c := New(store.Network{ID: 21, Nick: "thelion", Host: host, Port: port, Password: "s3cret", Channels: []string{"#home"}, JoinBeforeAuth: true}, quiet, Options{})
 	run(t, c)
 	eventually(t, "joined", func() bool {
 		for _, l := range srv.got() {

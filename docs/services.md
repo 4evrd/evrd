@@ -40,10 +40,27 @@ sent back to the browser.
   in, then asks services to `GHOST`, `REGAIN` or `RECOVER` the nick (with
   the password) and switches to it. With *IDENTIFY sends: just the
   password* it frees the nick first and identifies once it's back.
-- **Join channels after identifying** — holds the channel joins until
-  services confirm the login, so channels only logged-in users may join
-  (`+r`, `+R`) let evrd in. If services don't answer within **Wait for
-  services** seconds (default 15) evrd joins anyway.
+- **Join channels after identifying** (on by default) — holds the channel
+  joins until services confirm the login, so channels only logged-in users
+  may join (`+r`, `+R`) let evrd in, on every reconnect too. If services
+  don't answer within **Wait for services** seconds (default 15) evrd
+  joins anyway. Switched off, the joins go out right behind the login.
+  Either way, a channel that turns evrd away for not being logged in
+  (`477`) before the login went through is joined once more when services
+  say yes (or, already logged in, once more two seconds later: the server
+  may not have caught up with services yet). Once per channel per
+  connection: one that keeps refusing isn't tried forever, and it stays
+  in the network's channel list.
+
+## Opers
+
+An `OPER` in the network's *perform* commands is sent before the channel
+joins, and they wait for the server's answer (`381`, or a refusal), for
+10 seconds at most — so oper-only channels (`+O`) let evrd in. A channel
+refused as oper-only (`520`) before the answer came is joined once more
+when it does. When there's a services login too, the joins wait for both.
+The `OPER` line, password and all, isn't logged: the connection log only
+says how many perform commands were sent.
 
 ## Presets
 
@@ -83,7 +100,7 @@ anything services repeat.
 /msg *status set identifyargs password       (account, password or auto)
 /msg *status set identifyon prompt           (connect or prompt)
 /msg *status set ghost ghost                 (ghost, regain, recover or off)
-/msg *status set joinafterauth on
+/msg *status set joinafterauth off           (on by default)
 /msg *status set authtimeout 30
 /msg *status set authcommand PRIVMSG X@channels.undernet.org :LOGIN %account% %password%
 /msg *status set auth command                (set the command first)

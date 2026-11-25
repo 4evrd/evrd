@@ -23,13 +23,13 @@ func TestNetworkAuthAndItsColumns(t *testing.T) {
 	}
 	n, err := st.CreateNetwork(t.Context(), Network{UserID: 1, Name: "dal", Nick: "a", Host: "h", AuthMethod: AuthNickServ,
 		ServicesNick: "NickServ@services.dal.net", IdentifyArgs: IdentifyPassword, IdentifyOn: IdentifyOnPrompt,
-		AuthCommand: "x", GhostCmd: "ghost", JoinAfterAuth: true, AuthTimeout: 9})
+		AuthCommand: "x", GhostCmd: "ghost", JoinBeforeAuth: true, AuthTimeout: 9})
 	if err != nil {
 		t.Fatal(err)
 	}
 	got, _ := st.NetworkByID(t.Context(), n.ID)
 	if got.ServicesNick != "NickServ@services.dal.net" || got.IdentifyArgs != IdentifyPassword || got.IdentifyOn != IdentifyOnPrompt ||
-		got.AuthCommand != "x" || got.GhostCmd != "ghost" || !got.JoinAfterAuth || got.AuthTimeout != 9 || got.Auth() != AuthNickServ {
+		got.AuthCommand != "x" || got.GhostCmd != "ghost" || !got.JoinBeforeAuth || got.AuthTimeout != 9 || got.Auth() != AuthNickServ {
 		t.Fatalf("%+v", got)
 	}
 }

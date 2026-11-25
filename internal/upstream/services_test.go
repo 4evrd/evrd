@@ -89,9 +89,9 @@ func connect(t *testing.T, s *scripted, n store.Network) (*Conn, *logRec) {
 }
 
 func shorten(t *testing.T) {
-	pw, gw, au := promptWait, ghostWait, authUnit
-	promptWait, ghostWait, authUnit = 100*time.Millisecond, 50*time.Millisecond, 20*time.Millisecond
-	t.Cleanup(func() { promptWait, ghostWait, authUnit = pw, gw, au })
+	pw, gw, au, ow, rw := promptWait, ghostWait, authUnit, operWait, rejoinWait
+	promptWait, ghostWait, authUnit, operWait, rejoinWait = 100*time.Millisecond, 50*time.Millisecond, 20*time.Millisecond, 100*time.Millisecond, 50*time.Millisecond
+	t.Cleanup(func() { promptWait, ghostWait, authUnit, operWait, rejoinWait = pw, gw, au, ow, rw })
 }
 
 func noPassword(t *testing.T, rec *logRec, pw string) {
@@ -211,7 +211,7 @@ func TestACommandWithoutATarget(t *testing.T) {
 
 func TestAWrongPasswordIsExplained(t *testing.T) {
 	s := startServices(t, services{answer: nickserv("right-pw")})
-	c, rec := connect(t, s, store.Network{AuthMethod: store.AuthNickServ, Password: "wrong-pw", Channels: []string{"#home"}, JoinAfterAuth: true})
+	c, rec := connect(t, s, store.Network{AuthMethod: store.AuthNickServ, Password: "wrong-pw", Channels: []string{"#home"}})
 	eventually(t, "refused", func() bool { return c.Health().Auth == AuthFailed })
 	eventually(t, "joined anyway", func() bool { return s.has("JOIN #home") })
 	if !rec.has("evrd", "Services refused the login: Invalid password for alice.", true) || !rec.has("evrd", "The password was refused", false) {
@@ -264,9 +264,10 @@ func TestRPLLoggedInConfirms(t *testing.T) {
 	eventually(t, "identified", func() bool { return c.Health().Auth == AuthIdentified })
 }
 
+// Waiting is the default (JoinBeforeAuth opts out).
 func TestJoinAfterAuthWaitsForServices(t *testing.T) {
 	s := startServices(t, services{answer: func(*peer, string, string) {}}) // answers later
-	c, rec := connect(t, s, store.Network{AuthMethod: store.AuthNickServ, Password: "pw-pw", JoinAfterAuth: true,
+	c, rec := connect(t, s, store.Network{AuthMethod: store.AuthNickServ, Password: "pw-pw",
 		Channels: []string{"#regonly"}})
 	eventually(t, "identify", func() bool { return s.has("PRIVMSG NickServ :IDENTIFY pw-pw") })
 	time.Sleep(100 * time.Millisecond)
@@ -283,24 +284,25 @@ func TestJoinAfterAuthWaitsForServices(t *testing.T) {
 func TestJoinAfterAuthGivesUp(t *testing.T) {
 	shorten(t)
 	s := startServices(t, services{})
-	c, rec := connect(t, s, store.Network{AuthMethod: store.AuthNickServ, Password: "pw-pw", JoinAfterAuth: true,
+	c, rec := connect(t, s, store.Network{AuthMethod: store.AuthNickServ, Password: "pw-pw",
 		AuthTimeout: 5, Channels: []string{"#regonly"}})
 	eventually(t, "joined after the timeout", func() bool { return s.has("JOIN #regonly") })
 	if c.Health().Auth != AuthUnconfirmed || !rec.has("evrd", "Services didn't answer the login within", true) ||
 		!rec.has("evrd", "NickServ@services.dal.net", false) {
 		t.Fatalf("auth %q, log %+v", c.Health().Auth, rec.all())
 	}
-	// a late answer changes nothing
+	// a late answer is taken, but joins nothing again: nothing was refused
 	s.send(":NickServ!NickServ@services. NOTICE alice :You are now identified for \x02alice\x02.")
+	eventually(t, "identified late", func() bool { return c.Health().Auth == AuthIdentified })
 	time.Sleep(50 * time.Millisecond)
-	if c.Health().Auth != AuthUnconfirmed || s.count("JOIN") != 1 {
-		t.Fatalf("auth %q, sent %q", c.Health().Auth, s.last().got())
+	if s.count("JOIN") != 1 {
+		t.Fatalf("sent %q", s.last().got())
 	}
 }
 
 func TestJoinDelayStillApplies(t *testing.T) {
 	s := startServices(t, services{answer: nickserv("pw-pw")})
-	connect(t, s, store.Network{AuthMethod: store.AuthNickServ, Password: "pw-pw", JoinAfterAuth: true, JoinDelay: 1,
+	connect(t, s, store.Network{AuthMethod: store.AuthNickServ, Password: "pw-pw", JoinDelay: 1,
 		Channels: []string{"#later"}})
 	eventually(t, "identify", func() bool { return s.has("PRIVMSG NickServ :IDENTIFY pw-pw") })
 	time.Sleep(300 * time.Millisecond)

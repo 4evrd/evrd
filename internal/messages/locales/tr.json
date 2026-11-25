@@ -418,6 +418,8 @@
     "irc.log.identifyInstead": "Bunun yerine bağlandıktan sonra {services} ile kimlik doğrulanacak",
     "irc.log.noPassword": "Parola ayarlı değil: {services} ile kimlik doğrulanmıyor",
     "irc.log.joinAfterLogin": "Servisler girişi onaylayınca kanallara katılınacak",
+    "irc.log.joinAfterOper": "Sunucu OPER'a yanıt verince kanallara katılınacak",
+    "irc.log.joinAgain": "{channels} kanallarına yeniden katılınıyor: sunucu, giriş veya OPER tamamlanmadan önce reddetti",
     "irc.log.waitingForPrompt": "Kimlik doğrulamadan önce {services} sormasını bekliyor",
     "irc.log.sentLoginCommand": "Giriş komutu gönderildi",
     "irc.log.sentLoginCommandTo": "Giriş komutu {target} hedefine gönderildi",

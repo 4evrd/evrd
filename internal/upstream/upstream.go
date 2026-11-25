@@ -922,6 +922,21 @@ func (c *Conn) handle(m irc.Message) {
 		if h := HintText(lastParam(m)); !h.IsZero() {
 			c.noteT(false, h)
 		}
+		c.joinRefused(m)
+	case "520": // ERR_OPERONLY (InspIRCd, UnrealIRCd): a channel for opers only
+		c.joinRefused(m)
+	case "381": // RPL_YOUREOPER
+		c.mu.Lock()
+		gen := c.auth.gen
+		c.mu.Unlock()
+		c.operDone(gen, true)
+	case "491", "464": // ERR_NOOPERHOST, ERR_PASSWDMISMATCH: OPER refused
+		if c.Status() == StatusConnected {
+			c.mu.Lock()
+			gen := c.auth.gen
+			c.mu.Unlock()
+			c.operDone(gen, false)
+		}
 	case "001": // RPL_WELCOME — registration complete
 		moduleLogin := c.modsLogIn()
 		c.mu.Lock()
@@ -935,8 +950,13 @@ func (c *Conn) handle(m irc.Message) {
 		c.health.Attempts, c.health.RetryIn, c.health.Lag = 0, 0, -1
 		c.mu.Unlock()
 		// Log in to services (unless SASL did) before joining: some
-		// channels need you identified.
-		c.login(moduleLogin, joinLines(saved, settings))
+		// channels need you identified, so the joins wait for the answer.
+		c.login(moduleLogin)
+		// perform before the joins (an OPER there holds them for its
+		// answer: oper-only channels), and the joins before what clients
+		// sent meanwhile (messages to those channels)
+		c.modsRegistered()
+		c.joinWhenReady(joinLines(saved, settings))
 		if away != "" {
 			c.send("AWAY :" + away)
 		}
@@ -950,7 +970,6 @@ func (c *Conn) handle(m irc.Message) {
 		c.notify(Event{Kind: "connected", TitleText: messages.T("event.connected", "network", c.net.Name),
 			DetailText: messages.T("event.connectedAs", "host", c.net.Host, "port", c.net.Port, "nick", c.Nick())})
 		c.noteT(false, messages.T("log.signedIn", "nick", c.Nick()))
-		c.modsRegistered()
 	case "005": // RPL_ISUPPORT
 		if len(m.Params) > 2 {
 			c.mu.Lock()
@@ -1982,6 +2001,9 @@ func (c *Conn) sendUser(line string) {
 }
 
 func (c *Conn) send(line string) {
+	if len(line) > 5 && strings.EqualFold(line[:5], "OPER ") {
+		c.operSent()
+	}
 	c.mu.Lock()
 	w := c.w
 	registered := c.health.Status == StatusConnected

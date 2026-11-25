@@ -410,6 +410,8 @@
     "irc.log.identifyInstead": "代わりに接続後に {services} で識別します",
     "irc.log.noPassword": "パスワード未設定のため {services} で識別しません",
     "irc.log.joinAfterLogin": "サービスがログインを確認したらチャンネルに参加します",
+    "irc.log.joinAfterOper": "サーバーが OPER に応答したらチャンネルに参加します",
+    "irc.log.joinAgain": "{channels} に再参加します: ログインまたは OPER が完了する前にサーバーに拒否されました",
     "irc.log.waitingForPrompt": "識別の前に {services} から求められるのを待っています",
     "irc.log.sentLoginCommand": "ログインコマンドを送信しました",
     "irc.log.sentLoginCommandTo": "ログインコマンドを {target} に送信しました",

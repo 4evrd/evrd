@@ -249,10 +249,13 @@ type Network struct {
 	// GhostCmd frees the nick when it's taken: "", "ghost", "regain" or
 	// "recover", sent to the services nick.
 	GhostCmd string
-	// JoinAfterAuth holds the channel joins until services confirm the
-	// login (or AuthTimeout seconds pass; 0 = DefaultAuthTimeout).
-	JoinAfterAuth bool
-	AuthTimeout   int
+	// The channel joins wait for services to answer the login (or for
+	// AuthTimeout seconds; 0 = DefaultAuthTimeout), for channels only
+	// logged-in users may join. JoinBeforeAuth opts out: they go out right
+	// behind it. (It replaced JoinAfterAuth, an opt-in, so networks saved
+	// before wait too; that column is no longer read.)
+	JoinBeforeAuth bool
+	AuthTimeout    int
 
 	// Server certificates: accepted if the SHA-256 fingerprint is listed, or
 	// TrustAllCerts is set, or (TrustPKI) the chain verifies for the host.

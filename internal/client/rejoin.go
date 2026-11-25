@@ -50,7 +50,7 @@ func (se *session) rejoinedAlready() {
 
 // joinFailed: the network turned evrd away from a channel the client kept
 // open, so it's taken out after all.
-var joinFailed = map[string]bool{"403": true, "405": true, "471": true, "473": true, "474": true, "475": true, "476": true, "477": true, "489": true}
+var joinFailed = map[string]bool{"403": true, "405": true, "471": true, "473": true, "474": true, "475": true, "476": true, "477": true, "489": true, "520": true}
 
 // notRejoined takes the client out of a channel it kept open that evrd
 // couldn't rejoin, reporting whether m said so.

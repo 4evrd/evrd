@@ -64,7 +64,7 @@ func TestAuthChangesReconnect(t *testing.T) {
 		func(n *store.Network) { n.IdentifyOn = store.IdentifyOnPrompt },
 		func(n *store.Network) { n.AuthCommand = "x" },
 		func(n *store.Network) { n.GhostCmd = "regain" },
-		func(n *store.Network) { n.JoinAfterAuth = true },
+		func(n *store.Network) { n.JoinBeforeAuth = true },
 		func(n *store.Network) { n.AuthTimeout = 9 },
 	} {
 		b := a

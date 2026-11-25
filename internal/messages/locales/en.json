@@ -418,6 +418,8 @@
     "irc.log.identifyInstead": "Will identify to {services} once connected instead",
     "irc.log.noPassword": "No password set: not identifying to {services}",
     "irc.log.joinAfterLogin": "Joining channels once services confirm the login",
+    "irc.log.joinAfterOper": "Joining channels once the server answers OPER",
+    "irc.log.joinAgain": "Joining {channels} again: the server refused them before the login or OPER went through",
     "irc.log.waitingForPrompt": "Waiting for {services} to ask before identifying",
     "irc.log.sentLoginCommand": "Sent the login command",
     "irc.log.sentLoginCommandTo": "Sent the login command to {target}",

@@ -89,7 +89,7 @@
       servers: [{ host: '', port: '6697', tls: true, hasPassword: false, password: undefined }],
       nick: me.defaultNick || me.username, altNick: '', username: '', realname: '', quitMsg: '', bindHost: '',
       saslUser: '', password: undefined, hasPassword: false,
-      authMethod: 'auto', servicesNick: '', identifyArgs: '', identifyOn: '', ghost: '', authCommand: '', joinAfterAuth: false, authTimeout: '0',
+      authMethod: 'auto', servicesNick: '', identifyArgs: '', identifyOn: '', ghost: '', authCommand: '', joinAfterAuth: true, authTimeout: '0',
       trustPKI: true, trustAllCerts: false, fingerprints: [],
       encodingName: '', encodingAlways: false,
       floodOn: true, floodRate: '2', floodBurst: '9', joinDelay: '0', channels: [],

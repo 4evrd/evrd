@@ -425,6 +425,8 @@
     "irc.log.identifyInstead": "Mi identificherò invece con {services} dopo la connessione",
     "irc.log.noPassword": "Nessuna password impostata: niente identificazione con {services}",
     "irc.log.joinAfterLogin": "Entro nei canali appena i servizi confermano l'accesso",
+    "irc.log.joinAfterOper": "Entro nei canali appena il server risponde a OPER",
+    "irc.log.joinAgain": "Rientro in {channels}: il server li ha rifiutati prima che l'accesso o OPER andasse a buon fine",
     "irc.log.waitingForPrompt": "Aspetto che {services} chieda prima di identificarmi",
     "irc.log.sentLoginCommand": "Comando di accesso inviato",
     "irc.log.sentLoginCommandTo": "Comando di accesso inviato a {target}",

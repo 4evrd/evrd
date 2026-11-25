@@ -409,6 +409,8 @@
     "irc.log.identifyInstead": "Akan identify kepada {services} selepas bersambung",
     "irc.log.noPassword": "Tiada kata laluan ditetapkan: tidak identify kepada {services}",
     "irc.log.joinAfterLogin": "Menyertai saluran sebaik sahaja perkhidmatan mengesahkan log masuk",
+    "irc.log.joinAfterOper": "Menyertai saluran sebaik sahaja pelayan menjawab OPER",
+    "irc.log.joinAgain": "Menyertai {channels} semula: pelayan menolaknya sebelum log masuk atau OPER selesai",
     "irc.log.waitingForPrompt": "Menunggu {services} meminta sebelum identify",
     "irc.log.sentLoginCommand": "Arahan log masuk dihantar",
     "irc.log.sentLoginCommandTo": "Arahan log masuk dihantar kepada {target}",

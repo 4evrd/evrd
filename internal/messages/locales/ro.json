@@ -435,6 +435,8 @@
     "irc.log.identifyInstead": "Mă voi identifica la {services} după conectare",
     "irc.log.noPassword": "Nicio parolă setată: nu mă identific la {services}",
     "irc.log.joinAfterLogin": "Intru pe canale după ce serviciile confirmă login-ul",
+    "irc.log.joinAfterOper": "Intru pe canale după ce serverul răspunde la OPER",
+    "irc.log.joinAgain": "Intru din nou pe {channels}: serverul le-a refuzat înainte ca login-ul sau OPER să reușească",
     "irc.log.waitingForPrompt": "Aștept ca {services} să ceară identificarea",
     "irc.log.sentLoginCommand": "Am trimis comanda de login",
     "irc.log.sentLoginCommandTo": "Am trimis comanda de login către {target}",
