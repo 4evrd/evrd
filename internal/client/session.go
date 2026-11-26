@@ -21,6 +21,7 @@ import (
 	"github.com/4evrd/evrd/internal/history"
 	"github.com/4evrd/evrd/internal/irc"
 	"github.com/4evrd/evrd/internal/links"
+	"github.com/4evrd/evrd/internal/managed"
 	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/telemetry"
@@ -288,6 +289,9 @@ func (se *session) register(ctx context.Context) bool {
 // factor.
 func (se *session) signIn(username, network, password string) (u store.User, device, otp, code, why string) {
 	key := strings.ToLower(strings.TrimSpace(username))
+	if key == "" {
+		key = "ip:" + se.clientIP() // an access token alone names no one
+	}
 	var fails *auth.FailureLimiter
 	if se.srv.signIns != nil {
 		fails = se.srv.signIns.Failures()
@@ -312,6 +316,12 @@ func (se *session) signIn(username, network, password string) (u store.User, dev
 		return u, device, otp, "", ""
 	case errors.Is(err, accounts.ErrSuspended), errors.Is(err, auth.ErrSSOSuspended):
 		result, reason, code, why = "suspended", "suspended", "465", "This account is suspended"
+	case errors.Is(err, errTokensDown):
+		// not the user's fault: no lockout
+		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("tokens_unavailable"))
+		se.loginFailed(username, network, "tokens_unavailable")
+		se.refusal = "tokens_unavailable"
+		return store.User{}, "", "", "464", se.srv.managed.Text("unavailable", "")
 	case errors.Is(err, auth.ErrSSOUnavailable):
 		// not the user's fault: no lockout, and they can still use a client password
 		result, reason, code, why = "sso_unavailable", "sso_unavailable", "464", "Can't check your SSO password right now — use an IRC client password from "+se.srv.clientsPage()
@@ -326,6 +336,9 @@ func (se *session) signIn(username, network, password string) (u store.User, dev
 	default:
 		code, why = "464", "Invalid credentials"
 	}
+	if se.isManaged() && strings.HasPrefix(reason, "sso_") {
+		why = "Invalid credentials" // no web app, no client passwords to point to
+	}
 	if fails != nil {
 		fails.Add(key)
 	}
@@ -338,6 +351,9 @@ func (se *session) signIn(username, network, password string) (u store.User, dev
 // checkSecret is username's account if secret is one of its passwords: a
 // client password, the account password, or the SSO password.
 func (se *session) checkSecret(username, secret string) (store.User, string, error) {
+	if u, device, ok, err := se.tokenSignIn(username, secret); ok {
+		return u, device, err
+	}
 	u, device, err := se.srv.acc.IRCLogin(username, secret)
 	if errors.Is(err, accounts.ErrInvalidCredentials) && se.srv.signIns != nil && se.srv.signIns.SSOPasswordsOn() {
 		return se.ssoSignIn(username, secret, err)
@@ -447,8 +463,8 @@ func (se *session) noteFormat(login string, colon bool, password string, passwor
 		}
 	}
 	se.srv.log.Info("irc sign-in format", "format", format, "user", user, "ip", se.clientIP())
-	if format != fullLogin && format != "nothing" && format != "sasl" {
-		se.send(fmt.Sprintf(":%s NOTICE * :%s", serverName, ircText(se.tr("signin.format", "format", format, "full", fullLogin))))
+	if format != fullLogin && format != "nothing" && format != "sasl" && !se.isManaged() {
+		se.send(fmt.Sprintf(":%s NOTICE * :%s", se.serverName(), ircText(se.tr("signin.format", "format", format, "full", fullLogin))))
 	}
 	return rec
 }
@@ -516,6 +532,9 @@ func (se *session) namesAccount(login string) bool {
 // welcome burst, channel state, and backlog. A sign-in that needs a second
 // factor first waits for it on no network (mfa.go).
 func (se *session) attach() (attached bool) {
+	if se.isManaged() && managed.LooksLikeToken(se.pass) {
+		se.pass = ":" + se.pass // an access token alone: whoever it's for
+	}
 	login, password, ok := strings.Cut(se.pass, ":")
 	// Without a colon, PASS is a user (or user/network) to sign in by link
 	// — or, when it names no account, the password alone (ZNC's "server
@@ -530,7 +549,7 @@ func (se *session) attach() (attached bool) {
 	if passwordOnly {
 		login = ""
 	}
-	if (!ok || password == "") && se.srv.linkSignInOn() && !strings.ContainsAny(login, " ") {
+	if (!ok || password == "") && se.srv.linkSignInOn() && !se.isManaged() && !strings.ContainsAny(login, " ") {
 		// no password: sign in on the website instead (user, user/network
 		// or nothing at all)
 		return se.waitForLink(login, "", passwordOnly)
@@ -538,14 +557,20 @@ func (se *session) attach() (attached bool) {
 	if !ok || password == "" {
 		// Never log PASS itself: without a colon it may be just the password.
 		se.srv.log.Info("irc sign-in without a password", "ip", se.clientIP(), "pass_sent", se.pass != "", "password_only", passwordOnly)
-		if passwordOnly {
+		switch {
+		case se.isManaged():
+			se.numeric("464", ":Password required")
+		case passwordOnly:
 			se.numeric("464", ":A password alone doesn't say whose it is — use PASS <user>/<network>:<password>")
-		} else {
+		default:
 			se.numeric("464", ":Password required — use PASS <user>[/<network>]:<password>")
 		}
 		return false
 	}
 	username, network, _ := strings.Cut(login, "/")
+	if se.isManaged() {
+		network = "" // there's the one
+	}
 	u, device, otp := se.saslUser, se.saslDevice, se.saslOTP // SASL checked it already
 	if se.saslUser.ID == 0 {
 		var code, why string
@@ -566,8 +591,8 @@ func (se *session) attach() (attached bool) {
 		se.numeric("464", ":Signing in from "+ip+" isn't allowed for this account")
 		return false
 	}
-	if !se.srv.b.Owns(u.ID) {
-		se.numeric("464", ":"+movingMsg)
+	if !se.srv.b.Owns(u.ID) && !se.waitOwned(u.ID) {
+		se.numeric("464", ":"+se.movingMsg())
 		return false
 	}
 	locked, totp, code, why := se.secondFactor(u, username, network, device, otp)
@@ -613,7 +638,11 @@ func (se *session) attach() (attached bool) {
 		if err := se.bind(chosen); err != nil {
 			se.release()
 			se.att = nil
-			se.numeric("464", ":Network unavailable: "+err.Error())
+			if se.isManaged() {
+				se.numeric("464", ":"+se.srv.managed.Text("unavailable", se.nick))
+			} else {
+				se.numeric("464", ":Network unavailable: "+err.Error())
+			}
 			return false
 		}
 		se.unick = orElse(se.up.Nick(), chosen.Nick)
@@ -633,6 +662,13 @@ func (se *session) attach() (attached bool) {
 // bouncer-networks client that names none. A refusal is the numeric and
 // why.
 func (se *session) chooseNetwork(u store.User, network string) (chosen store.Network, unbound bool, code, why string) {
+	if se.isManaged() {
+		n, ok := se.managedNetwork(u)
+		if !ok {
+			return chosen, false, "464", se.srv.managed.Text("unavailable", se.nick)
+		}
+		return n, false, "", ""
+	}
 	nets, _ := se.srv.acc.ListNetworks(context.Background(), u.ID)
 	unbound = network == "" && se.bindID == "" && se.caps["soju.im/bouncer-networks"]
 	switch {
@@ -683,8 +719,11 @@ func (se *session) signedIn(onNetwork bool, username, netName, device string) {
 		se.say("clients.sharing", "device", o.Device, "client", orElse(o.Software, se.tr("clients.ircClient")), "ip", orElse(o.IP, "?"), "page", se.srv.clientsPage())
 	}
 	// Ask the client what it is (shown on the clients page and in the
-	// activity feed); the reply arrives as a NOTICE to *status.
-	se.send(fmt.Sprintf(":%s!status@%s PRIVMSG %s :\x01VERSION\x01", statusNick, serverName, se.unick))
+	// activity feed); the reply arrives as a NOTICE to *status — which
+	// managed mode doesn't have.
+	if !se.isManaged() {
+		se.send(fmt.Sprintf(":%s!status@%s PRIVMSG %s :\x01VERSION\x01", statusNick, se.serverName(), se.unick))
+	}
 	uid, ip, att := se.uid, se.clientIP(), se.att
 	go func() {
 		time.Sleep(3 * time.Second)
@@ -727,35 +766,39 @@ func (se *session) unsubscribe() {
 }
 
 func (se *session) welcome() {
+	if se.isManaged() {
+		se.managedWelcome()
+		return
+	}
 	n := se.unick
 	if se.up == nil {
-		se.send(fmt.Sprintf(":%s 001 %s :%s", serverName, n, ircText(se.tr("welcome.bouncer"))))
+		se.send(fmt.Sprintf(":%s 001 %s :%s", se.serverName(), n, ircText(se.tr("welcome.bouncer"))))
 	} else {
-		se.send(fmt.Sprintf(":%s 001 %s :%s", serverName, n, ircText(se.tr("welcome.network", "network", se.net.Name))))
+		se.send(fmt.Sprintf(":%s 001 %s :%s", se.serverName(), n, ircText(se.tr("welcome.network", "network", se.net.Name))))
 	}
-	se.send(fmt.Sprintf(":%s 002 %s :Your host is %s", serverName, n, serverName))
-	se.send(fmt.Sprintf(":%s 003 %s :evrd bouncer", serverName, n))
-	se.send(fmt.Sprintf(":%s 004 %s %s evrd o o", serverName, n, serverName))
+	se.send(fmt.Sprintf(":%s 002 %s :Your host is %s", se.serverName(), n, se.serverName()))
+	se.send(fmt.Sprintf(":%s 003 %s :evrd bouncer", se.serverName(), n))
+	se.send(fmt.Sprintf(":%s 004 %s %s evrd o o", se.serverName(), n, se.serverName()))
 	se.sendISupport()
 	if se.quick {
-		se.send(fmt.Sprintf(":%s 422 %s :MOTD skipped: back within %d minutes", serverName, n, int(resumeWithin/time.Minute)))
+		se.send(fmt.Sprintf(":%s 422 %s :MOTD skipped: back within %d minutes", se.serverName(), n, int(resumeWithin/time.Minute)))
 		if se.nick != "" && se.nick != n {
-			se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.nick, se.nick, serverName, n))
+			se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.nick, se.nick, se.serverName(), n))
 		}
 		return
 	}
-	se.send(fmt.Sprintf(":%s 375 %s :- %s message of the day -", serverName, n, serverName))
+	se.send(fmt.Sprintf(":%s 375 %s :- %s message of the day -", se.serverName(), n, se.serverName()))
 	if se.up != nil {
-		se.send(fmt.Sprintf(":%s 372 %s :- %s", serverName, n, ircText(se.tr("welcome.motdNetwork", "network", se.net.Name, "host", se.net.Host, "port", se.net.Port))))
+		se.send(fmt.Sprintf(":%s 372 %s :- %s", se.serverName(), n, ircText(se.tr("welcome.motdNetwork", "network", se.net.Name, "host", se.net.Host, "port", se.net.Port))))
 	}
-	se.send(fmt.Sprintf(":%s 372 %s :- %s", serverName, n, ircText(se.tr("welcome.motdHelp", "status", statusNick))))
-	se.send(fmt.Sprintf(":%s 376 %s :End of /MOTD command.", serverName, n))
+	se.send(fmt.Sprintf(":%s 372 %s :- %s", se.serverName(), n, ircText(se.tr("welcome.motdHelp", "status", statusNick))))
+	se.send(fmt.Sprintf(":%s 376 %s :End of /MOTD command.", se.serverName(), n))
 
 	// If the client registered under a different nick than the upstream's, tell
 	// it explicitly — otherwise it won't recognize the synthesized self-JOIN and
 	// won't open the channel.
 	if se.nick != "" && se.nick != n {
-		se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.nick, se.nick, serverName, n))
+		se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.nick, se.nick, se.serverName(), n))
 	}
 }
 
@@ -780,7 +823,7 @@ func (se *session) joinChannels() {
 // selfJoin is the JOIN that opens a channel on the client: in the
 // extended-join form (account, realname) for a client that asked for it.
 func (se *session) selfJoin(ch string) string {
-	line := fmt.Sprintf(":%s!%s@%s JOIN %s", se.unick, se.unick, serverName, ch)
+	line := fmt.Sprintf(":%s!%s@%s JOIN %s", se.unick, se.unick, se.serverName(), ch)
 	if se.caps["extended-join"] {
 		line += " " + orElse(se.up.Account(), "*") + " :" + orElse(se.net.Realname, se.unick)
 	}
@@ -864,13 +907,13 @@ func (se *session) openBatch(kind string, params ...string) string {
 	}
 	se.batches++
 	ref := strconv.Itoa(se.batches)
-	se.send(strings.Join(append([]string{":" + serverName, "BATCH", "+" + ref, kind}, params...), " "))
+	se.send(strings.Join(append([]string{":" + se.serverName(), "BATCH", "+" + ref, kind}, params...), " "))
 	return ref
 }
 
 func (se *session) closeBatch(ref string) {
 	if ref != "" {
-		se.send(fmt.Sprintf(":%s BATCH -%s", serverName, ref))
+		se.send(fmt.Sprintf(":%s BATCH -%s", se.serverName(), ref))
 	}
 }
 
@@ -886,11 +929,11 @@ func (se *session) jump(n store.Network) error {
 		return err
 	}
 	for _, ch := range old {
-		se.send(fmt.Sprintf(":%s!%s@%s PART %s :%s", se.unick, se.unick, serverName, ch, ircText(se.tr("part.jumped", "network", n.Name))))
+		se.send(fmt.Sprintf(":%s!%s@%s PART %s :%s", se.unick, se.unick, se.serverName(), ch, ircText(se.tr("part.jumped", "network", n.Name))))
 	}
 	clear(se.open) // the client's in none of them now
 	if nick := orElse(se.up.Nick(), n.Nick); nick != se.unick {
-		se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, serverName, nick))
+		se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, se.serverName(), nick))
 		se.unick = nick
 	}
 	if se.att != nil {
@@ -1081,7 +1124,7 @@ func (se *session) leftChannels(chans []string) {
 			continue
 		}
 		delete(se.open, strings.ToLower(ch))
-		se.send(fmt.Sprintf(":%s KICK %s %s :%s", serverName, ch, se.unick, ircText(se.tr("kick.disconnected", "network", se.net.Name))))
+		se.send(fmt.Sprintf(":%s KICK %s %s :%s", se.serverName(), ch, se.unick, ircText(se.tr("kick.disconnected", "network", se.net.Name))))
 	}
 }
 
@@ -1095,7 +1138,7 @@ func (se *session) detach(chans []string) {
 		}
 		se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Detached = true })
 		delete(se.open, strings.ToLower(ch))
-		se.send(fmt.Sprintf(":%s!%s@%s PART %s :%s", se.unick, se.unick, serverName, ch, ircText(se.tr("part.detached", "channel", ch))))
+		se.send(fmt.Sprintf(":%s!%s@%s PART %s :%s", se.unick, se.unick, se.serverName(), ch, ircText(se.tr("part.detached", "channel", ch))))
 	}
 }
 
@@ -1125,8 +1168,11 @@ func (se *session) dispatch(m irc.Message) {
 	if se.locked != nil && !se.lockedCommand(m) {
 		return
 	}
+	if se.isManaged() && se.managedCommand(m.Command, m.Params) {
+		return
+	}
 	if se.up == nil && !unboundOK[m.Command] {
-		se.send(fmt.Sprintf(":%s NOTICE %s :%s", serverName, se.unick, ircText(se.tr("bouncerConnection"))))
+		se.send(fmt.Sprintf(":%s NOTICE %s :%s", se.serverName(), se.unick, ircText(se.tr("bouncerConnection"))))
 		return
 	}
 	if se.ownNickLine(m) {
@@ -1142,9 +1188,9 @@ func (se *session) dispatch(m irc.Message) {
 		}
 		se.markRead(m.Params)
 	case "PING":
-		se.send(fmt.Sprintf(":%s PONG %s :%s", serverName, serverName, lastParam(m)))
+		se.send(fmt.Sprintf(":%s PONG %s :%s", se.serverName(), se.serverName(), lastParam(m)))
 	case "PONG":
-		if lastParam(m) != pingToken {
+		if lastParam(m) != se.pingToken() {
 			se.passOn(m) // as before: the network's business
 		}
 	case "QUIT":
@@ -1175,7 +1221,7 @@ func (se *session) dispatch(m irc.Message) {
 		// The server won't echo our own line back over the raw feed, so
 		// honor echo-message ourselves; plain clients display it locally.
 		if se.caps["echo-message"] {
-			se.send(se.tags(id, "", tags) + fmt.Sprintf(":%s!%s@%s %s %s :%s", se.unick, se.unick, serverName, m.Command, target, text))
+			se.send(se.tags(id, "", tags) + fmt.Sprintf(":%s!%s@%s %s %s :%s", se.unick, se.unick, se.serverName(), m.Command, target, text))
 		}
 	case "REDACT": // REDACT <target> <msgid> [reason]: the network's msgid
 		if len(m.Params) >= 2 {
@@ -1444,7 +1490,7 @@ func (se *session) send(line string) {
 
 func (se *session) numeric(code, trailing string) {
 	n := orElse(se.unick, orElse(se.nick, "*"))
-	se.send(fmt.Sprintf(":%s %s %s %s", serverName, code, n, ircText(trailing)))
+	se.send(fmt.Sprintf(":%s %s %s %s", se.serverName(), code, n, ircText(trailing)))
 }
 
 // clientIP is the client's address (the original one, if forwarded).

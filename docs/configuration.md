@@ -26,6 +26,7 @@ are stored in the database and win over the file (see below).
 | `links_socket` (`EVRD_LINKS_SOCKET`) | — | the [connection holder](#connection-holder)'s socket: IRC connections stay up while evrd restarts (one node only) |
 | `hold_clients` | `yes` | with the holder, keep IRC clients connected through evrd restarts too ([connection holder](#connection-holder)) |
 | `provision_token` (`EVRD_PROVISION_TOKEN`) | — | turns on the [provisioning API](#provisioning-api) for tools that create accounts |
+| `managed`, `managed_*` (`EVRD_MANAGED_TOKEN`, `EVRD_MANAGED_WEBIRC_PASSWORD`, `EVRD_MANAGED_SERVER_PASSWORD`) | off | [managed mode](managed.md): evrd as an invisible IRCv3 bridge for another service (Boson) in front of one IRC server |
 | `db` (`EVRD_DB`) | `sqlite:evrd.db` | accounts and settings: `postgres://user:pass@host/evrd?sslmode=disable` or `sqlite:/path/evrd.db` |
 | `history` (`EVRD_HISTORY`) | `pebble:history` | chat history: `pebble:/var/lib/evrd/history` (one node) or `scylla://host1,host2:9042/evrd` (shared) |
 | `secret_key` (`EVRD_SECRET_KEY`), `secret_key_file`, `secret_key_old` | — | encrypts saved network passwords and module settings; see [Saved passwords](#saved-passwords) |

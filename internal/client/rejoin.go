@@ -28,7 +28,7 @@ func (se *session) leftQuietly(line upstream.Line) {
 			continue
 		}
 		se.rejoining[key] = rejoin{Was: line.Was[key], Nick: se.unick}
-		se.send(fmt.Sprintf(":%s NOTICE %s :%s", serverName, ch, ircText(se.tr("notice.disconnected", "network", se.net.Name))))
+		se.channelNotice(ch, "notice.disconnected", "network", se.net.Name)
 	}
 }
 
@@ -97,21 +97,21 @@ func (se *session) rejoined(ch string) {
 		old, there := before[k]
 		delete(before, k)
 		if !there {
-			se.send(fmt.Sprintf(":%s JOIN %s", userhost(m), ch))
+			se.send(fmt.Sprintf(":%s JOIN %s", se.userhost(m), ch))
 			old = upstream.Member{Nick: m.Nick}
 		}
 		se.statusModes(ch, m.Nick, prefixes(old), prefixes(m))
 	}
 	for _, m := range rj.Was.Members {
 		if _, gone := before[strings.ToLower(m.Nick)]; gone && !self(m.Nick) {
-			se.send(fmt.Sprintf(":%s PART %s :%s", userhost(m), ch, ircText(se.tr("part.goneWhileAway"))))
+			se.send(fmt.Sprintf(":%s PART %s :%s", se.userhost(m), ch, ircText(se.tr("part.goneWhileAway"))))
 		}
 	}
 	se.statusModes(ch, se.unick, prefixes(wasMine), prefixes(mine))
 	if topic := se.up.Topic(ch); topic != rj.Was.Topic {
-		se.send(fmt.Sprintf(":%s TOPIC %s :%s", serverName, ch, topic))
+		se.send(fmt.Sprintf(":%s TOPIC %s :%s", se.serverName(), ch, topic))
 	}
-	se.send(fmt.Sprintf(":%s NOTICE %s :%s", serverName, ch, ircText(se.tr("notice.rejoined", "network", se.net.Name))))
+	se.channelNotice(ch, "notice.rejoined", "network", se.net.Name)
 }
 
 // statusModes sends the MODE that takes nick's status prefixes in ch from
@@ -148,7 +148,7 @@ func (se *session) statusModes(ch, nick, was, is string) {
 			args = append(args, nick)
 		}
 	}
-	se.send(fmt.Sprintf(":%s MODE %s %s %s", serverName, ch, modes, strings.Join(args, " ")))
+	se.send(fmt.Sprintf(":%s MODE %s %s %s", se.serverName(), ch, modes, strings.Join(args, " ")))
 }
 
 // prefixes is a member's status prefixes: all of them when the network
@@ -161,6 +161,6 @@ func prefixes(m upstream.Member) string {
 }
 
 // userhost is a member's nick!user@host, as far as it's known.
-func userhost(m upstream.Member) string {
-	return m.Nick + "!" + orElse(m.User, m.Nick) + "@" + orElse(m.Host, serverName)
+func (se *session) userhost(m upstream.Member) string {
+	return m.Nick + "!" + orElse(m.User, m.Nick) + "@" + orElse(m.Host, se.serverName())
 }

@@ -198,6 +198,10 @@ func (c *Conn) ctcp(prefix, target, text string) bool {
 	}
 	switch cmd {
 	case "VERSION":
+		if c.versionText != "" {
+			reply(c.versionText)
+			break
+		}
 		reply("evrd " + c.version)
 	case "PING":
 		reply(arg)

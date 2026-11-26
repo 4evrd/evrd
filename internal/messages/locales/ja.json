@@ -403,6 +403,7 @@
     "irc.log.connected": "{address} に接続しました",
     "irc.log.tlsDone": "TLS ハンドシェイク完了",
     "irc.log.signingIn": "{nick} としてサインインしています",
+    "irc.log.webirc": "ユーザーのアドレスで WEBIRC を送信しました",
     "irc.log.signedIn": "{nick} としてサインインしました",
     "irc.log.saslLoggingIn": "{account} として SASL でログインしています",
     "irc.log.saslDone": "{account} として SASL でログインしました",

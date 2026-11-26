@@ -57,7 +57,7 @@ func (se *session) answerLocally(command string, params []string) bool {
 
 // reply sends one numeric reply from evrd as the server.
 func (se *session) reply(code string, params ...string) {
-	se.send(fmt.Sprintf(":%s %s %s %s", serverName, code, se.unick, strings.Join(params, " ")))
+	se.send(fmt.Sprintf(":%s %s %s %s", se.serverName(), code, se.unick, strings.Join(params, " ")))
 }
 
 // sendTopic sends a channel's topic and who set it when: as on a join,
@@ -90,7 +90,7 @@ func (se *session) sendNames(st upstream.ChannelState) {
 	case st.Private():
 		kind = "*"
 	}
-	head := fmt.Sprintf(":%s 353 %s %s %s :", serverName, se.unick, kind, st.Name)
+	head := fmt.Sprintf(":%s 353 %s %s %s :", se.serverName(), se.unick, kind, st.Name)
 	var line strings.Builder
 	flush := func() {
 		if line.Len() > 0 {

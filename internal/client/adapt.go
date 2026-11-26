@@ -39,7 +39,7 @@ func (se *session) relay(line upstream.Line) {
 		// The upstream re-registered (it reconnected). Don't replay the
 		// welcome; just bring the client's nick along if it changed.
 		if len(m.Params) > 0 && m.Params[0] != se.unick {
-			se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, serverName, m.Params[0]))
+			se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, se.serverName(), m.Params[0]))
 			se.unick = m.Params[0]
 		}
 		return
@@ -244,7 +244,7 @@ func (se *session) adapt(m irc.Message) (out []irc.Message, keep bool) {
 	case "FAIL", "WARN", "NOTE":
 		if !se.caps["standard-replies"] && len(p) > 0 {
 			text := m.Command + " " + strings.Join(p[:len(p)-1], " ") + ": " + p[len(p)-1]
-			return []irc.Message{{Prefix: orElse(m.Prefix, serverName), Command: "NOTICE", Params: []string{se.unick, text}}}, false
+			return []irc.Message{{Prefix: orElse(m.Prefix, se.serverName()), Command: "NOTICE", Params: []string{se.unick, text}}}, false
 		}
 	case "366": // RPL_ENDOFNAMES: me #chan :End
 		if len(p) >= 2 && !se.namesWanted(p[1], true) {
@@ -344,7 +344,7 @@ func (se *session) chghost(m irc.Message) []irc.Message {
 		out = append(out, irc.Message{Prefix: nu, Command: "JOIN", Params: []string{p.Channel}})
 		if p.Prefix != "" {
 			if mode := se.up.PrefixMode(p.Prefix[0]); mode != 0 {
-				out = append(out, irc.Message{Prefix: serverName, Command: "MODE", Params: []string{p.Channel, "+" + string(mode), nick}})
+				out = append(out, irc.Message{Prefix: se.serverName(), Command: "MODE", Params: []string{p.Channel, "+" + string(mode), nick}})
 			}
 		}
 	}
@@ -363,7 +363,7 @@ func (se *session) rename(m irc.Message) []irc.Message {
 	if len(m.Params) > 2 && m.Params[2] != "" {
 		why += ": " + m.Params[2]
 	}
-	me := se.unick + "!" + se.unick + "@" + serverName
+	me := se.unick + "!" + se.unick + "@" + se.serverName()
 	se.up.SendRaw("NAMES " + nu)
 	se.up.SendRaw("TOPIC " + nu)
 	return []irc.Message{

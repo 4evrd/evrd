@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/4evrd/evrd/internal/irc"
+	"github.com/4evrd/evrd/internal/managed"
 	"github.com/4evrd/evrd/internal/store"
 	"github.com/4evrd/evrd/internal/upstream"
 )
@@ -49,6 +50,14 @@ func (se *session) offer() map[string]string {
 		link = se.regLink()
 	}
 	out["sasl"] = "PLAIN"
+	if m := se.srv.managed; m != nil {
+		// no bouncer networks: there's the one network
+		delete(out, "soju.im/bouncer-networks")
+		delete(out, "soju.im/bouncer-networks-notify")
+		if m.Tokens() != nil {
+			out["sasl"] = "PLAIN,OAUTHBEARER,IRCV3BEARER"
+		}
+	}
 	if v := se.srv.stsValue(se.secure()); v != "" {
 		out["sts"] = v
 	}
@@ -85,7 +94,14 @@ func (se *session) regLink() *upstream.Conn {
 		if password == "" {
 			return nil
 		}
-		if u, _, err = se.srv.acc.IRCLogin(username, password); err != nil {
+		if m := se.srv.managed; m != nil && managed.LooksLikeToken(password) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			u, err = m.SignIn(ctx, se.srv.acc, password, username)
+			cancel()
+		} else {
+			u, _, err = se.srv.acc.IRCLogin(username, password)
+		}
+		if err != nil {
 			return nil
 		}
 	}
@@ -145,7 +161,7 @@ func (se *session) sendCapList(sub string, words []string) {
 		if n < len(words) && se.capVersion >= 302 {
 			more = " *"
 		}
-		se.send(fmt.Sprintf(":%s CAP %s %s%s :%s", serverName, nick, sub, more, strings.Join(words[:n], " ")))
+		se.send(fmt.Sprintf(":%s CAP %s %s%s :%s", se.serverName(), nick, sub, more, strings.Join(words[:n], " ")))
 		words = words[n:]
 		if len(words) == 0 {
 			return
@@ -193,7 +209,7 @@ func (se *session) handleCap(m irc.Message) {
 		batch := se.caps["batch"] || slices.Contains(req, "batch")
 		for _, c := range req {
 			if _, ok := offer[strings.TrimPrefix(c, "-")]; !ok || !requestable(c) || needsBatch[c] && !batch {
-				se.send(fmt.Sprintf(":%s CAP %s NAK :%s", serverName, nick, m.Params[1]))
+				se.send(fmt.Sprintf(":%s CAP %s NAK :%s", se.serverName(), nick, m.Params[1]))
 				return
 			}
 		}
@@ -204,7 +220,7 @@ func (se *session) handleCap(m irc.Message) {
 				se.caps[c] = true
 			}
 		}
-		se.send(fmt.Sprintf(":%s CAP %s ACK :%s", serverName, nick, m.Params[1]))
+		se.send(fmt.Sprintf(":%s CAP %s ACK :%s", se.serverName(), nick, m.Params[1]))
 	case "END":
 		se.capNegotiating = false
 	}
@@ -268,6 +284,9 @@ func (se *session) isupport() []string {
 	if se.up != nil {
 		toks = append(toks, se.up.ISupport()...)
 	}
+	if se.isManaged() {
+		toks = se.managedISupport(toks)
+	}
 	return toks
 }
 
@@ -276,7 +295,7 @@ func (se *session) sendISupport() {
 	toks := se.isupport()
 	for len(toks) > 0 {
 		n := min(len(toks), 13)
-		se.send(fmt.Sprintf(":%s 005 %s %s :are supported by this server", serverName, se.unick, strings.Join(toks[:n], " ")))
+		se.send(fmt.Sprintf(":%s 005 %s %s :are supported by this server", se.serverName(), se.unick, strings.Join(toks[:n], " ")))
 		toks = toks[n:]
 	}
 }

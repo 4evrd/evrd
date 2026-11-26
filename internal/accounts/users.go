@@ -17,6 +17,12 @@ func (s *Service) UserByID(ctx context.Context, id int64) (store.User, error) {
 	return s.users.UserByID(ctx, id)
 }
 
+func (s *Service) UserBySubject(ctx context.Context, subject string) (store.User, error) {
+	ctx, span := tracer.Start(ctx, "AccountService.UserBySubject")
+	defer span.End()
+	return s.users.UserBySubject(ctx, subject)
+}
+
 func (s *Service) UserByUsername(ctx context.Context, username string) (store.User, error) {
 	ctx, span := tracer.Start(ctx, "AccountService.UserByUsername", trace.WithAttributes(attribute.String("user.name", username)))
 	defer span.End()

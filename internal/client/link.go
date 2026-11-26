@@ -182,7 +182,7 @@ func (se *session) finishLink(userID int64) {
 			return
 		}
 		if nick := orElse(se.up.Nick(), chosen.Nick); nick != se.unick {
-			se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, serverName, nick))
+			se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, se.serverName(), nick))
 			se.unick = nick
 		}
 	}

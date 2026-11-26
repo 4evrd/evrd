@@ -153,7 +153,10 @@ func (se *session) statusf(format string, a ...any) {
 		se.web(fmt.Sprintf(format, a...))
 		return
 	}
-	se.send(fmt.Sprintf(":%s!status@%s PRIVMSG %s :%s", statusNick, serverName, se.unick, ircText(fmt.Sprintf(format, a...))))
+	if se.isManaged() {
+		return // there's no *status
+	}
+	se.send(fmt.Sprintf(":%s!status@%s PRIVMSG %s :%s", statusNick, se.serverName(), se.unick, ircText(fmt.Sprintf(format, a...))))
 }
 
 // say sends key's text (irc.<key> in internal/messages) from *status, in
@@ -164,6 +167,9 @@ func (se *session) say(key string, args ...any) {
 
 // tr is key's text (irc.<key>) in the user's language.
 func (se *session) tr(key string, args ...any) string {
+	if t, ok := se.managedText(key); ok {
+		return t
+	}
 	return se.printer().T(messages.Area+key, args...)
 }
 

@@ -203,7 +203,7 @@ func (b *Bouncer) refreshAway(userID int64) {
 func (b *Bouncer) setAway(userID int64, away bool) {
 	msg := ""
 	if away {
-		msg = AwayMessage
+		msg = b.awayMessage()
 	}
 	b.mu.Lock()
 	var conns []*upstream.Conn

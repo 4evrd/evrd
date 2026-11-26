@@ -228,6 +228,9 @@ type Conn struct {
 	modsOff     func() map[string]bool
 	idle        func() bool
 	version     string
+	versionText string // the whole CTCP VERSION answer ("": evrd's)
+	webirc      func(ctx context.Context) string
+	replyFrom   string
 	links       Holder
 	linkID      string
 	detaching   func() bool
@@ -289,6 +292,14 @@ type Options struct {
 	Idle func() bool
 	// Version is evrd's version, for CTCP VERSION.
 	Version string
+	// VersionReply, when set, is the whole CTCP VERSION answer instead of
+	// "evrd <Version>".
+	VersionReply string
+	// WebIRC, when set, is the WEBIRC line to open each new connection
+	// with ("" sends none), so the server shows the user's own address.
+	WebIRC func(ctx context.Context) string
+	// ReplyFrom is who modules' replies come from (default *evrd!evrd@evrd).
+	ReplyFrom string
 	// PingInterval and ReadTimeout override the link supervision defaults.
 	PingInterval, ReadTimeout time.Duration
 }
@@ -326,6 +337,9 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		rests:        rests{},
 		idle:         opts.Idle,
 		version:      opts.Version,
+		versionText:  opts.VersionReply,
+		webirc:       opts.WebIRC,
+		replyFrom:    orElse(opts.ReplyFrom, "*evrd!evrd@evrd"),
 		pingEvery:    opts.PingInterval,
 		readLimit:    opts.ReadTimeout,
 		userAttr:     strconv.FormatInt(n.UserID, 10),
@@ -724,6 +738,13 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 	} else {
 		// Registration. CAP LS holds registration open so we can negotiate
 		// SASL; CAP END (sent once auth resolves, see handleCap) completes it.
+		// WEBIRC goes first of all: it gives the server the user's address.
+		if c.webirc != nil {
+			if line := c.webirc(ctx); line != "" {
+				c.send(line)
+				c.noteT(false, messages.T("log.webirc"))
+			}
+		}
 		if sv.Password != "" {
 			c.send("PASS " + sv.Password)
 		}

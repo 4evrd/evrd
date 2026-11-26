@@ -109,13 +109,13 @@ func (se *session) forwardIfElsewhere(ctx context.Context) bool {
 		return false // nobody runs them (suspended?): attach says why
 	}
 	if err != nil || node.IRCAddr == "" {
-		se.numeric("464", ":"+movingMsg)
+		se.numeric("464", ":"+se.movingMsg())
 		return true
 	}
 	telemetry.Forwarded.Add(ctx, 1, telemetry.Attrs("kind", "irc"))
 	if err := se.splice(node); err != nil {
 		se.srv.log.Warn("forward irc client", "node", node.ID, "err", err)
-		se.numeric("464", ":"+movingMsg)
+		se.numeric("464", ":"+se.movingMsg())
 	}
 	return true
 }

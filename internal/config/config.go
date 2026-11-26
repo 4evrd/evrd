@@ -88,6 +88,8 @@ type Config struct {
 	Cluster  Cluster
 	Outbound Outbound
 	Metrics  Metrics
+	// Managed is managed mode (managed.go): off unless "managed yes".
+	Managed Managed
 	// ModulesOff are modules (internal/modules) switched off server-wide.
 	ModulesOff []string
 	Secrets    Secrets
@@ -497,6 +499,7 @@ func Default() *Config {
 		Outbound:          Outbound{ConnectRate: 5, PreferIPv6: true},
 		ClientPingTimeout: 60 * time.Second,
 		Metrics:           Metrics{Interval: 15 * time.Second},
+		Managed:           defaultManaged(),
 
 		NetworkDirectory: DefaultNetworkDirectory,
 		UpdateCheck:      DefaultUpdateCheck,
@@ -634,6 +637,9 @@ func (c *Config) ApplyEnv() error {
 		"EVRD_SECRET_KEY":                 &c.Secrets.Key,
 		"EVRD_SECRET_KEY_FILE":            &c.Secrets.KeyFile,
 		"EVRD_PROVISION_TOKEN":            &c.ProvisionToken,
+		"EVRD_MANAGED_TOKEN":              &c.Managed.Token,
+		"EVRD_MANAGED_WEBIRC_PASSWORD":    &c.Managed.WebIRCPassword,
+		"EVRD_MANAGED_SERVER_PASSWORD":    &c.Managed.ServerPassword,
 		"EVRD_LINKS_SOCKET":               &c.LinksSocket,
 		"EVRD_IDENTD_LISTEN":              &c.IdentdListen,
 		"EVRD_NODE_ID":                    &c.Cluster.NodeID,
@@ -652,6 +658,9 @@ func (c *Config) ApplyEnv() error {
 }
 
 func (c *Config) set(key, val string) error {
+	if ok, err := c.setManaged(key, val); ok {
+		return err
+	}
 	var err error
 	switch key {
 	case "listen":

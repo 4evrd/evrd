@@ -32,6 +32,7 @@ import (
 	"github.com/4evrd/evrd/internal/languages"
 	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/listen"
+	"github.com/4evrd/evrd/internal/managed"
 	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/outbound"
@@ -85,6 +86,11 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 	cfg, err := base.WithSettings(nil)
 	if err != nil {
 		log.Error("environment", "err", err)
+		return 1
+	}
+
+	if err := cfg.CheckManaged(); err != nil {
+		log.Error("config", "err", err)
 		return 1
 	}
 
@@ -332,6 +338,26 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 			}
 		}()
 	}
+	// Managed mode: every account's one network follows the config, and the
+	// connections present themselves as the config says.
+	mm := managed.New(cfg)
+	var prov *managed.Provisioner
+	if mm != nil {
+		prov = &managed.Provisioner{Mode: mm, Accounts: acc, Bouncer: b}
+		if n, err := prov.Reconcile(ctx); err != nil {
+			log.Error("managed: bring networks in line with the config", "err", err)
+			return 1
+		} else if n > 0 {
+			log.Info("managed: networks updated from the config", "networks", n)
+		}
+		mc := mm.Config()
+		b.SetManaged(bouncer.Managed{
+			AwayMessage: mc.AwayMessage, VersionReply: mc.VersionReply, QuitMessage: mc.QuitMessage,
+			ReplyFrom: mm.ServerName(), WebIRC: mm.WebIRC,
+		})
+		log.Info("managed mode", "network", mc.Network, "server", mc.Host, "port", mc.Port, "tls", mc.TLS,
+			"webirc", mc.WebIRCPassword != "", "token_issuer", cfg.ManagedIssuer())
+	}
 	if err := b.Start(ctx); err != nil {
 		log.Error("start bouncer", "err", err)
 		return 1
@@ -395,9 +421,10 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 	irc.SetMessages(msgs)
 	irc.SetSignIns(am)     // the lockout, and SSO passwords (sso_irc_password)
 	factors := mfa.New(st) // second factors for IRC sign-ins (irc_mfa)
-	irc.SetSecondFactors(factors, mfa.PolicyOf(cfg.Auth))
+	irc.SetSecondFactors(factors, mfaPolicy(cfg, mm))
 	signIns := ircsignin.New(st, acc) // IRC sign-in by link (irc_link_signin)
-	irc.SetLinkSignIn(signIns, cfg.LinkSignIn())
+	irc.SetLinkSignIn(signIns, cfg.LinkSignIn() && mm == nil)
+	irc.SetManaged(mm)
 	srv := evrdhttp.New(b, evrdhttp.Services{
 		Accounts:   acc,
 		Auth:       am,
@@ -408,6 +435,9 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 		IRCSignIns: signIns,
 	}, cfg, irc, log)
 	srv.SetMetrics(metricsq.New(cfg.Metrics.QueryURL))
+	if prov != nil {
+		srv.SetManaged(prov) // its API instead of the web app's
+	}
 	srv.SetSettings(sm)
 	irc.SetTLSConfig(certMgr.IRCConfig())
 	irc.SetPublicURL(cfg.PublicURL)
@@ -416,7 +446,11 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 	srv.SetCerts(certMgr)
 	// The network directory users pick from when adding a network: fetched
 	// now and twice a day, the last good copy kept in the database.
-	dir := directory.New(cfg.NetworkDirectory, st, log)
+	dirSource := cfg.NetworkDirectory
+	if mm != nil {
+		dirSource = "" // nobody picks a network
+	}
+	dir := directory.New(dirSource, st, log)
 	if cfg.Chroot != "" {
 		jailed := *cfg
 		dir.PathMap = func(p string) string { q, _ := jailed.InChroot(p); return q }
@@ -470,8 +504,8 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 		acc.SetBindHosts(live.Outbound.BindHosts)
 		acc.SetZNCPasswordDays(live.Auth.ZNCPasswordDays)
 		am.SetConfig(live.Auth)
-		irc.SetMFAPolicy(mfa.PolicyOf(live.Auth))
-		irc.SetLinkSignInOn(live.LinkSignIn())
+		irc.SetMFAPolicy(mfaPolicy(&live, mm))
+		irc.SetLinkSignInOn(live.LinkSignIn() && mm == nil)
 		irc.SetClientPingTimeout(live.ClientPingTimeout)
 		ob.SetRate(live.Outbound.ConnectRate)
 		ob.SetIPv4First(!live.Outbound.PreferIPv6)
@@ -481,7 +515,9 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 		}
 		srv.SetConfig(&live)
 		irc.SetSTS(live.IRCSTS, live.IRCHost)
-		dir.SetSource(live.NetworkDirectory)
+		if mm == nil {
+			dir.SetSource(live.NetworkDirectory)
+		}
 		upd.SetSource(live.UpdateCheck)
 		m, w := updateMode(&live)
 		upd.SetAllowed(live.SelfUpdate, m, w)
@@ -551,6 +587,15 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 		return 1
 	}
 	return 0
+}
+
+// mfaPolicy is when IRC sign-ins need a second factor: never in managed
+// mode, where the managing service signs its users in.
+func mfaPolicy(c *config.Config, mode *managed.Mode) mfa.Policy {
+	if mode != nil {
+		return mfa.Policy{Mode: mfa.PolicyOff}
+	}
+	return mfa.PolicyOf(c.Auth)
 }
 
 // inDocker is whether evrd runs in a container (whose restart policy

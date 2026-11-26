@@ -18,7 +18,9 @@ import (
 func isOwnNick(name string) bool { return len(name) > 1 && name[0] == '*' }
 
 // knownNick reports whether evrd has a user by that name.
-func knownNick(name string) bool { return strings.EqualFold(name, statusNick) }
+func (se *session) knownNick(name string) bool {
+	return !se.isManaged() && strings.EqualFold(name, statusNick)
+}
 
 // ownNickLine answers a client's line about evrd's own nicks, reporting
 // whether it took the line. Lines that also name the network's nicks go on
@@ -30,10 +32,10 @@ func (se *session) ownNickLine(m irc.Message) bool {
 			return false
 		}
 		nick := m.Params[len(m.Params)-1]
-		if knownNick(nick) {
+		if se.knownNick(nick) {
 			user := strings.TrimPrefix(nick, "*")
-			se.numeric("311", fmt.Sprintf("%s %s %s * :evrd", nick, user, serverName))
-			se.numeric("312", fmt.Sprintf("%s %s :evrd bouncer", nick, serverName))
+			se.numeric("311", fmt.Sprintf("%s %s %s * :evrd", nick, user, se.serverName()))
+			se.numeric("312", fmt.Sprintf("%s %s :evrd bouncer", nick, se.serverName()))
 		} else {
 			se.numeric("401", nick+" :No such nick/channel")
 		}
@@ -43,8 +45,8 @@ func (se *session) ownNickLine(m irc.Message) bool {
 		if len(m.Params) == 0 || !isOwnNick(m.Params[0]) {
 			return false
 		}
-		if nick := m.Params[0]; knownNick(nick) {
-			se.numeric("352", fmt.Sprintf("* %s %s %s %s H :0 evrd", strings.TrimPrefix(nick, "*"), serverName, serverName, nick))
+		if nick := m.Params[0]; se.knownNick(nick) {
+			se.numeric("352", fmt.Sprintf("* %s %s %s %s H :0 evrd", strings.TrimPrefix(nick, "*"), se.serverName(), se.serverName(), nick))
 		}
 		se.numeric("315", m.Params[0]+" :End of /WHO list")
 		return true
@@ -70,11 +72,11 @@ func (se *session) ownNickLine(m irc.Message) bool {
 		}
 		var found []string
 		for _, nick := range ours {
-			if !knownNick(nick) {
+			if !se.knownNick(nick) {
 				continue
 			}
 			if m.Command == "USERHOST" {
-				nick += "=+" + strings.TrimPrefix(nick, "*") + "@" + serverName
+				nick += "=+" + strings.TrimPrefix(nick, "*") + "@" + se.serverName()
 			}
 			found = append(found, nick)
 		}

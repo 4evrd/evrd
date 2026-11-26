@@ -428,6 +428,7 @@
     "irc.log.connected": "Conectat la {address}",
     "irc.log.tlsDone": "Handshake TLS încheiat",
     "irc.log.signingIn": "Intru ca {nick}",
+    "irc.log.webirc": "WEBIRC trimis cu adresa utilizatorului",
     "irc.log.signedIn": "Intrat ca {nick}",
     "irc.log.saslLoggingIn": "Login prin SASL ca {account}",
     "irc.log.saslDone": "Autentificat prin SASL ca {account}",

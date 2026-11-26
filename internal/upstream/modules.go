@@ -69,7 +69,7 @@ func (h modHost) After(d time.Duration, f func()) {
 }
 
 func (h modHost) Reply(text string) {
-	h.c.broadcastRaw(Line{Text: ":*evrd!evrd@evrd NOTICE " + h.c.Nick() + " :" + text})
+	h.c.broadcastRaw(Line{Text: ":" + h.c.replyFrom + " NOTICE " + h.c.Nick() + " :" + text})
 }
 
 func toModuleConfigs(in map[string]store.ModuleConfig) map[string]modules.Config {

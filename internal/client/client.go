@@ -26,10 +26,11 @@ import (
 	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/links"
 	"github.com/4evrd/evrd/internal/listen"
+	"github.com/4evrd/evrd/internal/managed"
 	"github.com/4evrd/evrd/internal/messages"
 )
 
-const serverName = "evrd"
+const defaultServerName = "evrd"
 
 type Server struct {
 	b       *bouncer.Bouncer
@@ -45,6 +46,8 @@ type Server struct {
 	tlsErr  error
 
 	dir *directory.Directory // nil: none
+
+	managed *managed.Mode // managed mode (managed.go); nil: off
 
 	publicURL string // the web app's address; "" when unknown
 

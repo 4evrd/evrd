@@ -402,6 +402,7 @@
     "irc.log.connected": "Bersambung ke {address}",
     "irc.log.tlsDone": "Jabat tangan TLS selesai",
     "irc.log.signingIn": "Log masuk sebagai {nick}",
+    "irc.log.webirc": "WEBIRC dihantar dengan alamat pengguna",
     "irc.log.signedIn": "Telah log masuk sebagai {nick}",
     "irc.log.saslLoggingIn": "Log masuk dengan SASL sebagai {account}",
     "irc.log.saslDone": "Telah log masuk dengan SASL sebagai {account}",

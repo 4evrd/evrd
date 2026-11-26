@@ -124,6 +124,8 @@ type AccountServiceImpl interface {
 
 	UserByID(ctx context.Context, id int64) (store.User, error)
 	UserByUsername(ctx context.Context, username string) (store.User, error)
+	// UserBySubject is the account linked to an OIDC subject.
+	UserBySubject(ctx context.Context, subject string) (store.User, error)
 	ListUsers(ctx context.Context) ([]store.User, error)
 	UpdateUser(ctx context.Context, u store.User) error
 	DeleteUser(ctx context.Context, id int64) error

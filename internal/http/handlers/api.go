@@ -32,6 +32,7 @@ import (
 	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/http/middleware"
 	"github.com/4evrd/evrd/internal/languages"
+	"github.com/4evrd/evrd/internal/managed"
 	"github.com/4evrd/evrd/internal/messages"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/settings"
@@ -67,6 +68,7 @@ type Handlers struct {
 	certs    *certs.Manager       // nil: no certificate report
 	dir      *directory.Directory // nil: no network directory
 	upd      *update.Updater      // nil: no update checks
+	prov     *managed.Provisioner // managed mode's API (managed.go); nil: off
 	log      *slog.Logger
 	up       websocket.Upgrader
 }

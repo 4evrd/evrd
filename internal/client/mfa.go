@@ -169,7 +169,7 @@ func (se *session) lock(l lockedSignIn) {
 	})
 	where := l.net.Name
 	if l.unbound {
-		where = "evrd"
+		where = se.serverName()
 	}
 	switch {
 	case l.totp && l.url != "":
@@ -275,7 +275,7 @@ func (se *session) unlock() {
 			return
 		}
 		if nick := orElse(se.up.Nick(), l.net.Nick); nick != se.unick {
-			se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, serverName, nick))
+			se.send(fmt.Sprintf(":%s!%s@%s NICK %s", se.unick, se.unick, se.serverName(), nick))
 			se.unick = nick
 		}
 		se.att.Update(func(ci *bouncer.ClientInfo) { ci.Networks = []string{l.net.Name} })
