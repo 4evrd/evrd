@@ -60,6 +60,9 @@ type Managed struct {
 	AwayMessage  string
 	VersionReply string
 	QuitMessage  string
+	// NickGuard keeps accounts that don't log in to services off nicks
+	// registered to someone else (managed_nick_guard, default yes).
+	NickGuard bool
 }
 
 // ManagedTexts are the texts managed_text sets, with their defaults.
@@ -77,7 +80,7 @@ var ManagedTexts = map[string]string{
 
 // defaultManaged is managed mode's defaults, when it's off.
 func defaultManaged() Managed {
-	return Managed{TLSVerify: true, WebIRCGateway: "gateway", WebIRCResolve: true, ServerName: "irc", AwayMessage: "Away"}
+	return Managed{TLSVerify: true, WebIRCGateway: "gateway", WebIRCResolve: true, ServerName: "irc", AwayMessage: "Away", NickGuard: true}
 }
 
 // Text is the named text (ManagedTexts) with {network} and {nick} filled
@@ -179,6 +182,8 @@ func (c *Config) setManaged(key, val string) (bool, error) {
 		m.VersionReply = val
 	case "managed_quit":
 		m.QuitMessage = val
+	case "managed_nick_guard":
+		m.NickGuard, err = parseBool(val)
 	default:
 		return false, nil
 	}

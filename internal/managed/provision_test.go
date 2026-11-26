@@ -24,6 +24,8 @@ func (f *fakeBouncer) Reconnect(id int64) error {
 	f.calls = append(f.calls, "reconnect")
 	return f.reconnErr
 }
+func (f *fakeBouncer) CurrentNick(id int64) string { return "" }
+
 func (f *fakeBouncer) Status(id int64) upstream.Status {
 	if s, ok := f.status[id]; ok {
 		return s

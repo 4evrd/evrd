@@ -138,15 +138,26 @@ type Conn struct {
 	onLog      func(LogEntry)
 	dial       func(ctx context.Context, host string, port int) (net.Conn, error)
 	altNick    string
-	pingEvery  time.Duration
-	readLimit  time.Duration
-	userAttr   string // user id, for metric labels
-	netAttr    string // network id, for metric labels
+	// guard is the nick guard (nickguard.go); badNicks the nicks it
+	// learned are registered (lowercased, kept across connections).
+	guard     bool
+	badNicks  map[string]bool
+	pingEvery time.Duration
+	readLimit time.Duration
+	userAttr  string // user id, for metric labels
+	netAttr   string // network id, for metric labels
 
 	mu       sync.Mutex
 	w        io.Writer
 	nick     string
 	triedAlt bool
+	// the nick guard's NICK on its way (""), a client's, how many times
+	// the nick changed (for the join hold), and nicks in use on this
+	// connection
+	guardAsked, clientNick string
+	guardSeq               int
+	guardTaken             map[string]bool
+	guardLen               int // the nick length to fit while NICKLEN is unknown
 	// caps: what the network offers (CAP LS may take several lines), how
 	// many of evrd's requests are unanswered, and what it acknowledged
 	capsOffered map[string]string // name -> value
@@ -282,6 +293,9 @@ type Options struct {
 	// AltNick is tried when the nick is taken while registering (the
 	// network's own alternate nick wins).
 	AltNick string
+	// NickGuard keeps the connection off nicks registered with services
+	// (nickguard.go): for connections that never log in to services.
+	NickGuard bool
 	// QuitMsg is sent when the network is switched off (the network's own
 	// quit message wins); empty sends a plain QUIT.
 	QuitMsg string
@@ -329,6 +343,8 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		resync:       map[string]bool{},
 		tryResume:    opts.Links != nil && opts.JumpTo == nil,
 		altNick:      orElse(strings.TrimSpace(n.AltNick), strings.TrimSpace(opts.AltNick)),
+		guard:        opts.NickGuard,
+		badNicks:     map[string]bool{},
 		quitMsg:      orElse(n.QuitMsg, opts.QuitMsg),
 		joinDelay:    time.Duration(n.JoinDelay) * time.Second,
 		chanSettings: n.ChannelSettings,
@@ -712,11 +728,13 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 
 	c.mu.Lock()
 	c.w = conn
-	c.nick = c.net.Nick
+	c.nick = c.guardFirst()
 	if resumed != nil {
 		c.nick = resumed.Nick
 	}
 	c.triedAlt = false
+	c.guardAsked, c.clientNick, c.guardTaken = "", "", map[string]bool{}
+	first := c.nick
 	c.capsOffered, c.caps, c.capsWaiting = map[string]string{}, map[string]bool{}, 0
 	c.isupport, c.account = nil, ""
 	c.channels = map[string]bool{}
@@ -749,10 +767,10 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 			c.send("PASS " + sv.Password)
 		}
 		c.send("CAP LS 302")
-		c.send("NICK " + c.net.Nick)
+		c.send("NICK " + first)
 		real := orElse(c.net.Realname, c.net.Nick)
 		c.send(fmt.Sprintf("USER %s 0 * :%s", c.Ident(), real))
-		c.noteT(false, messages.T("log.signingIn", "nick", c.net.Nick))
+		c.noteT(false, messages.T("log.signingIn", "nick", first))
 	}
 
 	sc := bufio.NewScanner(conn)
@@ -777,6 +795,10 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 			c.mu.Lock()
 			c.serverErr = lastParam(m)
 			c.mu.Unlock()
+			c.guardKilled(lastParam(m))
+		}
+		if m.Command == "KILL" && len(m.Params) > 0 && strings.EqualFold(m.Params[0], c.Nick()) {
+			c.guardKilled(nickOf(m.Prefix) + " " + lastParam(m))
 		}
 		if m.Command == "PRIVMSG" && len(m.Params) == 2 && c.ctcp(m.Prefix, m.Params[0], m.Params[1]) {
 			continue // answered (or blocked) here
@@ -981,7 +1003,9 @@ func (c *Conn) handle(m irc.Message) {
 		saved := append([]string(nil), c.saved...)
 		settings := c.chanSettings
 		away := c.away
-		c.unwanted = nil // this connection joins only what's saved
+		c.unwanted = nil          // this connection joins only what's saved
+		c.auth.guarding = c.guard // the joins wait for the nick to settle
+		guardGen, guardSeq := c.auth.gen, c.guardSeq
 		c.health.Status, c.health.ConnectedAt = StatusConnected, time.Now()
 		c.health.Attempts, c.health.RetryIn, c.health.Lag = 0, 0, -1
 		c.mu.Unlock()
@@ -993,6 +1017,9 @@ func (c *Conn) handle(m irc.Message) {
 		// sent meanwhile (messages to those channels)
 		c.modsRegistered()
 		c.joinWhenReady(joinLines(saved, settings))
+		if c.guard {
+			c.guardSettleLater(guardGen, guardSeq)
+		}
 		if away != "" {
 			c.send("AWAY :" + away)
 		}
@@ -1001,6 +1028,9 @@ func (c *Conn) handle(m irc.Message) {
 		c.pending = nil
 		c.mu.Unlock()
 		for _, l := range pending {
+			if f := strings.Fields(l); len(f) > 1 && strings.EqualFold(f[0], "JOIN") && c.guardHoldJoin(l) {
+				continue
+			}
 			c.send(l)
 		}
 		c.notify(Event{Kind: "connected", TitleText: messages.T("event.connected", "network", c.net.Name),
@@ -1029,11 +1059,13 @@ func (c *Conn) handle(m irc.Message) {
 				}
 			}
 		}
+	case "432", "435", "437", "447": // erroneous, can't change, held (services)
+		c.guardRefused(m)
 	case "433": // ERR_NICKNAMEINUSE
 		// While registering, try the alternate nick, then variants. Once
 		// connected, it's the answer to a client's NICK and goes back to that
 		// client as-is.
-		if c.Status() == StatusConnected {
+		if c.guardRefused(m) || c.Status() == StatusConnected {
 			return
 		}
 		c.mu.Lock()
@@ -1118,6 +1150,7 @@ func (c *Conn) handle(m irc.Message) {
 			c.event("nick", ch, old, "", nu)
 		}
 		if me {
+			c.guardNick(old, nu)
 			c.nickChanged(nu)
 		}
 	case "QUIT":
@@ -2093,7 +2126,11 @@ func (c *Conn) SendRaw(line string) {
 			delete(c.unwanted, strings.ToLower(ch))
 		}
 		c.mu.Unlock()
+		if c.guardHoldJoin(line) {
+			return
+		}
 	}
+	c.guardClientNick(line)
 	c.sendUser(line)
 }
 

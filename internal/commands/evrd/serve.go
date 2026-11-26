@@ -353,7 +353,7 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 		mc := mm.Config()
 		b.SetManaged(bouncer.Managed{
 			AwayMessage: mc.AwayMessage, VersionReply: mc.VersionReply, QuitMessage: mc.QuitMessage,
-			ReplyFrom: mm.ServerName(), WebIRC: mm.WebIRC,
+			ReplyFrom: mm.ServerName(), WebIRC: mm.WebIRC, NickGuard: mc.NickGuard,
 		})
 		log.Info("managed mode", "network", mc.Network, "server", mc.Host, "port", mc.Port, "tls", mc.TLS,
 			"webirc", mc.WebIRCPassword != "", "token_issuer", cfg.ManagedIssuer())

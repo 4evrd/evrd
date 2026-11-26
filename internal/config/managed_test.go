@@ -11,7 +11,7 @@ func TestManagedOffByDefault(t *testing.T) {
 	if c.Managed.On || c.CheckManaged() != nil {
 		t.Fatalf("managed: %+v", c.Managed)
 	}
-	if !c.Managed.TLSVerify || c.Managed.ServerName != "irc" || c.Managed.WebIRCGateway != "gateway" || !c.Managed.WebIRCResolve {
+	if !c.Managed.TLSVerify || c.Managed.ServerName != "irc" || c.Managed.WebIRCGateway != "gateway" || !c.Managed.WebIRCResolve || !c.Managed.NickGuard {
 		t.Errorf("defaults %+v", c.Managed)
 	}
 }
@@ -38,6 +38,7 @@ managed_text welcome Hi {nick}, this is {network}
 managed_away gone
 managed_version Boson
 managed_quit bye
+managed_nick_guard no
 `)
 	c, err := LoadFile(path)
 	if err != nil {
@@ -49,7 +50,7 @@ managed_quit bye
 		m.WebIRCPassword != "webircpw" || m.WebIRCGateway != "boson" || m.WebIRCResolve ||
 		m.ServerName != "irc.example.org" || m.Token != "api-token" || m.TokenIssuer != "https://auth.example.org" ||
 		m.TokenAudience != "boson" || m.TokenJWKS == "" || !slices.Equal(m.MOTD, []string{"Welcome!", "Be nice."}) ||
-		m.AwayMessage != "gone" || m.VersionReply != "Boson" || m.QuitMessage != "bye" {
+		m.AwayMessage != "gone" || m.VersionReply != "Boson" || m.QuitMessage != "bye" || m.NickGuard {
 		t.Errorf("loaded %+v", m)
 	}
 	if err := c.CheckManaged(); err != nil {

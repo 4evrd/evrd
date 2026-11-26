@@ -56,6 +56,7 @@ type authState struct {
 	retryAuth  []string
 	retryOper  []string
 	retried    map[string]bool
+	guarding   bool // the joins wait for the nick guard (nickguard.go)
 	ghosted    bool // the ghost command went out
 	nickSent   bool // and NICK after it
 	saslFailed bool // SASL was refused (logged once)
@@ -206,12 +207,13 @@ func (c *Conn) joinWhenReady(joins []string) {
 		return
 	}
 	c.mu.Lock()
-	holding, opering := c.auth.holding, c.auth.opering
-	if holding || opering {
+	holding, opering, guarding := c.auth.holding, c.auth.opering, c.auth.guarding
+	if holding || opering || guarding {
 		c.auth.held = append(c.auth.held, joins...)
 	}
 	c.mu.Unlock()
 	switch {
+	case guarding && !holding && !opering:
 	case holding:
 		c.noteT(false, messages.T("log.joinAfterLogin"))
 	case opering:
@@ -317,7 +319,7 @@ func (c *Conn) authDone(gen int, ok bool, said string) {
 // takeHeld hands over the held joins once nothing holds them any more.
 // Holds c.mu.
 func (c *Conn) takeHeld() []string {
-	if c.auth.holding || c.auth.opering {
+	if c.auth.holding || c.auth.opering || c.auth.guarding {
 		return nil
 	}
 	held := c.auth.held
@@ -459,6 +461,9 @@ func (c *Conn) rejoin(gen int, chans []string) {
 // identify, the login's answer, or a ghost gone.
 func (c *Conn) servicesSaid(m irc.Message) {
 	text := strings.TrimSpace(formatting.ReplaceAllString(lastParam(m), ""))
+	if c.guardNotice(text) {
+		return
+	}
 	c.mu.Lock()
 	st := c.auth
 	c.mu.Unlock()

@@ -429,6 +429,7 @@
     "irc.log.identified": "Identified to services: {said}",
     "irc.log.loginRefused": "Services refused the login: {said}",
     "irc.log.ghosting": "{nick} is taken: asking {services} to {command} it",
+    "irc.log.nickRegistered": "{nick} is registered to someone else: switching to {next}",
     "irc.rest.allBanned": "All servers of {network} refuse this address: trying again in {wait}",
     "irc.rest.allLimited": "All servers of {network} refuse or limit connections from this address: trying again in {wait}",
     "irc.rest.banned": "{host} refuses this address: resting it for {rest}, trying the network's other servers",
