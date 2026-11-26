@@ -19,6 +19,7 @@
   <a href="docs/web-chat.md">Web chat on another site</a> ·
   <a href="docs/openbsd.md">OpenBSD</a> ·
   <a href="docs/clustering.md">Clustering</a> ·
+  <a href="docs/managed.md">Managed mode</a> ·
   <a href="docs/translations.md">Translations</a> ·
   <a href="docs/development.md">Development</a>
 </p>

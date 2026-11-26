@@ -411,6 +411,7 @@
     "irc.log.connected": "{address} adresine bağlanıldı",
     "irc.log.tlsDone": "TLS el sıkışması tamam",
     "irc.log.signingIn": "{nick} olarak oturum açılıyor",
+    "irc.log.webirc": "WEBIRC kullanıcının adresiyle gönderildi",
     "irc.log.signedIn": "{nick} olarak oturum açıldı",
     "irc.log.saslLoggingIn": "{account} olarak SASL ile giriş yapılıyor",
     "irc.log.saslDone": "{account} olarak SASL ile giriş yapıldı",

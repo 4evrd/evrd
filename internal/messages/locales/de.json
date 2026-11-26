@@ -418,6 +418,7 @@
     "irc.log.connected": "Verbunden mit {address}",
     "irc.log.tlsDone": "TLS-Handshake fertig",
     "irc.log.signingIn": "Melde an als {nick}",
+    "irc.log.webirc": "WEBIRC mit der Adresse des Nutzers gesendet",
     "irc.log.signedIn": "Angemeldet als {nick}",
     "irc.log.saslLoggingIn": "Melde mit SASL an als {account}",
     "irc.log.saslDone": "Mit SASL angemeldet als {account}",

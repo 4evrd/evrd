@@ -17,6 +17,15 @@ import (
 // is evrd's, not the network's.
 const pingToken = "evrd"
 
+// pingToken is what this session's PINGs say: the server name in managed
+// mode.
+func (se *session) pingToken() string {
+	if se.isManaged() {
+		return se.serverName()
+	}
+	return pingToken
+}
+
 const (
 	// pingQuiet is how long a client may say nothing before evrd pings it.
 	pingQuiet = 90 * time.Second
@@ -54,7 +63,7 @@ func (se *session) checkAlive() {
 		se.kick(bouncer.DropPingTimeout)
 	case se.pinged.IsZero() && time.Since(last) >= orDefault(se.srv.pingQuiet, pingQuiet):
 		se.pinged = time.Now()
-		se.send("PING :" + pingToken)
+		se.send("PING :" + se.pingToken())
 	}
 }
 
@@ -72,7 +81,7 @@ func (se *session) answers(wait time.Duration) bool {
 	if se.att != nil && time.Since(se.att.Info().Since) < orDefault(se.srv.justAttached, justAttached) {
 		return true
 	}
-	go se.send("PING :" + pingToken) // a ghost's write may stall
+	go se.send("PING :" + se.pingToken()) // a ghost's write may stall
 	for end := asked.Add(wait); time.Now().Before(end); time.Sleep(50 * time.Millisecond) {
 		if time.Unix(0, se.lastRead.Load()).After(asked) {
 			return true

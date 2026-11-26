@@ -68,6 +68,7 @@ func noEnv(t *testing.T) {
 		"EVRD_PROVISION_TOKEN", "EVRD_LINKS_SOCKET", "EVRD_NODE_ID", "EVRD_INTERNAL_URL",
 		"EVRD_INTERNAL_IRC_ADDR", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "EVRD_METRICS_URL",
 		"EVRD_NETWORK_DIRECTORY", "EVRD_IDENTD_LISTEN", "EVRD_UPDATE_CHECK", "EVRD_SELF_UPDATE", "EVRD_UPDATE_DIR",
+		"EVRD_MANAGED_TOKEN", "EVRD_MANAGED_WEBIRC_PASSWORD", "EVRD_MANAGED_SERVER_PASSWORD",
 	} {
 		t.Setenv(v, "")
 	}
@@ -599,6 +600,7 @@ func TestStartupErrors(t *testing.T) {
 		{name: "history", setup: lines("history nope://x"), want: "msg=\"open history\" store=nope://x"},
 		{name: "sign-in", setup: lines("oidc_issuer "+oidc404.URL, "public_url https://bnc.test"), want: "msg=\"set up sign-in\" issuer=" + oidc404.URL},
 		{name: "cluster", setup: lines("internal_listen 127.0.0.1:1"), want: "cluster: internal_listen needs cluster_secret"},
+		{name: "managed", setup: lines("managed yes"), want: "managed: set managed_network"},
 		{name: "outbound", setup: lines("upstream_prefix6 10.0.0.0/8"), want: "msg=outbound"},
 		{name: "api port", setup: func(t *testing.T, dir string) []string {
 			return []string{"api " + busyAddr(t)}

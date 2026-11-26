@@ -26,7 +26,7 @@ import (
 func (se *session) bouncerFail(code, sub string, args ...string) {
 	text := args[len(args)-1]
 	args = append(args[:len(args)-1:len(args)-1], ":"+ircText(text))
-	se.send(fmt.Sprintf(":%s FAIL BOUNCER %s %s %s", serverName, code, sub, strings.Join(args, " ")))
+	se.send(fmt.Sprintf(":%s FAIL BOUNCER %s %s %s", se.serverName(), code, sub, strings.Join(args, " ")))
 }
 
 // bouncerCommand answers BOUNCER after registration.
@@ -70,7 +70,7 @@ func (se *session) bouncerCommand(p []string) {
 			se.bouncerFail("UNKNOWN_ERROR", sub, p[1], err.Error())
 			return
 		}
-		se.send(fmt.Sprintf(":%s BOUNCER DELNETWORK %d", serverName, n.ID))
+		se.send(fmt.Sprintf(":%s BOUNCER DELNETWORK %d", se.serverName(), n.ID))
 		se.notifyNetworks()
 		if se.up != nil && n.ID == se.net.ID {
 			se.conn.Close() // its network is gone
@@ -140,7 +140,7 @@ func (se *session) listNetworks() {
 	nets := se.bouncerNetworks()
 	batch := se.openBatch("soju.im/bouncer-networks")
 	for _, id := range sortedKeys(nets) {
-		se.send(se.batchTag(batch) + fmt.Sprintf(":%s BOUNCER NETWORK %s %s", serverName, id, encodeAttrs(nets[id])))
+		se.send(se.batchTag(batch) + fmt.Sprintf(":%s BOUNCER NETWORK %s %s", se.serverName(), id, encodeAttrs(nets[id])))
 	}
 	se.closeBatch(batch)
 	se.netsSent = nets
@@ -165,7 +165,7 @@ func (se *session) notifyNetworks() {
 	for _, id := range sortedKeys(now) {
 		old, had := se.netsSent[id]
 		if !had {
-			se.send(fmt.Sprintf(":%s BOUNCER NETWORK %s %s", serverName, id, encodeAttrs(now[id])))
+			se.send(fmt.Sprintf(":%s BOUNCER NETWORK %s %s", se.serverName(), id, encodeAttrs(now[id])))
 			continue
 		}
 		diff := map[string]string{}
@@ -186,12 +186,12 @@ func (se *session) notifyNetworks() {
 			for _, k := range gone {
 				attrs = strings.TrimPrefix(attrs+";"+k, ";")
 			}
-			se.send(fmt.Sprintf(":%s BOUNCER NETWORK %s %s", serverName, id, attrs))
+			se.send(fmt.Sprintf(":%s BOUNCER NETWORK %s %s", se.serverName(), id, attrs))
 		}
 	}
 	for _, id := range sortedKeys(se.netsSent) {
 		if _, ok := now[id]; !ok {
-			se.send(fmt.Sprintf(":%s BOUNCER NETWORK %s *", serverName, id))
+			se.send(fmt.Sprintf(":%s BOUNCER NETWORK %s *", se.serverName(), id))
 		}
 	}
 	se.netsSent = now
@@ -297,7 +297,7 @@ func (se *session) addNetwork(attrs map[string]string) {
 		return
 	}
 	se.srv.b.Connect(n.ID)
-	se.send(fmt.Sprintf(":%s BOUNCER ADDNETWORK %d", serverName, n.ID))
+	se.send(fmt.Sprintf(":%s BOUNCER ADDNETWORK %d", se.serverName(), n.ID))
 	se.notifyNetworks()
 }
 
@@ -323,7 +323,7 @@ func (se *session) changeNetwork(id string, attrs map[string]string) {
 	if accounts.ReconnectFor(before, n, string(se.srv.b.Status(n.ID))) {
 		se.srv.b.Reconnect(n.ID)
 	}
-	se.send(fmt.Sprintf(":%s BOUNCER CHANGENETWORK %s", serverName, id))
+	se.send(fmt.Sprintf(":%s BOUNCER CHANGENETWORK %s", se.serverName(), id))
 	se.notifyNetworks()
 }
 

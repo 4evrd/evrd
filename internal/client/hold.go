@@ -237,7 +237,7 @@ func (s *Server) takeHeld(ctx context.Context, hc links.HeldClient) bool {
 	if cc.Info.State != nil {
 		if err := se.restore(cc.Info.State); err != nil {
 			s.log.Warn("couldn't resume a held IRC client", "client", hc.Client, "ip", remoteHost(cc), "err", err)
-			se.send("ERROR :Closing link: evrd restarted, reconnect")
+			se.send("ERROR :Closing link: " + orElse(se.managedRestartText(), "evrd restarted, reconnect"))
 			cc.Close()
 			s.taken(hc.Client)
 			return false

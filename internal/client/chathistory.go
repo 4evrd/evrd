@@ -79,7 +79,7 @@ func (r ref) from() history.ID {
 // chathistory answers a CHATHISTORY command.
 func (se *session) chathistory(p []string) {
 	fail := func(code string, args ...string) {
-		se.send(fmt.Sprintf(":%s FAIL CHATHISTORY %s %s", serverName, code, strings.Join(args, " ")))
+		se.send(fmt.Sprintf(":%s FAIL CHATHISTORY %s %s", se.serverName(), code, strings.Join(args, " ")))
 	}
 	if len(p) == 0 {
 		fail("INVALID_PARAMS", "*", ":Insufficient parameters")
@@ -236,7 +236,7 @@ func (se *session) chathistoryTargets(a, b ref, limit int) {
 	}
 	if err != nil {
 		se.srv.log.Warn("chathistory targets", "network", se.net.ID, "err", err)
-		se.send(fmt.Sprintf(":%s FAIL CHATHISTORY MESSAGE_ERROR TARGETS * :Messages could not be retrieved", serverName))
+		se.send(fmt.Sprintf(":%s FAIL CHATHISTORY MESSAGE_ERROR TARGETS * :Messages could not be retrieved", se.serverName()))
 		return
 	}
 	batch := se.openBatch("draft/chathistory-targets")
@@ -245,7 +245,7 @@ func (se *session) chathistoryTargets(a, b ref, limit int) {
 		if batch != "" {
 			tags = "@batch=" + batch + " "
 		}
-		se.send(fmt.Sprintf("%s:%s CHATHISTORY TARGETS %s %s", tags, serverName, t.Name, t.Latest.UTC().Format(timeFormat)))
+		se.send(fmt.Sprintf("%s:%s CHATHISTORY TARGETS %s %s", tags, se.serverName(), t.Name, t.Latest.UTC().Format(timeFormat)))
 	}
 	se.closeBatch(batch)
 }

@@ -93,7 +93,7 @@ func (se *session) multilineLimits() (maxBytes, maxLines int) {
 // client with echo-message.
 func (se *session) sendMultiline(b *multiline) {
 	fail := func(code string, args ...string) {
-		se.send(fmt.Sprintf(":%s FAIL BATCH %s %s", serverName, code, strings.Join(args, " ")))
+		se.send(fmt.Sprintf(":%s FAIL BATCH %s %s", se.serverName(), code, strings.Join(args, " ")))
 	}
 	maxBytes, maxLines := se.multilineLimits()
 	switch {
@@ -120,13 +120,13 @@ func (se *session) sendMultiline(b *multiline) {
 	}
 	se.batches++
 	ref := strconv.Itoa(se.batches)
-	se.send(fmt.Sprintf("%s:%s!%s@%s BATCH +%s draft/multiline %s", first, se.unick, se.unick, serverName, ref, b.target))
+	se.send(fmt.Sprintf("%s:%s!%s@%s BATCH +%s draft/multiline %s", first, se.unick, se.unick, se.serverName(), ref, b.target))
 	for i, l := range b.lines {
 		tag := "@batch=" + ref
 		if b.concat[i] {
 			tag += ";draft/multiline-concat"
 		}
-		se.send(fmt.Sprintf("%s :%s!%s@%s %s %s :%s", tag, se.unick, se.unick, serverName, b.command, b.target, l))
+		se.send(fmt.Sprintf("%s :%s!%s@%s %s %s :%s", tag, se.unick, se.unick, se.serverName(), b.command, b.target, l))
 	}
-	se.send(fmt.Sprintf(":%s BATCH -%s", serverName, ref))
+	se.send(fmt.Sprintf(":%s BATCH -%s", se.serverName(), ref))
 }

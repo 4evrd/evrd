@@ -32,17 +32,17 @@ func (se *session) labeled(label string, m irc.Message) {
 	}
 	switch len(lines) {
 	case 0:
-		se.send(fmt.Sprintf("@label=%s :%s ACK", label, serverName))
+		se.send(fmt.Sprintf("@label=%s :%s ACK", label, se.serverName()))
 	case 1:
 		se.send(withTag(lines[0], "label="+label))
 	default:
 		se.batches++
 		ref := fmt.Sprint(se.batches)
-		se.send(fmt.Sprintf("@label=%s :%s BATCH +%s labeled-response", label, serverName, ref))
+		se.send(fmt.Sprintf("@label=%s :%s BATCH +%s labeled-response", label, se.serverName(), ref))
 		for _, l := range lines {
 			se.send(withTag(l, "batch="+ref))
 		}
-		se.send(fmt.Sprintf(":%s BATCH -%s", serverName, ref))
+		se.send(fmt.Sprintf(":%s BATCH -%s", se.serverName(), ref))
 	}
 }
 

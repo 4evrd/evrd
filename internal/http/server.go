@@ -28,6 +28,7 @@ import (
 	"github.com/4evrd/evrd/internal/http/handlers"
 	"github.com/4evrd/evrd/internal/http/middleware"
 	"github.com/4evrd/evrd/internal/listen"
+	"github.com/4evrd/evrd/internal/managed"
 	"github.com/4evrd/evrd/internal/metricsq"
 	"github.com/4evrd/evrd/internal/settings"
 	"github.com/4evrd/evrd/internal/update"
@@ -52,7 +53,9 @@ type Server struct {
 	// updatedWeb is an installed update's web app, served at /api/webapp/
 	// for the web container to prefer over its own copy ("": none).
 	updatedWeb string
-	log        *slog.Logger
+	// managed: managed mode, which serves its own API only
+	managed bool
+	log     *slog.Logger
 }
 
 // New builds the handlers on b and svc and the server in front of them.
@@ -93,8 +96,34 @@ func (s *Server) SetUpdatedWebApp(dir string) { s.updatedWeb = dir }
 // SetMetrics reads the dashboards' charts from m.
 func (s *Server) SetMetrics(m *metricsq.Client) { s.h.SetMetrics(m) }
 
+// SetManaged serves managed mode's API with p instead of the web app's
+// (docs/managed.md).
+func (s *Server) SetManaged(p *managed.Provisioner) {
+	s.h.SetManaged(p)
+	s.managed = p != nil
+}
+
+// managedHandler is the public API in managed mode: the managed API alone,
+// behind managed_token. No web app, no sign-in, no user API: the managing
+// service owns the accounts.
+func (s *Server) managedHandler() http.Handler {
+	mux := http.NewServeMux()
+	h := s.h
+	tok := func(f http.HandlerFunc) http.HandlerFunc { return middleware.BearerToken(h.ManagedToken, f) }
+	mux.HandleFunc("GET /api/managed/health", tok(h.ManagedHealth))
+	mux.HandleFunc("GET /api/managed/users", tok(h.ManagedUsers))
+	mux.HandleFunc("GET /api/managed/users/{username}", tok(h.ManagedUser))
+	mux.HandleFunc("PUT /api/managed/users/{username}", tok(h.ManagedPutUser))
+	mux.HandleFunc("DELETE /api/managed/users/{username}", tok(h.ManagedDeleteUser))
+	mux.Handle("/", http.NotFoundHandler())
+	return middleware.Traced(false, mux)
+}
+
 // Handler is the public API, behind the load balancer.
 func (s *Server) Handler() http.Handler {
+	if s.managed {
+		return s.managedHandler()
+	}
 	mux := http.NewServeMux()
 	h := s.h
 

@@ -16,7 +16,7 @@ import (
 // markRead answers MARKREAD <target> [timestamp=…].
 func (se *session) markRead(p []string) {
 	fail := func(code string, args ...string) {
-		se.send(fmt.Sprintf(":%s FAIL MARKREAD %s %s", serverName, code, strings.Join(args, " ")))
+		se.send(fmt.Sprintf(":%s FAIL MARKREAD %s %s", se.serverName(), code, strings.Join(args, " ")))
 	}
 	if len(p) == 0 {
 		fail("NEED_MORE_PARAMS", ":Missing parameters")
@@ -53,7 +53,7 @@ func (se *session) sendMark(target string, at time.Time) {
 	if !at.IsZero() {
 		ts = "timestamp=" + at.UTC().Format(timeFormat)
 	}
-	se.send(fmt.Sprintf(":%s MARKREAD %s %s", serverName, target, ts))
+	se.send(fmt.Sprintf(":%s MARKREAD %s %s", se.serverName(), target, ts))
 	if se.marks != nil {
 		se.marks[strings.ToLower(target)] = at
 	}

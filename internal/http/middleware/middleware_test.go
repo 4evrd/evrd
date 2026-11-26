@@ -200,3 +200,27 @@ func TestOwner(t *testing.T) {
 		t.Fatalf("forwarded request: %s %v", fr.URL, fr.Header)
 	}
 }
+
+func TestBearerToken(t *testing.T) {
+	token := ""
+	h := BearerToken(func() string { return token }, ok)
+	req := func(auth string) *http.Request {
+		r := httptest.NewRequest("GET", "/api/managed/health", nil)
+		if auth != "" {
+			r.Header.Set("Authorization", auth)
+		}
+		return r
+	}
+	if rec := serve(h, req("Bearer x")); rec.Code != http.StatusNotFound {
+		t.Fatalf("no token set: %d", rec.Code)
+	}
+	token = "api"
+	for _, a := range []string{"", "api", "Bearer nope"} {
+		if rec := serve(h, req(a)); rec.Code != http.StatusUnauthorized {
+			t.Errorf("%q: %d", a, rec.Code)
+		}
+	}
+	if rec := serve(h, req("Bearer api")); rec.Code != http.StatusNoContent {
+		t.Fatalf("the token: %d", rec.Code)
+	}
+}

@@ -68,6 +68,11 @@ type Bouncer struct {
 	// awayAfter is each user's pending auto-away (state.go's refreshAway).
 	awayAfter map[int64]*time.Timer
 
+	// managed is managed mode's presentation (managed.go), nil when off;
+	// lastIP each user's latest client's address, for WEBIRC.
+	managed *Managed
+	lastIP  map[int64]string
+
 	holderMu sync.Mutex
 	holder   HolderStatus // as last asked (Holder)
 	holderAt time.Time
@@ -313,6 +318,7 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 		CTCPReplies: u.CTCPReplies,
 		Idle:        func() bool { return b.idle(n.UserID) },
 		Version:     version.Version,
+		WebIRC:      b.webIRC(n.UserID, orElse(n.Username, n.Nick)),
 		OnChannels: func(channels []string) {
 			if err := b.store.SetNetworkChannels(context.Background(), networkID, channels); err != nil {
 				b.log.Warn("save channels", "network", n.Name, "err", err)
@@ -320,6 +326,10 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 		},
 		Dial:   dial,
 		JumpTo: jumpTo,
+	}
+	if m := b.managed; m != nil {
+		opts.VersionReply, opts.ReplyFrom = m.VersionReply, m.ReplyFrom
+		opts.QuitMsg = orElse(u.QuitMsg, m.QuitMessage)
 	}
 	if b.links != nil {
 		opts.Links, opts.LinkID, opts.ResumeAfter = b.links, linkID(networkID), b.resumeAfter
@@ -329,7 +339,7 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 	conn = upstream.New(n, b.log, opts)
 	b.conns[networkID] = &entry{conn: conn, userID: n.UserID, cancel: cancel}
 	if u.AutoAway && len(b.clients[n.UserID])+len(b.streams[n.UserID]) == 0 {
-		conn.SetAway(AwayMessage) // applied once registered
+		conn.SetAway(b.awayMessageLocked()) // applied once registered
 	}
 	go conn.Run(cctx)
 	b.log.Info("connecting network", "network", n.Name, "host", n.Host)
@@ -604,6 +614,7 @@ func (b *Bouncer) attach(userID int64, max int, info ClientInfo, close func(reas
 	c := &client{close: close, info: info}
 	set[c] = struct{}{}
 	b.mu.Unlock()
+	b.noteIP(userID, info.IP)
 	b.seen(userID)
 	b.refreshAway(userID)
 	return &Attachment{b: b, userID: userID, c: c, replaced: len(ghosts) > 0, sharing: sharing}, nil
