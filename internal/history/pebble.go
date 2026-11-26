@@ -123,13 +123,24 @@ func upperBound(prefix []byte) []byte {
 
 // --- values ----------------------------------------------------------------
 
+// encodingV1 is a version byte, the time (varint unix nanos), then
+// length-prefixed fields: target, sender, kind, text, extra and — only when
+// there are any — the line's kept client-only tags (StoredTags). A reader
+// ignores bytes past the fields it knows, so records without tags (all
+// those written before tags were kept) and with them read either way, and
+// an older evrd reads a tagged record, minus its tags.
 const encodingV1 = 1
 
 func encode(m Message) []byte {
-	b := make([]byte, 0, 32+len(m.Target)+len(m.Sender)+len(m.Text)+len(m.Extra))
+	tags := StoredTags(m.Tags)
+	b := make([]byte, 0, 32+len(m.Target)+len(m.Sender)+len(m.Text)+len(m.Extra)+len(tags))
 	b = append(b, encodingV1)
 	b = binary.AppendVarint(b, m.Time.UnixNano())
-	for _, f := range []string{m.Target, m.Sender, m.Kind, m.Text, m.Extra} {
+	fields := []string{m.Target, m.Sender, m.Kind, m.Text, m.Extra}
+	if tags != "" {
+		fields = append(fields, tags)
+	}
+	for _, f := range fields {
 		b = binary.AppendUvarint(b, uint64(len(f)))
 		b = append(b, f...)
 	}
@@ -157,10 +168,15 @@ func decode(networkID int64, b []byte) (Message, error) {
 		fields[i] = string(b[n : n+int(l)])
 		b = b[n+int(l):]
 	}
-	return Message{
+	m := Message{
 		NetworkID: networkID, Time: time.Unix(0, nanos),
 		Target: fields[0], Sender: fields[1], Kind: fields[2], Text: fields[3], Extra: fields[4],
-	}, nil
+	}
+	// The optional tags field; anything else after the fields is ignored.
+	if l, n := binary.Uvarint(b); n > 0 && uint64(len(b)-n) >= l {
+		m.Tags = string(b[n : n+int(l)])
+	}
+	return m, nil
 }
 
 // decodeAt is decode, taking the line's Seq from the end of its key.

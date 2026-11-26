@@ -322,6 +322,9 @@ func (s *Handlers) Messages(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]map[string]any, 0, len(msgs))
 	for _, m := range msgs {
+		if m.Kind == history.KindTagMsg {
+			continue // reactions: for IRC clients; the web chat doesn't show them
+		}
 		out = append(out, messageDTO(m))
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -570,6 +573,9 @@ func (s *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
 		case m, ok := <-sub:
 			if !ok {
 				return
+			}
+			if m.Kind == history.KindTagMsg {
+				continue
 			}
 			if err := ws.WriteJSON(messageDTO(m)); err != nil {
 				return

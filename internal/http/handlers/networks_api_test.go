@@ -136,6 +136,8 @@ func TestMessagesAndBuffersOffline(t *testing.T) {
 		e.b.History().Add(history.Message{NetworkID: id, Target: "#a", Sender: "zed", Kind: "message", Text: text, Extra: "x", Time: now.Add(time.Duration(i) * time.Second)})
 	}
 	e.b.History().Add(history.Message{NetworkID: id, Target: "zed", Sender: "zed", Kind: "message", Text: "psst", Time: now})
+	// a reaction is for IRC clients: the web chat doesn't get it
+	e.b.History().Add(history.Message{NetworkID: id, Target: "#a", Sender: "zed", Kind: history.KindTagMsg, Tags: "+draft/react=up", Time: now.Add(time.Second / 2)})
 
 	code, out := c.doAny("GET", path+"/messages?target=%23a", nil)
 	msgs, _ := out.([]any)

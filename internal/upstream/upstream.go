@@ -1259,6 +1259,8 @@ func (c *Conn) handle(m irc.Message) {
 			c.servicesSaid(m)
 		}
 		c.handleMessage(m)
+	case "TAGMSG":
+		c.handleTagMsg(m)
 	}
 }
 
@@ -1730,7 +1732,54 @@ func (c *Conn) handleMessage(m irc.Message) {
 		Sender:    sender,
 		Kind:      kind,
 		Text:      text,
+		Tags:      c.localTags(m.Tags),
 	}))
+}
+
+// handleTagMsg records a TAGMSG carrying a reaction (or its undoing), so
+// clients reading history later see it; typing and the rest pass on live
+// only.
+func (c *Conn) handleTagMsg(m irc.Message) {
+	sender := nickOf(m.Prefix)
+	if len(m.Params) == 0 || sender == "" {
+		return
+	}
+	tags := c.localTags(m.Tags)
+	if !history.Reaction(tags) {
+		return
+	}
+	target := m.Params[0]
+	if !isChannel(target) {
+		target = sender
+	}
+	c.emit(c.stamp(history.Message{
+		NetworkID: c.net.ID, Target: target, Sender: sender, Kind: history.KindTagMsg, Tags: tags,
+	}))
+}
+
+// localTags are the client-only tags of a line from the network that
+// history keeps (history.StoredTags), with the msgids replies and reactions
+// name turned into evrd's: what clients know the lines by, now and after a
+// restart. One evrd can't match (a line from before it started) stays the
+// network's.
+func (c *Conn) localTags(theirs map[string]string) string {
+	var out []string
+	for k, v := range theirs {
+		if !history.KeptTag(k) {
+			continue
+		}
+		if history.ReplyTag(k) {
+			if ours, ok := c.LocalMsgID(v); ok {
+				v = ours
+			}
+		}
+		if v != "" {
+			k += "=" + v
+		}
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return strings.Join(out, ";")
 }
 
 // count records a relayed line, both server-wide and per user and network.
@@ -1824,13 +1873,23 @@ func (c *Conn) SendMultiline(origin, tags, command, target string, lines []strin
 
 // SendTagMsg sends a TAGMSG (typing, a reaction) with client-only tags when
 // the network takes message-tags, and passes it on live to the user's other
-// clients. It's never recorded: typing is gone in a moment.
+// clients. A reaction is recorded (history.KindTagMsg), typing never: it's
+// gone in a moment.
 func (c *Conn) SendTagMsg(origin, tags, target string) {
 	if tags == "" || !c.HasCap("message-tags") {
 		return
 	}
 	c.sendUser(c.withTags(tags, "TAGMSG "+target))
-	c.broadcastRaw(Line{Text: "@" + tags + " :" + c.Nick() + " TAGMSG " + target, Origin: origin})
+	line := Line{Text: "@" + tags + " :" + c.Nick() + " TAGMSG " + target, Origin: origin}
+	if history.Reaction(tags) {
+		m := history.Message{
+			NetworkID: c.net.ID, Target: target, Sender: c.Nick(), Kind: history.KindTagMsg,
+			Time: time.Now(), Seq: history.NextSeq(), Origin: origin, Tags: tags,
+		}
+		c.emit(m)
+		line.ID = m.ID() // its msgid, the one replay gives it
+	}
+	c.broadcastRaw(line)
 }
 
 // withTags puts client-only tags on a line for a network that takes them.
