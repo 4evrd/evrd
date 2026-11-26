@@ -238,3 +238,89 @@ func TestManagedNgircd(t *testing.T) {
 		t.Errorf("health: %d %v", code, out)
 	}
 }
+
+// registerNick registers nick with NickServ on server (a classic client),
+// with Anope's quick kill protection.
+func registerNick(t *testing.T, server, nick string) {
+	t.Helper()
+	c := dialIRC(t, server)
+	c.send("NICK %s", nick)
+	c.send("USER %s 0 * :Owner", nick)
+	c.expect(" 001 " + nick + " ")
+	c.send("PRIVMSG NickServ :REGISTER owner-secret-%s %s@example.org", nick, nick)
+	c.expect("registered.")
+	c.send("PRIVMSG NickServ :SET KILL QUICK")
+	c.expect("reduced delay")
+	c.send("QUIT")
+	c.c.Close()
+}
+
+// Against ngircd with Anope (dev/e2e-managed.sh, EVRD_E2E_NGIRCD_ANOPE):
+// an account that doesn't log in to services, provisioned with nicks
+// someone else registered with NickServ, moves to a nick that isn't
+// registered before it joins anything, is never identified, and isn't
+// renamed or killed when NickServ's protection would have hit.
+func TestManagedNickGuard(t *testing.T) {
+	server := os.Getenv("EVRD_E2E_NGIRCD_ANOPE")
+	if server == "" {
+		t.Skip("set EVRD_E2E_NGIRCD_ANOPE=host:port (dev/e2e-managed.sh)")
+	}
+	registerNick(t, server, "alice")
+	registerNick(t, server, "alice-home")
+
+	// a classic user in the channel, watching
+	c := dialIRC(t, server)
+	c.send("NICK watcher")
+	c.send("USER watcher 0 * :Watcher")
+	c.expect(" 001 watcher ")
+	c.send("JOIN #boson")
+	c.expect("366 watcher #boson")
+
+	m := startManaged(t, server, "managed_webirc_gateway {ident}")
+	if code, out := m.call("PUT", "/api/managed/users/alice-home", map[string]any{
+		"subject": "usr_fed", "nick": "alice-home", "altNick": "alice-home_", "ident": "alicehome",
+		"auth": map[string]any{"method": "none"}, "channels": []string{"#boson"},
+	}); code != 201 {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	b := dialIRC(t, m.irc)
+	b.send("PASS %s", m.issuer.Token("usr_fed", "alice-home"))
+	b.send("NICK alice-home")
+	b.send("USER alice-home 0 * :Alice")
+	b.expect(" 001 ")
+	b.expect("NICK :alice-home_") // her own client follows
+	b.expect(" JOIN :#boson")
+
+	joined := c.expect(" JOIN :#boson")
+	if !strings.HasPrefix(joined, ":alice-home_!") {
+		t.Fatalf("joined as %q", joined)
+	}
+	b.send("PRIVMSG #boson :hello from another server")
+	c.expect(":alice-home_!alicehome@")
+	c.send("WHOIS alice-home_")
+	for {
+		l := c.expect("alice-home_")
+		if strings.Contains(l, " 307 ") || strings.Contains(l, " 330 ") {
+			t.Fatalf("identified to NickServ: %q", l)
+		}
+		if strings.Contains(l, " 318 ") {
+			break
+		}
+	}
+	// past NickServ's quick protection (20s): no rename, no kill
+	time.Sleep(25 * time.Second)
+	c.send("PING :still-there")
+	c.expect("still-there")
+	for _, l := range append(c.seen, b.seen...) {
+		if strings.Contains(l, "Guest") || strings.Contains(l, " KILL ") || strings.Contains(l, ":alice-home!") && strings.Contains(l, " JOIN ") {
+			t.Errorf("enforced or seen on the registered nick: %q", l)
+		}
+	}
+	if code, out := m.call("GET", "/api/managed/users/alice-home", nil); code != 200 || out["currentNick"] != "alice-home_" || out["status"] != "connected" {
+		t.Errorf("account: %d %v", code, out)
+	}
+	if strings.Count(m.stderr.String(), "connecting network") > 1 {
+		t.Errorf("reconnected:\n%s", m.stderr)
+	}
+	b.noEvrd()
+}

@@ -23,6 +23,7 @@ import (
 type Bouncer interface {
 	Reconnect(networkID int64) error
 	Status(networkID int64) upstream.Status
+	CurrentNick(networkID int64) string
 	StopUser(userID int64)
 	ResumeUser(userID int64)
 	DeleteUser(userID int64) error
@@ -84,6 +85,10 @@ type User struct {
 	// Status is the connection's: disconnected (never connected yet, or
 	// disabled), connecting, connected or reconnecting.
 	Status string `json:"status"`
+	// CurrentNick is the nick on the server now ("" while there's no
+	// connection): Nick, or another one when Nick was taken or is
+	// registered to someone else (the nick guard).
+	CurrentNick string `json:"currentNick,omitempty"`
 	// Clients is how many clients are attached now.
 	Clients int `json:"clients"`
 	// Created is set when this call made the account.
@@ -340,6 +345,9 @@ func (p *Provisioner) view(u store.User, n store.Network) User {
 	out.Auth.Account, out.Auth.HasPassword = n.SASLUser, n.Password != ""
 	if n.ID != 0 {
 		out.Status = string(p.Bouncer.Status(n.ID))
+		if out.Status != string(upstream.StatusDisconnected) {
+			out.CurrentNick = p.Bouncer.CurrentNick(n.ID)
+		}
 	}
 	out.Clients = p.Bouncer.ClientsByUser()[u.ID]
 	return out

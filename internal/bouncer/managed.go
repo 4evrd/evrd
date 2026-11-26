@@ -15,6 +15,9 @@ type Managed struct {
 	// accounts without their own; ReplyFrom is who modules' replies come
 	// from.
 	AwayMessage, VersionReply, QuitMessage, ReplyFrom string
+	// NickGuard keeps connections that don't log in to services off
+	// nicks registered to someone else (upstream.Options.NickGuard).
+	NickGuard bool
 	// WebIRC is the WEBIRC line for a user at ip with ident ("" none).
 	WebIRC func(ctx context.Context, ip, ident string) string
 }

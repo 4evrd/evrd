@@ -158,7 +158,8 @@ jobs:
           retention-days: 30
 
   # Managed mode against a real ngircd (no IRCv3) in Docker: WEBIRC,
-  # IRCv3 for the managed user, and nothing naming evrd (dev/e2e-managed.sh).
+  # IRCv3 for the managed user, and nothing naming evrd; then ngircd with
+  # Anope for the nick guard (dev/e2e-managed.sh).
   e2e-managed:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -167,7 +168,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Managed mode against ngircd
+      - name: Managed mode against ngircd (and ngircd + Anope)
         run: dev/e2e-managed.sh
 
   web:

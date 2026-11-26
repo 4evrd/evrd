@@ -330,6 +330,7 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 	if m := b.managed; m != nil {
 		opts.VersionReply, opts.ReplyFrom = m.VersionReply, m.ReplyFrom
 		opts.QuitMsg = orElse(u.QuitMsg, m.QuitMessage)
+		opts.NickGuard = m.NickGuard && !logsIn(n)
 	}
 	if b.links != nil {
 		opts.Links, opts.LinkID, opts.ResumeAfter = b.links, linkID(networkID), b.resumeAfter
@@ -519,6 +520,27 @@ func (b *Bouncer) ConnFor(networkID int64) (*upstream.Conn, bool) {
 		return nil, false
 	}
 	return e.conn, true
+}
+
+// logsIn reports whether a network's connection logs in to services:
+// with a password (SASL or IDENTIFY), or with a command of the user's.
+func logsIn(n store.Network) bool {
+	switch n.Auth() {
+	case store.AuthNone:
+		return false
+	case store.AuthCommand:
+		return true
+	}
+	return n.Password != ""
+}
+
+// CurrentNick is a network's nick on the server now ("" when it has no
+// connection).
+func (b *Bouncer) CurrentNick(networkID int64) string {
+	if c, ok := b.ConnFor(networkID); ok {
+		return c.Nick()
+	}
+	return ""
 }
 
 // Status returns the live status for a network.

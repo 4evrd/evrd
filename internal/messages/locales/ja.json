@@ -421,6 +421,7 @@
     "irc.log.identified": "サービスで識別されました: {said}",
     "irc.log.loginRefused": "サービスがログインを拒否しました: {said}",
     "irc.log.ghosting": "{nick} は使われています: {services} に {command} を依頼しています",
+    "irc.log.nickRegistered": "{nick} は他の人が登録しています: {next} に切り替えます",
     "irc.rest.allBanned": "{network} のすべてのサーバーがこのアドレスを拒否しています: {wait} 後に再試行します",
     "irc.rest.allLimited": "{network} のすべてのサーバーがこのアドレスからの接続を拒否または制限しています: {wait} 後に再試行します",
     "irc.rest.banned": "{host} がこのアドレスを拒否しています: {rest} 休ませ、ネットワークの他のサーバーを試します",

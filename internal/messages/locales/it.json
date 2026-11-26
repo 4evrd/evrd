@@ -436,6 +436,7 @@
     "irc.log.identified": "Identificato con i servizi: {said}",
     "irc.log.loginRefused": "I servizi hanno rifiutato l'accesso: {said}",
     "irc.log.ghosting": "{nick} è occupato: chiedo a {services} di liberarlo con {command}",
+    "irc.log.nickRegistered": "{nick} è registrato da qualcun altro: passo a {next}",
     "irc.rest.allBanned": "Tutti i server di {network} rifiutano questo indirizzo: nuovo tentativo tra {wait}",
     "irc.rest.allLimited": "Tutti i server di {network} rifiutano o limitano le connessioni da questo indirizzo: nuovo tentativo tra {wait}",
     "irc.rest.banned": "{host} rifiuta questo indirizzo: lo metto a riposo per {rest} e provo gli altri server della rete",

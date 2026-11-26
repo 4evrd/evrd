@@ -56,6 +56,7 @@ managed_webirc_password …                         # or EVRD_MANAGED_WEBIRC_PAS
 # managed_away            Away         # set while no client is attached (accounts with auto-away)
 # managed_version         Boson        # CTCP VERSION answer while no client is attached; none: no answer
 # managed_quit            …            # quit message when a connection is switched off
+# managed_nick_guard      yes          # keep accounts without a services login off registered nicks
 # managed_text <name> <text>           # see below
 ```
 
@@ -159,10 +160,13 @@ The answer is the account:
   "username": "alice", "id": 7, "subject": "usr_01J…", "email": "alice@example.org",
   "disabled": false, "nick": "alice", "altNick": "alice_", "ident": "alice", "realname": "Alice",
   "auth": {"method": "sasl", "account": "alice", "hasPassword": true},
-  "channels": ["#general"], "status": "connected", "clients": 1, "created": true
+  "channels": ["#general"], "status": "connected", "currentNick": "alice", "clients": 1, "created": true
 }
 ```
 
+`currentNick` is the nick on the server now (left out while there's no
+connection): `nick`, or another one when that was taken or is registered
+to someone else ([the nick guard](#registered-nicks-the-nick-guard)).
 `status` is the connection's state: `disconnected` (before the first
 client, or while disabled), `connecting`, `connected` or `reconnecting`. If a
 connected account's nick, ident, real name or services login changes, it
@@ -271,6 +275,33 @@ The `<connect>` block for evrd's address must come before the general one.
 Also exempt evrd's address from `connflood` and DNSBL checks if those
 modules are loaded.
 
+### Registered nicks (the nick guard)
+
+An account that doesn't log in to services (`auth.method` `none`, or no
+password) must never keep a nick someone else registered with NickServ:
+services would rename or kill the connection, and people could take the
+user for the nick's owner. Boson gives its users from other servers
+(federated accounts) such an account. With `managed_nick_guard yes` (the
+default), those connections:
+
+- move off a nick when services say it's registered (NickServ's "This
+  nickname is registered…" notice), when the server renames them without
+  being asked (services' `SVSNICK` to `Guest1234`), or when services kill
+  them over it. The next nick is `altNick`, then `altNick` with a number
+  (`alice_2`, `alice_3`…), cut to the server's `NICKLEN`;
+- remember the nicks they learned are registered, so the next connection
+  (after a kill, say) starts on another one: no reconnect loop;
+- hold their channel joins (saved channels and clients' `JOIN`s) until
+  the nick has stayed the same for 2 seconds, so a registered nick never
+  shows in a channel;
+- never send `IDENTIFY` or SASL.
+
+The user's clients get the server's `NICK` line, like for any nick change.
+Pick a `nick` that's unlikely to be registered in the first place: Boson
+gives federated users `alice-bosonchat` (the home server's domain as a
+suffix) on add-on installs. Accounts that log in to services aren't
+guarded: they own their nick.
+
 ### Services
 
 Each account logs in to the network's services (Anope, Atheme…) as the
@@ -285,7 +316,12 @@ SASL either, so use `nickserv` or `auto` there.
   front of a real ngircd in Docker. It checks WEBIRC (a classic user's WHOIS
   shows the managed user's own address), IRCv3 from a server without it
   (server-time, msgids, echo-message, chathistory), and that nothing names
-  evrd. CI runs it on every push.
+  evrd. Then ngircd with Anope (`dev/ngircd-anope`, Debian's packages):
+  `TestManagedNickGuard` registers `alice` and `alice-home` with NickServ
+  (quick kill protection), provisions `alice-home` without a services
+  login, and checks a classic client sees it join as `alice-home_` (never
+  as `alice-home`), not identified (no 307/330), and neither renamed nor
+  killed 25 seconds on. CI runs it on every push.
 
 ## Not yet
 
