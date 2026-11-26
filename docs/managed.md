@@ -50,7 +50,7 @@ managed_webirc_password …                         # or EVRD_MANAGED_WEBIRC_PAS
 # managed_tls_verify      yes          # check the server's certificate chain
 # managed_fingerprint     ab12…        # or accept this SHA-256 fingerprint (repeatable)
 # managed_server_password …            # sent as PASS (or EVRD_MANAGED_SERVER_PASSWORD)
-# managed_webirc_gateway  gateway      # the gateway name WEBIRC sends
+# managed_webirc_gateway  gateway      # the gateway name WEBIRC sends; {ident}: each user's ident (ngircd)
 # managed_webirc_resolve  yes          # send the address's host name (forward-confirmed)
 # managed_motd            Welcome!     # a line of the MOTD (repeatable); none: 422
 # managed_away            Away         # set while no client is attached (accounts with auto-away)
@@ -219,8 +219,15 @@ Without WEBIRC, managed users show with evrd's host. In that case leave
 	MaxConnectionsIP = 0   ; ngircd can't exempt one address: this lifts the limit for everyone
 ```
 
-ngircd accepts WEBIRC from any host that knows the password, so keep it
-secret. ngircd takes the host name WEBIRC sends as it is, so leave
+and in evrd.conf:
+
+```
+managed_webirc_gateway {ident}
+```
+
+ngircd reads WEBIRC's second parameter as the user name, so with the
+default (`gateway`) every managed user would show as `gateway@…`. ngircd
+accepts WEBIRC from any host that knows the password, so keep it secret. ngircd takes the host name WEBIRC sends as it is, so leave
 `managed_webirc_resolve` on to show host names rather than addresses.
 `dev/ngircd/ngircd.conf` is the configuration the end-to-end test uses.
 

@@ -44,7 +44,7 @@ func TestNewIsNilWhenOff(t *testing.T) {
 	if m != nil || m.On() {
 		t.Fatal("managed mode on by default")
 	}
-	if m.WebIRC(context.Background(), "192.0.2.1") != "" {
+	if m.WebIRC(context.Background(), "192.0.2.1", "al") != "" {
 		t.Error("WEBIRC with managed mode off")
 	}
 	m = New(testConfig(nil))
@@ -76,7 +76,7 @@ func TestApplySetsTheServer(t *testing.T) {
 func TestWebIRC(t *testing.T) {
 	c := testConfig(nil)
 	m := New(c)
-	if m.WebIRC(context.Background(), "192.0.2.1") != "" {
+	if m.WebIRC(context.Background(), "192.0.2.1", "al") != "" {
 		t.Error("WEBIRC without a password")
 	}
 	c.Managed.WebIRCPassword, c.Managed.WebIRCResolve = "secret", false
@@ -88,7 +88,7 @@ func TestWebIRC(t *testing.T) {
 		"2001:db8::1":      "WEBIRC secret gateway 2001:db8::1 2001:db8::1",
 		"not an address":   "",
 	} {
-		if got := m.WebIRC(context.Background(), ip); got != want {
+		if got := m.WebIRC(context.Background(), ip, "al"); got != want {
 			t.Errorf("%s: %q, want %q", ip, got, want)
 		}
 	}
@@ -114,13 +114,20 @@ func TestWebIRC(t *testing.T) {
 		"192.0.2.2": "WEBIRC secret gateway 192.0.2.2 192.0.2.2",    // its name points elsewhere
 		"192.0.2.3": "WEBIRC secret gateway 192.0.2.3 192.0.2.3",    // no name
 	} {
-		if got := m.WebIRC(context.Background(), ip); got != want {
+		if got := m.WebIRC(context.Background(), ip, "al"); got != want {
 			t.Errorf("%s: %q, want %q", ip, got, want)
+		}
+	}
+	c.Managed.WebIRCGateway, c.Managed.WebIRCResolve = IdentGateway, false
+	g := New(c)
+	for ident, want := range map[string]string{"~alice": "WEBIRC secret alice 192.0.2.5 192.0.2.5", "": "WEBIRC secret user 192.0.2.5 192.0.2.5"} {
+		if got := g.WebIRC(context.Background(), "192.0.2.5", ident); got != want {
+			t.Errorf("ident %q: %q", ident, got)
 		}
 	}
 	ips["host.example"] = nil
 	names["192.0.2.1"] = []string{"gone.example."}
-	if got := m.WebIRC(context.Background(), "192.0.2.1"); got != "WEBIRC secret gateway 192.0.2.1 192.0.2.1" {
+	if got := m.WebIRC(context.Background(), "192.0.2.1", "al"); got != "WEBIRC secret gateway 192.0.2.1 192.0.2.1" {
 		t.Error(got)
 	}
 }

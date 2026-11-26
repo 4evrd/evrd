@@ -15,8 +15,8 @@ type Managed struct {
 	// accounts without their own; ReplyFrom is who modules' replies come
 	// from.
 	AwayMessage, VersionReply, QuitMessage, ReplyFrom string
-	// WebIRC is the WEBIRC line for a user at ip ("" none).
-	WebIRC func(ctx context.Context, ip string) string
+	// WebIRC is the WEBIRC line for a user at ip with ident ("" none).
+	WebIRC func(ctx context.Context, ip, ident string) string
 }
 
 // SetManaged turns managed mode's presentation on. Call it before Start.
@@ -77,11 +77,12 @@ func (b *Bouncer) userIP(userID int64) string {
 	return ""
 }
 
-// webIRC is the WEBIRC opener for userID's connections (nil: not managed).
-func (b *Bouncer) webIRC(userID int64) func(ctx context.Context) string {
+// webIRC is the WEBIRC opener for userID's connections with ident (nil:
+// not managed).
+func (b *Bouncer) webIRC(userID int64, ident string) func(ctx context.Context) string {
 	if b.managed == nil || b.managed.WebIRC == nil {
 		return nil
 	}
 	f := b.managed.WebIRC
-	return func(ctx context.Context) string { return f(ctx, b.userIP(userID)) }
+	return func(ctx context.Context) string { return f(ctx, b.userIP(userID), ident) }
 }

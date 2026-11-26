@@ -29,22 +29,22 @@ type managedEvrd struct {
 
 // startManaged runs evrd in managed mode in front of the IRC server at
 // server (host:port), with WEBIRC, until the test ends.
-func startManaged(t *testing.T, server string) *managedEvrd {
+func startManaged(t *testing.T, server string, extra ...string) *managedEvrd {
 	t.Helper()
 	noEnv(t)
 	is := managedtest.New(t)
 	host, port, _ := net.SplitHostPort(server)
-	conf, api, ircAddr := testConfig(t, shortDir(t),
+	conf, api, ircAddr := testConfig(t, shortDir(t), append([]string{
 		"managed yes",
 		"managed_network ExampleNet",
-		"managed_server "+host+" "+port,
+		"managed_server " + host + " " + port,
 		"managed_server_name irc.example.org",
-		"managed_token_issuer "+is.URL,
-		"managed_token_audience "+managedtest.Audience,
+		"managed_token_issuer " + is.URL,
+		"managed_token_audience " + managedtest.Audience,
 		"managed_webirc_password webirc-secret",
 		"managed_webirc_resolve no",
 		"managed_away Away",
-	)
+	}, extra...)...)
 	t.Setenv("EVRD_MANAGED_TOKEN", "api-token")
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &managedEvrd{t: t, api: api, irc: ircAddr, stderr: &syncBuffer{}, issuer: is}
@@ -183,9 +183,10 @@ func TestManagedNgircd(t *testing.T) {
 	if server == "" {
 		t.Skip("set EVRD_E2E_NGIRCD=host:port (dev/e2e-managed.sh)")
 	}
-	m := startManaged(t, server)
+	// ngircd takes WEBIRC's gateway as the user name: send the ident there
+	m := startManaged(t, server, "managed_webirc_gateway {ident}")
 	if code, out := m.call("PUT", "/api/managed/users/alice", map[string]any{
-		"subject": "usr_1", "nick": "alice", "realname": "Alice from Boson", "channels": []string{"#boson"},
+		"subject": "usr_1", "nick": "alice", "ident": "alice", "realname": "Alice from Boson", "channels": []string{"#boson"},
 	}); code != 201 {
 		t.Fatalf("create: %d %v", code, out)
 	}
@@ -202,7 +203,7 @@ func TestManagedNgircd(t *testing.T) {
 	b.expect(" 903 ")
 	b.send("CAP END")
 	b.expect(":irc.example.org 001 alice ")
-	b.expect("JOIN #boson")
+	b.expect(" JOIN :#boson") // ngircd's form
 
 	// a classic client, straight to ngircd
 	c := dialIRC(t, server)
@@ -213,7 +214,7 @@ func TestManagedNgircd(t *testing.T) {
 	c.expect("366 classic #boson")
 	c.send("WHOIS alice")
 	whois := c.expect(" 311 classic alice ")
-	if f := strings.Fields(whois); len(f) < 6 || (f[5] != "127.0.0.1" && f[5] != "localhost") {
+	if f := strings.Fields(whois); len(f) < 6 || f[4] != "alice" || (f[5] != "127.0.0.1" && f[5] != "localhost") {
 		t.Errorf("alice doesn't show with her own address (WEBIRC): %q", whois)
 	}
 	if !strings.Contains(whois, "Alice from Boson") {

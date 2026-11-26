@@ -318,7 +318,7 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 		CTCPReplies: u.CTCPReplies,
 		Idle:        func() bool { return b.idle(n.UserID) },
 		Version:     version.Version,
-		WebIRC:      b.webIRC(n.UserID),
+		WebIRC:      b.webIRC(n.UserID, orElse(n.Username, n.Nick)),
 		OnChannels: func(channels []string) {
 			if err := b.store.SetNetworkChannels(context.Background(), networkID, channels); err != nil {
 				b.log.Warn("save channels", "network", n.Name, "err", err)

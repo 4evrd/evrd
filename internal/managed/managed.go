@@ -132,8 +132,10 @@ func (m *Mode) SignIn(ctx context.Context, acc accounts.AccountServiceImpl, toke
 
 // WebIRC is the WEBIRC line that gives the server ip as the user's address
 // (and its host name, forward-confirmed, when managed_webirc_resolve is
-// on); "" when WEBIRC is off or ip isn't an address.
-func (m *Mode) WebIRC(ctx context.Context, ip string) string {
+// on); "" when WEBIRC is off or ip isn't an address. A gateway of
+// "{ident}" sends the user's ident in its place: ngircd takes WEBIRC's
+// second parameter as the user name.
+func (m *Mode) WebIRC(ctx context.Context, ip, ident string) string {
 	if m == nil || m.cfg.WebIRCPassword == "" {
 		return ""
 	}
@@ -147,8 +149,19 @@ func (m *Mode) WebIRC(ctx context.Context, ip string) string {
 	if m.cfg.WebIRCResolve {
 		host = m.resolve(ctx, a)
 	}
-	return "WEBIRC " + m.cfg.WebIRCPassword + " " + m.cfg.WebIRCGateway + " " + colonSafe(host) + " " + colonSafe(addr)
+	gw := m.cfg.WebIRCGateway
+	if gw == IdentGateway {
+		gw = strings.TrimPrefix(ident, "~")
+		if gw == "" || strings.ContainsAny(gw, " :") {
+			gw = "user"
+		}
+	}
+	return "WEBIRC " + m.cfg.WebIRCPassword + " " + gw + " " + colonSafe(host) + " " + colonSafe(addr)
 }
+
+// IdentGateway, as managed_webirc_gateway, sends each user's ident as
+// WEBIRC's gateway (for ngircd).
+const IdentGateway = "{ident}"
 
 // colonSafe keeps an IPv6 address from reading as a trailing parameter.
 func colonSafe(s string) string {

@@ -15,7 +15,7 @@ func TestManagedConnections(t *testing.T) {
 	r := newLiveRig(t)
 	ips := make(chan string, 4)
 	r.b.SetManaged(Managed{AwayMessage: "Away for now", QuitMessage: "bye", ReplyFrom: "irc.example",
-		WebIRC: func(ctx context.Context, ip string) string {
+		WebIRC: func(ctx context.Context, ip, ident string) string {
 			ips <- ip
 			if ip == "" {
 				return ""
@@ -63,7 +63,7 @@ func TestUserIPFromSignIns(t *testing.T) {
 	if ip := r.b.userIP(alice.ID); ip != "192.0.2.2" {
 		t.Errorf("the latest client's: %q", ip)
 	}
-	if r.b.webIRC(alice.ID) != nil {
+	if r.b.webIRC(alice.ID, "alice") != nil {
 		t.Error("WEBIRC outside managed mode")
 	}
 	if !strings.Contains(r.b.awayMessage(), "evrd") {
