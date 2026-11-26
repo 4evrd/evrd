@@ -269,10 +269,21 @@ tag, for clients with `message-tags`). Not supported: `draft/metadata-2`
 `message-tags`, when the network has `message-tags`: `TAGMSG` lines (typing
 notifications, reactions) and the `+` tags on messages and notices. Your
 typing also shows on your other attached clients, as with soju;
-`echo-message` sends a client's own back. `TAGMSG`s are never saved. Of the
+`echo-message` sends a client's own back. Of the
 network's own tags only `@account` (with `account-tag`) and `@bot` pass; a
 client can't send anything but `+` tags. On a network without
 `message-tags`, typing goes nowhere and messages go without their tags.
+
+**Replies and reactions in history.** Replies, reactions and channel
+context (`+draft/reply`, `+reply`, `+draft/react`, `+react`,
+`+draft/unreact`, `+unreact`, `+draft/channel-context`) are saved with the
+line, so a client that wasn't attached sees the same threads in backlog and
+`CHATHISTORY` as one that was — for clients with `message-tags`. Other tags,
+`+typing` among them, are never saved. A reaction is a `TAGMSG`: it's saved
+too, and replayed (as a `TAGMSG` in the history batch) only to clients with
+`message-tags` and `draft/event-playback`, as Ergo does; other `TAGMSG`s
+aren't saved. Saved replies name lines by evrd's msgids, which stay the same
+across restarts.
 
 **msgids.** Clients know lines by evrd's msgids. evrd remembers the network's
 msgid for the last few thousand lines of each network, so replies
@@ -288,7 +299,7 @@ accepts it otherwise. A redaction doesn't remove the line from evrd's history.
 `draft/chathistory-targets`) batch, and mistakes as `FAIL CHATHISTORY …`
 standard replies. A client sees the network it's attached to and nothing
 else. Without `draft/event-playback`, only messages, notices and actions come
-back, and events don't count against the limit. A `timestamp=` stands for its
+back (no reactions), and events don't count against the limit. A `timestamp=` stands for its
 whole millisecond (the precision of `@time`); `msgid=` is exact, so evrd lists
 it first: clients that negotiate chathistory get `CHATHISTORY=1000
 MSGREFTYPES=msgid,timestamp` in ISUPPORT — at most 1000 lines per request

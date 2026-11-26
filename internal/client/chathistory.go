@@ -181,7 +181,8 @@ func (se *session) lines(target string, q history.Query) ([]history.Message, err
 }
 
 // readLines reads a slice of a buffer: chat lines, and channel events if
-// events is set. Skipped events don't use up the limit; reading goes on.
+// events is set (reactions too, for a client with message-tags). Skipped
+// events don't use up the limit; reading goes on.
 func (se *session) readLines(target string, q history.Query, events bool) ([]history.Message, error) {
 	h := se.srv.b.History()
 	need := q.Limit
@@ -194,7 +195,7 @@ func (se *session) readLines(target string, q history.Query, events bool) ([]his
 		}
 		var kept []history.Message
 		for _, m := range got {
-			if events || isChat(m.Kind) {
+			if isChat(m.Kind) || events && (m.Kind != history.KindTagMsg || se.caps["message-tags"]) {
 				kept = append(kept, m)
 			}
 		}

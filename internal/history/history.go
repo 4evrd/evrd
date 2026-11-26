@@ -21,8 +21,9 @@ type Message struct {
 	Target    string // channel, or the other nick for a private buffer
 	Sender    string
 	// Kind is message | notice | action, or a channel event: join | part |
-	// quit | kick | nick | topic | mode. For events, Sender is who did it,
-	// Text the reason / topic / modes, and Extra the kicked nick or new nick.
+	// quit | kick | nick | topic | mode, or tagmsg (KindTagMsg: a reaction,
+	// in Tags). For events, Sender is who did it, Text the reason / topic /
+	// modes, and Extra the kicked nick or new nick.
 	Kind  string
 	Text  string
 	Extra string
@@ -34,7 +35,9 @@ type Message struct {
 	// sender's other sessions can show it while the sender avoids a double.
 	Origin string
 	// Tags are the client-only tags it was sent with ("+draft/reply=…"),
-	// also transient: passed on live to clients that take message-tags.
+	// in wire form, msgids in them evrd's. Live, all of them pass on to
+	// clients that take message-tags; stores keep only replies, reactions
+	// and channel context (StoredTags), so replay can show threads too.
 	Tags string
 }
 

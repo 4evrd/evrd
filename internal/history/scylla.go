@@ -4,6 +4,7 @@ package history
 // node.
 //
 //	lines   ((network_id, buffer, bucket), ts, seq) — newest first
+//	        (tags: the kept client-only tags, StoredTags; null for none)
 //	buckets ((network_id, buffer), bucket)          — the months a buffer has
 //	buffers (network_id, buffer) -> target           — the buffer's spelling
 //
@@ -126,7 +127,7 @@ func openScylla(dsn string) (*scyllaStore, error) {
 	for _, ddl := range []string{
 		`CREATE TABLE IF NOT EXISTS lines (
 			network_id bigint, buffer text, bucket int, ts bigint, seq int,
-			target text, sender text, kind text, text text, extra text,
+			target text, sender text, kind text, text text, extra text, tags text,
 			PRIMARY KEY ((network_id, buffer, bucket), ts, seq)
 		) WITH CLUSTERING ORDER BY (ts DESC, seq DESC)`,
 		`CREATE TABLE IF NOT EXISTS buckets (
@@ -144,7 +145,36 @@ func openScylla(dsn string) (*scyllaStore, error) {
 		}
 	}
 
+	if err := addTagsColumn(sess, keyspace); err != nil {
+		sess.Close()
+		return nil, fmt.Errorf("history: add the tags column: %w", err)
+	}
 	return newScyllaStore(sess), nil
+}
+
+// addTagsColumn adds lines.tags to a table made before evrd kept tags.
+// Another node may be adding it at the same moment: if the ALTER fails, the
+// column being there after all is fine.
+func addTagsColumn(sess *gocql.Session, keyspace string) error {
+	has := func() (bool, error) {
+		var name string
+		err := sess.Query(`SELECT column_name FROM system_schema.columns
+			WHERE keyspace_name = ? AND table_name = 'lines' AND column_name = 'tags'`, keyspace).Scan(&name)
+		if errors.Is(err, gocql.ErrNotFound) {
+			return false, nil
+		}
+		return err == nil, err
+	}
+	if ok, err := has(); ok || err != nil {
+		return err
+	}
+	err := sess.Query(`ALTER TABLE lines ADD tags text`).Exec()
+	if err != nil {
+		if ok, _ := has(); ok {
+			return nil
+		}
+	}
+	return err
 }
 
 // newScyllaStore wraps a session whose keyspace and tables exist, and starts
@@ -236,9 +266,13 @@ func (s *scyllaStore) write(w scyllaWrite) error {
 		s.known[ix.key] = true
 		s.mu.Unlock()
 	}
-	return s.s.Query(`INSERT INTO lines (network_id, buffer, bucket, ts, seq, target, sender, kind, text, extra)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.NetworkID, buf, bucket, m.Time.UnixNano(), int32(w.seq), m.Target, m.Sender, m.Kind, m.Text, m.Extra).Exec()
+	var tags *string // null rather than "": no tombstone for a line without
+	if t := StoredTags(m.Tags); t != "" {
+		tags = &t
+	}
+	return s.s.Query(`INSERT INTO lines (network_id, buffer, bucket, ts, seq, target, sender, kind, text, extra, tags)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.NetworkID, buf, bucket, m.Time.UnixNano(), int32(w.seq), m.Target, m.Sender, m.Kind, m.Text, m.Extra, tags).Exec()
 }
 
 // Flush waits until every queued write has been attempted.
@@ -270,7 +304,7 @@ func (s *scyllaStore) Recent(networkID int64, target string, limit int) ([]Messa
 		if len(out) >= limit {
 			break
 		}
-		it := s.s.Query(`SELECT ts, seq, target, sender, kind, text, extra FROM lines
+		it := s.s.Query(`SELECT ts, seq, target, sender, kind, text, extra, tags FROM lines
 			WHERE network_id = ? AND buffer = ? AND bucket = ? LIMIT ?`,
 			networkID, buf, b, limit-len(out)).Iter()
 		out = scanLines(it, networkID, out)
@@ -285,12 +319,12 @@ func (s *scyllaStore) Recent(networkID int64, target string, limit int) ([]Messa
 }
 
 // scanLines appends the rows of a SELECT ts, seq, target, sender, kind, text,
-// extra to out.
+// extra, tags to out.
 func scanLines(it *gocql.Iter, networkID int64, out []Message) []Message {
 	var ts int64
 	var seq int32
 	var m Message
-	for it.Scan(&ts, &seq, &m.Target, &m.Sender, &m.Kind, &m.Text, &m.Extra) {
+	for it.Scan(&ts, &seq, &m.Target, &m.Sender, &m.Kind, &m.Text, &m.Extra, &m.Tags) {
 		m.NetworkID, m.Time, m.Seq = networkID, time.Unix(0, ts), uint32(seq)
 		out = append(out, m)
 		m = Message{}
@@ -309,7 +343,7 @@ func (s *scyllaStore) Range(networkID int64, target string, q Query) ([]Message,
 	if err != nil {
 		return nil, err
 	}
-	cql := `SELECT ts, seq, target, sender, kind, text, extra FROM lines
+	cql := `SELECT ts, seq, target, sender, kind, text, extra, tags FROM lines
 		WHERE network_id = ? AND buffer = ? AND bucket = ?`
 	var bounds []any
 	if !q.After.IsZero() {

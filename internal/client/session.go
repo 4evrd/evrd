@@ -1316,8 +1316,18 @@ func (se *session) formatAs(m history.Message, playback bool) string {
 func (se *session) formatIn(m history.Message, playback bool, batch string) string {
 	var b strings.Builder
 	client := ""
-	if !playback && se.caps["message-tags"] {
-		client = m.Tags // sent live with the line
+	if se.caps["message-tags"] {
+		client = m.Tags // sent live with the line, or kept with it
+		if playback {
+			client = se.replayTags(m.Tags)
+		}
+	}
+	if m.Kind == history.KindTagMsg {
+		// a reaction: only to a client that takes tags, as a history event
+		// (what Ergo does: without draft/event-playback, none)
+		if !playback || client == "" || batch == "" || !se.caps["draft/event-playback"] {
+			return ""
+		}
 	}
 	b.WriteString(se.tags(m.ID(), batch, client))
 	stamp := func(text string) string { return text }
@@ -1338,6 +1348,10 @@ func (se *session) formatIn(m history.Message, playback bool, batch string) stri
 		sender = "*"
 	}
 	prefix := sender + "!" + sender + "@" + se.net.Name
+	if m.Kind == history.KindTagMsg {
+		b.WriteString(fmt.Sprintf(":%s TAGMSG %s", prefix, se.replyTarget(m)))
+		return b.String()
+	}
 	if !isChat(m.Kind) {
 		ev, ok := eventLine(m, prefix)
 		if !ok || batch == "" || !se.caps["draft/event-playback"] {
@@ -1354,14 +1368,35 @@ func (se *session) formatIn(m history.Message, playback bool, batch string) stri
 	case "action":
 		text = "\x01ACTION " + text + "\x01"
 	}
-	// a private message is saved under the other side's nick: one they sent
-	// was sent to you, as the network delivered it
-	target := m.Target
-	if !isChannelName(target) && strings.EqualFold(m.Sender, target) && se.unick != "" {
-		target = se.unick
-	}
-	b.WriteString(fmt.Sprintf(":%s %s %s :%s", prefix, cmd, target, text))
+	b.WriteString(fmt.Sprintf(":%s %s %s :%s", prefix, cmd, se.replyTarget(m), text))
 	return b.String()
+}
+
+// replyTarget is where a stored line was sent. A private message is saved
+// under the other side's nick: one they sent was sent to you, as the
+// network delivered it.
+func (se *session) replyTarget(m history.Message) string {
+	if !isChannelName(m.Target) && strings.EqualFold(m.Sender, m.Target) && se.unick != "" {
+		return se.unick
+	}
+	return m.Target
+}
+
+// replayTags are a stored line's kept client-only tags for replay. Their
+// msgids are evrd's already, except one the link couldn't match when the
+// line came (from before evrd started): matched now if it can be.
+func (se *session) replayTags(tags string) string {
+	if tags == "" {
+		return ""
+	}
+	kvs := strings.Split(tags, ";")
+	for i, kv := range kvs {
+		k, v, _ := strings.Cut(kv, "=")
+		if _, ours := history.ParseID(v); history.ReplyTag(k) && v != "" && !ours && se.up != nil {
+			kvs[i] = k + "=" + se.localRef(k, v)
+		}
+	}
+	return strings.Join(kvs, ";")
 }
 
 // eventLine is a stored channel event as the line the server sent. Only the
