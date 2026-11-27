@@ -109,6 +109,32 @@ func TestSetNetworkIdentifiedNick(t *testing.T) {
 	}
 }
 
+func TestSetNetworkLastNick(t *testing.T) {
+	st := open(t)
+	n, _ := st.CreateNetwork(t.Context(), Network{UserID: 1, Name: "x", Nick: "lion-home"})
+	if err := st.SetNetworkLastNick(t.Context(), n.ID, "lion"); err != nil {
+		t.Fatal(err)
+	}
+	// an edit keeping the nick leaves it alone
+	n.Realname = "Lion"
+	if err := st.UpdateNetwork(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := st.NetworkByID(t.Context(), n.ID)
+	if got.LastNick != "lion" || got.Realname != "Lion" {
+		t.Fatalf("got %+v", got)
+	}
+	// a new nick: the nick set wins over the one used last
+	n.Nick = "lion-away"
+	if err := st.UpdateNetwork(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = st.NetworkByID(t.Context(), n.ID)
+	if got.LastNick != "" || got.Nick != "lion-away" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
 func TestMigrateLegacyMessages(t *testing.T) {
 	st := open(t)
 	db := st.(*gormStore).db.DB

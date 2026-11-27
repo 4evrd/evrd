@@ -185,6 +185,13 @@ to someone else ([the nick guard](#registered-nicks-the-nick-guard)).
 `identifiedNick` is the registered nick the user last identified for with
 NickServ during the nick guard's grace (left out when there's none): it's
 tried first on the next connections.
+`lastNick` is the nick the user last changed to on the server with
+`/nick` (left out when there's none): new connections register with it
+rather than `nick`, so the nick a user picked outlives reconnects and
+restarts. Changing `nick` clears it. A client signing in to a connection
+that's up never changes the nick: whatever its registration `NICK` asked
+for, it's welcomed under the nick in use (then sent a `NICK` from the one
+it asked for), as with ZNC or soju.
 `status` is the connection's state: `disconnected` (before the first
 client, or while disabled), `connecting`, `connected` or `reconnecting`. If a
 connected account's nick, ident, real name or services login changes, it
@@ -380,6 +387,8 @@ those connections:
   (`identifiedNick` in the managed API), and try it first on the next
   connections while a client is attached. The user identifies again
   within the grace (services want that on every connection);
+- try the nick the user last changed to (`lastNick`) next, and forget it
+  once it's found registered to someone else;
 - hold their channel joins (saved channels and clients' `JOIN`s) until
   the nick has stayed the same for 2 seconds, so a nick the guard leaves
   at once never shows in a channel. During a grace the user is on the

@@ -291,6 +291,12 @@ type Network struct {
 	// with services on a connection the nick guard watches (managed mode):
 	// it's tried first on later connections.
 	IdentifiedNick string `gorm:"not null;default:''"`
+
+	// LastNick is the nick a client last changed to on the network (and
+	// the server gave): a new connection registers with it rather than
+	// Nick, as a bouncer keeps the nick across reconnects. Changing Nick
+	// clears it.
+	LastNick string `gorm:"not null;default:''"`
 }
 
 // ModuleConfig is one module on a network.

@@ -19,6 +19,8 @@
 # TestManagedNickGuardGrace: a handle longer than NICKLEN (16 here, like
 # IRCForever) cut by parts; a registered nick the user identifies for
 # within the grace kept (307 in WHOIS); one they don't, moved off after it.
+# TestManagedNickKeptAcrossReconnects: the nick a user changed to kept
+# when their client signs in again with another and on a new connection.
 # TestManagedGuestsNgircd: a guest through the web gateway's WEBIRC, with
 # its own address, off a registered nick, gone after the linger.
 #
@@ -52,4 +54,4 @@ for i in $(seq 1 100); do
 	if docker logs "$ANOPE" 2>&1 | grep -q 'services.ngircd.test (Services) is done syncing'; then break; fi
 	sleep 0.2
 done
-EVRD_E2E_NGIRCD_ANOPE=127.0.0.1:$ANOPE_PORT go test -count=1 -run 'TestManagedNickGuard|TestManagedGuestsNgircd' -v ./internal/commands/evrd
+EVRD_E2E_NGIRCD_ANOPE=127.0.0.1:$ANOPE_PORT go test -count=1 -run 'TestManagedNickGuard|TestManagedNickKept|TestManagedGuestsNgircd' -v ./internal/commands/evrd

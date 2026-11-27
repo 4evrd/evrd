@@ -255,6 +255,32 @@ func TestNickChangeFollowsTheServer(t *testing.T) {
 	ic.expect("PRIVMSG renamed :Account alice")
 }
 
+// A client attaching to a connection that's up keeps the nick in use, as
+// ZNC and soju do: its registration NICK isn't sent on, it's welcomed under
+// the network's nick and told of it.
+func TestAttachKeepsTheNickInUse(t *testing.T) {
+	r := newRig(t)
+	ic := r.attach("alice/one:alice-password")
+	ic.expect("JOIN #one")
+	ic.send("NICK TheLion")
+	ic.expect(":alice_one!u@h NICK TheLion")
+	eventually(t, "the last nick saved", func() bool { return r.network("one").LastNick == "TheLion" })
+	ic.c.Close()
+
+	again := r.attach("alice/one:alice-password") // registers as alice
+	again.expect(" 001 TheLion ")
+	again.expect(":alice!alice@evrd NICK TheLion")
+	again.expect("JOIN #one")
+	for _, l := range r.irc.Lines() {
+		if l == "NICK alice" {
+			t.Fatalf("the client's registration nick went to the network: %q", r.irc.Lines())
+		}
+	}
+	if n, _ := r.b.ConnFor(r.network("one").ID); n.Nick() != "TheLion" {
+		t.Fatalf("on %s", n.Nick())
+	}
+}
+
 func TestNoticesAndActionsAreRecorded(t *testing.T) {
 	r := newRig(t)
 	ic := r.attach("alice/one:alice-password")

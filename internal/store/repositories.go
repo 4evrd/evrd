@@ -66,6 +66,9 @@ type NetworkRepositoryImpl interface {
 	// SetNetworkIdentifiedNick saves the registered nick the user last
 	// identified for (the nick guard's, managed mode).
 	SetNetworkIdentifiedNick(ctx context.Context, id int64, nick string) error
+	// SetNetworkLastNick saves the nick a client last changed to on the
+	// network ("" forgets it).
+	SetNetworkLastNick(ctx context.Context, id int64, nick string) error
 }
 
 // ReadMarkerRepositoryImpl keeps how far each buffer is read.
