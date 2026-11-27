@@ -58,6 +58,11 @@ func (se *session) offer() map[string]string {
 			out["sasl"] = "PLAIN,OAUTHBEARER,IRCV3BEARER"
 		}
 	}
+	if se.srv.push.Enabled() {
+		// Ergo offers both; Goguma asks for soju's
+		out["draft/webpush"] = ""
+		out["soju.im/webpush"] = ""
+	}
 	if v := se.srv.stsValue(se.secure()); v != "" {
 		out["sts"] = v
 	}
@@ -273,6 +278,9 @@ func (se *session) isupport() []string {
 	var toks []string
 	if se.caps["draft/chathistory"] {
 		toks = append(toks, fmt.Sprintf("CHATHISTORY=%d", chathistoryMax), "MSGREFTYPES=msgid,timestamp")
+	}
+	if k := se.srv.push.PublicKey(); k != "" {
+		toks = append(toks, "VAPID="+k)
 	}
 	if se.caps["soju.im/bouncer-networks"] {
 		if se.up != nil {

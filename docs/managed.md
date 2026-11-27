@@ -124,6 +124,12 @@ names. The first client connects the account's network, so the IRC server
 sees the user arrive with that client's address. After that the
 connection stays up (it's a bouncer) and comes back on restarts.
 
+Push notifications (`draft/webpush`, see
+[Push notifications](configuration.md#push-notifications-webpush)) are for
+these clients only: a client signed in with its access token can `WEBPUSH
+REGISTER`; a guest, or a client signed in another way, is answered
+`FAIL WEBPUSH FORBIDDEN`.
+
 ## The managed API
 
 Every call carries `Authorization: Bearer <managed_token>`. Without a

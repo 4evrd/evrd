@@ -80,6 +80,9 @@ func (r *NetworkRepository) DeleteNetwork(ctx context.Context, userID, id int64)
 				return err
 			}
 		}
+		if err := tx.Where("network_id = ?", id).Delete(&PushSubscription{}).Error; err != nil {
+			return err
+		}
 		return tx.Where("network_id = ?", id).Delete(&BufferPlayback{}).Error
 	})
 }

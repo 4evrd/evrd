@@ -221,6 +221,25 @@ type IRCSignInRepositoryImpl interface {
 	DeleteIRCSignInsBefore(ctx context.Context, before time.Time) error
 }
 
+// PushSubscriptionRepositoryImpl keeps Web Push subscriptions
+// (PushSubscription).
+type PushSubscriptionRepositoryImpl interface {
+	// PushSubscriptions lists a user's subscriptions, every network's.
+	PushSubscriptions(ctx context.Context, userID int64) ([]PushSubscription, error)
+	AllPushSubscriptions(ctx context.Context) ([]PushSubscription, error)
+	// SavePushSubscription adds s, or updates the one with its user,
+	// network and endpoint (its keys and LastRefresh; LastSuccess when s
+	// has one). A new one past max on its user's network (0: no limit) is
+	// ErrPushLimit.
+	SavePushSubscription(ctx context.Context, s PushSubscription, max int) (PushSubscription, error)
+	// TouchPushSubscription records a push that went through.
+	TouchPushSubscription(ctx context.Context, id int64, success time.Time) error
+	DeletePushSubscription(ctx context.Context, id int64) error
+	// DeletePushEndpoint drops a user's subscription for endpoint on a
+	// network, if there is one.
+	DeletePushEndpoint(ctx context.Context, userID, networkID int64, endpoint string) error
+}
+
 // Store is every repository on one database, plus what spans them. It's
 // what Open returns; a service takes only the repositories it uses.
 // Implementations must be safe for concurrent use.
@@ -241,6 +260,7 @@ type Store interface {
 	ClientDisconnectRepositoryImpl
 	IRCSignInRepositoryImpl
 	DevicePositionRepositoryImpl
+	PushSubscriptionRepositoryImpl
 
 	// EncryptSecrets re-encrypts network secrets under the current key.
 	EncryptSecrets(ctx context.Context) (int, error)

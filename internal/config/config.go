@@ -90,6 +90,9 @@ type Config struct {
 	Metrics  Metrics
 	// Managed is managed mode (managed.go): off unless "managed yes".
 	Managed Managed
+	// WebPush is IRCv3 draft/webpush: push notifications for DMs and
+	// highlights while none of an account's clients is attached.
+	WebPush WebPush
 	// ModulesOff are modules (internal/modules) switched off server-wide.
 	ModulesOff []string
 	Secrets    Secrets
@@ -120,6 +123,57 @@ type Config struct {
 	Path string
 	// fromFile records the directives the file set.
 	fromFile map[string]bool
+}
+
+// WebPush configures push notifications (IRCv3 draft/webpush, the
+// webpush_* directives; internal/webpush).
+type WebPush struct {
+	// Enabled offers draft/webpush to clients (webpush yes, the default).
+	Enabled bool
+	// Delay holds a push back; one for a line read meanwhile on another
+	// client isn't sent. 0 pushes at once.
+	Delay time.Duration
+	// Subscriber is the VAPID contact push services see (an https: or
+	// mailto: URL); empty: public_url.
+	Subscriber string
+	// MaxSubscriptions is how many an account may register on a network.
+	MaxSubscriptions int
+	// Expiration is how long a subscription lasts without its client
+	// registering it again.
+	Expiration time.Duration
+	// KeyFile is the VAPID private key (PEM), made the first time
+	// (relative: the working directory, the data volume in the image).
+	// Every node of a cluster needs the same one.
+	KeyFile string
+}
+
+// PushSubscriber is the VAPID contact: webpush_subscriber, else public_url
+// ("": the push service's default).
+func (c *Config) PushSubscriber() string {
+	if c.WebPush.Subscriber != "" {
+		return c.WebPush.Subscriber
+	}
+	return c.PublicURL
+}
+
+// DefaultVAPIDKeyFile is where the VAPID key is kept, under the working
+// directory.
+const DefaultVAPIDKeyFile = "webpush-vapid.pem"
+
+// minPushExpiration is the shortest webpush_expiration (Ergo's minimum):
+// a subscription must outlive a few days without the app.
+const minPushExpiration = 3 * 24 * time.Hour
+
+// parseDays is a duration that may also be in days ("30d").
+func parseDays(v string) (time.Duration, error) {
+	if d, ok := strings.CutSuffix(v, "d"); ok {
+		n, err := strconv.Atoi(d)
+		if err != nil {
+			return 0, fmt.Errorf("want a duration (e.g. 720h or 30d), got %q", v)
+		}
+		return time.Duration(n) * 24 * time.Hour, nil
+	}
+	return time.ParseDuration(v)
 }
 
 // TLS configures where certificates come from.
@@ -505,7 +559,11 @@ func Default() *Config {
 		UpdateCheck:      DefaultUpdateCheck,
 		SelfUpdate:       true,
 		UpdateDir:        DefaultUpdateDir,
-		fromFile:         map[string]bool{},
+		WebPush: WebPush{
+			Enabled: true, Delay: 20 * time.Second, MaxSubscriptions: 8,
+			Expiration: 30 * 24 * time.Hour, KeyFile: DefaultVAPIDKeyFile,
+		},
+		fromFile: map[string]bool{},
 	}
 }
 
@@ -615,6 +673,16 @@ func (c *Config) ApplyEnv() error {
 	}
 	if v := os.Getenv("EVRD_UPDATE_DIR"); v != "" {
 		c.UpdateDir = v
+	}
+	if v := os.Getenv("EVRD_WEBPUSH"); v != "" {
+		on, err := parseBool(v)
+		if err != nil {
+			return fmt.Errorf("EVRD_WEBPUSH: %w", err)
+		}
+		c.WebPush.Enabled = on
+	}
+	if v := os.Getenv("EVRD_WEBPUSH_VAPID_KEY"); v != "" {
+		c.WebPush.KeyFile = v
 	}
 	if v := os.Getenv("EVRD_IDENT_FILE"); v != "" {
 		c.IdentFile = v
@@ -870,6 +938,24 @@ func (c *Config) set(key, val string) error {
 		c.Metrics.Interval, err = time.ParseDuration(val)
 	case "metrics_url":
 		c.Metrics.QueryURL = strings.TrimRight(val, "/")
+	case "webpush":
+		c.WebPush.Enabled, err = parseBool(val)
+	case "webpush_delay":
+		if c.WebPush.Delay, err = parseDays(val); err == nil && c.WebPush.Delay < 0 {
+			err = errors.New("webpush_delay can't be negative")
+		}
+	case "webpush_subscriber":
+		c.WebPush.Subscriber = val
+	case "webpush_max_subscriptions":
+		if c.WebPush.MaxSubscriptions, err = strconv.Atoi(val); err == nil && c.WebPush.MaxSubscriptions < 1 {
+			err = errors.New("want at least 1")
+		}
+	case "webpush_expiration":
+		if c.WebPush.Expiration, err = parseDays(val); err == nil && c.WebPush.Expiration < minPushExpiration {
+			err = errors.New("webpush_expiration is too short (several days at least: 3d)")
+		}
+	case "webpush_vapid_key":
+		c.WebPush.KeyFile = val
 	case "max_networks":
 		c.Limits.MaxNetworks, err = strconv.Atoi(val)
 	case "max_clients":

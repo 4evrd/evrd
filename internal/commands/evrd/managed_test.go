@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -165,6 +166,13 @@ func TestManagedMode(t *testing.T) {
 		t.Fatalf("welcome: %q\n%s", l, m.stderr)
 	}
 	c.expect("JOIN #chat")
+	// push notifications: the VAPID key evrd made, and WEBPUSH for a
+	// client signed in with its token
+	if !slices.ContainsFunc(c.seen, func(l string) bool { return strings.Contains(l, " 005 ") && strings.Contains(l, " VAPID=") }) {
+		t.Errorf("no VAPID= in ISUPPORT:\n%s", strings.Join(c.seen, "\n"))
+	}
+	c.send("WEBPUSH REGISTER http://push.example/x p256dh=a;auth=b")
+	c.expect(":irc.example.org FAIL WEBPUSH INVALID_PARAMS REGISTER http://push.example/x :Invalid web push URL")
 	c.noEvrd()
 	if !ircLog.Has("WEBIRC webirc-secret gateway 127.0.0.1 127.0.0.1") {
 		t.Errorf("no WEBIRC: %q", ircLog.Lines())

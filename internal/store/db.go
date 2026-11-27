@@ -32,6 +32,7 @@ type gormStore struct {
 	ClientDisconnectRepositoryImpl
 	IRCSignInRepositoryImpl
 	DevicePositionRepositoryImpl
+	PushSubscriptionRepositoryImpl
 
 	db *DB
 }
@@ -71,7 +72,7 @@ func NewDatabase(dsn string) (*DB, error) {
 		return nil, err
 	}
 	hadPlayback := db.Migrator().HasTable(&BufferPlayback{})
-	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}, &PendingSignIn{}, &ClientDisconnect{}, &IRCSignIn{}, &DevicePosition{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}, &PendingSignIn{}, &ClientDisconnect{}, &IRCSignIn{}, &DevicePosition{}, &PushSubscription{}); err != nil {
 		return nil, err
 	}
 	if !hadPlayback {
@@ -116,6 +117,7 @@ func newStore(db *DB) *gormStore {
 		ClientDisconnectRepositoryImpl: NewClientDisconnectRepository(db),
 		IRCSignInRepositoryImpl:        NewIRCSignInRepository(db),
 		DevicePositionRepositoryImpl:   NewDevicePositionRepository(db),
+		PushSubscriptionRepositoryImpl: NewPushSubscriptionRepository(db),
 		db:                             db,
 	}
 }
