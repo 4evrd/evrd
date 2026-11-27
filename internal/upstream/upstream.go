@@ -2313,12 +2313,7 @@ func (c *Conn) Channels() []string {
 func (c *Conn) Joined(channel string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for ch := range c.channels {
-		if strings.EqualFold(ch, channel) {
-			return true
-		}
-	}
-	return false
+	return c.joinedFoldLocked(channel)
 }
 
 // Topic is a joined channel's topic.
@@ -2353,6 +2348,51 @@ func (c *Conn) Members(channel string) []Member {
 		return strings.ToLower(out[i].Nick) < strings.ToLower(out[j].Nick)
 	})
 	return out
+}
+
+// Membership is one nick's standing in a channel, as a connection in that
+// channel sees it (MemberOf).
+type Membership struct {
+	// Joined: this connection is in the channel, so it knows the member list.
+	Joined bool
+	// Present: the nick is in the channel.
+	Present bool
+	// Nick as the server spells it; Prefix its highest status prefix ("@"),
+	// Mode that prefix's mode letter ("o"); both "" for a plain member.
+	Nick   string
+	Prefix string
+	Mode   string
+}
+
+// MemberOf is nick's standing in channel, as far as this connection knows:
+// only a connection that is in the channel (Joined) knows its members.
+func (c *Conn) MemberOf(channel, nick string) Membership {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.joinedFoldLocked(channel) {
+		return Membership{}
+	}
+	m := c.members[strings.ToLower(channel)][strings.ToLower(nick)]
+	if m == nil {
+		return Membership{Joined: true}
+	}
+	out := Membership{Joined: true, Present: true, Nick: m.Nick, Prefix: m.Prefix}
+	if m.Prefix != "" {
+		if i := strings.Index(c.prefixChars, m.Prefix); i >= 0 && i < len(c.prefixModes) {
+			out.Mode = c.prefixModes[i : i+1]
+		}
+	}
+	return out
+}
+
+// joinedFoldLocked: channel is in c.channels, whatever its case. Holds c.mu.
+func (c *Conn) joinedFoldLocked(channel string) bool {
+	for ch := range c.channels {
+		if strings.EqualFold(ch, channel) {
+			return true
+		}
+	}
+	return false
 }
 
 // MemberCount is the number of members in a joined channel.

@@ -559,6 +559,29 @@ func (b *Bouncer) ConnFor(networkID int64) (*upstream.Conn, bool) {
 	return e.conn, true
 }
 
+// ChannelMember is nick's standing in channel as this node's connections
+// see it: the first connection in the channel that has the nick, else
+// Joined (some connection is in the channel and the nick isn't), else the
+// zero Membership (no connection here is in the channel: unknown). Meant
+// for managed mode, where every connection is on the one network.
+func (b *Bouncer) ChannelMember(channel, nick string) upstream.Membership {
+	b.mu.Lock()
+	conns := make([]*upstream.Conn, 0, len(b.conns))
+	for _, e := range b.conns {
+		conns = append(conns, e.conn)
+	}
+	b.mu.Unlock()
+	var out upstream.Membership
+	for _, c := range conns {
+		m := c.MemberOf(channel, nick)
+		if m.Present {
+			return m
+		}
+		out.Joined = out.Joined || m.Joined
+	}
+	return out
+}
+
 // logsIn reports whether a network's connection logs in to services:
 // with a password (SASL or IDENTIFY), or with a command of the user's.
 func logsIn(n store.Network) bool {

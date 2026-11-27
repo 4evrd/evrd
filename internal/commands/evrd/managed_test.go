@@ -245,6 +245,19 @@ func TestManagedNgircd(t *testing.T) {
 	if code, out := m.call("GET", "/api/managed/health", nil); code != 200 || out["ok"] != true || out["connections"].(map[string]any)["connected"] != float64(1) {
 		t.Errorf("health: %d %v", code, out)
 	}
+	// Who's in #boson, from alice's connection's member list: the classic
+	// client (a plain member) and alice (op: she made the channel).
+	for nick, mode := range map[string]string{"classic": "", "alice": "o"} {
+		if code, out := m.call("GET", "/api/managed/channels/%23boson/members/"+nick, nil); code != 200 || out["known"] != true || out["present"] != true || out["mode"] != mode {
+			t.Errorf("member %s: %d %v", nick, code, out)
+		}
+	}
+	if code, out := m.call("GET", "/api/managed/channels/%23boson/members/nobody", nil); code != 200 || out["known"] != true || out["present"] != false {
+		t.Errorf("member nobody: %d %v", code, out)
+	}
+	if code, out := m.call("GET", "/api/managed/channels/%23elsewhere/members/classic", nil); code != 200 || out["known"] != false {
+		t.Errorf("a channel evrd isn't in: %d %v", code, out)
+	}
 }
 
 // registerNick registers nick with NickServ on server (a classic client),

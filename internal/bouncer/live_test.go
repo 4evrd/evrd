@@ -804,3 +804,28 @@ func TestAutoAwayWaits(t *testing.T) {
 	eventually(t, "back", func() bool { return aways() == 2 })
 	att.Release()
 }
+
+// ChannelMember answers from the member lists of the connections in the
+// channel: the fake server's NAMES puts our own nick and @op in it.
+func TestChannelMember(t *testing.T) {
+	r := newLiveRig(t)
+	alice := r.user("alice", nil)
+	n := r.network(alice, "boson", true)
+	if err := r.b.Start(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	r.connected(n.ID)
+	eventually(t, "names for #boson", func() bool { return r.b.ChannelMember("#boson", "op").Present })
+	if m := r.b.ChannelMember("#BOSON", "OP"); !m.Joined || !m.Present || m.Nick != "op" || m.Prefix != "@" || m.Mode != "o" {
+		t.Fatalf("op: %+v", m)
+	}
+	if m := r.b.ChannelMember("#boson", "alice_boson"); !m.Present || m.Prefix != "" || m.Mode != "" {
+		t.Fatalf("our own nick: %+v", m)
+	}
+	if m := r.b.ChannelMember("#boson", "nobody"); !m.Joined || m.Present {
+		t.Fatalf("absent nick: %+v", m)
+	}
+	if m := r.b.ChannelMember("#elsewhere", "op"); m.Joined || m.Present {
+		t.Fatalf("a channel nobody here is in: %+v", m)
+	}
+}

@@ -12,10 +12,13 @@ package handlers
 //	GET    /api/managed/settings           the live settings (guests, the nick guard's grace)
 //	PUT    /api/managed/settings           change some (managed.LiveInput)
 //	DELETE /api/managed/settings           back to the config's
+//	GET    /api/managed/channels/{channel}/members/{nick}
+//	                                       a nick's standing in a channel
 
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/managed"
@@ -137,4 +140,24 @@ func (s *Handlers) ManagedResetSettings(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, l)
+}
+
+// ManagedChannelMember is GET /api/managed/channels/{channel}/members/{nick}
+// (the channel with its # escaped, %23boson): whether nick is in channel
+// and its highest status there, as this node's connections see it. known
+// is false when none of them is in the channel (then present is false
+// too: nobody here can tell). Boson's voice server asks it for guests'
+// channel membership on a bridged network.
+func (s *Handlers) ManagedChannelMember(w http.ResponseWriter, r *http.Request) {
+	channel, nick := strings.TrimSpace(r.PathValue("channel")), strings.TrimSpace(r.PathValue("nick"))
+	if channel == "" || nick == "" || strings.ContainsAny(channel+nick, " ,\r\n\x00") || !strings.ContainsRune("#&+!", rune(channel[0])) {
+		writeErr(w, http.StatusUnprocessableEntity, "need a channel (#name) and a nick")
+		return
+	}
+	m := s.b.ChannelMember(channel, nick)
+	out := map[string]any{"channel": channel, "nick": nick, "known": m.Joined, "present": m.Present, "prefix": m.Prefix, "mode": m.Mode}
+	if m.Present {
+		out["nick"] = m.Nick
+	}
+	writeJSON(w, http.StatusOK, out)
 }

@@ -144,6 +144,7 @@ DELETE /api/managed/users/{username}
 GET    /api/managed/settings
 PUT    /api/managed/settings
 DELETE /api/managed/settings
+GET    /api/managed/channels/{channel}/members/{nick}
 ```
 
 `{username}` is evrd's account name: 2–32 characters, starting with a
@@ -263,6 +264,25 @@ their next sign-in. A guest who's in stays when `guests` goes off; switch
 it off and they can't come back. The grace applies from each connection's
 next connect. Boson's auth service sets `guests` from its own guest
 setting, so an add-on install lets guests in exactly when Boson does.
+
+### GET /api/managed/channels/{channel}/members/{nick}
+
+Whether `nick` is in `channel` right now, and its highest status there, as
+evrd's own connections see it (the channel's `#` escaped:
+`/api/managed/channels/%23boson/members/vic`). Boson's voice server asks it
+to let a guest into a voice channel that needs people in its text channel.
+
+```json
+{"channel": "#boson", "nick": "Vic", "known": true, "present": true, "prefix": "@", "mode": "o"}
+```
+
+`known` is whether any of evrd's connections is in the channel: only then
+does evrd know who's there, so `known: false` (with `present: false`) means
+"can't tell", not "not in it". `prefix` and `mode` are `""` for a plain
+member. Any nick can be asked about, connected through evrd or not; it's
+answered from the member lists evrd already holds, so it never sends
+anything to the IRC server. In a cluster each node answers from its own
+connections. 422: no channel or nick.
 
 ## Setting up the IRC server
 
