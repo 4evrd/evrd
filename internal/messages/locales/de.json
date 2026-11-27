@@ -437,6 +437,8 @@
     "irc.log.loginRefused": "Die Services haben die Anmeldung abgelehnt: {said}",
     "irc.log.ghosting": "{nick} ist belegt: bitte {services}, ihn per {command} freizugeben",
     "irc.log.nickRegistered": "{nick} ist für jemand anderen registriert: wechsle zu {next}",
+    "irc.log.nickGrace": "{nick} ist registriert: warte {grace}, bis sich der Benutzer identifiziert, dann wechsle zu {next}",
+    "irc.log.nickIdentified": "Für {nick} identifiziert: wird behalten",
     "irc.rest.allBanned": "Alle Server von {network} weisen diese Adresse ab: neuer Versuch in {wait}",
     "irc.rest.allLimited": "Alle Server von {network} weisen Verbindungen von dieser Adresse ab oder begrenzen sie: neuer Versuch in {wait}",
     "irc.rest.banned": "{host} weist diese Adresse ab: lasse ihn {rest} ruhen und versuche die anderen Server des Netzwerks",

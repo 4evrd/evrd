@@ -70,3 +70,37 @@ func TestUserIPFromSignIns(t *testing.T) {
 		t.Error("the stock away message changed")
 	}
 }
+
+// The nick guard in managed mode: a registered nick the user identifies
+// for during the grace is kept and saved, and tried first next time.
+func TestManagedNickGuardSavesTheIdentifiedNick(t *testing.T) {
+	r := newLiveRig(t)
+	r.b.SetManaged(Managed{ReplyFrom: "irc.example", NickGuard: true,
+		NickGuardGrace: func() time.Duration { return time.Minute }, GuardWarning: "{nick}: identify within {grace}"})
+	alice := r.user("alice", nil)
+	n, err := r.st.CreateNetwork(context.Background(), store.Network{UserID: alice.ID, Name: "net", Host: r.host, Port: r.port,
+		Nick: "lion", AuthMethod: store.AuthNone})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.b.Start(r.ctx)
+	att, err := r.b.AttachClient(alice.ID, 0, ClientInfo{IP: "192.0.2.7"}, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer att.Release()
+	if err := r.b.Connect(n.ID); err != nil {
+		t.Fatal(err)
+	}
+	r.connected(n.ID)
+	r.irc.Send(":NickServ!s@services NOTICE lion :This nickname is registered and protected. If it is your nick, type /msg NickServ IDENTIFY password.")
+	time.Sleep(100 * time.Millisecond)
+	r.irc.Send(":NickServ!s@services NOTICE lion :Password accepted - you are now recognized.")
+	eventually(t, "the identified nick saved", func() bool {
+		got, _ := r.st.NetworkByID(context.Background(), n.ID)
+		return got.IdentifiedNick == "lion"
+	})
+	if c, _ := r.b.ConnFor(n.ID); c.Nick() != "lion" {
+		t.Errorf("moved: %s", c.Nick())
+	}
+}

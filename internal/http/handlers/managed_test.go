@@ -42,7 +42,7 @@ func managedAPI(t *testing.T) (*httptest.Server, *accounts.Service) {
 	t.Cleanup(func() { hist.Close() })
 	b := bouncer.New(st, hist, log)
 	api := evrdhttp.New(b, evrdhttp.Services{Accounts: acc, Auth: am, Languages: languages.New(st), Cluster: cluster.NewStateService(st)}, cfg, nil, log)
-	api.SetManaged(&managed.Provisioner{Mode: managed.New(cfg), Accounts: acc, Bouncer: b})
+	api.SetManaged(&managed.Provisioner{Mode: managed.New(cfg), Accounts: acc, Bouncer: b, Store: st})
 	srv := httptest.NewServer(api.Handler())
 	t.Cleanup(srv.Close)
 	return srv, acc
@@ -139,5 +139,34 @@ func TestManagedAPI(t *testing.T) {
 	}
 	if code, _ := call("DELETE", "/api/managed/users/alice", nil); code != 404 {
 		t.Errorf("delete again: %d", code)
+	}
+}
+
+// The live settings: guests and the nick guard's grace, changed through
+// the API over the config's, and back.
+func TestManagedSettingsAPI(t *testing.T) {
+	srv, _ := managedAPI(t)
+	call := func(method, path string, body any) (int, map[string]any) {
+		return managedCall(t, srv, "api-token", method, path, body)
+	}
+	if code, out := call("GET", "/api/managed/settings", nil); code != 200 || out["guests"] != false ||
+		out["nickGuardGraceSeconds"] != float64(60) || out["guestsMax"] != float64(100) || len(out["set"].([]any)) != 0 {
+		t.Fatalf("defaults: %d %v", code, out)
+	}
+	if code, out := call("PUT", "/api/managed/settings", map[string]any{"guests": true, "nickGuardGraceSeconds": 30}); code != 200 ||
+		out["guests"] != true || out["nickGuardGraceSeconds"] != float64(30) || len(out["set"].([]any)) != 2 {
+		t.Fatalf("put: %d %v", code, out)
+	}
+	if code, out := call("PUT", "/api/managed/settings", map[string]any{"guestsPerIP": -1}); code != 422 {
+		t.Errorf("negative: %d %v", code, out)
+	}
+	if code, out := call("GET", "/api/managed/settings", nil); out["guests"] != true || out["guestsPerIP"] != float64(3) {
+		t.Errorf("kept: %d %v", code, out)
+	}
+	if code, out := call("DELETE", "/api/managed/settings", nil); code != 200 || out["guests"] != false || out["nickGuardGraceSeconds"] != float64(60) {
+		t.Errorf("reset: %d %v", code, out)
+	}
+	if code, _ := managedCall(t, srv, "wrong", "PUT", "/api/managed/settings", map[string]any{"guests": true}); code != 401 {
+		t.Errorf("wrong token: %d", code)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Managed configures managed mode. Off (the zero value) changes nothing.
@@ -63,6 +64,25 @@ type Managed struct {
 	// NickGuard keeps accounts that don't log in to services off nicks
 	// registered to someone else (managed_nick_guard, default yes).
 	NickGuard bool
+	// NickGuardGrace is how long a guarded connection may stay on a nick
+	// services say is registered, so the user can identify for it, before
+	// it's moved off (managed_nick_guard_grace, default 60s; 0 moves at
+	// once).
+	NickGuardGrace time.Duration
+	// ClientWebIRCPassword lets a web gateway in front of evrd (Boson's
+	// webircgateway) pass each client's own address with WEBIRC
+	// (managed_client_webirc_password; "" refuses WEBIRC from clients).
+	ClientWebIRCPassword string
+	// Guests lets clients without credentials in (managed_guests, default
+	// no): each gets an ephemeral session of its own on the network.
+	Guests bool
+	// GuestsMax caps the guests at once (managed_guests_max, default 100;
+	// 0 no cap), GuestsPerIP those from one address (managed_guests_per_ip,
+	// default 3; 0 no cap).
+	GuestsMax, GuestsPerIP int
+	// GuestLinger keeps a guest's connection after its client goes, so a
+	// page refresh picks it up again (managed_guest_linger, default 30s).
+	GuestLinger time.Duration
 }
 
 // ManagedTexts are the texts managed_text sets, with their defaults.
@@ -76,11 +96,15 @@ var ManagedTexts = map[string]string{
 	"restarting":   "Server restarting, please reconnect",
 	"unavailable":  "Service unavailable, try again later",
 	"denied":       "Sign-in failed",
+	// the nick guard's warning on a registered nick ({services}, {grace}
+	// and {next} too)
+	"registered": "{nick} is registered with {services}. Identify within {grace} (/msg {services} IDENTIFY password) or you'll be moved to {next}",
 }
 
 // defaultManaged is managed mode's defaults, when it's off.
 func defaultManaged() Managed {
-	return Managed{TLSVerify: true, WebIRCGateway: "gateway", WebIRCResolve: true, ServerName: "irc", AwayMessage: "Away", NickGuard: true}
+	return Managed{TLSVerify: true, WebIRCGateway: "gateway", WebIRCResolve: true, ServerName: "irc", AwayMessage: "Away", NickGuard: true,
+		NickGuardGrace: 60 * time.Second, GuestsMax: 100, GuestsPerIP: 3, GuestLinger: 30 * time.Second}
 }
 
 // Text is the named text (ManagedTexts) with {network} and {nick} filled
@@ -184,6 +208,18 @@ func (c *Config) setManaged(key, val string) (bool, error) {
 		m.QuitMessage = val
 	case "managed_nick_guard":
 		m.NickGuard, err = parseBool(val)
+	case "managed_nick_guard_grace":
+		m.NickGuardGrace, err = parseSeconds(val)
+	case "managed_client_webirc_password":
+		m.ClientWebIRCPassword = val
+	case "managed_guests":
+		m.Guests, err = parseBool(val)
+	case "managed_guests_max":
+		m.GuestsMax, err = parseCount(val)
+	case "managed_guests_per_ip":
+		m.GuestsPerIP, err = parseCount(val)
+	case "managed_guest_linger":
+		m.GuestLinger, err = parseSeconds(val)
 	default:
 		return false, nil
 	}
@@ -220,4 +256,26 @@ func parseServer(val string) (host string, port int, tls bool, err error) {
 		}
 	}
 	return host, port, tls, nil
+}
+
+// parseSeconds is a duration ("60s", "2m") or a number of seconds ("60"),
+// not negative.
+func parseSeconds(val string) (time.Duration, error) {
+	if n, err := strconv.Atoi(val); err == nil {
+		val = strconv.Itoa(n) + "s"
+	}
+	d, err := time.ParseDuration(val)
+	if err == nil && d < 0 {
+		err = errors.New("must not be negative")
+	}
+	return d, err
+}
+
+// parseCount is a number, 0 or more.
+func parseCount(val string) (int, error) {
+	n, err := strconv.Atoi(val)
+	if err == nil && n < 0 {
+		err = errors.New("must not be negative")
+	}
+	return n, err
 }

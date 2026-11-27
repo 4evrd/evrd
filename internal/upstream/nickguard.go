@@ -46,20 +46,29 @@ const guardNumbered = 20
 var servicesKilled = regexp.MustCompile(`(?i)(nick(name)?\s*(kill|enforce|protect|collision)|enforce|nickserv|services?)`)
 
 // guardFirst is the nick to register with: the first not known to be
-// registered. Holds c.mu.
-func (c *Conn) guardFirst() string {
+// registered (prefer, the nick the user last identified for, first).
+// Holds c.mu.
+func (c *Conn) guardFirst(prefer bool) string {
 	if !c.guard {
 		return c.net.Nick
 	}
+	c.guardPrefer = prefer
 	return c.guardPick("")
 }
 
-// guardCandidates are the nicks to use, in order. Holds c.mu.
+// guardCandidates are the nicks to use, in order: the nick the user last
+// identified for (while a client is there to identify again), the nick,
+// the alternate nick, then the alternate nick numbered. Each is fitted to
+// the server's NICKLEN, dropping whole trailing parts first. Holds c.mu.
 func (c *Conn) guardCandidates() []string {
 	base := strings.TrimSpace(c.net.Nick)
-	alt := orElse(c.altNick, base+"_")
 	max := c.nickLen()
-	out := []string{fitNick(base, "", max), fitNick(alt, "", max)}
+	var out []string
+	if p := strings.TrimSpace(c.preferNick); p != "" && c.guardPrefer && (max == 0 || len(p) <= max) {
+		out = append(out, p)
+	}
+	alt := orElse(c.altNick, base+"_")
+	out = append(out, fitNick(base, "", max), fitNick(alt, "", max))
 	for i := 2; i <= guardNumbered; i++ {
 		out = append(out, fitNick(alt, strconv.Itoa(i), max))
 	}
@@ -90,24 +99,59 @@ func (c *Conn) guardPick(skip string) string {
 	}
 }
 
-// fitNick is base+suffix cut to max (0: no limit), keeping the suffix.
+// nickSeps split a nick into parts: thelion-windows-bosonchat.
+const nickSeps = "-_.|"
+
+// fitNick is base+suffix cut to max (0: no limit), keeping the suffix. A
+// base with parts loses whole trailing parts first, as long as two are
+// left (thelion-windows-bosonchat → thelion-windows: the home server's
+// suffix goes before the name is cut), and is cut in the middle only when
+// that isn't enough.
 func fitNick(base, suffix string, max int) string {
-	if max > 0 && len(base)+len(suffix) > max {
-		if keep := max - len(suffix); keep > 0 {
-			base = base[:keep]
-		} else {
-			base, suffix = "", suffix[len(suffix)-max:]
+	if max <= 0 || len(base)+len(suffix) <= max {
+		return base + suffix
+	}
+	keep := max - len(suffix)
+	if keep <= 0 {
+		return suffix[len(suffix)-max:]
+	}
+	b := strings.TrimRight(base, nickSeps)
+	for len(b) > keep {
+		i := strings.LastIndexAny(b, nickSeps)
+		if i <= 0 {
+			break
+		}
+		head := strings.TrimRight(b[:i], nickSeps)
+		if head == "" || !strings.ContainsAny(strings.Trim(head, nickSeps), nickSeps) {
+			break // one part left: it would read as someone else's nick
+		}
+		b = head
+	}
+	if len(b) > keep {
+		b = base[:keep]
+		if t := strings.TrimRight(b, nickSeps); t != "" && suffix == "" {
+			b = t
 		}
 	}
-	return base + suffix
+	return b + suffix
 }
 
 // minNickLen is the nick length every server takes (RFC 1459), used once
 // a server refused a nick while registering, before its NICKLEN is known.
 const minNickLen = 9
 
-// nickLen is the server's ISUPPORT NICKLEN (0 unknown). Holds c.mu.
+// nickLen is the server's ISUPPORT NICKLEN, else the length to fit
+// while it's unknown (0: none). Holds c.mu.
 func (c *Conn) nickLen() int {
+	if n := c.isupportNickLen(); n > 0 {
+		return n
+	}
+	return c.guardLen
+}
+
+// isupportNickLen is the server's ISUPPORT NICKLEN (0: not said). Holds
+// c.mu.
+func (c *Conn) isupportNickLen() int {
 	for _, t := range c.isupport {
 		if v, ok := strings.CutPrefix(t, "NICKLEN="); ok {
 			if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -115,7 +159,7 @@ func (c *Conn) nickLen() int {
 			}
 		}
 	}
-	return c.guardLen
+	return 0
 }
 
 // guardMove leaves the nick in use for another one, after marking it as
@@ -134,24 +178,46 @@ func (c *Conn) guardMove(cur string, bad bool) (next string) {
 	return next
 }
 
-// guardNotice handles a notice from services while guarded: their
-// "this nick is registered" moves us off the nick. It reports whether
-// the notice was that (then it isn't looked at as a login answer).
-func (c *Conn) guardNotice(text string) bool {
+// guardNotice handles a notice from services to target while guarded:
+// their "this nick is registered" starts the grace (guardGraceStart) or
+// moves us off the nick, and their "you're identified" makes the nick
+// ours (guardIdentified). It reports whether the notice was the prompt
+// (then it isn't looked at as a login answer).
+func (c *Conn) guardNotice(from, target, text string) bool {
+	if c.guard && servicesOK.MatchString(text) {
+		c.guardIdentified(target, "services")
+		return false
+	}
 	if !servicesPrompt.MatchString(text) {
 		return false
 	}
+	idle := c.idle != nil && c.idle()
 	c.mu.Lock()
 	if !c.guard || c.health.Status != StatusConnected {
 		c.mu.Unlock()
 		return false
 	}
-	if c.guardAsked != "" {
+	cur := c.nick
+	k := strings.ToLower(cur)
+	switch {
+	case c.guardAsked != "":
 		// about the nick we're leaving already
 		c.mu.Unlock()
 		return true
+	case target != "" && !strings.EqualFold(target, cur):
+		// about a nick we were on before
+		c.mu.Unlock()
+		return true
+	case c.ownNicks[k], strings.EqualFold(c.graceNick, cur):
+		// identified for it, or the grace for it runs already
+		c.mu.Unlock()
+		return true
 	}
-	cur := c.nick
+	c.prompted[k] = true
+	if c.guardGrace > 0 && !idle {
+		c.guardGraceStart(cur, from)
+		return true // (unlocked)
+	}
 	next := c.guardMove(cur, true)
 	c.mu.Unlock()
 	c.log.Info("nick is registered to someone else, moving off it", "network", c.net.Name, "nick", cur, "next", next)
@@ -170,6 +236,7 @@ func (c *Conn) guardNick(old, nu string) {
 		return
 	}
 	asked := strings.EqualFold(nu, c.guardAsked) || strings.EqualFold(nu, c.clientNick)
+	c.guardGraceEnd() // a grace is for the nick we left
 	if asked {
 		c.guardAsked, c.clientNick = "", ""
 		c.guardSeq++

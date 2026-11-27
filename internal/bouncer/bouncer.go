@@ -331,6 +331,17 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 		opts.VersionReply, opts.ReplyFrom = m.VersionReply, m.ReplyFrom
 		opts.QuitMsg = orElse(u.QuitMsg, m.QuitMessage)
 		opts.NickGuard = m.NickGuard && !logsIn(n)
+		if opts.NickGuard {
+			if m.NickGuardGrace != nil {
+				opts.NickGuardGrace = m.NickGuardGrace()
+			}
+			opts.GuardWarning, opts.PreferNick = m.GuardWarning, n.IdentifiedNick
+			opts.OnIdentifiedNick = func(nick string) {
+				if err := b.store.SetNetworkIdentifiedNick(context.Background(), networkID, nick); err != nil {
+					b.log.Warn("save the identified nick", "network", n.Name, "err", err)
+				}
+			}
+		}
 	}
 	if b.links != nil {
 		opts.Links, opts.LinkID, opts.ResumeAfter = b.links, linkID(networkID), b.resumeAfter

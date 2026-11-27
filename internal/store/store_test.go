@@ -92,6 +92,23 @@ func TestSetNetworkChannels(t *testing.T) {
 	}
 }
 
+func TestSetNetworkIdentifiedNick(t *testing.T) {
+	st := open(t)
+	n, _ := st.CreateNetwork(t.Context(), Network{UserID: 1, Name: "x", Nick: "lion-home"})
+	if err := st.SetNetworkIdentifiedNick(t.Context(), n.ID, "lion"); err != nil {
+		t.Fatal(err)
+	}
+	// an edit with an older copy leaves it alone
+	n.Nick = "lion-away"
+	if err := st.UpdateNetwork(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := st.NetworkByID(t.Context(), n.ID)
+	if got.IdentifiedNick != "lion" || got.Nick != "lion-away" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
 func TestMigrateLegacyMessages(t *testing.T) {
 	st := open(t)
 	db := st.(*gormStore).db.DB

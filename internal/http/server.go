@@ -115,6 +115,9 @@ func (s *Server) managedHandler() http.Handler {
 	mux.HandleFunc("GET /api/managed/users/{username}", tok(h.ManagedUser))
 	mux.HandleFunc("PUT /api/managed/users/{username}", tok(h.ManagedPutUser))
 	mux.HandleFunc("DELETE /api/managed/users/{username}", tok(h.ManagedDeleteUser))
+	mux.HandleFunc("GET /api/managed/settings", tok(h.ManagedSettings))
+	mux.HandleFunc("PUT /api/managed/settings", tok(h.ManagedPutSettings))
+	mux.HandleFunc("DELETE /api/managed/settings", tok(h.ManagedResetSettings))
 	mux.Handle("/", http.NotFoundHandler())
 	return middleware.Traced(false, mux)
 }

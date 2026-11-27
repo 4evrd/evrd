@@ -15,7 +15,12 @@
 # Then ngircd with Anope (dev/ngircd-anope) for TestManagedNickGuard: an
 # account without a services login, given nicks someone registered with
 # NickServ, moves off them before joining, is never identified, and
-# isn't renamed or killed by NickServ's protection.
+# isn't renamed or killed by NickServ's protection (no grace).
+# TestManagedNickGuardGrace: a handle longer than NICKLEN (16 here, like
+# IRCForever) cut by parts; a registered nick the user identifies for
+# within the grace kept (307 in WHOIS); one they don't, moved off after it.
+# TestManagedGuestsNgircd: a guest through the web gateway's WEBIRC, with
+# its own address, off a registered nick, gone after the linger.
 #
 # Needs docker and go.
 set -euo pipefail
@@ -47,4 +52,4 @@ for i in $(seq 1 100); do
 	if docker logs "$ANOPE" 2>&1 | grep -q 'services.ngircd.test (Services) is done syncing'; then break; fi
 	sleep 0.2
 done
-EVRD_E2E_NGIRCD_ANOPE=127.0.0.1:$ANOPE_PORT go test -count=1 -run 'TestManagedNickGuard' -v ./internal/commands/evrd
+EVRD_E2E_NGIRCD_ANOPE=127.0.0.1:$ANOPE_PORT go test -count=1 -run 'TestManagedNickGuard|TestManagedGuestsNgircd' -v ./internal/commands/evrd

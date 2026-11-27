@@ -250,6 +250,8 @@ type CreateInput struct {
 	// SSOClaimable lets the owner's first SSO sign-in (same username and
 	// email) take over the account; see store.User.
 	SSOClaimable bool
+	// Guest makes a managed mode guest's ephemeral account (store.User.Guest).
+	Guest bool
 }
 
 // Create validates and stores a new user.
@@ -270,7 +272,7 @@ func (s *Service) Create(in CreateInput) (store.User, error) {
 	if role != store.RoleUser && role != store.RoleAdmin {
 		return store.User{}, invalid("role")
 	}
-	u := store.User{Username: name, Email: strings.TrimSpace(in.Email), Role: role, DefaultNick: name, SSOClaimable: in.SSOClaimable}
+	u := store.User{Username: name, Email: strings.TrimSpace(in.Email), Role: role, DefaultNick: name, SSOClaimable: in.SSOClaimable, Guest: in.Guest}
 	if in.Password != "" {
 		if u.PasswordHash, err = HashPassword(in.Password); err != nil {
 			return store.User{}, err

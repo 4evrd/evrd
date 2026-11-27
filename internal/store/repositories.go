@@ -63,6 +63,9 @@ type NetworkRepositoryImpl interface {
 	UpdateNetwork(ctx context.Context, n Network) error
 	SetNetworkChannelSettings(ctx context.Context, id int64, settings map[string]ChannelSettings) error
 	SetNetworkChannels(ctx context.Context, id int64, channels []string) error
+	// SetNetworkIdentifiedNick saves the registered nick the user last
+	// identified for (the nick guard's, managed mode).
+	SetNetworkIdentifiedNick(ctx context.Context, id int64, nick string) error
 }
 
 // ReadMarkerRepositoryImpl keeps how far each buffer is read.

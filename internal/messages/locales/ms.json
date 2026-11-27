@@ -421,6 +421,8 @@
     "irc.log.loginRefused": "Perkhidmatan menolak log masuk: {said}",
     "irc.log.ghosting": "{nick} sudah diambil: meminta {services} untuk {command}",
     "irc.log.nickRegistered": "{nick} didaftarkan oleh orang lain: bertukar kepada {next}",
+    "irc.log.nickGrace": "{nick} berdaftar: menunggu {grace} untuk pengguna mengenal pasti diri, kemudian bertukar kepada {next}",
+    "irc.log.nickIdentified": "Dikenal pasti untuk {nick}: dikekalkan",
     "irc.rest.allBanned": "Semua pelayan {network} menolak alamat ini: mencuba lagi dalam {wait}",
     "irc.rest.allLimited": "Semua pelayan {network} menolak atau mengehadkan sambungan dari alamat ini: mencuba lagi dalam {wait}",
     "irc.rest.banned": "{host} menolak alamat ini: merehatkannya selama {rest}, mencuba pelayan lain rangkaian itu",

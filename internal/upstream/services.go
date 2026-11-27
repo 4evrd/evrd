@@ -461,7 +461,11 @@ func (c *Conn) rejoin(gen int, chans []string) {
 // identify, the login's answer, or a ghost gone.
 func (c *Conn) servicesSaid(m irc.Message) {
 	text := strings.TrimSpace(formatting.ReplaceAllString(lastParam(m), ""))
-	if c.guardNotice(text) {
+	target := ""
+	if len(m.Params) > 1 {
+		target = m.Params[0]
+	}
+	if c.guardNotice(nickOf(m.Prefix), target, text) {
 		return
 	}
 	c.mu.Lock()
