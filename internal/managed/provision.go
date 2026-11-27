@@ -89,6 +89,10 @@ type User struct {
 	// connection): Nick, or another one when Nick was taken or is
 	// registered to someone else (the nick guard).
 	CurrentNick string `json:"currentNick,omitempty"`
+	// IdentifiedNick is the registered nick the user last identified for
+	// with services during the nick guard's grace: tried first on the
+	// next connections ("" none).
+	IdentifiedNick string `json:"identifiedNick,omitempty"`
 	// Clients is how many clients are attached now.
 	Clients int `json:"clients"`
 	// Created is set when this call made the account.
@@ -109,7 +113,28 @@ type Provisioner struct {
 	Mode     *Mode
 	Accounts accounts.AccountServiceImpl
 	Bouncer  Bouncer
+	// Guests are counted in the health (nil: none).
+	Guests *Guests
+	// Store keeps the live settings (live.go).
+	Store LiveStore
 }
+
+// Live is the live settings in effect.
+func (p *Provisioner) Live() Live { return p.Mode.Live() }
+
+// SetLive changes the live settings.
+func (p *Provisioner) SetLive(ctx context.Context, in LiveInput) (Live, error) {
+	return p.Mode.SetLive(ctx, p.Store, in)
+}
+
+// ResetLive goes back to the config's settings.
+func (p *Provisioner) ResetLive(ctx context.Context) (Live, error) {
+	return p.Mode.ResetLive(ctx, p.Store)
+}
+
+// ErrGuestAccount is a username that's a guest's: the managed API leaves
+// guests alone.
+var ErrGuestAccount = fmt.Errorf("%w: that username is a guest's", ErrBadInput)
 
 // Put creates or changes username's account and its network.
 func (p *Provisioner) Put(ctx context.Context, username string, in UserInput) (User, error) {
@@ -121,6 +146,9 @@ func (p *Provisioner) Put(ctx context.Context, username string, in UserInput) (U
 		return User{}, err
 	}
 	u, err := p.Accounts.UserByUsername(ctx, name)
+	if err == nil && u.Guest {
+		return User{}, ErrGuestAccount
+	}
 	created := false
 	switch {
 	case errors.Is(err, store.ErrNotFound):
@@ -333,6 +361,7 @@ func (p *Provisioner) view(u store.User, n store.Network) User {
 		Username: u.Username, ID: u.ID, Email: u.Email, Disabled: u.Suspended,
 		Nick: n.Nick, AltNick: n.AltNick, Ident: orElse(n.Username, n.Nick), Realname: orElse(n.Realname, n.Nick),
 		Channels: append([]string{}, n.Channels...), Status: string(upstream.StatusDisconnected),
+		IdentifiedNick: n.IdentifiedNick,
 	}
 	if u.OIDCSubject != nil {
 		out.Subject = *u.OIDCSubject
@@ -356,6 +385,9 @@ func (p *Provisioner) view(u store.User, n store.Network) User {
 // Get is username's account.
 func (p *Provisioner) Get(ctx context.Context, username string) (User, error) {
 	u, err := p.Accounts.UserByUsername(ctx, strings.ToLower(strings.TrimSpace(username)))
+	if err == nil && u.Guest {
+		err = store.ErrNotFound
+	}
 	if err != nil {
 		return User{}, err
 	}
@@ -374,6 +406,9 @@ func (p *Provisioner) List(ctx context.Context) ([]User, error) {
 	}
 	out := []User{}
 	for _, u := range us {
+		if u.Guest {
+			continue
+		}
 		n, _, err := p.network(ctx, u.ID)
 		if err != nil {
 			return nil, err
@@ -386,6 +421,9 @@ func (p *Provisioner) List(ctx context.Context) ([]User, error) {
 // Delete removes username's account, with its network and history.
 func (p *Provisioner) Delete(ctx context.Context, username string) error {
 	u, err := p.Accounts.UserByUsername(ctx, strings.ToLower(strings.TrimSpace(username)))
+	if err == nil && u.Guest {
+		err = store.ErrNotFound
+	}
 	if err != nil {
 		return err
 	}
@@ -436,6 +474,18 @@ type Health struct {
 	Tokens bool `json:"tokens"`
 	// WebIRC says whether connections send WEBIRC.
 	WebIRC bool `json:"webirc"`
+	// Guests: whether they may sign in, and how many there are now on
+	// this node (lingering ones too). They aren't in Users or
+	// Connections.
+	Guests HealthGuests `json:"guests"`
+}
+
+// HealthGuests is the guests' part of the health.
+type HealthGuests struct {
+	Enabled bool `json:"enabled"`
+	Active  int  `json:"active"`
+	Max     int  `json:"max"`
+	PerIP   int  `json:"perIP"`
 }
 
 // HealthNetwork is the configured network.
@@ -452,7 +502,8 @@ type HealthNetwork struct {
 func (p *Provisioner) Health(ctx context.Context) (Health, error) {
 	c := p.Mode.Config()
 	h := Health{Network: HealthNetwork{c.Network, c.Host, c.Port, c.TLS}, Connections: map[string]int{},
-		Tokens: p.Mode.Tokens() != nil, WebIRC: c.WebIRCPassword != ""}
+		Tokens: p.Mode.Tokens() != nil, WebIRC: c.WebIRCPassword != "",
+		Guests: HealthGuests{Enabled: c.Guests, Active: p.Guests.Count(), Max: c.GuestsMax, PerIP: c.GuestsPerIP}}
 	for _, s := range []upstream.Status{upstream.StatusConnected, upstream.StatusConnecting, upstream.StatusReconnecting, upstream.StatusDisconnected} {
 		h.Connections[string(s)] = 0
 	}
@@ -462,6 +513,9 @@ func (p *Provisioner) Health(ctx context.Context) (Health, error) {
 	}
 	clients := p.Bouncer.ClientsByUser()
 	for _, u := range us {
+		if u.Guest {
+			continue
+		}
 		h.Users.Total++
 		if u.Suspended {
 			h.Users.Disabled++

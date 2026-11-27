@@ -140,12 +140,18 @@ type Conn struct {
 	altNick    string
 	// guard is the nick guard (nickguard.go); badNicks the nicks it
 	// learned are registered (lowercased, kept across connections).
-	guard     bool
-	badNicks  map[string]bool
-	pingEvery time.Duration
-	readLimit time.Duration
-	userAttr  string // user id, for metric labels
-	netAttr   string // network id, for metric labels
+	guard    bool
+	badNicks map[string]bool
+	// the grace for identifying on a registered nick (nickguard_grace.go),
+	// the warning clients get then, the nick the user last identified for
+	// and where to save it
+	guardGrace   time.Duration
+	guardWarning string
+	onIdentified func(nick string)
+	pingEvery    time.Duration
+	readLimit    time.Duration
+	userAttr     string // user id, for metric labels
+	netAttr      string // network id, for metric labels
 
 	mu       sync.Mutex
 	w        io.Writer
@@ -157,7 +163,20 @@ type Conn struct {
 	guardAsked, clientNick string
 	guardSeq               int
 	guardTaken             map[string]bool
-	guardLen               int // the nick length to fit while NICKLEN is unknown
+	guardLen               int    // the nick length to fit while NICKLEN is unknown
+	guardWant              string // the nick registered with (fitted once NICKLEN is known)
+	// guardPrefer: preferNick (the nick last identified for) goes first;
+	// ownNicks are identified for on this connection, prompted those
+	// services said are registered; graceNick has its grace running
+	// (graceSeq ends timers); whoisNick is being asked about (whoisFinal:
+	// a "no" moves off it, whoisReg: a "yes" came)
+	preferNick           string
+	guardPrefer          bool
+	ownNicks, prompted   map[string]bool
+	graceNick, whoisNick string
+	graceSeq, whoisSeq   int
+	whoisFinal, whoisReg bool
+	software             string // the server's version (004)
 	// caps: what the network offers (CAP LS may take several lines), how
 	// many of evrd's requests are unanswered, and what it acknowledged
 	capsOffered map[string]string // name -> value
@@ -296,6 +315,17 @@ type Options struct {
 	// NickGuard keeps the connection off nicks registered with services
 	// (nickguard.go): for connections that never log in to services.
 	NickGuard bool
+	// NickGuardGrace is how long the guard waits for the user to identify
+	// for a registered nick before moving off it (nickguard_grace.go; 0
+	// at once). GuardWarning is the notice clients get then, with {nick},
+	// {services}, {grace} and {next} ("": none).
+	NickGuardGrace time.Duration
+	GuardWarning   string
+	// PreferNick is the nick the user last identified for: the guard
+	// tries it first. OnIdentifiedNick is told of a registered nick the
+	// user identified for (to save as the next PreferNick).
+	PreferNick       string
+	OnIdentifiedNick func(nick string)
 	// QuitMsg is sent when the network is switched off (the network's own
 	// quit message wins); empty sends a plain QUIT.
 	QuitMsg string
@@ -345,6 +375,10 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		altNick:      orElse(strings.TrimSpace(n.AltNick), strings.TrimSpace(opts.AltNick)),
 		guard:        opts.NickGuard,
 		badNicks:     map[string]bool{},
+		guardGrace:   opts.NickGuardGrace,
+		guardWarning: opts.GuardWarning,
+		onIdentified: opts.OnIdentifiedNick,
+		preferNick:   strings.TrimSpace(opts.PreferNick),
 		quitMsg:      orElse(n.QuitMsg, opts.QuitMsg),
 		joinDelay:    time.Duration(n.JoinDelay) * time.Second,
 		chanSettings: n.ChannelSettings,
@@ -726,15 +760,19 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		conn.Close()
 	}()
 
+	prefer := c.guard && c.idle != nil && !c.idle() // someone's there to identify
 	c.mu.Lock()
 	c.w = conn
-	c.nick = c.guardFirst()
+	c.nick = c.guardFirst(prefer)
 	if resumed != nil {
 		c.nick = resumed.Nick
 	}
 	c.triedAlt = false
 	c.guardAsked, c.clientNick, c.guardTaken = "", "", map[string]bool{}
+	c.ownNicks, c.prompted, c.graceNick, c.whoisNick, c.software = map[string]bool{}, map[string]bool{}, "", "", ""
+	c.graceSeq++
 	first := c.nick
+	c.guardWant = first
 	c.capsOffered, c.caps, c.capsWaiting = map[string]string{}, map[string]bool{}, 0
 	c.isupport, c.account = nil, ""
 	c.channels = map[string]bool{}
@@ -816,7 +854,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 			}
 		}
 		c.line = history.ID{}
-		if c.resyncReply(m) {
+		if c.resyncReply(m) || c.guardWhoisReply(m) {
 			continue
 		}
 		c.broadcastRaw(out) // full-fidelity feed for attached IRC clients
@@ -972,6 +1010,15 @@ func (c *Conn) handle(m irc.Message) {
 			gen := c.auth.gen
 			c.mu.Unlock()
 			c.authDone(gen, true, lastParam(m))
+			if len(m.Params) > 2 {
+				c.guardAccount(m.Params[2])
+			}
+		}
+	case "004": // RPL_MYINFO: the server's name and version
+		if len(m.Params) > 2 {
+			c.mu.Lock()
+			c.software = m.Params[2]
+			c.mu.Unlock()
 		}
 	case "401", "440": // no such nick, services down
 		c.servicesMissing(m)
@@ -1059,6 +1106,7 @@ func (c *Conn) handle(m irc.Message) {
 				}
 			}
 		}
+		c.guardNickLen()
 	case "432", "435", "437", "447": // erroneous, can't change, held (services)
 		c.guardRefused(m)
 	case "433": // ERR_NICKNAMEINUSE
@@ -1267,6 +1315,8 @@ func (c *Conn) handle(m irc.Message) {
 			c.applyModes(m.Params[0], m.Params[1], m.Params[2:])
 			c.mu.Unlock()
 			c.event("mode", m.Params[0], nickOf(m.Prefix), strings.Join(m.Params[1:], " "), "")
+		} else if len(m.Params) >= 2 && strings.EqualFold(m.Params[0], c.Nick()) {
+			c.guardUserModes(m.Params[1])
 		}
 	case "AWAY": // away-notify: :nick!user@host AWAY [:message]
 		c.mu.Lock()
@@ -1277,6 +1327,9 @@ func (c *Conn) handle(m irc.Message) {
 			c.mu.Lock()
 			c.accountChanged(nickOf(m.Prefix), m.Params[0])
 			c.mu.Unlock()
+			if strings.EqualFold(nickOf(m.Prefix), c.Nick()) {
+				c.guardAccount(m.Params[0])
+			}
 		}
 	case "SETNAME": // setname: :nick!user@host SETNAME :realname
 		if len(m.Params) > 0 {

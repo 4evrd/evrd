@@ -430,6 +430,8 @@
     "irc.log.loginRefused": "Servisler girişi reddetti: {said}",
     "irc.log.ghosting": "{nick} alınmış: {services} hizmetinden onu {command} ile serbest bırakması isteniyor",
     "irc.log.nickRegistered": "{nick} başkası adına kayıtlı: {next} kullanılıyor",
+    "irc.log.nickGrace": "{nick} kayıtlı: kullanıcının kimliğini doğrulaması için {grace} bekleniyor, sonra {next} kullanılacak",
+    "irc.log.nickIdentified": "{nick} için kimlik doğrulandı: korunuyor",
     "irc.rest.allBanned": "{network} ağının tüm sunucuları bu adresi reddediyor: {wait} sonra yeniden denenecek",
     "irc.rest.allLimited": "{network} ağının tüm sunucuları bu adresten gelen bağlantıları reddediyor ya da sınırlıyor: {wait} sonra yeniden denenecek",
     "irc.rest.banned": "{host} bu adresi reddediyor: {rest} dinlendiriliyor, ağın diğer sunucuları deneniyor",

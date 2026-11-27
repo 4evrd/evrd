@@ -447,6 +447,8 @@
     "irc.log.loginRefused": "Serviciile au refuzat login-ul: {said}",
     "irc.log.ghosting": "{nick} e ocupat: îi cer lui {services} să-l {command}",
     "irc.log.nickRegistered": "{nick} e înregistrat de altcineva: trec la {next}",
+    "irc.log.nickGrace": "{nick} e înregistrat: aștept {grace} să se identifice utilizatorul, apoi trec la {next}",
+    "irc.log.nickIdentified": "Identificat pentru {nick}: îl păstrez",
     "irc.rest.allBanned": "Toate serverele {network} refuză această adresă: reîncerc în {wait}",
     "irc.rest.allLimited": "Toate serverele {network} refuză sau limitează conexiunile de la această adresă: reîncerc în {wait}",
     "irc.rest.banned": "{host} refuză această adresă: îl las în pauză {rest} și încerc celelalte servere ale rețelei",

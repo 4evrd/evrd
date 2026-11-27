@@ -18,6 +18,12 @@ type Managed struct {
 	// NickGuard keeps connections that don't log in to services off
 	// nicks registered to someone else (upstream.Options.NickGuard).
 	NickGuard bool
+	// NickGuardGrace is how long a guarded connection may stay on a
+	// registered nick for the user to identify (asked at each connect:
+	// the managed API can change it); GuardWarning the notice clients get
+	// then (upstream.Options).
+	NickGuardGrace func() time.Duration
+	GuardWarning   string
 	// WebIRC is the WEBIRC line for a user at ip with ident ("" none).
 	WebIRC func(ctx context.Context, ip, ident string) string
 }

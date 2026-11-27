@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestManagedOffByDefault(t *testing.T) {
@@ -11,7 +12,9 @@ func TestManagedOffByDefault(t *testing.T) {
 	if c.Managed.On || c.CheckManaged() != nil {
 		t.Fatalf("managed: %+v", c.Managed)
 	}
-	if !c.Managed.TLSVerify || c.Managed.ServerName != "irc" || c.Managed.WebIRCGateway != "gateway" || !c.Managed.WebIRCResolve || !c.Managed.NickGuard {
+	if !c.Managed.TLSVerify || c.Managed.ServerName != "irc" || c.Managed.WebIRCGateway != "gateway" || !c.Managed.WebIRCResolve || !c.Managed.NickGuard ||
+		c.Managed.NickGuardGrace != time.Minute || c.Managed.Guests || c.Managed.GuestsMax != 100 || c.Managed.GuestsPerIP != 3 ||
+		c.Managed.GuestLinger != 30*time.Second {
 		t.Errorf("defaults %+v", c.Managed)
 	}
 }
@@ -39,6 +42,12 @@ managed_away gone
 managed_version Boson
 managed_quit bye
 managed_nick_guard no
+managed_nick_guard_grace 45
+managed_client_webirc_password gw
+managed_guests yes
+managed_guests_max 7
+managed_guests_per_ip 2
+managed_guest_linger 1m
 `)
 	c, err := LoadFile(path)
 	if err != nil {
@@ -50,7 +59,9 @@ managed_nick_guard no
 		m.WebIRCPassword != "webircpw" || m.WebIRCGateway != "boson" || m.WebIRCResolve ||
 		m.ServerName != "irc.example.org" || m.Token != "api-token" || m.TokenIssuer != "https://auth.example.org" ||
 		m.TokenAudience != "boson" || m.TokenJWKS == "" || !slices.Equal(m.MOTD, []string{"Welcome!", "Be nice."}) ||
-		m.AwayMessage != "gone" || m.VersionReply != "Boson" || m.QuitMessage != "bye" || m.NickGuard {
+		m.AwayMessage != "gone" || m.VersionReply != "Boson" || m.QuitMessage != "bye" || m.NickGuard ||
+		m.NickGuardGrace != 45*time.Second || m.ClientWebIRCPassword != "gw" || !m.Guests || m.GuestsMax != 7 ||
+		m.GuestsPerIP != 2 || m.GuestLinger != time.Minute {
 		t.Errorf("loaded %+v", m)
 	}
 	if err := c.CheckManaged(); err != nil {
@@ -74,7 +85,9 @@ managed_nick_guard no
 
 func TestManagedServerAndTextErrors(t *testing.T) {
 	for _, bad := range []string{"managed_server", "managed_server a b c", "managed_server a +x", "managed_server a 70000",
-		"managed_text nosuch hi", "managed maybe", "managed_tls_verify maybe", "managed_webirc_resolve maybe"} {
+		"managed_text nosuch hi", "managed maybe", "managed_tls_verify maybe", "managed_webirc_resolve maybe",
+		"managed_nick_guard_grace -1s", "managed_nick_guard_grace soon", "managed_guests maybe", "managed_guests_max -1",
+		"managed_guests_per_ip x", "managed_guest_linger -5"} {
 		if _, err := LoadFile(writeConf(t, bad+"\n")); err == nil {
 			t.Errorf("%q loaded", bad)
 		}
@@ -127,11 +140,12 @@ func TestManagedSecretsFromEnv(t *testing.T) {
 	t.Setenv("EVRD_MANAGED_TOKEN", "envtok")
 	t.Setenv("EVRD_MANAGED_WEBIRC_PASSWORD", "envwebirc")
 	t.Setenv("EVRD_MANAGED_SERVER_PASSWORD", "envpass")
+	t.Setenv("EVRD_MANAGED_CLIENT_WEBIRC_PASSWORD", "envgw")
 	c := Default()
 	if err := c.ApplyEnv(); err != nil {
 		t.Fatal(err)
 	}
-	if c.Managed.Token != "envtok" || c.Managed.WebIRCPassword != "envwebirc" || c.Managed.ServerPassword != "envpass" {
+	if c.Managed.Token != "envtok" || c.Managed.WebIRCPassword != "envwebirc" || c.Managed.ServerPassword != "envpass" || c.Managed.ClientWebIRCPassword != "envgw" {
 		t.Errorf("%+v", c.Managed)
 	}
 }

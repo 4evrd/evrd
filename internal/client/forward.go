@@ -138,7 +138,7 @@ func (se *session) splice(node store.Node) error {
 	if capList == "" {
 		capList = "-"
 	}
-	intro := fmt.Sprintf("EVRD-PROXY %s %s %s\r\n", se.srv.secret, remoteHost(se.conn), capList)
+	intro := fmt.Sprintf("EVRD-PROXY %s %s %s\r\n", se.srv.secret, se.clientIP(), capList)
 	if se.lsWaiting {
 		intro += se.lsLine + "\r\n" // the owner answers it
 	}

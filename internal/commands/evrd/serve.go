@@ -342,8 +342,13 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 	// connections present themselves as the config says.
 	mm := managed.New(cfg)
 	var prov *managed.Provisioner
+	var guests *managed.Guests
 	if mm != nil {
-		prov = &managed.Provisioner{Mode: mm, Accounts: acc, Bouncer: b}
+		if _, err := mm.LoadLive(ctx, st); err != nil {
+			log.Warn("managed: live settings", "err", err)
+		}
+		guests = &managed.Guests{Mode: mm, Accounts: acc, Bouncer: b, Log: log}
+		prov = &managed.Provisioner{Mode: mm, Accounts: acc, Bouncer: b, Guests: guests, Store: st}
 		if n, err := prov.Reconcile(ctx); err != nil {
 			log.Error("managed: bring networks in line with the config", "err", err)
 			return 1
@@ -354,7 +359,17 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 		b.SetManaged(bouncer.Managed{
 			AwayMessage: mc.AwayMessage, VersionReply: mc.VersionReply, QuitMessage: mc.QuitMessage,
 			ReplyFrom: mm.ServerName(), WebIRC: mm.WebIRC, NickGuard: mc.NickGuard,
+			NickGuardGrace: mm.NickGuardGrace, GuardWarning: mm.Text("registered", "{nick}"),
 		})
+		// guests left over from before a restart go before anything
+		// connects them again
+		if n, err := guests.Sweep(ctx); err != nil {
+			log.Warn("managed: remove guests left over", "err", err)
+		} else if n > 0 {
+			log.Info("managed: removed guests left over", "guests", n)
+		}
+		go guests.Run(ctx, time.Minute)
+		go mm.FollowLive(ctx, st, 10*time.Second, log)
 		log.Info("managed mode", "network", mc.Network, "server", mc.Host, "port", mc.Port, "tls", mc.TLS,
 			"webirc", mc.WebIRCPassword != "", "token_issuer", cfg.ManagedIssuer())
 	}
@@ -425,6 +440,7 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 	signIns := ircsignin.New(st, acc) // IRC sign-in by link (irc_link_signin)
 	irc.SetLinkSignIn(signIns, cfg.LinkSignIn() && mm == nil)
 	irc.SetManaged(mm)
+	irc.SetGuests(guests)
 	srv := evrdhttp.New(b, evrdhttp.Services{
 		Accounts:   acc,
 		Auth:       am,

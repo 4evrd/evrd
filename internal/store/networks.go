@@ -89,8 +89,13 @@ func (r *NetworkRepository) SetNetworkEnabled(ctx context.Context, id int64, ena
 }
 
 func (r *NetworkRepository) UpdateNetwork(ctx context.Context, n Network) error {
-	// Everything but ownership and the on/off switch (SetNetworkEnabled).
-	return r.db.DB.WithContext(ctx).Model(&Network{ID: n.ID}).Select("*").Omit("id", "user_id", "enabled").Updates(&n).Error
+	// Everything but ownership, the on/off switch (SetNetworkEnabled) and
+	// the nick the guard saw identified (SetNetworkIdentifiedNick).
+	return r.db.DB.WithContext(ctx).Model(&Network{ID: n.ID}).Select("*").Omit("id", "user_id", "enabled", "identified_nick").Updates(&n).Error
+}
+
+func (r *NetworkRepository) SetNetworkIdentifiedNick(ctx context.Context, id int64, nick string) error {
+	return r.db.DB.WithContext(ctx).Model(&Network{ID: id}).Select("identified_nick").Updates(&Network{IdentifiedNick: nick}).Error
 }
 
 func (r *NetworkRepository) SetNetworkChannelSettings(ctx context.Context, id int64, settings map[string]ChannelSettings) error {

@@ -97,6 +97,11 @@ type User struct {
 	// MustChangePassword is set for a temporary password an admin chose.
 	MustChangePassword bool `gorm:"not null;default:false"`
 
+	// Guest marks a managed mode guest's ephemeral account: made when a
+	// guest signs in, removed (with its network and history) when the
+	// guest leaves.
+	Guest bool `gorm:"not null;default:false"`
+
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	LastLoginAt *time.Time
@@ -281,6 +286,11 @@ type Network struct {
 	// Modules are the network's modules (internal/modules) by name: on or
 	// off, and their settings.
 	Modules map[string]ModuleConfig `gorm:"serializer:secretjson"` // encrypted like passwords
+
+	// IdentifiedNick is the registered nick the user last identified for
+	// with services on a connection the nick guard watches (managed mode):
+	// it's tried first on later connections.
+	IdentifiedNick string `gorm:"not null;default:''"`
 }
 
 // ModuleConfig is one module on a network.

@@ -47,7 +47,8 @@ type Server struct {
 
 	dir *directory.Directory // nil: none
 
-	managed *managed.Mode // managed mode (managed.go); nil: off
+	managed *managed.Mode   // managed mode (managed.go); nil: off
+	guests  *managed.Guests // managed mode's guests (guests.go); nil: none
 
 	publicURL string // the web app's address; "" when unknown
 

@@ -9,6 +9,9 @@ package handlers
 //	GET    /api/managed/users/{username}   one account (404: none)
 //	PUT    /api/managed/users/{username}   create or change one (managed.UserInput)
 //	DELETE /api/managed/users/{username}   remove one, with its history
+//	GET    /api/managed/settings           the live settings (guests, the nick guard's grace)
+//	PUT    /api/managed/settings           change some (managed.LiveInput)
+//	DELETE /api/managed/settings           back to the config's
 
 import (
 	"errors"
@@ -101,4 +104,37 @@ func (s *Handlers) ManagedDeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Info("managed: deleted account", "user", r.PathValue("username"))
 	writeJSON(w, http.StatusOK, map[string]any{"username": r.PathValue("username"), "deleted": true})
+}
+
+// ManagedSettings is GET /api/managed/settings.
+func (s *Handlers) ManagedSettings(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.prov.Live())
+}
+
+// ManagedPutSettings is PUT /api/managed/settings: the fields it carries
+// change, at once and on every node.
+func (s *Handlers) ManagedPutSettings(w http.ResponseWriter, r *http.Request) {
+	var in managed.LiveInput
+	if !s.decode(w, r, &in) {
+		return
+	}
+	l, err := s.prov.SetLive(r.Context(), in)
+	if err != nil {
+		s.managedFail(w, r, err)
+		return
+	}
+	s.log.Info("managed: live settings changed", "guests", l.Guests, "guests_max", l.GuestsMax, "guests_per_ip", l.GuestsPerIP,
+		"guest_linger", l.GuestLingerSeconds, "nick_guard_grace", l.NickGuardGraceSeconds)
+	writeJSON(w, http.StatusOK, l)
+}
+
+// ManagedResetSettings is DELETE /api/managed/settings: the config's
+// settings again.
+func (s *Handlers) ManagedResetSettings(w http.ResponseWriter, r *http.Request) {
+	l, err := s.prov.ResetLive(r.Context())
+	if err != nil {
+		s.managedFail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, l)
 }

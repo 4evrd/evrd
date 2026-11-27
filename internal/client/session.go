@@ -132,6 +132,7 @@ type session struct {
 	restoredAt time.Time
 	savedState []byte
 	preAway    *string // AWAY sent while registering (pre-away)
+	guest      bool    // a managed mode guest (guests.go)
 }
 
 func newSession(srv *Server, conn net.Conn) *session {
@@ -196,11 +197,16 @@ func (se *session) serve(ctx context.Context) {
 		if se.heldOver(ctx) {
 			return // still attached, as far as the next evrd is concerned
 		}
-		se.recordDrop()
-		se.savePosition()
-		se.markOnNetwork() // until now
+		if !se.guest {
+			se.recordDrop()
+			se.savePosition()
+			se.markOnNetwork() // until now
+		}
 		if se.release != nil {
 			se.release()
+		}
+		if se.guest {
+			se.srv.guests.Left(se.uid)
 		}
 	}()
 	se.bridge(ctx)
@@ -249,6 +255,8 @@ func (se *session) register(ctx context.Context) bool {
 			}
 		case "AUTHENTICATE":
 			se.authenticate(m)
+		case "WEBIRC": // a web gateway passing its client's address (managed mode)
+			se.webIRC(m)
 		case "AWAY": // draft/pre-away: kept for once attached
 			if se.caps["draft/pre-away"] {
 				away := lastParam(m)
@@ -488,6 +496,9 @@ func (se *session) hasNetwork(userID int64, name string) bool {
 // account the client's ident or nick names, to tell the admin whose it is
 // and which — never kept itself.
 func (se *session) recordSignIn(rec store.IRCSignIn, attached bool, alone string) {
+	if se.guest {
+		return // a guest keeps nothing
+	}
 	switch l := se.locked; {
 	case l != nil && l.link:
 		rec.Result = "link"
@@ -549,6 +560,17 @@ func (se *session) attach() (attached bool) {
 	if passwordOnly {
 		login = ""
 	}
+	if (!ok || password == "") && se.saslUser.ID == 0 && se.guestsOn() {
+		u, device, ok := se.guestSignIn()
+		if !ok {
+			return false
+		}
+		if !se.attachAs(u, "", "", device, "") {
+			se.srv.guests.Left(u.ID) // refused after all: the session ends
+			return false
+		}
+		return true
+	}
 	if (!ok || password == "") && se.srv.linkSignInOn() && !se.isManaged() && !strings.ContainsAny(login, " ") {
 		// no password: sign in on the website instead (user, user/network
 		// or nothing at all)
@@ -584,6 +606,13 @@ func (se *session) attach() (attached bool) {
 			return false
 		}
 	}
+	return se.attachAs(u, username, network, device, otp)
+}
+
+// attachAs attaches the client to u, who signed in (on device, with otp
+// for a second factor): the host check, the second factor, the network
+// and the client limit, then the welcome.
+func (se *session) attachAs(u store.User, username, network, device, otp string) bool {
 	se.uid, se.acct = u.ID, u
 	if ip := se.clientIP(); ip != "" && !accounts.HostAllowed(u, ip) {
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("host_denied"))
@@ -646,6 +675,7 @@ func (se *session) attach() (attached bool) {
 			return false
 		}
 		se.unick = orElse(se.up.Nick(), chosen.Nick)
+		se.guestBound()
 	}
 	telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("ok"))
 	if !unbound {
@@ -712,8 +742,8 @@ func (se *session) signedIn(onNetwork bool, username, netName, device string) {
 	if se.caps["soju.im/bouncer-networks-notify"] {
 		se.listNetworks()
 	}
-	if se.quick {
-		return // the same device, back: no new activity entry, nothing new to ask
+	if se.quick || se.guest {
+		return // the same device, back (or a guest): no new activity entry, nothing new to ask
 	}
 	for _, o := range se.att.Sharing() {
 		se.say("clients.sharing", "device", o.Device, "client", orElse(o.Software, se.tr("clients.ircClient")), "ip", orElse(o.IP, "?"), "page", se.srv.clientsPage())

@@ -437,6 +437,8 @@
     "irc.log.loginRefused": "Los servicios rechazaron el inicio de sesión: {said}",
     "irc.log.ghosting": "{nick} está ocupado: pido a {services} que lo libere con {command}",
     "irc.log.nickRegistered": "{nick} está registrado por otra persona: cambio a {next}",
+    "irc.log.nickGrace": "{nick} está registrado: espero {grace} a que el usuario se identifique, luego cambio a {next}",
+    "irc.log.nickIdentified": "Identificado para {nick}: se mantiene",
     "irc.rest.allBanned": "Todos los servidores de {network} rechazan esta dirección: reintento en {wait}",
     "irc.rest.allLimited": "Todos los servidores de {network} rechazan o limitan las conexiones desde esta dirección: reintento en {wait}",
     "irc.rest.banned": "{host} rechaza esta dirección: lo dejo descansar {rest} y pruebo los demás servidores de la red",

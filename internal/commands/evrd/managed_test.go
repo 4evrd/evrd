@@ -240,7 +240,8 @@ func TestManagedNgircd(t *testing.T) {
 }
 
 // registerNick registers nick with NickServ on server (a classic client),
-// with Anope's quick kill protection.
+// with Anope's quick kill protection (20 seconds). Its password is
+// owner-secret-<nick>.
 func registerNick(t *testing.T, server, nick string) {
 	t.Helper()
 	c := dialIRC(t, server)
@@ -276,7 +277,8 @@ func TestManagedNickGuard(t *testing.T) {
 	c.send("JOIN #boson")
 	c.expect("366 watcher #boson")
 
-	m := startManaged(t, server, "managed_webirc_gateway {ident}")
+	// no grace: off the nick at once, as it always was
+	m := startManaged(t, server, "managed_webirc_gateway {ident}", "managed_nick_guard_grace 0")
 	if code, out := m.call("PUT", "/api/managed/users/alice-home", map[string]any{
 		"subject": "usr_fed", "nick": "alice-home", "altNick": "alice-home_", "ident": "alicehome",
 		"auth": map[string]any{"method": "none"}, "channels": []string{"#boson"},
@@ -323,4 +325,136 @@ func TestManagedNickGuard(t *testing.T) {
 		t.Errorf("reconnected:\n%s", m.stderr)
 	}
 	b.noEvrd()
+}
+
+// Against ngircd with Anope (EVRD_E2E_NGIRCD_ANOPE; NICKLEN 16, like
+// IRCForever): a Boson user whose handle is longer than NICKLEN gets it
+// cut by parts; on a registered nick it's warned, can identify with
+// NickServ within the grace and keeps the nick (remembered for next
+// time); on one it doesn't identify for it's moved off once the grace
+// ends.
+func TestManagedNickGuardGrace(t *testing.T) {
+	server := os.Getenv("EVRD_E2E_NGIRCD_ANOPE")
+	if server == "" {
+		t.Skip("set EVRD_E2E_NGIRCD_ANOPE=host:port (dev/e2e-managed.sh)")
+	}
+	registerNick(t, server, "lion")
+	registerNick(t, server, "gale")
+
+	m := startManaged(t, server, "managed_webirc_gateway {ident}", "managed_nick_guard_grace 8")
+	if code, out := m.call("PUT", "/api/managed/users/lion-windows-bosonchat", map[string]any{
+		"subject": "usr_lion", "nick": "lion-windows-bosonchat", "ident": "lion",
+		"auth": map[string]any{"method": "none"}, "channels": []string{"#den"},
+	}); code != 201 {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	b := dialIRC(t, m.irc)
+	b.send("PASS %s", m.issuer.Token("usr_lion", "lion-windows-bosonchat"))
+	b.send("NICK lion")
+	b.send("USER lion 0 * :Lion")
+	b.expect(" 001 ")
+	b.expect("NICK :lion-windows") // cut by parts to NICKLEN 16, not lion-windows-bos
+	b.expect(" JOIN :#den")
+	for _, l := range b.seen {
+		if strings.Contains(l, "NICK :lion-windows-") || strings.Contains(l, "NICK :lion-windows_") {
+			t.Errorf("on a nick cut badly: %q", l)
+		}
+	}
+
+	// the nick they own: warned, identifies, keeps it
+	b.send("NICK lion")
+	b.expect("NICK :lion")
+	warn := b.expect("is registered with NickServ")
+	if !strings.HasPrefix(warn, ":irc.example.org NOTICE lion :lion is registered with NickServ. Identify within 8 seconds") ||
+		!strings.Contains(warn, "moved to lion-windows") {
+		t.Errorf("warning: %q", warn)
+	}
+	b.send("PRIVMSG NickServ :IDENTIFY owner-secret-lion")
+	b.expect("Password accepted")
+	time.Sleep(12 * time.Second) // past the grace
+	c := dialIRC(t, server)
+	c.send("NICK watcher2")
+	c.send("USER watcher 0 * :Watcher")
+	c.expect(" 001 watcher2 ")
+	c.send("WHOIS lion")
+	c.expect(" 311 watcher2 lion ")
+	c.expect(" 307 watcher2 lion ") // identified
+	if code, out := m.call("GET", "/api/managed/users/lion-windows-bosonchat", nil); code != 200 || out["currentNick"] != "lion" || out["identifiedNick"] != "lion" {
+		t.Errorf("account: %d %v", code, out)
+	}
+
+	// someone else's: warned, doesn't identify, moved off after the grace,
+	// to the nick they identified for (services know them on it now)
+	b.send("NICK gale")
+	b.expect("NICK :gale")
+	b.expect("gale is registered with NickServ. Identify within 8 seconds (/msg NickServ IDENTIFY password) or you'll be moved to lion")
+	start := time.Now()
+	b.expect("NICK :lion")
+	if d := time.Since(start); d < 6*time.Second {
+		t.Errorf("moved after %s, before the grace", d)
+	}
+	for _, l := range b.seen {
+		if strings.Contains(l, " 311 ") || strings.Contains(l, " 318 ") {
+			t.Errorf("the guard's WHOIS reached the client: %q", l)
+		}
+		if strings.Contains(l, "Guest") || strings.Contains(l, " KILL ") {
+			t.Errorf("enforced: %q", l)
+		}
+	}
+	b.noEvrd()
+}
+
+// Against ngircd with Anope (EVRD_E2E_NGIRCD_ANOPE): guests sign in with
+// nothing, through the web gateway's WEBIRC, show on the server with
+// their own address, never keep a registered nick, and quit once gone
+// past the linger.
+func TestManagedGuestsNgircd(t *testing.T) {
+	server := os.Getenv("EVRD_E2E_NGIRCD_ANOPE")
+	if server == "" {
+		t.Skip("set EVRD_E2E_NGIRCD_ANOPE=host:port (dev/e2e-managed.sh)")
+	}
+	registerNick(t, server, "rex")
+	c := dialIRC(t, server)
+	c.send("NICK keeper")
+	c.send("USER keeper 0 * :Keeper")
+	c.expect(" 001 keeper ")
+	c.send("JOIN #lobby")
+	c.expect("366 keeper #lobby")
+
+	m := startManaged(t, server, "managed_webirc_gateway {ident}", "managed_guests yes", "managed_guest_linger 2",
+		"managed_nick_guard_grace 3", "managed_client_webirc_password gw-secret")
+	g := dialIRC(t, m.irc)
+	g.send("CAP LS 302")
+	g.send("WEBIRC gw-secret webircgateway 192.0.2.77 192.0.2.77")
+	g.send("NICK rex")
+	g.send("USER visitor 0 * :A visitor")
+	g.send("CAP REQ :message-tags server-time echo-message")
+	g.send("CAP END")
+	g.expect(":irc.example.org 001 rex ")
+	g.expect("rex is registered with NickServ. Identify within 3 seconds")
+	g.expect("NICK :rex_") // a guest never keeps a registered nick
+	g.send("JOIN #lobby")
+	g.expect(" JOIN :#lobby")
+	joined := c.expect(" JOIN :#lobby")
+	if !strings.HasPrefix(joined, ":rex_!visitor@192.0.2.77 ") {
+		t.Errorf("the guest joined as %q (want its own address, through WEBIRC)", joined)
+	}
+	g.send("PRIVMSG #lobby :hello, I'm a guest")
+	if echo := g.expect("hello, I'm a guest"); !strings.Contains(echo, "msgid=") {
+		t.Errorf("echo-message: %q", echo)
+	}
+	c.expect("hello, I'm a guest")
+	if code, out := m.call("GET", "/api/managed/health", nil); code != 200 || out["guests"].(map[string]any)["active"] != float64(1) {
+		t.Errorf("health: %d %v", code, out)
+	}
+	g.noEvrd()
+	g.c.Close()
+	start := time.Now()
+	c.expect(":rex_!visitor@192.0.2.77 QUIT")
+	if d := time.Since(start); d < 1500*time.Millisecond {
+		t.Errorf("quit after %s, before the linger", d)
+	}
+	if code, out := m.call("GET", "/api/managed/users", nil); code != 200 || len(out["users"].([]any)) != 0 {
+		t.Errorf("users: %d %v", code, out)
+	}
 }

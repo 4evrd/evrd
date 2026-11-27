@@ -28,6 +28,8 @@ type Mode struct {
 	// lookup is the resolver for WEBIRC host names (tests stand in).
 	lookupAddr func(ctx context.Context, addr string) ([]string, error)
 	lookupIP   func(ctx context.Context, host string) ([]net.IP, error)
+	// live is what the managed API changed over cfg (live.go).
+	live live
 }
 
 // New is c's managed mode, nil when it's off.
@@ -47,8 +49,15 @@ func New(c *config.Config) *Mode {
 // On reports whether managed mode is on.
 func (m *Mode) On() bool { return m != nil }
 
-// Config is the managed settings.
-func (m *Mode) Config() config.Managed { return m.cfg }
+// Config is the managed settings in effect: the config's, with what the
+// managed API changed over them (live.go).
+func (m *Mode) Config() config.Managed {
+	c := m.cfg
+	m.live.mu.Lock()
+	m.live.in.apply(&c)
+	m.live.mu.Unlock()
+	return c
+}
 
 // ServerName is the name the bouncer's own lines come from.
 func (m *Mode) ServerName() string { return m.cfg.ServerName }
