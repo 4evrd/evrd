@@ -28,3 +28,5 @@ coverage.out
 coverage.html
 test.out
 web/coverage.txt
+# the VAPID key evrd makes for push notifications (webpush_vapid_key)
+webpush-vapid.pem

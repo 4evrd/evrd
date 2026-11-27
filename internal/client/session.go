@@ -133,6 +133,9 @@ type session struct {
 	savedState []byte
 	preAway    *string // AWAY sent while registering (pre-away)
 	guest      bool    // a managed mode guest (guests.go)
+	// pushEndpoint is the push endpoint this client registered (WEBPUSH
+	// REGISTER), which a read marker it moves needn't be pushed to.
+	pushEndpoint string
 }
 
 func newSession(srv *Server, conn net.Conn) *session {
@@ -1217,6 +1220,8 @@ func (se *session) dispatch(m irc.Message) {
 			return
 		}
 		se.markRead(m.Params)
+	case "WEBPUSH":
+		se.webpush(m.Params)
 	case "PING":
 		se.send(fmt.Sprintf(":%s PONG %s :%s", se.serverName(), se.serverName(), lastParam(m)))
 	case "PONG":
@@ -1360,7 +1365,7 @@ func (se *session) dispatch(m irc.Message) {
 }
 
 // unboundOK are the commands a bouncer connection (on no network) takes.
-var unboundOK = map[string]bool{"PING": true, "QUIT": true, "CAP": true, "BOUNCER": true, "USER": true, "PASS": true, "AUTHENTICATE": true}
+var unboundOK = map[string]bool{"PING": true, "QUIT": true, "CAP": true, "BOUNCER": true, "USER": true, "PASS": true, "AUTHENTICATE": true, "WEBPUSH": true}
 
 // passOn sends a client's line to the upstream. Everything handleClient
 // doesn't take (JOIN, PART, MODE, WHO, NAMES, TOPIC, LIST, …) goes straight

@@ -42,6 +42,7 @@ import (
 	"github.com/4evrd/evrd/internal/telemetry"
 	"github.com/4evrd/evrd/internal/update"
 	"github.com/4evrd/evrd/internal/version"
+	"github.com/4evrd/evrd/internal/webpush"
 )
 
 // serve is evrd itself, with the config file at configPath ("" for the
@@ -128,6 +129,19 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 	updateDir, _ := filepath.Abs(cfg.UpdateDir)
 	if cfg.UpdateDir == "" {
 		updateDir = ""
+	}
+	// Push notifications' VAPID key (draft/webpush): made the first time,
+	// read now, while it's in reach (relative: the working directory).
+	var vapid *webpush.Keys
+	if cfg.WebPush.Enabled {
+		k, created, err := webpush.LoadOrCreateKeys(cfg.WebPush.KeyFile)
+		switch {
+		case err != nil:
+			log.Error("webpush: the VAPID key; push notifications are off", "file", cfg.WebPush.KeyFile, "err", err)
+		case created:
+			log.Info("webpush: made a VAPID key", "file", cfg.WebPush.KeyFile)
+		}
+		vapid = k
 	}
 	privileged := os.Geteuid() == 0 // a user switch then can't be undone
 	sandboxed := false
@@ -294,6 +308,15 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 	}
 
 	b := bouncer.New(st, hist, log)
+	var push *webpush.Service
+	if vapid != nil {
+		push = webpush.New(st, vapid, webpush.Options{
+			Delay: cfg.WebPush.Delay, Subscriber: cfg.PushSubscriber(),
+			MaxSubscriptions: cfg.WebPush.MaxSubscriptions, Expiration: cfg.WebPush.Expiration,
+		}, log)
+		push.Attached = func(userID int64) bool { return b.Attached(userID) > 0 }
+		b.SetPusher(push)
+	}
 	cl := cluster.New(st, store.Node{ID: cc.NodeID, HTTPURL: cc.InternalURL, IRCAddr: cc.InternalIRCAddr}, cluster.Hooks{
 		Acquire: b.ResumeUser,
 		Lose:    b.StopUser,
@@ -387,6 +410,7 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 	go func() { cl.Run(ctx); close(clusterDone) }()
 	go b.PruneLoop(ctx, 10*time.Minute, func(u store.User) int { return acc.LimitsFor(u).BacklogLines }, cl.Leader)
 	go acc.ZNCExpiryLoop(ctx, time.Hour, cl.Leader, log)
+	go push.Run(ctx, time.Hour, cl.Leader) // push subscriptions' expiry
 
 	// Metrics: pushed over OTLP (to VictoriaMetrics), read back for the
 	// dashboards from metrics_url.
@@ -441,6 +465,7 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 	irc.SetLinkSignIn(signIns, cfg.LinkSignIn() && mm == nil)
 	irc.SetManaged(mm)
 	irc.SetGuests(guests)
+	irc.SetPush(push)
 	srv := evrdhttp.New(b, evrdhttp.Services{
 		Accounts:   acc,
 		Auth:       am,

@@ -231,6 +231,7 @@ translated, or not at all.
 | `soju.im/bouncer-networks`, `soju.im/bouncer-networks-notify` | evrd's | `*status` network commands |
 | `no-implicit-names` | evrd's | every NAMES reply |
 | `draft/pre-away` | evrd's | — |
+| `draft/webpush`, `soju.im/webpush` | evrd's, unless `webpush no` | — |
 | `sts` | evrd's, with a trusted certificate | — |
 | `multi-prefix` | the network's | the highest prefix only (NAMES, WHO) |
 | `userhost-in-names` | the network's | nicks only in NAMES |
@@ -331,6 +332,29 @@ With `soju.im/bouncer-networks-notify` it hears when networks come, change
 buffer is read — the same markers the web app uses, so reading on one client
 or in the web app shows as read on the others within a few seconds. A marker
 only moves forward. A client gets a channel's marker after its JOIN.
+
+### Push notifications (`draft/webpush`)
+
+A client signed in to an account gets the VAPID key in ISUPPORT (`VAPID=`)
+and registers a Web Push endpoint, with its P-256 key and auth secret, for
+the account on the network it's on (a bouncer connection on none: for every
+network):
+
+    WEBPUSH REGISTER <endpoint> p256dh=<key>;auth=<secret>
+    WEBPUSH UNREGISTER <endpoint>
+
+evrd sends a test push (`PING webpush`) to a new endpoint before answering
+`WEBPUSH REGISTER <endpoint> <keys>`; registering it again (do it on every
+connect) only renews it. While none of the account's clients is attached, a
+private message or a line that names your nick there (what counts as a
+mention in the web app; not notices) is pushed to it: the line as a client
+would get it, `@time` and `@msgid` included, from `nick!nick@<network>`.
+Replies are Ergo's: `FAIL WEBPUSH FORBIDDEN` (push is off, or the client may
+not: not signed in, or a managed mode guest), `INVALID_PARAMS` (not an `https`
+URL, bad keys, the test push failed, an unknown subcommand),
+`MAX_REGISTRATIONS` and `INTERNAL_ERROR`. See
+[Push notifications](configuration.md#push-notifications-webpush) for the
+settings.
 
 ### Labels, multiline, STS
 

@@ -540,3 +540,24 @@ func (u User) AwayDelay() time.Duration {
 	}
 	return time.Duration(*u.AutoAwayDelay) * time.Second
 }
+
+// PushSubscription is a Web Push endpoint an IRC client registered for its
+// account (IRCv3 draft/webpush, WEBPUSH REGISTER): where evrd sends the
+// user's DMs and highlights while no client is attached. NetworkID is the
+// network the client was on when it registered (0: a bouncer connection on
+// none, which hears of every network's). P256DH and Auth are the client's
+// keys, base64url: what the push is encrypted to (RFC 8291).
+type PushSubscription struct {
+	ID        int64  `gorm:"primaryKey"`
+	UserID    int64  `gorm:"uniqueIndex:idx_push_sub,priority:1;not null"`
+	NetworkID int64  `gorm:"uniqueIndex:idx_push_sub,priority:2;not null;default:0"`
+	Endpoint  string `gorm:"uniqueIndex:idx_push_sub,priority:3;size:2048;not null"`
+	P256DH    string `gorm:"column:p256dh;not null"`
+	Auth      string `gorm:"not null"`
+	CreatedAt time.Time
+	// LastRefresh is when a client last registered it (WEBPUSH REGISTER),
+	// LastSuccess when a push to it last went through: it expires when
+	// either is too long ago.
+	LastRefresh time.Time
+	LastSuccess time.Time
+}

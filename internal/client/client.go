@@ -14,6 +14,7 @@ import (
 	"crypto/tls"
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/store"
+	"github.com/4evrd/evrd/internal/webpush"
 	"log/slog"
 	"net"
 	"strings"
@@ -51,6 +52,8 @@ type Server struct {
 	guests  *managed.Guests // managed mode's guests (guests.go); nil: none
 
 	publicURL string // the web app's address; "" when unknown
+
+	push *webpush.Service // draft/webpush (webpush.go); nil: off
 
 	// followEvery is how often a session checks its network for a new
 	// connection and changed capabilities (3s; tests shorten it).

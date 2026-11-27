@@ -45,6 +45,8 @@ func (se *session) markRead(p []string) {
 		return
 	}
 	se.sendMark(target, now)
+	// the user's devices can take a notification for it away
+	se.srv.push.MarkRead(se.uid, se.net.ID, target, now, se.pushEndpoint, se.serverName())
 }
 
 // sendMark tells the client how far target is read (* for not known).

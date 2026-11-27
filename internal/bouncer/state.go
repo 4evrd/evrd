@@ -339,16 +339,19 @@ func (b *Bouncer) observe(n store.Network, me string, m history.Message) {
 		nr.bufs[key] = st
 	}
 	st.LastAt = m.Time
-	mark := false
+	mark, mention := false, false
 	if isChat(m.Kind) && strings.EqualFold(m.Sender, me) {
 		// Saying something in a buffer means you've read it.
 		st.Unread, st.Mentions, st.ReadAt, mark = 0, 0, m.Time, true
 	} else {
-		st.count(m.Target, m, me)
+		mention = st.count(m.Target, m, me)
 	}
 	b.rmu.Unlock()
 	if mark {
 		_ = b.store.SetReadMarker(context.Background(), n.ID, key, m.Time)
+	}
+	if mention && b.push != nil && b.idle(n.UserID) {
+		b.push.Notify(n, me, m)
 	}
 }
 
@@ -455,27 +458,30 @@ func (b *Bouncer) MarkReadAt(networkID int64, buffer string, at time.Time) (time
 	return at, nil
 }
 
-// count adds a line in buffer to the unread state, me being the user's nick.
+// count adds a line in buffer to the unread state, me being the user's nick,
+// and reports whether it's a mention.
 // Chat lines from others are unread. Mentions are what asks for the user:
 // a private message, or their nick in a channel. Notices never are (they
 // come from services and bots: NickServ, welcome messages), and nothing a
 // server says counts at all: its connection notices arrive on every
 // reconnect. Nicks can't contain dots, so a server is any sender or
 // private buffer with one.
-func (st *BufferState) count(buffer string, m history.Message, me string) {
+func (st *BufferState) count(buffer string, m history.Message, me string) bool {
 	if !isChat(m.Kind) || strings.EqualFold(m.Sender, me) || isServerName(m.Sender) {
-		return
+		return false
 	}
 	if !isChannelName(buffer) && isServerName(buffer) {
-		return
+		return false
 	}
 	st.Unread++
 	if m.Kind == "notice" {
-		return
+		return false
 	}
 	if !isChannelName(buffer) || mentions(m.Text, me) {
 		st.Mentions++
+		return true
 	}
+	return false
 }
 
 func isServerName(s string) bool { return s == "" || strings.Contains(s, ".") }

@@ -76,7 +76,23 @@ type Bouncer struct {
 	holderMu sync.Mutex
 	holder   HolderStatus // as last asked (Holder)
 	holderAt time.Time
+
+	// push hears of DMs and highlights that arrive while none of their
+	// user's clients is attached (nil: no push notifications).
+	push Pusher
 }
+
+// Pusher sends push notifications (internal/webpush): Notify is a line for
+// the user that would notify them — a private message, or their nick in a
+// channel — that arrived on n while none of their clients was attached (me:
+// their nick there).
+type Pusher interface {
+	Notify(n store.Network, me string, m history.Message)
+}
+
+// SetPusher sends DMs and highlights to p while the user has no client
+// attached. Call it before Start.
+func (b *Bouncer) SetPusher(p Pusher) { b.push = p }
 
 // SetDialer sets how upstream connections are opened (pacing, source
 // addresses, bind hosts — see internal/outbound). Call it before Start.

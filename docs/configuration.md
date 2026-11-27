@@ -21,6 +21,7 @@ are stored in the database and win over the file (see below).
 | `modules_off` | — | [modules](modules.md) nobody on this server can use, space-separated |
 | `network_directory` (`EVRD_NETWORK_DIRECTORY`) | `https://evrd.sh/api/networks/v1.json` | the [network directory](network-directory.md) users pick from when adding a network: a URL, a local file, or `off` |
 | `update_check`, `self_update`, `update_dir` | GitHub's latest release, `yes`, `updates` | [new releases](updates.md): where to look for them, whether admins can install them from the web app, and where they go |
+| `webpush` (`EVRD_WEBPUSH`), `webpush_delay`, `webpush_subscriber`, `webpush_max_subscriptions`, `webpush_expiration`, `webpush_vapid_key` (`EVRD_WEBPUSH_VAPID_KEY`) | `yes`, `20s`, `public_url`, `8`, `30d`, `webpush-vapid.pem` | [push notifications](#push-notifications-webpush) for DMs and highlights while no client is attached: on or off, how long a push waits (a line read meanwhile isn't pushed), the VAPID contact push services see, subscriptions per account and network, how long one lasts without its client registering it again, and the VAPID key file |
 | `ident_file` (`EVRD_IDENT_FILE`) | — | an oidentd user config evrd keeps up to date so networks see users' idents, not evrd's system user; see [Idents](openbsd.md#idents-oidentd) |
 | `identd_listen` (`EVRD_IDENTD_LISTEN`) | — | evrd answers ident queries (RFC 1413) itself, e.g. `:113`; see [Ident](#ident-identd) |
 | `links_socket` (`EVRD_LINKS_SOCKET`) | — | the [connection holder](#connection-holder)'s socket: IRC connections stay up while evrd restarts (one node only) |
@@ -606,6 +607,39 @@ with the same username *and* email links to it — so the provider account must
 be the owner's, not a look-alike. After that it's an ordinary SSO account.
 Keep the token secret and the API on a local address (or behind your proxy
 with the token); anyone with it can create accounts.
+
+## Push notifications (webpush)
+
+evrd implements IRCv3 [`draft/webpush`](https://github.com/ircv3/ircv3-specifications/pull/471)
+as Ergo does, so the Boson app, Goguma and browsers get a notification for a
+private message or a highlight that arrives while none of the account's
+clients is attached. It's on by default (`webpush no` turns it off).
+
+- Clients are offered `draft/webpush` (and `soju.im/webpush`, as Ergo does)
+  and the VAPID public key as ISUPPORT `VAPID=`. A client signed in to an
+  account registers its endpoint with `WEBPUSH REGISTER <endpoint>
+  <keys>` (and drops it with `WEBPUSH UNREGISTER <endpoint>`); see
+  [IRC clients](irc-clients.md#push-notifications-draftwebpush).
+- A push is the IRC line (with `@time`, `@msgid` and its client-only tags),
+  encrypted to the subscription's key (RFC 8291), signed with evrd's VAPID
+  key (RFC 8292) and POSTed to the endpoint (RFC 8030). It waits
+  `webpush_delay` first: if the buffer's read marker moved past the line
+  meanwhile (read on another device, or in the web app), or a client
+  attached, it isn't sent. A buffer that was pushed and is then read is
+  pushed as a `MARKREAD`, so devices can take the notification away.
+- Only `https` endpoints, and never an address inside evrd's own network
+  (loopback, private, link-local, CGNAT): an endpoint is chosen by the client,
+  and evrd connects to it.
+- A subscription lasts `webpush_expiration` (at least `3d`) from the last time
+  its client registered it, as clients do on every connect; one whose pushes
+  stop going through expires too, and the push service answering `404` or
+  `410` drops it at once.
+- The VAPID key is made the first time, in `webpush_vapid_key` (relative to
+  the working directory: the data volume in the Docker image). Keep it:
+  subscriptions are bound to it, and a new key means every device registers
+  again. Every node of a [cluster](clustering.md) needs the same file.
+- In [managed mode](managed.md), only the clients of Boson accounts signed in
+  with their access token may register; guests can't.
 
 ## Saved passwords
 
