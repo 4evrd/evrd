@@ -170,3 +170,21 @@ func TestManagedSettingsAPI(t *testing.T) {
 		t.Errorf("wrong token: %d", code)
 	}
 }
+
+// The channel member query: behind the token, the channel's # escaped,
+// and "known: false" when no connection here is in the channel.
+func TestManagedChannelMemberAPI(t *testing.T) {
+	srv, _ := managedAPI(t)
+	if code, _ := managedCall(t, srv, "", "GET", "/api/managed/channels/%23boson/members/vic", nil); code != http.StatusUnauthorized {
+		t.Fatalf("no token: %d", code)
+	}
+	code, out := managedCall(t, srv, "api-token", "GET", "/api/managed/channels/%23boson/members/vic", nil)
+	if code != http.StatusOK || out["channel"] != "#boson" || out["nick"] != "vic" || out["known"] != false || out["present"] != false || out["mode"] != "" {
+		t.Fatalf("unknown channel: %d %v", code, out)
+	}
+	for _, p := range []string{"/api/managed/channels/boson/members/vic", "/api/managed/channels/%23bo%20son/members/vic", "/api/managed/channels/%23boson/members/%20"} {
+		if code, _ := managedCall(t, srv, "api-token", "GET", p, nil); code != http.StatusUnprocessableEntity {
+			t.Errorf("%s: %d", p, code)
+		}
+	}
+}
