@@ -404,6 +404,103 @@ func TestManagedNickGuardGrace(t *testing.T) {
 	b.noEvrd()
 }
 
+// Against ngircd with Anope (EVRD_E2E_NGIRCD_ANOPE; NICKLEN 16): the nick
+// a user changes to outlives their client reconnecting (a Boson app
+// restart registers with its handle-derived nick again: evrd keeps the
+// nick in use and tells the client) and a new connection to the network
+// (it registers with the nick the user last changed to).
+func TestManagedNickKeptAcrossReconnects(t *testing.T) {
+	server := os.Getenv("EVRD_E2E_NGIRCD_ANOPE")
+	if server == "" {
+		t.Skip("set EVRD_E2E_NGIRCD_ANOPE=host:port (dev/e2e-managed.sh)")
+	}
+	registerNick(t, server, "tlion")
+	m := startManaged(t, server, "managed_webirc_gateway {ident}", "managed_nick_guard_grace 8")
+	const user = "tlion-windows-bosonchat"
+	if code, out := m.call("PUT", "/api/managed/users/"+user, map[string]any{
+		"subject": "usr_tlion", "nick": user, "ident": "tlion",
+		"auth": map[string]any{"method": "none"}, "channels": []string{"#lair"},
+	}); code != 201 {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	account := func() map[string]any {
+		_, out := m.call("GET", "/api/managed/users/"+user, nil)
+		return out
+	}
+	wait := func(what string, cond func(map[string]any) bool) {
+		t.Helper()
+		var out map[string]any
+		for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+			if out = account(); cond(out) {
+				return
+			}
+		}
+		t.Fatalf("never: %s: %v", what, out)
+	}
+	// the Boson app signs in with its handle cut to 16, every time
+	attach := func() *lineConn {
+		b := dialIRC(t, m.irc)
+		b.send("PASS %s", m.issuer.Token("usr_tlion", user))
+		b.send("NICK tlion-windows-")
+		b.send("USER tlion 0 * :Lion")
+		return b
+	}
+
+	b := attach()
+	b.expect(" 001 ")
+	b.expect("NICK :tlion-windows")
+	b.expect(" JOIN :#lair")
+	b.send("NICK tlion-desk")
+	b.expect("NICK :tlion-desk")
+	wait("the last nick saved", func(o map[string]any) bool { return o["lastNick"] == "tlion-desk" })
+	b.c.Close()
+
+	// the app restarts: welcomed under the nick in use, which stays
+	b2 := attach()
+	b2.expect(" 001 tlion-desk ")
+	b2.expect(":tlion-windows-!tlion-windows-@irc.example.org NICK tlion-desk")
+	b2.expect("JOIN") // the channel opens (evrd's own JOIN: no colon)
+	time.Sleep(3 * time.Second)
+	if o := account(); o["currentNick"] != "tlion-desk" {
+		t.Fatalf("after the client came back: %v", o)
+	}
+
+	// a new connection to the network (a new real name relinks): on the
+	// last nick again
+	if code, out := m.call("PUT", "/api/managed/users/"+user, map[string]any{"realname": "Lion"}); code != 200 {
+		t.Fatalf("update: %d %v", code, out)
+	}
+	wait("reconnected on the last nick", func(o map[string]any) bool {
+		return strings.Count(m.stderr.String(), "connecting network") > 1 && o["status"] == "connected" && o["currentNick"] == "tlion-desk"
+	})
+
+	// the registered nick they own: identified, kept when the app restarts
+	b3 := attach()
+	b3.expect(" 001 tlion-desk ")
+	b3.expect("JOIN")
+	b3.send("NICK tlion")
+	b3.expect("NICK :tlion")
+	b3.expect("is registered with NickServ")
+	b3.send("PRIVMSG NickServ :IDENTIFY owner-secret-tlion")
+	b3.expect("Password accepted")
+	wait("identified", func(o map[string]any) bool { return o["identifiedNick"] == "tlion" && o["lastNick"] == "tlion" })
+	b2.c.Close()
+	b3.c.Close()
+	b4 := attach()
+	b4.expect(" 001 tlion ")
+	b4.expect("JOIN")
+	time.Sleep(12 * time.Second) // past a grace, had one started
+	if o := account(); o["currentNick"] != "tlion" {
+		t.Fatalf("after the client came back: %v", o)
+	}
+	for _, l := range b4.seen {
+		if strings.Contains(l, "is registered with NickServ") || strings.Contains(l, "NICK :tlion-windows") {
+			t.Errorf("moved again: %q", l)
+		}
+	}
+	b4.noEvrd()
+}
+
 // Against ngircd with Anope (EVRD_E2E_NGIRCD_ANOPE): guests sign in with
 // nothing, through the web gateway's WEBIRC, show on the server with
 // their own address, never keep a registered nick, and quit once gone

@@ -50,15 +50,16 @@ var servicesKilled = regexp.MustCompile(`(?i)(nick(name)?\s*(kill|enforce|protec
 // Holds c.mu.
 func (c *Conn) guardFirst(prefer bool) string {
 	if !c.guard {
-		return c.net.Nick
+		return orElse(c.lastNick, c.net.Nick)
 	}
 	c.guardPrefer = prefer
 	return c.guardPick("")
 }
 
 // guardCandidates are the nicks to use, in order: the nick the user last
-// identified for (while a client is there to identify again), the nick,
-// the alternate nick, then the alternate nick numbered. Each is fitted to
+// identified for (while a client is there to identify again), the nick a
+// client last changed to (not that registered one when nobody's there),
+// the nick, the alternate nick, then the alternate nick numbered. Each is fitted to
 // the server's NICKLEN, dropping whole trailing parts first. Holds c.mu.
 func (c *Conn) guardCandidates() []string {
 	base := strings.TrimSpace(c.net.Nick)
@@ -66,6 +67,9 @@ func (c *Conn) guardCandidates() []string {
 	var out []string
 	if p := strings.TrimSpace(c.preferNick); p != "" && c.guardPrefer && (max == 0 || len(p) <= max) {
 		out = append(out, p)
+	}
+	if l := c.lastNick; l != "" && (max == 0 || len(l) <= max) && (c.guardPrefer || !strings.EqualFold(l, c.preferNick)) {
+		out = append(out, l)
 	}
 	alt := orElse(c.altNick, base+"_")
 	out = append(out, fitNick(base, "", max), fitNick(alt, "", max))
@@ -169,6 +173,7 @@ func (c *Conn) guardMove(cur string, bad bool) (next string) {
 	k := strings.ToLower(cur)
 	if bad {
 		c.badNicks[k] = true
+		c.forgetLastNick(cur)
 	} else {
 		c.guardTaken[k] = true
 	}
@@ -295,6 +300,7 @@ func (c *Conn) guardKilled(reason string) {
 		return
 	}
 	c.badNicks[strings.ToLower(c.nick)] = true
+	c.forgetLastNick(c.nick)
 }
 
 // guardSettleLater lets the held joins go once the nick has been the same

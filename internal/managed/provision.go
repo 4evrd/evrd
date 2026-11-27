@@ -93,6 +93,9 @@ type User struct {
 	// with services during the nick guard's grace: tried first on the
 	// next connections ("" none).
 	IdentifiedNick string `json:"identifiedNick,omitempty"`
+	// LastNick is the nick the user last changed to on the server: new
+	// connections register with it ("" none; a new Nick clears it).
+	LastNick string `json:"lastNick,omitempty"`
 	// Clients is how many clients are attached now.
 	Clients int `json:"clients"`
 	// Created is set when this call made the account.
@@ -361,7 +364,7 @@ func (p *Provisioner) view(u store.User, n store.Network) User {
 		Username: u.Username, ID: u.ID, Email: u.Email, Disabled: u.Suspended,
 		Nick: n.Nick, AltNick: n.AltNick, Ident: orElse(n.Username, n.Nick), Realname: orElse(n.Realname, n.Nick),
 		Channels: append([]string{}, n.Channels...), Status: string(upstream.StatusDisconnected),
-		IdentifiedNick: n.IdentifiedNick,
+		IdentifiedNick: n.IdentifiedNick, LastNick: n.LastNick,
 	}
 	if u.OIDCSubject != nil {
 		out.Subject = *u.OIDCSubject

@@ -327,6 +327,16 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 		Dial:   dial,
 		JumpTo: jumpTo,
 	}
+	if !logsIn(n) {
+		// the nick a client changed to outlives reconnects; a network that
+		// logs in to services keeps to its own nick (the account's)
+		opts.LastNick = n.LastNick
+		opts.OnLastNick = func(nick string) {
+			if err := b.store.SetNetworkLastNick(context.Background(), networkID, nick); err != nil {
+				b.log.Warn("save the last nick", "network", n.Name, "err", err)
+			}
+		}
+	}
 	if m := b.managed; m != nil {
 		opts.VersionReply, opts.ReplyFrom = m.VersionReply, m.ReplyFrom
 		opts.QuitMsg = orElse(u.QuitMsg, m.QuitMessage)

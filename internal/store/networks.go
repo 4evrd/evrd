@@ -89,9 +89,20 @@ func (r *NetworkRepository) SetNetworkEnabled(ctx context.Context, id int64, ena
 }
 
 func (r *NetworkRepository) UpdateNetwork(ctx context.Context, n Network) error {
-	// Everything but ownership, the on/off switch (SetNetworkEnabled) and
-	// the nick the guard saw identified (SetNetworkIdentifiedNick).
-	return r.db.DB.WithContext(ctx).Model(&Network{ID: n.ID}).Select("*").Omit("id", "user_id", "enabled", "identified_nick").Updates(&n).Error
+	// Everything but ownership, the on/off switch (SetNetworkEnabled), the
+	// nick the guard saw identified (SetNetworkIdentifiedNick) and the
+	// nick last changed to (SetNetworkLastNick) — which a new Nick clears:
+	// the nick set wins over the one used last.
+	return r.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&Network{}).Where("id = ? AND nick <> ?", n.ID, n.Nick).Update("last_nick", "").Error; err != nil {
+			return err
+		}
+		return tx.Model(&Network{ID: n.ID}).Select("*").Omit("id", "user_id", "enabled", "identified_nick", "last_nick").Updates(&n).Error
+	})
+}
+
+func (r *NetworkRepository) SetNetworkLastNick(ctx context.Context, id int64, nick string) error {
+	return r.db.DB.WithContext(ctx).Model(&Network{ID: id}).Select("last_nick").Updates(&Network{LastNick: nick}).Error
 }
 
 func (r *NetworkRepository) SetNetworkIdentifiedNick(ctx context.Context, id int64, nick string) error {

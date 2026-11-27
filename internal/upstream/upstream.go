@@ -170,8 +170,13 @@ type Conn struct {
 	// services said are registered; graceNick has its grace running
 	// (graceSeq ends timers); whoisNick is being asked about (whoisFinal:
 	// a "no" moves off it, whoisReg: a "yes" came)
-	preferNick           string
-	guardPrefer          bool
+	preferNick  string
+	guardPrefer bool
+	// lastNick: the nick a client last changed to (Options.LastNick);
+	// askedNick: a client's NICK on its way, to save once the server
+	// answers it
+	lastNick, askedNick  string
+	onLastNick           func(nick string)
 	ownNicks, prompted   map[string]bool
 	graceNick, whoisNick string
 	graceSeq, whoisSeq   int
@@ -326,6 +331,13 @@ type Options struct {
 	// user identified for (to save as the next PreferNick).
 	PreferNick       string
 	OnIdentifiedNick func(nick string)
+	// LastNick is the nick a client last changed to on this network: a new
+	// connection registers with it instead of the network's nick (after
+	// PreferNick while guarded), so the nick outlives reconnects as on any
+	// bouncer. OnLastNick is told when a client's NICK took (to save as
+	// the next LastNick), and with "" when the guard found it registered.
+	LastNick   string
+	OnLastNick func(nick string)
 	// QuitMsg is sent when the network is switched off (the network's own
 	// quit message wins); empty sends a plain QUIT.
 	QuitMsg string
@@ -379,6 +391,8 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		guardWarning: opts.GuardWarning,
 		onIdentified: opts.OnIdentifiedNick,
 		preferNick:   strings.TrimSpace(opts.PreferNick),
+		lastNick:     strings.TrimSpace(opts.LastNick),
+		onLastNick:   opts.OnLastNick,
 		quitMsg:      orElse(n.QuitMsg, opts.QuitMsg),
 		joinDelay:    time.Duration(n.JoinDelay) * time.Second,
 		chanSettings: n.ChannelSettings,
@@ -768,7 +782,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		c.nick = resumed.Nick
 	}
 	c.triedAlt = false
-	c.guardAsked, c.clientNick, c.guardTaken = "", "", map[string]bool{}
+	c.guardAsked, c.clientNick, c.guardTaken, c.askedNick = "", "", map[string]bool{}, ""
 	c.ownNicks, c.prompted, c.graceNick, c.whoisNick, c.software = map[string]bool{}, map[string]bool{}, "", "", ""
 	c.graceSeq++
 	first := c.nick
@@ -1198,6 +1212,7 @@ func (c *Conn) handle(m irc.Message) {
 			c.event("nick", ch, old, "", nu)
 		}
 		if me {
+			c.lastNickChanged(nu)
 			c.guardNick(old, nu)
 			c.nickChanged(nu)
 		}
@@ -2184,6 +2199,7 @@ func (c *Conn) SendRaw(line string) {
 		}
 	}
 	c.guardClientNick(line)
+	c.clientAsksNick(line)
 	c.sendUser(line)
 }
 
