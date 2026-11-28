@@ -95,7 +95,9 @@ type Config struct {
 	WebPush WebPush
 	// ModulesOff are modules (internal/modules) switched off server-wide.
 	ModulesOff []string
-	Secrets    Secrets
+	// DCC is how the bouncedcc module relays DCCs (dcc.go).
+	DCC     DCC
+	Secrets Secrets
 	// NetworkDirectory is where the list of IRC networks users pick from
 	// comes from (internal/directory): an http(s) URL or a local file.
 	// Empty turns it off.
@@ -554,6 +556,7 @@ func Default() *Config {
 		ClientPingTimeout: 60 * time.Second,
 		Metrics:           Metrics{Interval: 15 * time.Second},
 		Managed:           defaultManaged(),
+		DCC:               DCC{Timeout: DefaultDCCTimeout},
 
 		NetworkDirectory: DefaultNetworkDirectory,
 		UpdateCheck:      DefaultUpdateCheck,
@@ -687,6 +690,9 @@ func (c *Config) ApplyEnv() error {
 	if v := os.Getenv("EVRD_IDENT_FILE"); v != "" {
 		c.IdentFile = v
 	}
+	if err := c.dccEnv(); err != nil {
+		return err
+	}
 	if v := os.Getenv("EVRD_UPSTREAM_PREFIX6"); v != "" {
 		p, err := netip.ParsePrefix(v)
 		if err != nil {
@@ -728,6 +734,9 @@ func (c *Config) ApplyEnv() error {
 
 func (c *Config) set(key, val string) error {
 	if ok, err := c.setManaged(key, val); ok {
+		return err
+	}
+	if ok, err := c.setDCC(key, val); ok {
 		return err
 	}
 	var err error

@@ -49,14 +49,11 @@ func (se *session) offer() map[string]string {
 	if link == nil && !se.registered {
 		link = se.regLink()
 	}
-	out["sasl"] = "PLAIN"
-	if m := se.srv.managed; m != nil {
+	out["sasl"] = strings.Join(se.saslMechs(), ",")
+	if se.srv.managed != nil {
 		// no bouncer networks: there's the one network
 		delete(out, "soju.im/bouncer-networks")
 		delete(out, "soju.im/bouncer-networks-notify")
-		if m.Tokens() != nil {
-			out["sasl"] = "PLAIN,OAUTHBEARER,IRCV3BEARER"
-		}
 	}
 	if se.srv.push.Enabled() {
 		// Ergo offers both; Goguma asks for soju's

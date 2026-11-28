@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/auth"
 	"github.com/4evrd/evrd/internal/bouncer"
 	"github.com/4evrd/evrd/internal/certs"
@@ -92,6 +93,10 @@ func (s *Server) SetUpdater(u *update.Updater) { s.h.SetUpdater(u) }
 // SetUpdatedWebApp serves an installed update's web app at /api/webapp/,
 // where the web image's nginx looks first. Call before serving.
 func (s *Server) SetUpdatedWebApp(dir string) { s.updatedWeb = dir }
+
+// SetClientCerts lets users manage the client certificates that sign their
+// IRC clients in (certauth).
+func (s *Server) SetClientCerts(c accounts.ClientCertServiceImpl) { s.h.SetClientCerts(c) }
 
 // SetMetrics reads the dashboards' charts from m.
 func (s *Server) SetMetrics(m *metricsq.Client) { s.h.SetMetrics(m) }
@@ -251,9 +256,17 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/me/client-passwords", user(h.ListClientPasswords))
 	mux.HandleFunc("POST /api/me/client-passwords", user(h.CreateClientPassword))
 	mux.HandleFunc("DELETE /api/me/client-passwords/{id}", user(h.DeleteClientPassword))
+	// client certificates that sign IRC clients in (Account → Security)
+	mux.HandleFunc("GET /api/me/client-certs", user(h.ListClientCerts))
+	mux.HandleFunc("POST /api/me/client-certs", user(h.AddClientCert))
+	mux.HandleFunc("DELETE /api/me/client-certs/{id}", user(h.DeleteClientCert))
 	mux.HandleFunc("GET /api/me/language-pack", user(h.MyLanguagePack))
 	mux.HandleFunc("PUT /api/me/language-pack", user(h.PutMyLanguagePack))
 	mux.HandleFunc("DELETE /api/me/language-pack", user(h.DeleteMyLanguagePack))
+	// notes (Account → Notes; /msg *notes)
+	mux.HandleFunc("GET /api/me/notes", user(h.MyNotes))
+	mux.HandleFunc("PUT /api/me/notes/{key}", user(h.PutMyNote))
+	mux.HandleFunc("DELETE /api/me/notes/{key}", user(h.DeleteMyNote))
 
 	// networks
 	mux.HandleFunc("GET /api/networks", chat(h.ListNetworks))

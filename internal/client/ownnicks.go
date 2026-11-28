@@ -19,7 +19,7 @@ func isOwnNick(name string) bool { return len(name) > 1 && name[0] == '*' }
 
 // knownNick reports whether evrd has a user by that name.
 func (se *session) knownNick(name string) bool {
-	return !se.isManaged() && strings.EqualFold(name, statusNick)
+	return !se.isManaged() && (strings.EqualFold(name, statusNick) || strings.EqualFold(name, notesNick) || se.certsOn() && strings.EqualFold(name, certauthNick))
 }
 
 // ownNickLine answers a client's line about evrd's own nicks, reporting
@@ -87,10 +87,15 @@ func (se *session) ownNickLine(m irc.Message) bool {
 		}
 		return true
 	case "PRIVMSG", "NOTICE", "TAGMSG":
-		// *status is handled by dispatch; other "*" names never reach
-		// the network, and only a PRIVMSG gets an answer.
-		if len(m.Params) == 0 || !isOwnNick(m.Params[0]) || strings.EqualFold(m.Params[0], statusNick) {
+		// *status (and *notes's and *certauth's PRIVMSG and NOTICE) are handled by
+		// dispatch; other "*" names never reach the network, and only a
+		// PRIVMSG gets an answer.
+		if len(m.Params) == 0 || !isOwnNick(m.Params[0]) || strings.EqualFold(m.Params[0], statusNick) ||
+			(m.Command != "TAGMSG" && se.knownNick(m.Params[0])) {
 			return false
+		}
+		if m.Command == "PRIVMSG" && len(m.Params) == 2 && se.up.ClientLine(m.String()) {
+			return true // a module's own nick (*crypt)
 		}
 		if m.Command == "PRIVMSG" {
 			se.numeric("401", m.Params[0]+" :No such nick/channel (evrd's commands are on "+statusNick+")")

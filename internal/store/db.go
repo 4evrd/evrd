@@ -19,6 +19,7 @@ type gormStore struct {
 	UserRepositoryImpl
 	SessionRepositoryImpl
 	ClientPasswordRepositoryImpl
+	ClientCertRepositoryImpl
 	NetworkRepositoryImpl
 	ReadMarkerRepositoryImpl
 	BufferPlaybackRepositoryImpl
@@ -33,6 +34,8 @@ type gormStore struct {
 	IRCSignInRepositoryImpl
 	DevicePositionRepositoryImpl
 	PushSubscriptionRepositoryImpl
+	NoteRepositoryImpl
+	ClientIPRepositoryImpl
 
 	db *DB
 }
@@ -72,7 +75,7 @@ func NewDatabase(dsn string) (*DB, error) {
 		return nil, err
 	}
 	hadPlayback := db.Migrator().HasTable(&BufferPlayback{})
-	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}, &PendingSignIn{}, &ClientDisconnect{}, &IRCSignIn{}, &DevicePosition{}, &PushSubscription{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &ClientPassword{}, &ClientCert{}, &Network{}, &Node{}, &UserLease{}, &ReadMarker{}, &BufferPlayback{}, &UserEvent{}, &Setting{}, &NodeConf{}, &CertCacheEntry{}, &CacheEntry{}, &LanguagePack{}, &UserLanguagePack{}, &UserTOTP{}, &RecoveryCode{}, &PendingSignIn{}, &ClientDisconnect{}, &IRCSignIn{}, &DevicePosition{}, &PushSubscription{}, &UserNote{}, &ClientIP{}); err != nil {
 		return nil, err
 	}
 	if !hadPlayback {
@@ -104,6 +107,7 @@ func newStore(db *DB) *gormStore {
 		UserRepositoryImpl:             NewUserRepository(db),
 		SessionRepositoryImpl:          NewSessionRepository(db),
 		ClientPasswordRepositoryImpl:   NewClientPasswordRepository(db),
+		ClientCertRepositoryImpl:       NewClientCertRepository(db),
 		NetworkRepositoryImpl:          NewNetworkRepository(db),
 		ReadMarkerRepositoryImpl:       NewReadMarkerRepository(db),
 		BufferPlaybackRepositoryImpl:   NewBufferPlaybackRepository(db),
@@ -118,6 +122,8 @@ func newStore(db *DB) *gormStore {
 		IRCSignInRepositoryImpl:        NewIRCSignInRepository(db),
 		DevicePositionRepositoryImpl:   NewDevicePositionRepository(db),
 		PushSubscriptionRepositoryImpl: NewPushSubscriptionRepository(db),
+		NoteRepositoryImpl:             NewNoteRepository(db),
+		ClientIPRepositoryImpl:         NewClientIPRepository(db),
 		db:                             db,
 	}
 }

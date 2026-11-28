@@ -68,6 +68,8 @@ type Server struct {
 	writeStall   time.Duration
 	heardJustNow time.Duration
 	justAttached time.Duration
+	// clientNotifyWait shortens clientnotify.go's wait in tests.
+	clientNotifyWait time.Duration
 
 	sts stsState
 
@@ -76,6 +78,9 @@ type Server struct {
 	signIns SignIns   // nil: no SSO passwords, no lockout (tests)
 	mfa     mfaState  // second factors for IRC sign-ins (mfa.go)
 	link    linkState // sign-in by link (link.go)
+
+	// sign-in by client certificate (certauth.go); nil: none
+	certs ClientCerts
 
 	// the connection holder, holding clients (hold.go); nil: none
 	holder      *links.Client
@@ -158,7 +163,7 @@ func (s *Server) listen(ctx context.Context, url string) {
 		if conf, err = s.tlsConfig(); err == nil {
 			if ln, err = listen.TCP(addr); err == nil {
 				s.tlsPort(ln.Addr().String())
-				ln = tls.NewListener(ln, conf)
+				ln = tls.NewListener(ln, requestClientCerts(conf))
 			}
 		}
 	default:

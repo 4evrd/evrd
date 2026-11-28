@@ -367,12 +367,13 @@ func (se *session) restore(raw []byte) error {
 	}
 	maps.Copy(se.rejoining, st.Rejoining)
 	att, err := se.srv.b.ReattachClient(u.ID,
-		bouncer.ClientInfo{Device: st.Device, Networks: bound, IP: se.clientIP(), Software: st.Software, Signature: st.Signature},
+		bouncer.ClientInfo{Device: st.Device, Networks: bound, IP: se.clientIP(), Software: st.Software, Signature: st.Signature, CertFP: se.peerCert().cert},
 		se.kick)
 	if err != nil {
 		return err
 	}
 	att.Answers(se.answers)
+	se.hearTells(att)
 	att.Update(func(ci *bouncer.ClientInfo) {
 		if !st.Since.IsZero() {
 			ci.Since = st.Since

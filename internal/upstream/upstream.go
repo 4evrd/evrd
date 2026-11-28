@@ -261,6 +261,7 @@ type Conn struct {
 	modCtx      context.Context
 	modCfg      map[string]store.ModuleConfig
 	modsOff     func() map[string]bool
+	clientIPs   func() []string
 	idle        func() bool
 	version     string
 	versionText string // the whole CTCP VERSION answer ("": evrd's)
@@ -271,6 +272,15 @@ type Conn struct {
 	detaching   func() bool
 	tryResume   bool // the first connection tries the holder's link first
 	resumeAfter <-chan struct{}
+
+	// the channels a module attached, to tell clients of with the line in
+	// hand (modules.go), and where the channel settings are saved
+	attached       []string
+	onChanSettings func(map[string]store.ChannelSettings)
+	// the modules' ClientRewriters (crypt), under mu: send can't wait for
+	// modMu, a module may be the one sending
+	rewriters  []modules.ClientRewriter
+	saveModule func(module, key, value string) // Options.SaveModuleSetting
 }
 
 // maxPending caps the lines held for an upstream that isn't registered yet.
@@ -296,6 +306,12 @@ type Options struct {
 	OnLog func(LogEntry)
 	// ModulesOff lists modules an admin switched off server-wide.
 	ModulesOff func() map[string]bool
+	// SaveModuleSetting saves a module's setting that the module changed
+	// itself (crypt's keys). May be nil.
+	SaveModuleSetting func(module, key, value string)
+	// ClientIPs lists where the user's IRC clients attached from (for
+	// bouncedcc). May be nil.
+	ClientIPs func() []string
 	// Dial opens the TCP connection (TLS is added on top). The bouncer uses
 	// it to pace connects and pick the source address; nil dials directly.
 	Dial func(ctx context.Context, host string, port int) (net.Conn, error)
@@ -346,6 +362,9 @@ type Options struct {
 	// Idle reports whether no client is attached, in which case evrd itself
 	// answers CTCP VERSION, PING and TIME. Nil: never.
 	Idle func() bool
+	// OnChannelSettings saves the channel settings when the connection
+	// changes them itself (a module attaching a channel). May be nil.
+	OnChannelSettings func(map[string]store.ChannelSettings)
 	// Version is evrd's version, for CTCP VERSION.
 	Version string
 	// VersionReply, when set, is the whole CTCP VERSION answer instead of
@@ -377,6 +396,8 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		onLog:        opts.OnLog,
 		modCfg:       n.Modules,
 		modsOff:      opts.ModulesOff,
+		saveModule:   opts.SaveModuleSetting,
+		clientIPs:    opts.ClientIPs,
 		dial:         opts.Dial,
 		links:        opts.Links,
 		linkID:       opts.LinkID,
@@ -436,6 +457,7 @@ func New(n store.Network, log *slog.Logger, opts Options) *Conn {
 		c.readLimit = DefaultReadTimeout
 	}
 	c.flood.set(n.FloodRate, n.FloodBurst)
+	c.onChanSettings = opts.OnChannelSettings
 	return c
 }
 
@@ -852,8 +874,16 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 		if m.Command == "KILL" && len(m.Params) > 0 && strings.EqualFold(m.Params[0], c.Nick()) {
 			c.guardKilled(nickOf(m.Prefix) + " " + lastParam(m))
 		}
+		if keep, changed := c.modsRewrite(&m); !keep {
+			continue // a module took it (crypt's key exchange)
+		} else if changed {
+			line = withTagsOf(line, m.String()) // (crypt decrypted it)
+		}
 		if m.Command == "PRIVMSG" && len(m.Params) == 2 && c.ctcp(m.Prefix, m.Params[0], m.Params[1]) {
 			continue // answered (or blocked) here
+		}
+		if m.Command == "PRIVMSG" && len(m.Params) == 2 && !c.serverCTCP(&m, &line) {
+			continue // a module took it (ctcprewrite.go)
 		}
 		c.line, c.recorded = history.ID{Nanos: time.Now().UnixNano(), Seq: history.NextSeq()}, false
 		c.handle(m)
@@ -868,7 +898,11 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 			}
 		}
 		c.line = history.ID{}
+		out.Attach = c.takeAttached() // channels a module attached on this line
 		if c.resyncReply(m) || c.guardWhoisReply(m) {
+			if out.Attach != nil {
+				c.broadcastRaw(Line{Attach: out.Attach})
+			}
 			continue
 		}
 		c.broadcastRaw(out) // full-fidelity feed for attached IRC clients
@@ -2097,6 +2131,13 @@ type Line struct {
 	// keeps them open and is told only what changed.
 	Left []string
 	Was  map[string]LeftChannel
+	// Attach are channels a module (autoattach) attached on this line, or
+	// on its own: clients show them again as *status attach does, this
+	// line coming in their playback.
+	Attach []string
+	// Note, instead of a line: a module telling the user something, put in
+	// each client's language (modHost.Notify).
+	Note Note
 }
 
 // LeftChannel is a channel as it was when the link evrd was in it on ended.
@@ -2219,7 +2260,15 @@ func (c *Conn) sendUser(line string) {
 	c.send(line)
 }
 
+// send sends a line to the server, as the modules have it (crypt
+// encrypts messages to the targets it has a key for).
 func (c *Conn) send(line string) {
+	for _, l := range c.rewriteOut(line) {
+		c.write(l)
+	}
+}
+
+func (c *Conn) write(line string) {
 	if len(line) > 5 && strings.EqualFold(line[:5], "OPER ") {
 		c.operSent()
 	}

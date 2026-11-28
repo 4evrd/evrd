@@ -6,6 +6,8 @@ package bouncer
 import (
 	"context"
 	"time"
+
+	"github.com/4evrd/evrd/internal/store"
 )
 
 // Managed is how connections present themselves in managed mode.
@@ -35,17 +37,22 @@ func (b *Bouncer) SetManaged(m Managed) {
 	b.mu.Unlock()
 }
 
-// awayMessage is the auto-away message in effect.
-func (b *Bouncer) awayMessage() string {
+// awayMessage is u's auto-away message, u having gone away at since.
+func (b *Bouncer) awayMessage(u store.User, since time.Time) string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.awayMessageLocked()
+	return b.awayMessageLocked(u, since)
 }
 
-// awayMessageLocked is awayMessage with b.mu held.
-func (b *Bouncer) awayMessageLocked() string {
+// awayMessageLocked is awayMessage with b.mu held: managed mode's when it
+// has one (the managing service decides how its accounts look), else the
+// user's own (away.go), else AwayMessage.
+func (b *Bouncer) awayMessageLocked(u store.User, since time.Time) string {
 	if b.managed != nil && b.managed.AwayMessage != "" {
 		return b.managed.AwayMessage
+	}
+	if u.AwayMessage != "" {
+		return awayText(u, since)
 	}
 	return AwayMessage
 }

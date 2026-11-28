@@ -19,6 +19,7 @@ are stored in the database and win over the file (see below).
 | `web_root` | — | the built web app (`web/build`) for evrd to serve on `api` and `https_listen`, without nginx |
 | `chroot`, `user` | — | confine evrd after startup; see [Confinement](#confinement-chroot-and-user) |
 | `modules_off` | — | [modules](modules.md) nobody on this server can use, space-separated |
+| `dcc_public` (`EVRD_DCC_PUBLIC`), `dcc_listen`, `dcc_ports` (`EVRD_DCC_PORTS`), `dcc_timeout`, `dcc_max_mb`, `dcc_private` | —, all, any free port, `60s`, `0`, `no` | the [bouncedcc module](modules.md#for-admins): the address(es) DCC offers point at (none: nothing is relayed), where its listeners bind, their port ranges, how long one waits, the largest file and whether offers to private addresses are followed |
 | `network_directory` (`EVRD_NETWORK_DIRECTORY`) | `https://evrd.sh/api/networks/v1.json` | the [network directory](network-directory.md) users pick from when adding a network: a URL, a local file, or `off` |
 | `update_check`, `self_update`, `update_dir` | GitHub's latest release, `yes`, `updates` | [new releases](updates.md): where to look for them, whether admins can install them from the web app, and where they go |
 | `webpush` (`EVRD_WEBPUSH`), `webpush_delay`, `webpush_subscriber`, `webpush_max_subscriptions`, `webpush_expiration`, `webpush_vapid_key` (`EVRD_WEBPUSH_VAPID_KEY`) | `yes`, `20s`, `public_url`, `8`, `30d`, `webpush-vapid.pem` | [push notifications](#push-notifications-webpush) for DMs and highlights while no client is attached: on or off, how long a push waits (a line read meanwhile isn't pushed), the VAPID contact push services see, subscriptions per account and network, how long one lasts without its client registering it again, and the VAPID key file |
@@ -335,10 +336,11 @@ again. Without a `secret_key` they're left out of the export.
 
 From ZNC, the config has the servers (and their passwords), nicks, channels
 (keys, detached, disabled, buffer sizes), certificate fingerprints, flood
-settings and `IRCConnectEnabled`. `keepnick`, `kickrejoin`, `autocycle` and
-`ctcpflood` come over as evrd's modules. `sasl` and `nickserv` set the
+settings and `IRCConnectEnabled`. `keepnick`, `kickrejoin`, `autocycle`,
+`ctcpflood`, `autoreply` (with its reply) and `autoattach` (with the channels
+on its line) come over as evrd's modules. `sasl` and `nickserv` set the
 login method, but ZNC keeps their passwords outside the config (as it does
-`perform`'s commands and `autoop`'s list), so the import tells you what to
+`perform`'s commands, `autoop`'s list and `crypt`'s keys), so the import tells you what to
 fill in. For old logs, see `evrctl history import-znc`.
 
 Admins can do the same for any account (Admin → Users → a user →
@@ -362,8 +364,13 @@ An account that doesn't exist yet is made, and
 - with an email, it's also claimable, as with the
   [provisioning API](#provisioning-api): the owner's first SSO sign-in with
   the same username and email takes it over.
+- it takes the user's `simple_away` (for the user or one of its networks):
+  auto-away on, its `-timer` (or `-notimer`: at once) and its reason as the
+  away message; and `clientnotify` turns client notices on. Their other
+  options, and the `notes` module's notes, are in ZNC's moddata, not the
+  config, so they don't come.
 
-An account that already exists keeps its own password. Then each user's
+An account that already exists keeps its own password and settings. Then each user's
 networks are imported into their account, as above.
 
 A file written by hand works too. Fields left out keep what the network

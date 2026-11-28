@@ -27,7 +27,23 @@ func (se *session) relay(line upstream.Line) {
 		}
 		return
 	}
+	if line.Note.From != "" { // a module telling the user something (*crypt)
+		se.send(fmt.Sprintf(":%s!%s@%s NOTICE %s :%s", line.Note.From, strings.TrimPrefix(line.Note.From, "*"), se.serverName(), se.unick, ircText(se.printer().Text(line.Note.Text))))
+		return
+	}
 	m := irc.Parse(line.Text)
+	if len(line.Attach) > 0 { // a module (autoattach) attached these
+		inPlayback := line.Text == ""
+		for _, ch := range line.Attach {
+			if se.up.Joined(ch) && !se.open[strings.ToLower(ch)] {
+				se.showChannel(ch)
+			}
+			inPlayback = inPlayback || strings.EqualFold(ch, lineChannel(m))
+		}
+		if inPlayback {
+			return // the line is in the channel's playback
+		}
+	}
 	text := line.Text
 	if strings.HasPrefix(text, "@") {
 		_, text, _ = strings.Cut(text[1:], " ")

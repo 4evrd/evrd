@@ -204,7 +204,7 @@ test('bouncer overview: tiles, placement, upstreams and storage', async ({ page 
     await page.getByRole('tab', { name: /Online/ }).click()
     await expect(page.locator('.user-node', { hasText: u.name })).toHaveCount(0)
     await page.getByRole('tab', { name: /All/ }).click()
-    await expect(page.locator('.up-row', { hasText: 'ircd' })).toContainText('All up')
+    await expect(page.locator('.up-row', { hasText: /(?<!insp)ircd/ })).toContainText('All up')
     await expect(page.locator('.kv', { hasText: 'Accounts' }).last()).toContainText('PostgreSQL')
     await expect(page.locator('.kv', { hasText: 'Chat history' })).toContainText('ScyllaDB')
     await expect(page.locator('.kv', { hasText: 'Networks per user' })).toContainText('∞')

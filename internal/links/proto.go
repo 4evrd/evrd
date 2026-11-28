@@ -111,6 +111,11 @@ type HeldClient struct {
 	Local  string          `json:"local"` // the listener's
 	TLS    bool            `json:"tls,omitempty"`
 	State  json.RawMessage `json:"state,omitempty"`
+
+	// the SHA-256s of the client's TLS certificate and of its public key,
+	// if it sent one (certauth)
+	CertFP string `json:"certfp,omitempty"`
+	KeyFP  string `json:"keyfp,omitempty"`
 }
 
 // Info describes a link the holder keeps.

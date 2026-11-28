@@ -67,6 +67,8 @@ type Bouncer struct {
 
 	// awayAfter is each user's pending auto-away (state.go's refreshAway).
 	awayAfter map[int64]*time.Timer
+	// awayAt is when each user auto-away has marked away went away.
+	awayAt map[int64]time.Time
 
 	// managed is managed mode's presentation (managed.go), nil when off;
 	// lastIP each user's latest client's address, for WEBIRC.
@@ -329,6 +331,7 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 		OnEvent:     func(e upstream.Event) { b.addNetworkEvent(n.UserID, n.ID, e.Kind, e.TitleText, e.DetailText) },
 		OnLog:       func(e upstream.LogEntry) { b.netlog.add(networkID, e) },
 		ModulesOff:  b.modulesOff,
+		ClientIPs:   func() []string { return b.clientIPs(n.UserID) },
 		AltNick:     u.DefaultAltNick,
 		QuitMsg:     u.QuitMsg,
 		CTCPReplies: u.CTCPReplies,
@@ -342,6 +345,17 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 		},
 		Dial:   dial,
 		JumpTo: jumpTo,
+	}
+	// a module attaching a channel (autoattach) saves it here
+	opts.OnChannelSettings = func(m map[string]store.ChannelSettings) {
+		if err := b.store.SetNetworkChannelSettings(context.Background(), networkID, m); err != nil {
+			b.log.Warn("save channel settings", "network", n.Name, "err", err)
+		}
+	}
+	opts.SaveModuleSetting = func(module, key, value string) {
+		if err := b.saveModuleSetting(networkID, module, key, value); err != nil {
+			b.log.Warn("save a module's setting", "network", n.Name, "module", module, "err", err)
+		}
 	}
 	if !logsIn(n) {
 		// the nick a client changed to outlives reconnects; a network that
@@ -377,7 +391,7 @@ func (b *Bouncer) connect(networkID int64, jumpTo *int) error {
 	conn = upstream.New(n, b.log, opts)
 	b.conns[networkID] = &entry{conn: conn, userID: n.UserID, cancel: cancel}
 	if u.AutoAway && len(b.clients[n.UserID])+len(b.streams[n.UserID]) == 0 {
-		conn.SetAway(b.awayMessageLocked()) // applied once registered
+		conn.SetAway(b.awayMessageLocked(u, b.awaySinceLocked(n.UserID))) // applied once registered
 	}
 	go conn.Run(cctx)
 	b.log.Info("connecting network", "network", n.Name, "host", n.Host)

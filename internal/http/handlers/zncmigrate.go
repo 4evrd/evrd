@@ -88,6 +88,27 @@ func (s *Handlers) AdminPreviewZNC(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"users": out})
 }
 
+// zncSettings gives a new account the ZNC user's settings: simple_away's
+// auto-away and reason, clientnotify.
+func (s *Handlers) zncSettings(r *http.Request, u *store.User, zs zncimport.Settings) {
+	if zs == (zncimport.Settings{}) {
+		return
+	}
+	if zs.AutoAway {
+		u.AutoAway = true
+		if zs.AutoAwayDelay != nil {
+			u.AutoAwayDelay = new(min(*zs.AutoAwayDelay, maxAutoAwayDelay))
+		}
+		if msg, ok := accounts.CleanAwayMessage(zs.AwayMessage); ok {
+			u.AwayMessage = msg
+		}
+	}
+	u.ClientNotify = zs.ClientNotify
+	if err := s.acc.UpdateUser(r.Context(), *u); err != nil {
+		s.log.Warn("znc account settings", "account", u.Username, "err", err)
+	}
+}
+
 // AdminCreateZNCAccounts makes the accounts ZNC users go to ({users}: the
 // ZNC user, the account name and optionally an email) where they don't
 // exist yet. A new account keeps the ZNC user's password when the config has
@@ -163,6 +184,7 @@ func (s *Handlers) AdminCreateZNCAccounts(w http.ResponseWriter, r *http.Request
 			out = append(out, res)
 			continue
 		}
+		s.zncSettings(r, &u, zu.Settings)
 		res["id"], res["created"], res["password"], res["claimable"] = u.ID, true, ci.PasswordHash != "", ci.SSOClaimable
 		out = append(out, res)
 	}

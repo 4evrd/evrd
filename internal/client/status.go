@@ -57,6 +57,9 @@ func init() {
 		{"listfingerprints", "", (*session).cmdListFingerprints},
 		{"addfingerprint", "<sha-256>", (*session).cmdAddFingerprint},
 		{"delfingerprint", "<sha-256>", (*session).cmdDelFingerprint},
+		{"listcerts", "", (*session).cmdListCerts},
+		{"addcert", "[sha-256] [label]", (*session).cmdAddCert},
+		{"delcert", "<number|sha-256>", (*session).cmdDelCert},
 		{"detach", "<#channel>[,…]", (*session).cmdDetach},
 		{"attach", "<#channel>[,…]", (*session).cmdAttach},
 		{"disablechan", "<#channel>[,…]", (*session).cmdDisableChan},
@@ -85,6 +88,9 @@ func init() {
 		{"clearuserbindhost", "", (*session).cmdClearUserBindHost},
 		{"info", "", (*session).cmdInfo},
 		{"language", "[code|-]", (*session).cmdLanguage},
+		{"awaymessage", "[message|-]", (*session).cmdAwayMessage},
+		{"clientnotify", "[on|off|newonly on|off|ondisconnect on|off]", (*session).cmdClientNotify},
+		{"notes", "[list|add|mod|del|get] …", (*session).cmdNotes},
 		{"listclients", "", (*session).cmdListClients},
 		{"uptime", "", (*session).cmdUptime},
 		{"traffic", "", (*session).cmdTraffic},
@@ -109,6 +115,7 @@ var statusAliases = map[string]string{
 	"reloadmodule": "reloadmod", "updatemodule": "updatemod",
 	"setvhost": "setbindhost", "clearvhost": "clearbindhost",
 	"motd": "showmotd", "lang": "language",
+	"awayreason": "awaymessage",
 }
 
 func (se *session) statusCommand(text string) {
@@ -156,7 +163,8 @@ func (se *session) statusf(format string, a ...any) {
 	if se.isManaged() {
 		return // there's no *status
 	}
-	se.send(fmt.Sprintf(":%s!status@%s PRIVMSG %s :%s", statusNick, se.serverName(), se.unick, ircText(fmt.Sprintf(format, a...))))
+	from := orElse(se.replyAs, statusNick)
+	se.send(fmt.Sprintf(":%s!%s@%s PRIVMSG %s :%s", from, from[1:], se.serverName(), se.unick, ircText(fmt.Sprintf(format, a...))))
 }
 
 // say sends key's text (irc.<key> in internal/messages) from *status, in

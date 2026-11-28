@@ -53,7 +53,7 @@ test('tabs: keyboard and deep links', async ({ page }) => {
   await expect(page.getByRole('tab', { name: 'Profile' })).toHaveAttribute('aria-selected', 'true')
   await page.keyboard.press('ArrowLeft')
   await expect(page.getByRole('tab', { name: 'Delete account' })).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByRole('tab')).toHaveCount(5)
+  await expect(page.getByRole('tab')).toHaveCount(6)
   // the user pill leads here
   await page.goto('/')
   await page.getByRole('link', { name: `Account: ${u.name}` }).click()

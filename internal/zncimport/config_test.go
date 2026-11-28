@@ -27,6 +27,7 @@ LoadModule = webadmin
 	RealName   = Got ZNC?
 	ChanBufferSize = 300
 	LoadModule = chansaver
+	LoadModule = bouncedcc
 
 	/* a comment
 	   over lines */
@@ -35,7 +36,7 @@ LoadModule = webadmin
 		LoadModule = keepnick
 		LoadModule = kickrejoin 5
 		LoadModule = perform
-		LoadModule = autoreply
+		LoadModule = shell
 		LoadModule = simple_away
 		Nick = libnick
 		Server     = irc.libera.chat +6697
@@ -106,7 +107,8 @@ func TestParseConfig(t *testing.T) {
 	if *pb[""].Lines != 300 || *pb["#znc"].Lines != 50 || *pb["#znc"].AutoClear {
 		t.Errorf("playback %+v", pb)
 	}
-	if n.AuthMethod != "sasl" || !n.Modules["keepnick"].Enabled || n.Modules["kickrejoin"].Settings["delay"] != "5" {
+	if n.AuthMethod != "sasl" || !n.Modules["keepnick"].Enabled || n.Modules["kickrejoin"].Settings["delay"] != "5" ||
+		!n.Modules["bouncedcc"].Enabled { // a user module: on for each network
 		t.Errorf("modules: %s %+v", n.AuthMethod, n.Modules)
 	}
 	if _, ok := n.Modules["perform"]; ok {
@@ -116,7 +118,7 @@ func TestParseConfig(t *testing.T) {
 	for _, no := range x.Notes() {
 		notes[no.Key] = no.Args[1].(string)
 	}
-	if notes["irc.znc.loginPassword"] != "sasl" || notes["irc.znc.moduleData"] != "perform" || notes["irc.znc.modulesSkipped"] != "autoreply" {
+	if notes["irc.znc.loginPassword"] != "sasl" || notes["irc.znc.moduleData"] != "perform" || notes["irc.znc.modulesSkipped"] != "shell" {
 		t.Errorf("notes %v", x.Notes())
 	}
 

@@ -25,6 +25,13 @@ type userSettingsInput struct {
 	QuietRejoin          *bool              `json:"quietRejoin"`
 	CTCPReplies          *map[string]string `json:"ctcpReplies"`
 	AllowedHosts         *[]string          `json:"allowedHosts"`
+
+	// clientnotify (ZNC's): tell the other IRC clients when one attaches
+	ClientNotify             *bool `json:"clientNotify"`
+	ClientNotifyNewOnly      *bool `json:"clientNotifyNewOnly"`
+	ClientNotifyOnDisconnect *bool `json:"clientNotifyOnDisconnect"`
+	// ShowNotesOnLogin: the notes to an IRC client as it attaches
+	ShowNotesOnLogin *bool `json:"showNotesOnLogin"`
 }
 
 // maxPlaybackLines caps PlaybackLines.
@@ -65,6 +72,10 @@ func (in userSettingsInput) apply(u *store.User) error {
 	set(&u.PrependTimestamp, in.PrependTimestamp)
 	set(&u.AppendTimestamp, in.AppendTimestamp)
 	set(&u.QuietRejoin, in.QuietRejoin)
+	set(&u.ClientNotify, in.ClientNotify)
+	set(&u.ClientNotifyNewOnly, in.ClientNotifyNewOnly)
+	set(&u.ClientNotifyOnDisconnect, in.ClientNotifyOnDisconnect)
+	set(&u.ShowNotesOnLogin, in.ShowNotesOnLogin)
 	if in.TimestampFormat != nil {
 		v := strings.TrimSpace(*in.TimestampFormat)
 		if v == "" || len(v) > 64 || strings.ContainsAny(v, "\r\n") {
@@ -127,5 +138,7 @@ func settingsDTO(u store.User) map[string]any {
 		"autoClearQueryBuffer": u.AutoClearQueryBuffer, "prependTimestamp": u.PrependTimestamp,
 		"appendTimestamp": u.AppendTimestamp, "timestampFormat": u.TimestampFormat, "timezone": u.Timezone,
 		"quietRejoin": u.QuietRejoin, "ctcpReplies": ctcp, "allowedHosts": orEmpty(u.AllowedHosts),
+		"clientNotify": u.ClientNotify, "clientNotifyNewOnly": u.ClientNotifyNewOnly, "clientNotifyOnDisconnect": u.ClientNotifyOnDisconnect,
+		"showNotesOnLogin": u.ShowNotesOnLogin,
 	}
 }

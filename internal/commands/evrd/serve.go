@@ -24,6 +24,7 @@ import (
 	"github.com/4evrd/evrd/internal/client"
 	"github.com/4evrd/evrd/internal/cluster"
 	"github.com/4evrd/evrd/internal/config"
+	"github.com/4evrd/evrd/internal/dcc"
 	"github.com/4evrd/evrd/internal/directory"
 	"github.com/4evrd/evrd/internal/history"
 	evrdhttp "github.com/4evrd/evrd/internal/http"
@@ -332,6 +333,7 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 	}
 	b.SetDialer(ob.DialFrom)
 	b.SetModulesOff(cfg.ModulesOff)
+	dcc.Configure(cfg.DCC)
 	var holder *links.Client
 	clientsBack := make(chan struct{}) // the clients the holder kept are back
 	if linksSocket != "" {
@@ -461,6 +463,8 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 	irc.SetSignIns(am)     // the lockout, and SSO passwords (sso_irc_password)
 	factors := mfa.New(st) // second factors for IRC sign-ins (irc_mfa)
 	irc.SetSecondFactors(factors, mfaPolicy(cfg, mm))
+	certs := accounts.NewClientCerts(st, st) // sign-in by client certificate (certauth)
+	irc.SetClientCerts(certs)
 	signIns := ircsignin.New(st, acc) // IRC sign-in by link (irc_link_signin)
 	irc.SetLinkSignIn(signIns, cfg.LinkSignIn() && mm == nil)
 	irc.SetManaged(mm)
@@ -475,6 +479,7 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 		MFA:        factors,
 		IRCSignIns: signIns,
 	}, cfg, irc, log)
+	srv.SetClientCerts(certs) // Account → Security's client certificates
 	srv.SetMetrics(metricsq.New(cfg.Metrics.QueryURL))
 	if prov != nil {
 		srv.SetManaged(prov) // its API instead of the web app's
@@ -551,6 +556,7 @@ func serveOnce(parent context.Context, configPath string, stderr io.Writer, next
 		ob.SetRate(live.Outbound.ConnectRate)
 		ob.SetIPv4First(!live.Outbound.PreferIPv6)
 		b.SetModulesOff(live.ModulesOff)
+		dcc.Configure(live.DCC)
 		if err := certMgr.Apply(&live); err != nil {
 			log.Warn("tls", "err", err)
 		}

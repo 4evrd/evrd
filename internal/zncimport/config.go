@@ -146,6 +146,8 @@ type User struct {
 	// Pass is the user's password as ZNC keeps it (nil: none in the config).
 	// Never sent anywhere: it's only for accounts.ZNCPasswordHash.
 	Pass *Pass
+	// Settings are the user's settings for its account (settings.go).
+	Settings Settings
 }
 
 // Pass is a ZNC user's password: Method is md5, sha256, argon2id or plain
@@ -202,7 +204,7 @@ func ParseConfig(text []byte) ([]User, error) {
 	}
 	var users []User
 	for _, u := range root.kids("User") {
-		users = append(users, User{Name: u.name, Networks: userNetworks(u), Pass: userPass(u)})
+		users = append(users, User{Name: u.name, Networks: userNetworks(u), Pass: userPass(u), Settings: userSettings(u)})
 	}
 	// <Network>s (or one network's <Chan>s and Servers) pasted on their own
 	if nets := userNetworks(root); len(nets) > 0 {
@@ -306,7 +308,7 @@ func network(u, n *section, name string) netfile.Network {
 		}
 		x.Channels = append(x.Channels, cc)
 	}
-	modules(&x, n)
+	modules(&x, u, n)
 	return x
 }
 
@@ -318,10 +320,17 @@ var ignored = []string{
 }
 
 // modules turns a network's LoadModule lines into evrd's modules and login
-// method, noting the ones whose settings ZNC keeps elsewhere.
-func modules(x *netfile.Network, n *section) {
+// method, noting the ones whose settings ZNC keeps elsewhere. bouncedcc is
+// a user module in ZNC: on the user (u), it's on for each of its networks.
+func modules(x *netfile.Network, u, n *section) {
 	var skipped []string
-	for _, line := range n.all("LoadModule") {
+	lines := n.all("LoadModule")
+	for _, line := range u.all("LoadModule") {
+		if name, _, _ := strings.Cut(strings.TrimSpace(line), " "); strings.EqualFold(name, "bouncedcc") {
+			lines = append(lines, line)
+		}
+	}
+	for _, line := range lines {
 		name, args, _ := strings.Cut(strings.TrimSpace(line), " ")
 		name, args = strings.ToLower(name), strings.TrimSpace(args)
 		set := func(settings map[string]string) {
@@ -334,7 +343,7 @@ func modules(x *netfile.Network, n *section) {
 		case "sasl", "nickserv":
 			x.Login = &netfile.Login{Method: name}
 			x.AddNote("irc.znc.loginPassword", "module", name)
-		case "keepnick", "ctcpflood":
+		case "keepnick", "ctcpflood", "bouncedcc":
 			set(nil)
 		case "kickrejoin":
 			if _, err := strconv.Atoi(args); err == nil {
@@ -348,7 +357,21 @@ func modules(x *netfile.Network, n *section) {
 			} else {
 				set(nil)
 			}
-		case "perform", "autoop", "autovoice", "alias", "q":
+		case "autoreply": // its argument is the reply
+			if args != "" {
+				set(map[string]string{"reply": args})
+			} else {
+				set(nil)
+			}
+		case "autoattach":
+			// its arguments are channels, each a rule; the rules added
+			// with a command ZNC keeps in its own data, not the config
+			if f := strings.Fields(args); len(f) > 0 {
+				set(map[string]string{"rules": strings.Join(f, "\n")})
+			} else {
+				x.AddNote("irc.znc.moduleData", "module", name)
+			}
+		case "perform", "autoop", "autovoice", "alias", "q", "crypt": // (crypt's keys are in its moddata)
 			x.AddNote("irc.znc.moduleData", "module", name)
 		default:
 			if !slices.Contains(ignored, name) {
