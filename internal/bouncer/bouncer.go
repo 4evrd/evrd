@@ -582,6 +582,48 @@ func (b *Bouncer) ChannelMember(channel, nick string) upstream.Membership {
 	return out
 }
 
+// NetworkSize is the network's users and channels from LUSERS, as the
+// freshest of this node's connected connections last heard it. When that
+// is older than maxAge it asks that connection again and waits for the
+// answer until ctx ends (then it is the older count). Counts are -1 when
+// no connection has said; meant for managed mode, where every connection
+// is on the one network.
+func (b *Bouncer) NetworkSize(ctx context.Context, maxAge time.Duration) upstream.Lusers {
+	b.mu.Lock()
+	conns := make([]*upstream.Conn, 0, len(b.conns))
+	for _, e := range b.conns {
+		conns = append(conns, e.conn)
+	}
+	b.mu.Unlock()
+	var best *upstream.Conn
+	cur := upstream.Lusers{Users: -1, Channels: -1}
+	for _, c := range conns {
+		if c.Status() != upstream.StatusConnected {
+			continue
+		}
+		if l := c.Lusers(); best == nil || l.At.After(cur.At) {
+			best, cur = c, l
+		}
+	}
+	if best == nil || time.Since(cur.At) <= maxAge {
+		return cur
+	}
+	asked := time.Now()
+	best.AskLusers()
+	t := time.NewTicker(50 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return cur
+		case <-t.C:
+		}
+		if l := best.Lusers(); !l.At.Before(asked) {
+			return l
+		}
+	}
+}
+
 // logsIn reports whether a network's connection logs in to services:
 // with a password (SASL or IDENTIFY), or with a command of the user's.
 func logsIn(n store.Network) bool {

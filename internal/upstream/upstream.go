@@ -229,6 +229,8 @@ type Conn struct {
 	// ("names #chan", "topic #chan"): the answers bring evrd up to date,
 	// and aren't passed to clients, which never asked.
 	resync map[string]bool
+	// lu is the network's size from LUSERS (lusers.go).
+	lu lusersState
 	// line is the ID of the server line being handled, shared by all it
 	// records (a QUIT is filed under each channel); recorded says it
 	// recorded something. Only the reading goroutine uses them.
@@ -868,7 +870,7 @@ func (c *Conn) dialAndServe(ctx context.Context) (bool, error) {
 			}
 		}
 		c.line = history.ID{}
-		if c.resyncReply(m) || c.guardWhoisReply(m) {
+		if c.resyncReply(m) || c.guardWhoisReply(m) || c.lusersOwn(m.Command) {
 			continue
 		}
 		c.broadcastRaw(out) // full-fidelity feed for attached IRC clients
@@ -1352,6 +1354,10 @@ func (c *Conn) handle(m irc.Message) {
 			c.realnameChanged(nickOf(m.Prefix), m.Params[0])
 			c.mu.Unlock()
 		}
+	case "251", "254", "266": // LUSERS: the network's users and channels
+		c.mu.Lock()
+		c.lusersReply(m.Command, m.Params)
+		c.mu.Unlock()
 	case "352": // RPL_WHOREPLY
 		c.mu.Lock()
 		c.whoReply(m.Params)
