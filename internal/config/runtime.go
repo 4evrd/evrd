@@ -129,6 +129,26 @@ var Specs = []Spec{
 		Help:  "Modules nobody can use on this server (e.g. autoop autovoice), space-separated. Running ones stop at once.",
 		get:   func(c *Config) string { return strings.Join(c.ModulesOff, " ") },
 		reset: func(c *Config) { c.ModulesOff = nil }},
+	{Key: "dcc_public", Group: "Modules", Label: "DCC: public addresses", Kind: "list", Env: "EVRD_DCC_PUBLIC",
+		Help:  "bouncedcc relays DCC chats and file transfers through evrd: the IPv4 address, IPv6 address or both that IRC clients and other people are told to connect to. Empty: bouncedcc relays nothing.",
+		get:   func(c *Config) string { return c.DCC.PublicText() },
+		reset: func(c *Config) { c.DCC.Public = nil }},
+	{Key: "dcc_listen", Group: "Modules", Label: "DCC: listen address", Kind: "string",
+		Help: "The local address relayed DCCs listen on. Empty: all addresses.",
+		get:  func(c *Config) string { return c.DCC.Listen }},
+	{Key: "dcc_ports", Group: "Modules", Label: "DCC: ports", Kind: "list", Env: "EVRD_DCC_PORTS",
+		Help:  "The ports relayed DCCs listen on, e.g. 50000-50100 (open them in the firewall), space-separated. Each DCC takes one or two while it's set up. Empty: any free port.",
+		get:   func(c *Config) string { return c.DCC.PortsText() },
+		reset: func(c *Config) { c.DCC.Ports = nil }},
+	{Key: "dcc_timeout", Group: "Modules", Label: "DCC: timeout", Kind: "duration",
+		Help: "How long a relayed DCC waits to be connected, and a file transfer for more data.",
+		get:  func(c *Config) string { return fmtDur(c.DCC.Timeout) }},
+	{Key: "dcc_max_mb", Group: "Modules", Label: "DCC: largest file (MB)", Kind: "int",
+		Help: "Bigger files aren't relayed. 0 is unlimited.",
+		get:  func(c *Config) string { return strconv.Itoa(c.DCC.MaxMB) }},
+	{Key: "dcc_private", Group: "Modules", Label: "DCC: private addresses", Kind: "bool",
+		Help: "Relay offers that point at loopback or private addresses (a LAN, Docker). Off, someone else's offer can't make evrd connect inside its own network.",
+		get:  func(c *Config) string { return fmtBool(c.DCC.Private) }},
 	{Key: "password_login", Group: "Sign-in", Label: "Password sign-in", Kind: "bool",
 		Help: "Let users sign in to the web app with a password. Turn off to use single sign-on only (set it up first). IRC clients still attach with client passwords.",
 		get:  func(c *Config) string { return fmtBool(c.Auth.PasswordLogin) }},
@@ -271,6 +291,8 @@ func (c *Config) clone() *Config {
 	n.Secrets.Old = slices.Clone(c.Secrets.Old)
 	n.TLS.ACMEHosts = slices.Clone(c.TLS.ACMEHosts)
 	n.Auth.WebChatOrigins = slices.Clone(c.Auth.WebChatOrigins)
+	n.DCC.Public = slices.Clone(c.DCC.Public)
+	n.DCC.Ports = slices.Clone(c.DCC.Ports)
 	n.fromFile = c.fromFile
 	return &n
 }
@@ -362,6 +384,8 @@ func (c *Config) setEmpty(key string) {
 		c.TLSCert = ""
 	case "tls_key":
 		c.TLSKey = ""
+	case "dcc_listen":
+		c.DCC.Listen = ""
 	}
 }
 

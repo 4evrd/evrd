@@ -23,14 +23,14 @@
     user // load again when the filter changes
     if (isAdmin) untrack(load)
   })
-  const rows = $derived((d?.signIns || []).filter((x) => only === 'all' || (!x.full && x.format !== 'sasl')))
+  const rows = $derived((d?.signIns || []).filter((x) => only === 'all' || (!x.full && x.format !== 'sasl' && x.format !== 'certificate')))
   const FILTERS = $derived([['all', t('admin.signins.all')], ['wrong', t('admin.signins.wrong')]])
   // ok and links allowed are fine; links waiting, second factors and
   // turned-away links are neither; anything else was refused
   const tone = (r) => (r === 'ok' || r === 'link_allowed' ? 'ok' : ['link', 'second_factor', 'link_denied'].includes(r) ? 'warn' : 'bad')
   const result = (r) => { const k = 'admin.signins.result.' + r, s = t(k); return s === k ? r : s }
   const when = (u) => new Date(u * 1000).toLocaleString(i18n.intl)
-  const sent = (f) => (f === 'nothing' ? t('admin.signins.nothing') : f === 'sasl' ? 'SASL' : f)
+  const sent = (f) => (f === 'nothing' ? t('admin.signins.nothing') : f === 'sasl' ? 'SASL' : f === 'certificate' ? t('certs.signinFormat') : f)
 </script>
 
 <svelte:head><title>{t('admin.signins.pageTitle')}</title></svelte:head>
@@ -77,7 +77,7 @@
                   <td><span class="od-field"><span class="mono">{x.ip}</span><span class="sub">{[x.nick && t('admin.signins.nick', { nick: x.nick }), x.ident && t('admin.signins.ident', { ident: x.ident })].filter(Boolean).join(' · ')}</span></span></td>
                   <td>
                     <span class="od-field">
-                      <span class="mono" data-testid="signin-format">{#if x.full}<Icon name="check" class="okc" />{:else if x.format !== 'nothing' && x.format !== 'sasl'}<Icon name="alert" class="warnc" />{/if}{sent(x.format)}</span>
+                      <span class="mono" data-testid="signin-format">{#if x.full}<Icon name="check" class="okc" />{:else if x.format === 'certificate'}<Icon name="check" class="okc" />{:else if x.format !== 'nothing' && x.format !== 'sasl'}<Icon name="alert" class="warnc" />{/if}{sent(x.format)}</span>
                       {#if x.network}<span class="sub">{t('admin.signins.network', { network: x.network })}</span>{/if}
                       {#if x.passwordLength}<span class="sub" data-testid="signin-match">{x.matched ? (x.matched === 'account' ? t('admin.signins.matchedAccount', { length: x.passwordLength, name: x.user }) : t('admin.signins.matchedDevice', { length: x.passwordLength, name: x.user, device: x.matched })) : x.user ? t('admin.signins.matchedNone', { length: x.passwordLength, name: x.user }) : t('admin.signins.length', { length: x.passwordLength })}</span>{/if}
                     </span>

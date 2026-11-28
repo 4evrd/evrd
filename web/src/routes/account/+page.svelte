@@ -6,7 +6,9 @@
   import Select from '$lib/components/Select.svelte'
   import ChangePassword from '$lib/components/ChangePassword.svelte'
   import SecondFactor from '$lib/components/SecondFactor.svelte'
+  import ClientCerts from '$lib/components/ClientCerts.svelte'
   import BouncerSettings from '$lib/components/BouncerSettings.svelte'
+  import Notes from '$lib/components/Notes.svelte'
   import Msg from '$lib/components/Msg.svelte'
   import PackUpload from '$lib/components/PackUpload.svelte'
   import PackDownload from '$lib/components/PackDownload.svelte'
@@ -19,7 +21,7 @@
   import { t, languages, pick as pickLocale, setLocale, setPacks, personalPack, builtinAll, ircBuiltin, serverPack, i18n } from '$lib/i18n.svelte.js'
 
   const me = $derived(session.me)
-  const TABS = [['profile', 'account.tabProfile'], ['bouncer', 'account.tabBouncer'], ['security', 'account.tabSecurity'], ['sessions', 'account.tabSessions'], ['danger', 'account.tabDelete']] // [id, message key]
+  const TABS = [['profile', 'account.tabProfile'], ['bouncer', 'account.tabBouncer'], ['notes', 'account.tabNotes'], ['security', 'account.tabSecurity'], ['sessions', 'account.tabSessions'], ['danger', 'account.tabDelete']] // [id, message key]
   let tab = $state(TABS.some(([k]) => '#' + k === location.hash) ? location.hash.slice(1) : 'profile')
   function pick(k) { tab = k; history.replaceState(null, '', '#' + k) }
   function tabKey(e, i) {
@@ -34,6 +36,7 @@
   let real = $state(session.me.defaultRealname)
   let away = $state(session.me.autoAway)
   let awayDelay = $state(String(session.me.autoAwayDelay ?? 120))
+  let awayMsg = $state(session.me.awayMessage || '')
   const AWAY_DELAYS = [0, 60, 120, 300, 900]
   let lang = $state(session.me.language || '')
   const langOptions = $derived([{ value: '', label: t('account.languageBrowser', { language: languages().find((l) => l.code === pickLocale(''))?.name }) }, ...languages().map((l) => ({ value: l.code, label: l.name }))])
@@ -45,7 +48,7 @@
     if (Object.values(perr).some(Boolean)) return
     saving = true
     try {
-      const patch = { defaultNick: nick.trim(), defaultAltNick: alt.trim(), defaultRealname: real.trim(), autoAway: away, autoAwayDelay: Number(awayDelay), language: lang }
+      const patch = { defaultNick: nick.trim(), defaultAltNick: alt.trim(), defaultRealname: real.trim(), autoAway: away, autoAwayDelay: Number(awayDelay), awayMessage: awayMsg.trim(), language: lang }
       if (!me.sso) patch.email = email.trim()
       session.me = await api.updateMe(patch)
       await setLocale(pickLocale(session.me.language))
@@ -161,6 +164,9 @@
               <Field id="p-away-delay" label={t('account.autoAwayDelay')} help={t('account.autoAwayDelayHelp')} span>
                 <Select id="p-away-delay" bind:value={awayDelay} testid="away-delay" options={AWAY_DELAYS.map((s) => ({ value: String(s), label: s ? t('account.afterMinutes', { count: s / 60 }) : t('account.atOnce') }))} />
               </Field>
+              <Field id="p-away-msg" label={t('account.awayMessage')} help={t('account.awayMessageHelp')} span>
+                <input class="input" id="p-away-msg" maxlength="300" placeholder={me.defaultAwayMessage} bind:value={awayMsg} />
+              </Field>
             {/if}
           </div>
         </div>
@@ -193,13 +199,20 @@
     <div role="tabpanel" id="bouncer" aria-labelledby="t-bouncer" class="card">
       <BouncerSettings value={me.settings} save={saveBouncer} {myIP} />
     </div>
+  {:else if tab === 'notes'}
+    <div role="tabpanel" id="notes" aria-labelledby="t-notes" class="card">
+      <Notes />
+    </div>
   {:else if tab === 'security'}
     <div role="tabpanel" id="security" aria-labelledby="t-security" class="card">
-      <div class="panel-grid">
-        <div class="od-stack"><h2>{t('account.password')}</h2><p class="desc">{me.hasPassword ? t('account.passwordHelp') : t('account.passwordSso', { sso: session.config.ssoLabel })}</p></div>
-        {#if me.hasPassword}<ChangePassword username={me.username} />{:else}<div><a class="btn" href="/clients"><Icon name="key" />{t('account.clientPasswords')}</a></div>{/if}
+      <div class="form">
+        <div class="panel-grid">
+          <div class="od-stack"><h2>{t('account.password')}</h2><p class="desc">{me.hasPassword ? t('account.passwordHelp') : t('account.passwordSso', { sso: session.config.ssoLabel })}</p></div>
+          {#if me.hasPassword}<ChangePassword username={me.username} />{:else}<div><a class="btn" href="/clients"><Icon name="key" />{t('account.clientPasswords')}</a></div>{/if}
+        </div>
+        <SecondFactor />
+        <ClientCerts />
       </div>
-      <SecondFactor />
     </div>
   {:else if tab === 'sessions'}
     <div role="tabpanel" id="sessions" aria-labelledby="t-sessions" class="card">
@@ -236,11 +249,12 @@
 </div>
 
 <style>
-  .panel-grid { display: grid; grid-template-columns: minmax(0, 280px) minmax(0, 1fr); gap: var(--s7); }
-  .panel-grid :global(.od-stack) { --od-gap: 6px; }
+  /* global: the panels of SecondFactor and ClientCerts use it too */
+  :global(.panel-grid) { display: grid; grid-template-columns: minmax(0, 280px) minmax(0, 1fr); gap: var(--s7); }
+  :global(.panel-grid .od-stack) { --od-gap: 6px; }
   :global(.form-foot) { display: flex; justify-content: flex-end; gap: var(--s2); }
   .sess-row { --cols: 36px minmax(0, 1fr) auto; }
   .sic { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--bg-deep); color: var(--muted); }
   .danger-card { border-color: oklch(68% 0.18 27 / 0.35); background: linear-gradient(180deg, var(--glass), oklch(68% 0.18 27 / 0.06)); }
-  @media (max-width: 959px) { .panel-grid { grid-template-columns: minmax(0, 1fr); gap: var(--s4); } }
+  @media (max-width: 959px) { :global(.panel-grid) { grid-template-columns: minmax(0, 1fr); gap: var(--s4); } }
 </style>

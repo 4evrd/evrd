@@ -71,6 +71,10 @@ type Handlers struct {
 	prov     *managed.Provisioner // managed mode's API (managed.go); nil: off
 	log      *slog.Logger
 	up       websocket.Upgrader
+
+	// clientCerts is IRC sign-in by client certificate (clientcerts.go);
+	// nil: none
+	clientCerts accounts.ClientCertServiceImpl
 }
 
 // Services are what the API works through, besides the bouncer: handlers

@@ -275,7 +275,7 @@ func TestNetworkModules(t *testing.T) {
 		mm := m.(map[string]any)
 		got[mm["name"].(string)] = mm["off"].(bool)
 	}
-	if code != 200 || len(got) != 9 || !got["autoop"] || got["perform"] {
+	if code != 200 || len(got) != 13 || !got["autoop"] || got["perform"] {
 		t.Fatalf("modules list: %d %v", code, got)
 	}
 }

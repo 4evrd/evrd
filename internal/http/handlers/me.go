@@ -25,7 +25,7 @@ func (s *Handlers) userDTO(u store.User) map[string]any {
 		"suspended": u.Suspended, "suspendedReason": u.SuspendedReason,
 		"hasPassword": u.PasswordHash != "", "sso": u.OIDCSubject != nil,
 		"defaultNick": u.DefaultNick, "defaultAltNick": u.DefaultAltNick, "defaultRealname": u.DefaultRealname,
-		"autoAway": u.AutoAway, "autoAwayDelay": int(u.AwayDelay() / time.Second), "mustChangePassword": u.MustChangePassword, "language": u.Language,
+		"autoAway": u.AutoAway, "autoAwayDelay": int(u.AwayDelay() / time.Second), "awayMessage": u.AwayMessage, "defaultAwayMessage": s.b.DefaultAwayMessage(), "mustChangePassword": u.MustChangePassword, "language": u.Language,
 		"createdAt": u.CreatedAt.Unix(), "lastLoginAt": unix(u.LastLoginAt), "lastSeenAt": unix(u.LastSeenAt),
 		"limits":      s.acc.LimitsFor(u),
 		"usage":       map[string]any{"networks": nets, "clients": s.b.Clients(u.ID), "attached": s.b.Attached(u.ID)},
@@ -70,6 +70,7 @@ func (s *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		DefaultAltNick  *string            `json:"defaultAltNick"`
 		AutoAway        *bool              `json:"autoAway"`
 		AutoAwayDelay   *int               `json:"autoAwayDelay"`
+		AwayMessage     *string            `json:"awayMessage"`
 		Language        *string            `json:"language"`
 		Settings        *userSettingsInput `json:"settings"`
 	}
@@ -138,6 +139,15 @@ func (s *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		u.AutoAwayDelay = in.AutoAwayDelay
+	}
+	if in.AwayMessage != nil {
+		msg, ok := accounts.CleanAwayMessage(*in.AwayMessage)
+		if !ok {
+			s.say(w, r, http.StatusUnprocessableEntity, "web.awayMessage", "max", accounts.MaxAwayMessage)
+			return
+		}
+		awayChanged = awayChanged || msg != u.AwayMessage
+		u.AwayMessage = msg
 	}
 	if err := s.acc.UpdateUser(r.Context(), u); err != nil {
 		s.fail(w, r, err)

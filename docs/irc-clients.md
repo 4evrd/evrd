@@ -7,7 +7,9 @@ the web app's *IRC clients* page — revocable one client at a time. Accounts
 that sign in with SSO can also **sign in by link** (below), or use their SSO
 password where the admin turned that on (`sso_irc_password`; the *IRC clients*
 page says so). Clients that do SASL can sign in
-with SASL PLAIN instead (user name `<user>` or `<user>/<network>`):
+with SASL PLAIN instead (user name `<user>` or `<user>/<network>`), and a
+client with a TLS **client certificate** on your account needs no password at
+all ([below](#signing-in-with-a-client-certificate)):
 
 ```
 server:   bnc.example.org         (your irc_host)
@@ -76,6 +78,93 @@ once each. IRC client passwords don't need a second factor (they're random, per
 device and revocable) unless the admin sets `irc_mfa_client_passwords yes`. A
 client the connection holder kept through a restart isn't asked again.
 
+### Signing in with a client certificate
+
+An IRC client can sign in with a TLS client certificate instead of a password,
+as with ZNC's *certauth* module (and Libera.Chat's and OFTC's CertFP). evrd's
+TLS port asks every client for a certificate but needs none, and doesn't care
+who signed it: a self-signed one is the usual. evrd knows a certificate by its
+**SHA-256 fingerprint** — of the whole certificate (what `openssl x509
+-fingerprint -sha256` prints, and Libera.Chat calls CertFP), or of its public
+key, which stays the same when you renew the certificate with the same key;
+either works. TLS proves the client holds the certificate's key, so keep the
+key file private: it's as good as a password.
+
+Make one (good for ten years; `evrd.pem` holds the key and the certificate):
+
+```sh
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+  -days 3650 -subj "/CN=mira" -keyout evrd.pem -out evrd.pem
+openssl x509 -in evrd.pem -noout -fingerprint -sha256
+```
+
+Add the fingerprint on *Account → Security* (with a label, if you like) — or
+connect once with the certificate and your password, and the page offers the
+certificate that client is using; or, from that client, `/msg *certauth add`
+(ZNC's command) or `/msg *status addcert [label]`. Then connect over TLS with
+the certificate and either:
+
+- **no password at all**: leave the server password empty, and pick the
+  network with your user name — the client's *user name* (ident) set to
+  `mira/libera`, or a server password of just `mira/libera` (no colon, no
+  password). Without either you're on your first network (or, asking for
+  `soju.im/bouncer-networks`, on a bouncer connection);
+- or **SASL EXTERNAL**, offered (`sasl=PLAIN,EXTERNAL`) to a client that sent a
+  certificate. The authorization identity can be empty, `mira` or
+  `mira/libera`.
+
+irssi:
+
+```
+/network add -user mira/libera -sasl_mechanism external evrd
+/server add -tls -tls_cert ~/.irssi/certs/evrd.pem -network evrd bnc.example.org 6697
+/connect evrd
+```
+
+WeeChat (before 4.0 the options are `ssl` and `ssl_cert`):
+
+```
+/server add evrd bnc.example.org/6697 -tls
+/set irc.server.evrd.tls_cert "${weechat_config_dir}/certs/evrd.pem"
+/set irc.server.evrd.username "mira/libera"
+/set irc.server.evrd.sasl_mechanism external
+/connect evrd
+```
+
+HexChat: put the file at `certs/<network>.pem` in HexChat's config folder
+(`~/.config/hexchat/certs/evrd.pem` for a network called *evrd*; `%APPDATA%\HexChat\certs\`
+on Windows). In the Network List, edit the network: server
+`bnc.example.org/6697`, *Use SSL for all the servers on this network* on,
+*User name* `mira/libera`, *Login method* **SASL EXTERNAL (cert)** and no
+password.
+
+A server password *with* a password in it is checked as before, certificate or
+not: leave it out to sign in with the certificate. A certificate that isn't on
+the account gets a notice with its fingerprint, and the client carries on as
+it would without one (sign-in by link, or *Password required*). The same
+certificate may be on two accounts (a fingerprint is no secret, so anyone can
+add yours to theirs): then the client has to say which it means — its user
+name, the server password's, or EXTERNAL's identity — and is refused
+otherwise; evrd never guesses. A certificate counts like an IRC client
+password: it stays on its device and is removed on its own, so it needs a
+[second factor](#a-second-factor) only with `irc_mfa_client_passwords yes`.
+
+| command | does |
+|---|---|
+| `listcerts` | your certificates, numbered, and this client's |
+| `addcert [sha-256] [label]` | add a certificate by its fingerprint, or this client's (`addcert laptop`) |
+| `delcert <number\|sha-256>` | remove one |
+| `/msg *certauth add [sha-256]` / `list` / `del <number>` | the same, by ZNC's names |
+
+Expiry dates aren't checked (as on Libera.Chat): a certificate works until you
+remove it. In a cluster the node a client connects to passes its certificate
+on to the node serving the account. With the connection holder
+(`links_socket`), the holder does the TLS: restart `evrd-links` after updating
+evrd so its listeners ask for certificates too. Managed mode has no
+certificate sign-in. ZNC's certauth keys live in its *moddata*, not in
+`znc.conf`, and aren't fingerprints, so the ZNC import can't bring them: add
+each client's certificate again (`/msg *certauth add`).
+
 On connect you get the welcome burst, your channels (with names/topic), backlog
 replay, and live traffic. evrd keeps each channel's members, topic and modes
 up to date from what the network sends, so the channels on connect, and
@@ -129,6 +218,7 @@ command names stay the same in every language. See
 | `set [network] <setting> <value>` | change `name`, `host`, `port` (`+port` = TLS), `tls`, `nick`, `altnick`, `ident`, `realname`, `password`, `sasluser`, `auth`, `servicesnick`, `identifyargs`, `identifyon`, `authcommand`, `ghost`, `joinafterauth`, `authtimeout` ([services login](services.md)), `bindhost`, `quitmsg`, `encoding`, `trustallcerts`, `trustpki`, `floodrate`, `floodburst`, `joindelay` (`-` clears); reconnects when needed |
 | `listservers` / `addserver <host> [[+]port] [pass]` / `delserver <host> [port]` | the network's servers, tried in turn |
 | `listfingerprints` / `addfingerprint <sha-256>` / `delfingerprint <sha-256>` | trusted server certificates |
+| `listcerts` / `addcert [sha-256] [label]` / `delcert <number\|sha-256>` | your [client certificates](#signing-in-with-a-client-certificate), which sign IRC clients in without a password |
 | `detach <#chan>` / `attach <#chan>` | hide a channel from IRC clients (still joined and logged) / show it again with what you missed (`/join` does too) |
 | `disablechan <#chan>` / `enablechan <#chan>` | leave a channel but keep it saved, with its key / join it again |
 | `channels` / `showchan <#chan>` | this network's saved channels / one channel's state, settings and buffer |
@@ -143,8 +233,46 @@ command names stay the same in every language. See
 | `listusers` / `listallusernetworks [filter]` | admins: every user / every user's networks (the filter matches a network's name or its owner's) |
 | `info` / `version` | your account and limits / the evrd version |
 | `language [code\|-]` | your language for *status and the web app: show it and the choices, or pick one (`language ro`, or a name); `-` for none |
+| `awaymessage [message\|-]` | your auto-away message (ZNC simple_away's reason): show it, set it (`%awaytime%` becomes the time you went away), or `-` for the server's; used the next time you're away |
+| `clientnotify [on\|off]` / `clientnotify newonly\|ondisconnect on\|off` | tell your IRC clients when another client attaches ([below](#other-clients-and-notes)) |
+| `notes [list\|add\|mod\|del\|get] …` | your notes, as `/msg *notes` has them ([below](#other-clients-and-notes)) |
 
 Buffer names take wildcards (`clearbuffer #evrd*`) and lists (`#a,#b`).
+
+### Other clients and notes
+
+**Away message.** With *Mark me away* on (*Account → Profile*), evrd sets
+/away on every network while no client is attached, with your **away
+message** (or the server's: `Away - evrd is keeping my seat`). `%awaytime%`
+in it becomes the time you went away, in your time zone (*Account →
+Bouncer*), as ZNC's simple_away writes it. Changing it while you're away
+sends the new one at once. In [managed mode](managed.md) `managed_away` is
+used instead: the managing service decides how its accounts look.
+
+**Client notices** (ZNC's clientnotify; *Account → Bouncer → Other clients*,
+or `clientnotify`): when another IRC client attaches to your account, the
+ones already attached hear from *status — its software and address, and how
+many are attached now. *Only from new addresses* stays quiet for an address
+one of your clients attached from lately (the last 50 are remembered); *When
+a client disconnects too* tells them when one goes. Web chats aren't
+announced: a browser opens and closes them with every tab. Off by default.
+
+**Notes** (ZNC's notes; *Account → Notes*): short texts under a key, kept on
+evrd. From IRC, `/msg *notes`:
+
+| command | does |
+|---|---|
+| `list` | your notes |
+| `add <key> <note>` / `mod <key> <note>` | add a note / change one |
+| `+<key> <note>` | add a note, or change it |
+| `del <key>` / `-<key>` | delete a note |
+| `get <key>` | one note's text |
+
+`/msg *status notes …` takes the same. A key is one word (up to 64
+characters, not starting with `+` or `-`), a note one line of up to 400; up to
+100 notes. With *Show my notes to IRC clients as they connect* (on by
+default) a client is sent them as notices from `*notes` after the message of
+the day — not a device back within minutes, which skips that too.
 
 When a network disconnects (it dropped, or you ran `disconnect`), evrd
 kicks your client out of that network's channels, as ZNC does, and your
@@ -224,7 +352,7 @@ translated, or not at all.
 |---|---|---|
 | `batch`, `server-time`, `message-tags`, `echo-message` | evrd's | plain lines; timestamps in replayed text |
 | `cap-notify` | evrd's | the offer as it was at `CAP LS` |
-| `sasl` (`PLAIN`) | evrd's | sign in with PASS |
+| `sasl` (`PLAIN`; `EXTERNAL` with a client certificate) | evrd's | sign in with PASS |
 | `standard-replies` | evrd's | the network's `FAIL`/`WARN`/`NOTE` as notices |
 | `draft/chathistory`, `draft/event-playback` | evrd's | backlog pushed on attach |
 | `draft/read-marker` | evrd's | — |
@@ -315,7 +443,9 @@ messages. AWAY, ACCOUNT, CHGHOST and SETNAME aren't kept in history.
 **SASL.** Instead of PASS, a client can sign in with SASL PLAIN: the user name
 (or `user/network`, to pick a network) and the account password or an IRC
 client password. Accounts that sign in with SSO need a client password, as with
-PASS, and a refused sign-in is logged the same way.
+PASS, and a refused sign-in is logged the same way. A client that sent a TLS
+client certificate on your account can use SASL EXTERNAL instead
+([certificates](#signing-in-with-a-client-certificate)).
 
 **Networks (`soju.im/bouncer-networks`).** Goguma and gamja list, add, change
 and remove your networks from the client (`BOUNCER LISTNETWORKS`,

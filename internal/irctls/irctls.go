@@ -61,6 +61,14 @@ func Fingerprint(cert *x509.Certificate) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// KeyFingerprint is the SHA-256 of a certificate's public key (its
+// SubjectPublicKeyInfo), lowercase hex: the same for every certificate
+// made with that key.
+func KeyFingerprint(cert *x509.Certificate) string {
+	sum := sha256.Sum256(cert.RawSubjectPublicKeyInfo)
+	return hex.EncodeToString(sum[:])
+}
+
 // Config is the TLS client config for host. onUntrusted, if set, is told
 // the fingerprint of a refused certificate. PKI validation uses the
 // config's RootCAs: nil, the system roots, unless the caller sets it.

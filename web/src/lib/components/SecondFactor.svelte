@@ -41,6 +41,7 @@
 </script>
 
 {#if st && st.choice !== 'hidden'}
+  <hr class="divider" />
   <div class="panel-grid" data-testid="second-factor">
     <div class="od-stack">
       <h2>{t('mfa.title')}</h2>

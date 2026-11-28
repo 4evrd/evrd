@@ -49,6 +49,14 @@ type Host interface {
 	Log(t messages.Text)
 	// Reply sends a notice to the user's attached clients, as the module.
 	Reply(text string)
+	// ClientAttached reports whether any of the user's clients (IRC or web)
+	// is attached: the user isn't away.
+	ClientAttached() bool
+	// Detached reports whether a channel is detached (*status detach):
+	// joined and logged, hidden from IRC clients. AttachChannel brings it
+	// back to them, as *status attach does.
+	Detached(channel string) bool
+	AttachChannel(channel string)
 }
 
 // Member is one nick in a channel.
@@ -75,6 +83,51 @@ type CTCPFilter interface {
 // IRC clients before they go to the server (true: handled, don't send).
 type ClientFilter interface {
 	ClientLine(line string) (handled bool)
+}
+
+// LineRewriter is implemented by modules that change lines from the server
+// before evrd handles, saves or passes them on (crypt decrypts them). It
+// may change m; false drops the line.
+type LineRewriter interface {
+	RewriteLine(m *irc.Message) (keep bool)
+}
+
+// ClientRewriter is implemented by modules that change the user's lines
+// (from clients, the web app, SendAsUser) just as they go to the server,
+// after evrd has saved and shown them (crypt encrypts them). It returns the
+// lines to send instead: the line, several, or none. It's called outside
+// the lock that keeps a module's other calls apart, so it locks what it
+// shares with them.
+type ClientRewriter interface {
+	RewriteClientLine(line string) []string
+}
+
+// SettingsSaver is a Host that can save one of a module's settings (crypt's
+// keys, set from a client) without starting the module afresh.
+type SettingsSaver interface {
+	SaveSetting(module, key, value string)
+}
+
+// Notifier is a Host that can tell the user's IRC clients something, as
+// from a nick of the module's own (*crypt), each in the user's language.
+type Notifier interface {
+	Notify(from string, t messages.Text)
+}
+
+// CTCPRewriter is implemented by modules that change CTCP messages on their
+// way through (bouncedcc's DCC offers). ServerCTCP gets one sent to the
+// user (from is nick!user@host) before evrd handles it and the clients get
+// it; ClientCTCP one a client at clientIP sends target. Each returns the
+// text to pass on: the same, another, or "" for nothing.
+type CTCPRewriter interface {
+	ServerCTCP(from, text string) string
+	ClientCTCP(target, text, clientIP string) string
+}
+
+// ClientAddrs is implemented by hosts that know where the user's IRC
+// clients attached from.
+type ClientAddrs interface {
+	ClientIPs() []string
 }
 
 // Setting describes one of a module's settings.

@@ -53,7 +53,7 @@ managed_webirc_password …                         # or EVRD_MANAGED_WEBIRC_PAS
 # managed_webirc_gateway  gateway      # the gateway name WEBIRC sends; {ident}: each user's ident (ngircd)
 # managed_webirc_resolve  yes          # send the address's host name (forward-confirmed)
 # managed_motd            Welcome!     # a line of the MOTD (repeatable); none: 422
-# managed_away            Away         # set while no client is attached (accounts with auto-away)
+# managed_away            Away         # set while no client is attached (accounts with auto-away; it replaces their own away message)
 # managed_version         Boson        # CTCP VERSION answer while no client is attached; none: no answer
 # managed_quit            …            # quit message when a connection is switched off
 # managed_nick_guard      yes          # keep accounts without a services login off registered nicks

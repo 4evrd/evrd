@@ -24,10 +24,12 @@ type guestBouncer struct {
 }
 
 func (b *guestBouncer) DeleteUser(id int64) error {
+	err := b.acc.DeleteUser(context.Background(), id)
+	// noted once it's done, so a test that sees it gone finds no account
 	b.mu.Lock()
 	b.deleted = append(b.deleted, id)
 	b.mu.Unlock()
-	return b.acc.DeleteUser(context.Background(), id)
+	return err
 }
 
 func (b *guestBouncer) ClientsByUser() map[int64]int {

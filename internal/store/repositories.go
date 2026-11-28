@@ -47,6 +47,18 @@ type ClientPasswordRepositoryImpl interface {
 	TouchClientPassword(ctx context.Context, id int64, at time.Time) error
 }
 
+// ClientCertRepositoryImpl keeps the client certificates that sign users
+// in to IRC (ClientCert).
+type ClientCertRepositoryImpl interface {
+	CreateClientCert(ctx context.Context, c ClientCert) (ClientCert, error)
+	ListClientCerts(ctx context.Context, userID int64) ([]ClientCert, error)
+	// ClientCertsByFingerprint is every account's certificates with one
+	// of fingerprints.
+	ClientCertsByFingerprint(ctx context.Context, fingerprints []string) ([]ClientCert, error)
+	DeleteClientCert(ctx context.Context, userID, id int64) error
+	TouchClientCert(ctx context.Context, id int64, at time.Time) error
+}
+
 // NetworkRepositoryImpl keeps users' IRC networks and their channels.
 type NetworkRepositoryImpl interface {
 	ListNetworks(ctx context.Context, userID int64) ([]Network, error)
@@ -247,6 +259,7 @@ type Store interface {
 	UserRepositoryImpl
 	SessionRepositoryImpl
 	ClientPasswordRepositoryImpl
+	ClientCertRepositoryImpl
 	NetworkRepositoryImpl
 	ReadMarkerRepositoryImpl
 	BufferPlaybackRepositoryImpl
@@ -261,6 +274,8 @@ type Store interface {
 	IRCSignInRepositoryImpl
 	DevicePositionRepositoryImpl
 	PushSubscriptionRepositoryImpl
+	NoteRepositoryImpl
+	ClientIPRepositoryImpl
 
 	// EncryptSecrets re-encrypts network secrets under the current key.
 	EncryptSecrets(ctx context.Context) (int, error)

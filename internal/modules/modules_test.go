@@ -19,10 +19,13 @@ type fakeHost struct {
 	members        map[string][]Member
 	user, password string
 	timers         []func()
+	attached       bool            // a client is attached
+	detached       map[string]bool // lowercased
+	attachedChans  []string        // what AttachChannel was asked to attach
 }
 
 func newFake() *fakeHost {
-	return &fakeHost{nick: "alice", wanted: "alice", joined: map[string]bool{}, ops: map[string]bool{}, members: map[string][]Member{}}
+	return &fakeHost{nick: "alice", wanted: "alice", joined: map[string]bool{}, ops: map[string]bool{}, members: map[string][]Member{}, detached: map[string]bool{}}
 }
 
 func (f *fakeHost) Send(l string)        { f.sent = append(f.sent, l) }
@@ -42,6 +45,12 @@ func (f *fakeHost) Account() (string, string)       { return f.user, f.password 
 func (f *fakeHost) After(_ time.Duration, g func()) { f.timers = append(f.timers, g) }
 func (f *fakeHost) Log(t messages.Text)             { f.logs = append(f.logs, t.English()) }
 func (f *fakeHost) Reply(string)                    {}
+func (f *fakeHost) ClientAttached() bool            { return f.attached }
+func (f *fakeHost) Detached(c string) bool          { return f.detached[strings.ToLower(c)] }
+func (f *fakeHost) AttachChannel(c string) {
+	f.attachedChans = append(f.attachedChans, c)
+	delete(f.detached, strings.ToLower(c))
+}
 
 // fire runs the timers set so far (not ones they set).
 func (f *fakeHost) fire() {

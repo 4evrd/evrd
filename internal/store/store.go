@@ -64,6 +64,19 @@ type User struct {
 	// back doesn't flap.
 	AutoAway      bool `gorm:"not null;default:false"`
 	AutoAwayDelay *int
+	// AwayMessage is the auto-away message ("": the server's), like ZNC
+	// simple_away's reason; %awaytime% becomes the time the user went away.
+	AwayMessage string `gorm:"not null;default:''"`
+	// ClientNotify tells the user's attached IRC clients when another one
+	// attaches (ZNC's clientnotify): only from an address not seen before
+	// with ClientNotifyNewOnly, and when one goes too with
+	// ClientNotifyOnDisconnect.
+	ClientNotify             bool `gorm:"not null;default:false"`
+	ClientNotifyNewOnly      bool `gorm:"not null;default:false"`
+	ClientNotifyOnDisconnect bool `gorm:"not null;default:false"`
+	// ShowNotesOnLogin sends the user's notes (UserNote) to an IRC client
+	// as it attaches.
+	ShowNotesOnLogin bool `gorm:"not null;default:true"`
 	// Language is the web app's language (a code from the app's list); ""
 	// follows the browser.
 	Language string `gorm:"not null;default:''"`
@@ -142,6 +155,21 @@ type ClientPassword struct {
 	// "remember this device"): it stops working at ExpiresAt.
 	Remembered bool `gorm:"not null;default:false"`
 	ExpiresAt  *time.Time
+}
+
+// ClientCert is a TLS client certificate that signs its user in to IRC
+// without a password (certauth): SASL EXTERNAL, or no password at all.
+// Fingerprint is a SHA-256, lowercase hex: of the whole certificate (what
+// Libera.Chat and OFTC call certfp), or of its public key (which outlasts
+// renewing the certificate with the same key). A client's certificate
+// matches either.
+type ClientCert struct {
+	ID          int64  `gorm:"primaryKey"`
+	UserID      int64  `gorm:"uniqueIndex:idx_client_cert,priority:1;not null"`
+	Fingerprint string `gorm:"uniqueIndex:idx_client_cert,priority:2;index;size:64;not null"`
+	Label       string `gorm:"not null;default:''"`
+	CreatedAt   time.Time
+	LastUsedAt  *time.Time
 }
 
 // ClientDisconnect is an IRC client that went: which device, when it came

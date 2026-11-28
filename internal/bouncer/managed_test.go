@@ -66,7 +66,7 @@ func TestUserIPFromSignIns(t *testing.T) {
 	if r.b.webIRC(alice.ID, "alice") != nil {
 		t.Error("WEBIRC outside managed mode")
 	}
-	if !strings.Contains(r.b.awayMessage(), "evrd") {
+	if !strings.Contains(r.b.awayMessage(store.User{}, time.Now()), "evrd") {
 		t.Error("the stock away message changed")
 	}
 }

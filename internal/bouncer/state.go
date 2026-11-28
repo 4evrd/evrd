@@ -40,6 +40,9 @@ type ClientInfo struct {
 	// sharing a password don't.
 	Signature string    `json:"-"`
 	Since     time.Time `json:"since"`
+	// CertFP is the SHA-256 of the TLS client certificate it sent, if any
+	// (certauth): what the Account page offers to add.
+	CertFP string `json:"certfp,omitempty"`
 }
 
 type client struct {
@@ -48,6 +51,9 @@ type client struct {
 	// answers reports whether the client is still there, asking it and
 	// waiting up to the given time (nil: can't ask; see Attachment.Answers).
 	answers func(wait time.Duration) bool
+	// tell passes the client a notice from evrd (nil: it can't take one;
+	// see Attachment.Tell).
+	tell func(messages.Text)
 }
 
 // answerWait is how long a client sharing a device with a newcomer has to
@@ -168,6 +174,11 @@ func (b *Bouncer) refreshAway(userID int64) {
 	away := u.AutoAway && b.Attached(userID) == 0
 	delay := u.AwayDelay()
 	b.mu.Lock()
+	if _, already := b.awayAt[userID]; already && away {
+		b.mu.Unlock()
+		b.setAway(u, true) // away already: only the message may have changed
+		return
+	}
 	if t, pending := b.awayAfter[userID]; pending {
 		if away && delay > 0 {
 			b.mu.Unlock()
@@ -189,23 +200,35 @@ func (b *Bouncer) refreshAway(userID int64) {
 			}
 			delete(b.awayAfter, userID)
 			b.mu.Unlock()
-			b.setAway(userID, u.AutoAway && b.Attached(userID) == 0)
+			if now, err := b.store.UserByID(context.Background(), userID); err == nil {
+				u = now // its away message as it is now
+			}
+			b.setAway(u, u.AutoAway && b.Attached(userID) == 0)
 		})
 		b.awayAfter[userID] = t
 		b.mu.Unlock()
 		return
 	}
 	b.mu.Unlock()
-	b.setAway(userID, away)
+	b.setAway(u, away)
 }
 
 // setAway marks the user away on every network, or back.
-func (b *Bouncer) setAway(userID int64, away bool) {
+func (b *Bouncer) setAway(u store.User, away bool) {
+	userID := u.ID
 	msg := ""
-	if away {
-		msg = b.awayMessage()
-	}
 	b.mu.Lock()
+	if away {
+		if b.awayAt == nil {
+			b.awayAt = map[int64]time.Time{}
+		}
+		if _, ok := b.awayAt[userID]; !ok {
+			b.awayAt[userID] = time.Now()
+		}
+		msg = b.awayMessageLocked(u, b.awayAt[userID])
+	} else {
+		delete(b.awayAt, userID)
+	}
 	var conns []*upstream.Conn
 	for _, e := range b.conns {
 		if e.userID == userID {

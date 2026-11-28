@@ -24,6 +24,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/4evrd/evrd/internal/irctls"
 )
 
 // reconnectLine is what a client the holder gives up on is told.
@@ -40,6 +42,8 @@ type heldClient struct {
 	id, addr, local string
 	tls             bool
 	conn            net.Conn
+	// the client certificate's fingerprints, if it sent one (certauth)
+	certFP, keyFP string
 
 	mu       sync.Mutex
 	att      net.Conn        // evrd's stream; nil while waiting for evrd
@@ -123,6 +127,7 @@ func (h *Holder) accept(hl *heldListener) {
 }
 
 func (h *Holder) newClient(hl *heldListener, conn net.Conn) {
+	var certFP, keyFP string
 	if hl.TLS {
 		tc := tls.Server(conn, h.clientTLS())
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -132,11 +137,14 @@ func (h *Holder) newClient(hl *heldListener, conn net.Conn) {
 			conn.Close()
 			return
 		}
+		if certs := tc.ConnectionState().PeerCertificates; len(certs) > 0 {
+			certFP, keyFP = irctls.Fingerprint(certs[0]), irctls.KeyFingerprint(certs[0])
+		}
 		conn = tc
 	}
 	cl := &heldClient{
 		id: "c" + strconv.FormatInt(clientSeq.Add(1), 10), addr: conn.RemoteAddr().String(),
-		local: hl.Addr, tls: hl.TLS, conn: conn, since: time.Now(),
+		local: hl.Addr, tls: hl.TLS, conn: conn, since: time.Now(), certFP: certFP, keyFP: keyFP,
 	}
 	h.mu.Lock()
 	h.clients[cl.id] = cl
@@ -196,7 +204,7 @@ func (cl *heldClient) waiting() (HeldClient, bool) {
 	if cl.att != nil || cl.closed {
 		return HeldClient{}, false
 	}
-	return HeldClient{Client: cl.id, Addr: cl.addr, Local: cl.local, TLS: cl.tls, State: cl.state}, true
+	return HeldClient{Client: cl.id, Addr: cl.addr, Local: cl.local, TLS: cl.tls, CertFP: cl.certFP, KeyFP: cl.keyFP, State: cl.state}, true
 }
 
 // announce tells evrd's clients stream, if there is one, that cl waits.
@@ -488,8 +496,9 @@ func hangUp(conn net.Conn) {
 
 // clientTLS is the TLS config the holder's IRC clients connect with: one for
 // all of them, so a client's session ticket from its last connection resumes
-// (Go keeps ticket keys per config).
+// (Go keeps ticket keys per config). It asks for a client certificate, any
+// one (self-signed is usual), which evrd matches to an account (certauth).
 func (h *Holder) clientTLS() *tls.Config {
-	h.tlsOnce.Do(func() { h.tlsConf = &tls.Config{GetCertificate: h.getCert} })
+	h.tlsOnce.Do(func() { h.tlsConf = &tls.Config{GetCertificate: h.getCert, ClientAuth: tls.RequestClientCert} })
 	return h.tlsConf
 }

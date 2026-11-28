@@ -110,6 +110,8 @@ type session struct {
 	// web is set for a *status command from the web chat: replies go to it
 	// instead of an IRC connection, and IRC-only commands say so.
 	web func(string)
+	// cert is sign-in by client certificate (certauth.go)
+	cert certState
 
 	batches  int                          // BATCH references handed out
 	netsSent map[string]map[string]string // networks as last told (bouncer-networks-notify)
@@ -136,6 +138,11 @@ type session struct {
 	// pushEndpoint is the push endpoint this client registered (WEBPUSH
 	// REGISTER), which a read marker it moves needn't be pushed to.
 	pushEndpoint string
+	// tells are notices for this client from elsewhere (clientnotify.go),
+	// sent from the bridge; replyAs is who command replies come from
+	// ("": *status; *notes for its commands).
+	tells   chan messages.Text
+	replyAs string
 }
 
 func newSession(srv *Server, conn net.Conn) *session {
@@ -204,6 +211,7 @@ func (se *session) serve(ctx context.Context) {
 			se.recordDrop()
 			se.savePosition()
 			se.markOnNetwork() // until now
+			se.notifyDetached()
 		}
 		if se.release != nil {
 			se.release()
@@ -463,6 +471,9 @@ func (se *session) noteFormat(login string, colon bool, password string, passwor
 	if se.saslUser.ID != 0 && format == "nothing" {
 		format = "sasl"
 	}
+	if se.cert.login != nil {
+		format = certFormat // no password needed (certauth.go)
+	}
 	rec := store.IRCSignIn{At: time.Now(), IP: se.clientIP(), Nick: se.nick, Ident: se.user, Format: format}
 	user := ""
 	if username, network, _ := cutLogin(login); !passwordOnly && username != "" {
@@ -474,7 +485,7 @@ func (se *session) noteFormat(login string, colon bool, password string, passwor
 		}
 	}
 	se.srv.log.Info("irc sign-in format", "format", format, "user", user, "ip", se.clientIP())
-	if format != fullLogin && format != "nothing" && format != "sasl" && !se.isManaged() {
+	if format != fullLogin && format != "nothing" && format != "sasl" && format != certFormat && !se.isManaged() {
 		se.send(fmt.Sprintf(":%s NOTICE * :%s", se.serverName(), ircText(se.tr("signin.format", "format", format, "full", fullLogin))))
 	}
 	return rec
@@ -554,6 +565,7 @@ func (se *session) attach() (attached bool) {
 	// — or, when it names no account, the password alone (ZNC's "server
 	// password"): never shown, logged or asked for on the website.
 	passwordOnly := !ok && login != "" && !se.namesAccount(login)
+	se.prepareCertLogin(login, ok && password != "", passwordOnly) // no password, a certificate (certauth.go)
 	rec := se.noteFormat(login, ok, password, passwordOnly)
 	alone := ""
 	if passwordOnly {
@@ -562,6 +574,9 @@ func (se *session) attach() (attached bool) {
 	defer func() { se.recordSignIn(rec, attached, alone) }()
 	if passwordOnly {
 		login = ""
+	}
+	if se.cert.login != nil {
+		return se.certAttach()
 	}
 	if (!ok || password == "") && se.saslUser.ID == 0 && se.guestsOn() {
 		u, device, ok := se.guestSignIn()
@@ -644,7 +659,7 @@ func (se *session) attachAs(u store.User, username, network, device, otp string)
 	}
 
 	att, err := se.srv.b.AttachClient(u.ID, se.srv.acc.LimitsFor(u).MaxClients,
-		bouncer.ClientInfo{Device: device, Networks: bound, IP: se.clientIP(), Signature: se.signature()},
+		bouncer.ClientInfo{Device: device, Networks: bound, IP: se.clientIP(), Signature: se.signature(), CertFP: se.peerCert().cert},
 		se.kick)
 	if errors.Is(err, bouncer.ErrTooManyClients) {
 		telemetry.IRCLogins.Add(context.Background(), 1, telemetry.Result("too_many_clients"))
@@ -744,6 +759,13 @@ func (se *session) signedIn(onNetwork bool, username, netName, device string) {
 	}
 	if se.caps["soju.im/bouncer-networks-notify"] {
 		se.listNetworks()
+	}
+	if !se.guest {
+		se.hearTells(se.att)
+		if !se.quick {
+			se.showNotes() // as the message of the day, not for a device back at once
+		}
+		se.notifyAttached()
 	}
 	if se.quick || se.guest {
 		return // the same device, back (or a guest): no new activity entry, nothing new to ask
@@ -1026,7 +1048,7 @@ func (se *session) bridge(ctx context.Context) {
 				continue
 			}
 			se.relay(line)
-			if se.held != nil && (len(line.Left) > 0 || strings.Contains(line.Text, " NICK ") || strings.Contains(line.Text, "BATCH ") ||
+			if se.held != nil && (len(line.Left) > 0 || len(line.Attach) > 0 || strings.Contains(line.Text, " NICK ") || strings.Contains(line.Text, "BATCH ") ||
 				strings.Contains(line.Text, " JOIN ") || strings.Contains(line.Text, " PART ") || strings.Contains(line.Text, " KICK ")) {
 				se.saveState()
 			}
@@ -1041,6 +1063,8 @@ func (se *session) bridge(ctx context.Context) {
 			if isChat(m.Kind) && strings.EqualFold(m.Sender, se.unick) && m.Origin != se.id {
 				se.send(se.formatAs(m, false))
 			}
+		case t := <-se.tells:
+			se.told(t)
 		case <-follow.C:
 			se.checkAlive()
 			if se.locked != nil {
@@ -1177,6 +1201,12 @@ func (se *session) detach(chans []string) {
 
 func (se *session) attachChannel(ch string) {
 	se.srv.b.SetChannelSettings(se.net.ID, ch, func(cs *store.ChannelSettings) { cs.Detached = false })
+	se.showChannel(ch)
+}
+
+// showChannel brings an attached channel back to this client: its JOIN,
+// names and topic, and what it missed.
+func (se *session) showChannel(ch string) {
 	se.send(se.selfJoin(ch))
 	se.open[strings.ToLower(ch)] = true
 	se.joinedMark(ch)
@@ -1250,6 +1280,24 @@ func (se *session) dispatch(m irc.Message) {
 				se.att.Update(func(ci *bouncer.ClientInfo) { ci.Software = clientName(strings.TrimSuffix(v, "\x01")) })
 			}
 			return
+		}
+		if strings.EqualFold(target, certauthNick) && se.certsOn() {
+			if m.Command == "PRIVMSG" {
+				se.certauthCommand(text)
+			}
+			return
+		}
+		if strings.EqualFold(target, notesNick) && se.knownNick(target) {
+			if m.Command == "PRIVMSG" {
+				se.notesQuery(text)
+			}
+			return
+		}
+		if m.Command == "PRIVMSG" {
+			// a module may rewrite a CTCP (bouncedcc's DCC offers)
+			if text = se.up.ClientCTCP(target, text, se.clientIP()); text == "" {
+				return
+			}
 		}
 		tags := se.clientTags(m)
 		id := se.up.SendTagged(se.id, tags, m.Command, target, text)

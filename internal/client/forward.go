@@ -5,11 +5,12 @@ package client
 // registered (CAP, PASS, NICK, USER), a node that isn't the owner opens a
 // connection to the owner's internal IRC listener, introduces it with
 //
-//	EVRD-PROXY <cluster secret> <client address> <negotiated caps | ->
+//	EVRD-PROXY <cluster secret> <client address> <negotiated caps | -> [<cert fingerprint>,<key fingerprint> | -]
 //
 // replays PASS/NICK/USER, and then splices the two sockets. CAP was already
 // answered here, so it isn't replayed; the owner just takes the caps as
-// negotiated. The owner authenticates the client as usual.
+// negotiated. The owner authenticates the client as usual — by the TLS
+// client certificate this node saw, too (certauth.go), which it passes on.
 
 import (
 	"context"
@@ -89,6 +90,12 @@ func (se *session) acceptForwarded() bool {
 			}
 		}
 	}
+	if len(m.Params) > 3 {
+		se.cert.forwarded = parsePeerCert(m.Params[3])
+	}
+	if se.cert.forwarded == nil {
+		se.cert.forwarded = &peerCert{} // this connection's isn't the client's
+	}
 	return true
 }
 
@@ -98,9 +105,15 @@ func (se *session) forwardIfElsewhere(ctx context.Context) bool {
 	if se.srv.cl == nil || se.internal {
 		return false
 	}
-	login, _, _ := strings.Cut(se.pass, ":")
+	login, password, _ := strings.Cut(se.pass, ":")
 	username, _, _ := strings.Cut(login, "/")
 	u, err := se.srv.acc.UserByUsername(ctx, strings.ToLower(username))
+	if (err != nil || username == "") && password == "" {
+		// no account named, no password: maybe its certificate's
+		if cu, ok := se.certOwner(); ok {
+			u, err = cu, nil
+		}
+	}
 	if err != nil || se.srv.cl.Owns(u.ID) {
 		return false // unknown user (attach refuses it) or ours
 	}
@@ -138,7 +151,7 @@ func (se *session) splice(node store.Node) error {
 	if capList == "" {
 		capList = "-"
 	}
-	intro := fmt.Sprintf("EVRD-PROXY %s %s %s\r\n", se.srv.secret, se.clientIP(), capList)
+	intro := fmt.Sprintf("EVRD-PROXY %s %s %s %s\r\n", se.srv.secret, se.clientIP(), capList, se.peerCert().param())
 	if se.lsWaiting {
 		intro += se.lsLine + "\r\n" // the owner answers it
 	}

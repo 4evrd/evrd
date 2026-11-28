@@ -17,6 +17,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/4evrd/evrd/internal/irctls"
 )
 
 // handOver gives h a fresh listener on 127.0.0.1 and returns its address.
@@ -331,6 +333,48 @@ func TestTLSClients(t *testing.T) {
 	io.WriteString(tc, "NICK tls\r\n")
 	if got := readFrom(t, bufio.NewReader(cc), cc); got != "NICK tls" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// A client's TLS certificate, self-signed, reaches evrd as fingerprints
+// (certauth); one without is still taken.
+func TestTLSClientCerts(t *testing.T) {
+	cl, _ := serveHolder(t, quietHolder())
+	addr := handOver(t, cl, true)
+	certPEM, keyPEM := testCert(t)
+	if err := cl.SetCert(context.Background(), certPEM, keyPEM); err != nil {
+		t.Fatal(err)
+	}
+	ch, _ := watch(t, cl)
+	next(t, ch)
+
+	ccPEM, ckPEM := testCert(t)
+	clientCert, err := tls.X509KeyPair(ccPEM, ckPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf, _ := x509.ParseCertificate(clientCert.Certificate[0])
+	tc, err := tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: true, Certificates: []tls.Certificate{clientCert}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tc.Close()
+	hc := next(t, ch)
+	if hc.CertFP != irctls.Fingerprint(leaf) || hc.KeyFP != irctls.KeyFingerprint(leaf) || hc.CertFP == hc.KeyFP {
+		t.Fatalf("announced %+v", hc)
+	}
+	cc, err := cl.AttachClient(context.Background(), hc)
+	if err != nil || cc.Info.CertFP != hc.CertFP {
+		t.Fatalf("attached %+v %v", cc, err)
+	}
+
+	tc2, err := tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tc2.Close()
+	if hc := next(t, ch); hc.CertFP != "" || hc.KeyFP != "" {
+		t.Fatalf("no certificate, announced %+v", hc)
 	}
 }
 

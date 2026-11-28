@@ -22,6 +22,7 @@
     quietRejoin: !!v.quietRejoin,
     ctcp: Object.entries(v.ctcpReplies || {}).map(([k, r]) => ({ k, r })),
     allowedHosts: [...(v.allowedHosts || [])],
+    clientNotify: !!v.clientNotify, clientNotifyNewOnly: !!v.clientNotifyNewOnly, clientNotifyOnDisconnect: !!v.clientNotifyOnDisconnect,
   })
   let f = $state(clone(untrack(() => value))) // the form starts from the saved settings
   let errs = $state({})
@@ -66,6 +67,7 @@
       quietRejoin: f.quietRejoin,
       ctcpReplies: Object.fromEntries(f.ctcp.filter((c) => c.k.trim()).map((c) => [c.k.trim().toUpperCase(), c.r])),
       allowedHosts: f.allowedHosts,
+      clientNotify: f.clientNotify, clientNotifyNewOnly: f.clientNotifyNewOnly, clientNotifyOnDisconnect: f.clientNotifyOnDisconnect,
     }
     if (admin || !binds.locked) settings.bindHost = f.bindHost.trim()
     busy = true
@@ -152,6 +154,17 @@
           <button class="btn" type="button" onclick={addHost}><Icon name="plus" />{t('account.bouncer.add')}</button>
         </div>
       </Field>
+    </div>
+  </div>
+
+  <div class="group" data-testid="client-notify">
+    <div class="od-stack head"><h3>{t('account.bouncer.clients')}</h3><p class="desc">{t('account.bouncer.clientsHelp')}</p></div>
+    <div class="form-grid">
+      <div class="check-row span-2"><span class="od-field"><span id="b-cn-l">{t('account.bouncer.clientNotify')}</span><span>{t('account.bouncer.clientNotifyHelp')}</span></span><Switch checked={f.clientNotify} labelledby="b-cn-l" onchange={(v) => (f.clientNotify = v)} /></div>
+      {#if f.clientNotify}
+        <div class="check-row span-2"><span class="od-field"><span id="b-cnn-l">{t('account.bouncer.clientNotifyNewOnly')}</span><span>{t('account.bouncer.clientNotifyNewOnlyHelp')}</span></span><Switch checked={f.clientNotifyNewOnly} labelledby="b-cnn-l" onchange={(v) => (f.clientNotifyNewOnly = v)} /></div>
+        <div class="check-row span-2"><span class="od-field"><span id="b-cnd-l">{t('account.bouncer.clientNotifyOnDisconnect')}</span><span>{t('account.bouncer.clientNotifyOnDisconnectHelp')}</span></span><Switch checked={f.clientNotifyOnDisconnect} labelledby="b-cnd-l" onchange={(v) => (f.clientNotifyOnDisconnect = v)} /></div>
+      {/if}
     </div>
   </div>
 

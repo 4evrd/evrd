@@ -5,6 +5,7 @@ package upstream
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/4evrd/evrd/internal/irc"
@@ -63,13 +64,48 @@ func (h modHost) After(d time.Duration, f func()) {
 			return
 		}
 		h.c.modMu.Lock()
-		defer h.c.modMu.Unlock()
 		f()
+		h.c.modMu.Unlock()
+		if chans := h.c.takeAttached(); len(chans) > 0 { // on a timer: no line to go with
+			h.c.broadcastRaw(Line{Attach: chans})
+		}
 	})
 }
 
 func (h modHost) Reply(text string) {
 	h.c.broadcastRaw(Line{Text: ":" + h.c.replyFrom + " NOTICE " + h.c.Nick() + " :" + text})
+}
+
+// ClientAttached: the user isn't away (no IRC or web client attached is
+// what Idle reports).
+func (h modHost) ClientAttached() bool { return h.c.idle == nil || !h.c.idle() }
+
+func (h modHost) Detached(channel string) bool { return h.c.ChannelSettings(channel).Detached }
+
+// AttachChannel attaches a detached channel at once (and saves that).
+// Clients hear of it with the line being handled (Line.Attach), which
+// they then get in the channel's playback, not twice.
+func (h modHost) AttachChannel(channel string) {
+	c := h.c
+	if !c.ChannelSettings(channel).Detached {
+		return
+	}
+	m := c.SetChannelSettings(channel, func(cs *store.ChannelSettings) { cs.Detached = false })
+	if c.onChanSettings != nil {
+		c.onChanSettings(m)
+	}
+	c.mu.Lock()
+	c.attached = append(c.attached, channel)
+	c.mu.Unlock()
+}
+
+// takeAttached returns the channels modules attached since last asked.
+func (c *Conn) takeAttached() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	chans := c.attached
+	c.attached = nil
+	return chans
 }
 
 func toModuleConfigs(in map[string]store.ModuleConfig) map[string]modules.Config {
@@ -85,7 +121,7 @@ func (c *Conn) startModules(ctx context.Context) {
 	c.modMu.Lock()
 	defer c.modMu.Unlock()
 	c.modCtx = ctx
-	c.mods = c.newModules(ctx)
+	c.useModules(c.newModules(ctx))
 }
 
 func (c *Conn) newModules(ctx context.Context) []modules.Module {
@@ -110,7 +146,7 @@ func (c *Conn) setModules(cfgs map[string]store.ModuleConfig) {
 	if c.modCtx == nil {
 		return // not connected: they start with the next connection
 	}
-	c.mods = c.newModules(c.modCtx)
+	c.useModules(c.newModules(c.modCtx))
 	if c.Status() == StatusConnected {
 		for _, m := range c.mods {
 			if s, ok := m.(interface{ Started() }); ok {
@@ -180,4 +216,114 @@ func (c *Conn) ClientLine(line string) bool {
 		}
 	}
 	return false
+}
+
+// useModules puts new module instances in place (holds modMu).
+func (c *Conn) useModules(mods []modules.Module) {
+	c.mods = mods
+	var rw []modules.ClientRewriter
+	for _, m := range mods {
+		if r, ok := m.(modules.ClientRewriter); ok {
+			rw = append(rw, r)
+		}
+	}
+	c.mu.Lock()
+	c.rewriters = rw
+	c.mu.Unlock()
+}
+
+// modsRewrite lets the modules change (or drop) a line from the server
+// before evrd handles it; changed says one did.
+func (c *Conn) modsRewrite(m *irc.Message) (keep, changed bool) {
+	c.modMu.Lock()
+	defer c.modMu.Unlock()
+	before := ""
+	for _, mod := range c.mods {
+		r, ok := mod.(modules.LineRewriter)
+		if !ok {
+			continue
+		}
+		if before == "" {
+			before = m.String()
+		}
+		if !r.RewriteLine(m) {
+			return false, true
+		}
+	}
+	return true, before != "" && m.String() != before
+}
+
+// rewriteOut is what a line to the server becomes once the modules have
+// had it (encrypted by crypt): the line, several, or none.
+func (c *Conn) rewriteOut(line string) []string {
+	c.mu.Lock()
+	rws := c.rewriters
+	c.mu.Unlock()
+	lines := []string{line}
+	for _, r := range rws {
+		var next []string
+		for _, l := range lines {
+			next = append(next, r.RewriteClientLine(l)...)
+		}
+		lines = next
+	}
+	return lines
+}
+
+// withTagsOf is text (a line rewritten) with the tags the original line had.
+func withTagsOf(orig, text string) string {
+	if strings.HasPrefix(orig, "@") {
+		tags, _, _ := strings.Cut(orig, " ")
+		return tags + " " + text
+	}
+	return text
+}
+
+// SaveSetting saves a setting a module changed itself, without starting
+// the modules afresh (crypt keeps the key exchanges it's in the middle of).
+func (h modHost) SaveSetting(module, key, value string) {
+	c := h.c
+	c.mu.Lock()
+	cfgs := make(map[string]store.ModuleConfig, len(c.modCfg))
+	for k, v := range c.modCfg {
+		cfgs[k] = v
+	}
+	mc := cfgs[module]
+	settings := map[string]string{}
+	for k, v := range mc.Settings {
+		settings[k] = v
+	}
+	settings[key] = value
+	mc.Settings = settings
+	cfgs[module] = mc
+	c.modCfg = cfgs // so the saved network doesn't look changed (Reconfigure)
+	save := c.saveModule
+	c.mu.Unlock()
+	if save == nil {
+		return
+	}
+	go func() { // (not under modMu: saving may reconfigure)
+		// one at a time, each the latest value: an older one never lands last
+		saveMu.Lock()
+		defer saveMu.Unlock()
+		c.mu.Lock()
+		value := c.modCfg[module].Settings[key]
+		c.mu.Unlock()
+		save(module, key, value)
+	}()
+}
+
+// saveMu keeps the modules' saves of their settings one at a time.
+var saveMu sync.Mutex
+
+// Note is something a module tells the user, as from a nick of its own
+// (*crypt): each IRC client gets it in the user's language.
+type Note struct {
+	From string
+	Text messages.Text
+}
+
+// Notify tells the user's IRC clients something, as from the module.
+func (h modHost) Notify(from string, t messages.Text) {
+	h.c.broadcastRaw(Line{Note: Note{From: from, Text: t}})
 }

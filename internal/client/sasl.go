@@ -52,6 +52,10 @@ func (se *session) authenticate(m irc.Message) {
 		payload, mech := se.saslBuf, se.saslMech
 		se.saslMech, se.saslBuf = "", ""
 		raw, err := base64.StdEncoding.DecodeString(payload)
+		if mech == "EXTERNAL" && err == nil {
+			se.saslExternal(string(raw), reply) // the certificate (certauth.go)
+			return
+		}
 		login, password, ok := saslCredentials(mech, string(raw))
 		if err != nil || !ok {
 			reply("904", ":SASL authentication failed")
@@ -77,11 +81,15 @@ func (se *session) authenticate(m irc.Message) {
 	}
 }
 
-// saslMechs are the SASL mechanisms offered: PLAIN, and in managed mode
-// with an issuer the bearer-token ones.
+// saslMechs are the SASL mechanisms offered: PLAIN; EXTERNAL to a client
+// that sent a certificate (certauth.go); and in managed mode with an
+// issuer the bearer-token ones.
 func (se *session) saslMechs() []string {
 	if m := se.srv.managed; m != nil && m.Tokens() != nil {
 		return []string{"PLAIN", "OAUTHBEARER", "IRCV3BEARER"}
+	}
+	if se.certsOn() && se.peerCert().cert != "" {
+		return []string{"PLAIN", "EXTERNAL"}
 	}
 	return []string{"PLAIN"}
 }
