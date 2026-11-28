@@ -145,6 +145,7 @@ GET    /api/managed/settings
 PUT    /api/managed/settings
 DELETE /api/managed/settings
 GET    /api/managed/channels/{channel}/members/{nick}
+GET    /api/managed/stats
 ```
 
 `{username}` is evrd's account name: 2–32 characters, starting with a
@@ -283,6 +284,26 @@ member. Any nick can be asked about, connected through evrd or not; it's
 answered from the member lists evrd already holds, so it never sends
 anything to the IRC server. In a cluster each node answers from its own
 connections. 422: no channel or nick.
+
+### GET /api/managed/stats
+
+How many users and channels the network has, from `LUSERS` on one of
+evrd's connected connections. Boson's admin panel reports them (bucketed)
+in its anonymous usage stats.
+
+```json
+{"users": 42, "channels": 17, "at": "2026-11-27T10:00:00Z"}
+```
+
+`users` is the server's `RPL_GLOBALUSERS` (266), or `RPL_LUSERCLIENT`'s
+(251) users plus invisible when it has no 266; `channels` is
+`RPL_LUSERCHANNELS` (254, the channels formed). `at` is when the server last
+said. evrd keeps what the server sends after registration and asks again,
+keeping the replies from attached clients, when that is older than
+`max_age` (a duration, default `5m`; `?max_age=0s` always asks), waiting up to 5 seconds for the answer (else it answers with the older
+count). Each is `null` when no connection has heard it (nobody connected
+yet, or a server that doesn't send it). In a cluster each node answers from
+its own connections. 422: a `max_age` that isn't a duration.
 
 ## Setting up the IRC server
 

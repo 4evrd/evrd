@@ -119,6 +119,7 @@ func (s *Server) managedHandler() http.Handler {
 	mux.HandleFunc("PUT /api/managed/settings", tok(h.ManagedPutSettings))
 	mux.HandleFunc("DELETE /api/managed/settings", tok(h.ManagedResetSettings))
 	mux.HandleFunc("GET /api/managed/channels/{channel}/members/{nick}", tok(h.ManagedChannelMember))
+	mux.HandleFunc("GET /api/managed/stats", tok(h.ManagedStats))
 	mux.Handle("/", http.NotFoundHandler())
 	return middleware.Traced(false, mux)
 }

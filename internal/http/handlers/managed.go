@@ -14,11 +14,14 @@ package handlers
 //	DELETE /api/managed/settings           back to the config's
 //	GET    /api/managed/channels/{channel}/members/{nick}
 //	                                       a nick's standing in a channel
+//	GET    /api/managed/stats              the network's users and channels (LUSERS), ?max_age=
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/4evrd/evrd/internal/accounts"
 	"github.com/4evrd/evrd/internal/managed"
@@ -158,6 +161,40 @@ func (s *Handlers) ManagedChannelMember(w http.ResponseWriter, r *http.Request) 
 	out := map[string]any{"channel": channel, "nick": nick, "known": m.Joined, "present": m.Present, "prefix": m.Prefix, "mode": m.Mode}
 	if m.Present {
 		out["nick"] = m.Nick
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// statsMaxAge: by default a LUSERS count older than this is asked for again.
+const statsMaxAge = 5 * time.Minute
+
+// ManagedStats is GET /api/managed/stats[?max_age=5m]: how many users and
+// channels the network has, from LUSERS on one of this node's connections
+// (asked again when the last answer is older than max_age, waiting up to 5
+// seconds): {users, channels, at}, each null when no connection has heard
+// it. Counts only. Boson's admin panel reports them in its usage stats.
+func (s *Handlers) ManagedStats(w http.ResponseWriter, r *http.Request) {
+	maxAge := statsMaxAge
+	if v := r.URL.Query().Get("max_age"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 0 {
+			writeErr(w, http.StatusUnprocessableEntity, "max_age is a duration, like 5m or 0s")
+			return
+		}
+		maxAge = d
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	l := s.b.NetworkSize(ctx, maxAge)
+	out := map[string]any{"users": nil, "channels": nil, "at": nil}
+	if l.Users >= 0 {
+		out["users"] = l.Users
+	}
+	if l.Channels >= 0 {
+		out["channels"] = l.Channels
+	}
+	if !l.At.IsZero() {
+		out["at"] = l.At.UTC()
 	}
 	writeJSON(w, http.StatusOK, out)
 }

@@ -258,6 +258,19 @@ func TestManagedNgircd(t *testing.T) {
 	if code, out := m.call("GET", "/api/managed/channels/%23elsewhere/members/classic", nil); code != 200 || out["known"] != false {
 		t.Errorf("a channel evrd isn't in: %d %v", code, out)
 	}
+	// The network's size from LUSERS on alice's connection, asked now
+	// (max_age=0): alice and classic at least, and #boson.
+	if code, out := m.call("GET", "/api/managed/stats?max_age=0s", nil); code != 200 || out["users"] == nil || out["users"].(float64) < 2 || out["channels"] == nil || out["channels"].(float64) < 1 || out["at"] == nil {
+		t.Fatalf("stats: %d %v", code, out)
+	}
+	c.send("JOIN #second")
+	c.expect("366 classic #second")
+	if code, out := m.call("GET", "/api/managed/stats?max_age=0s", nil); code != 200 || out["channels"] == nil || out["channels"].(float64) < 2 {
+		t.Fatalf("stats after another channel: %d %v", code, out)
+	}
+	if code, _ := m.call("GET", "/api/managed/stats?max_age=soon", nil); code != 422 {
+		t.Fatalf("a bad max_age: %d", code)
+	}
 }
 
 // registerNick registers nick with NickServ on server (a classic client),

@@ -7,12 +7,13 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
 // Start runs a minimal IRC server until the test ends and returns its
 // address. It registers clients, echoes JOIN, PART and NICK back the way a
-// real server confirms them, and sends "SIMULATE <line>" back verbatim.
+// real server confirms them, answers LUSERS, and sends "SIMULATE <line>" back verbatim.
 func Start(t testing.TB) string {
 	t.Helper()
 	return StartLogged(t, nil)
@@ -83,6 +84,7 @@ func StartCaps(t testing.TB, log *Log, caps string) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { ln.Close() })
+	var lusers atomic.Int64 // LUSERS asked so far, on any connection
 	go func() {
 		for {
 			c, err := ln.Accept()
@@ -167,6 +169,11 @@ func StartCaps(t testing.TB, log *Log, caps string) string {
 							out(":fake 352 %s %s o oh fake op H@ :0 The Op", nick, f[1])
 						}
 						out(":fake 315 %s %s :End of /WHO list.", nick, f[1])
+					case "LUSERS": // the Nth LUSERS: 10+N users, N channels
+						n := lusers.Add(1)
+						out(":fake 251 %s :There are %d users and 0 invisible on 1 servers", nick, 10+n)
+						out(":fake 254 %s %d :channels formed", nick, n)
+						out(":fake 266 %s %d %d :Current global users %d, max %d", nick, 10+n, 10+n, 10+n, 10+n)
 					case "SIMULATE": // test hook: the server sends a line as-is
 						out("%s", strings.TrimPrefix(sc.Text(), "SIMULATE "))
 					}

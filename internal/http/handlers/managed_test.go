@@ -188,3 +188,24 @@ func TestManagedChannelMemberAPI(t *testing.T) {
 		}
 	}
 }
+
+// The network's size: behind the token; null counts with no connection
+// that has heard LUSERS.
+func TestManagedStatsAPI(t *testing.T) {
+	srv, _ := managedAPI(t)
+	if code, _ := managedCall(t, srv, "", "GET", "/api/managed/stats", nil); code != http.StatusUnauthorized {
+		t.Fatalf("no token: %d", code)
+	}
+	code, out := managedCall(t, srv, "api-token", "GET", "/api/managed/stats", nil)
+	if code != http.StatusOK || len(out) != 3 || out["users"] != nil || out["channels"] != nil || out["at"] != nil {
+		t.Fatalf("no connections: %d %v", code, out)
+	}
+	if code, _ := managedCall(t, srv, "api-token", "GET", "/api/managed/stats?max_age=0s", nil); code != http.StatusOK {
+		t.Fatalf("max_age=0s: %d", code)
+	}
+	for _, bad := range []string{"soon", "-1m"} {
+		if code, _ := managedCall(t, srv, "api-token", "GET", "/api/managed/stats?max_age="+bad, nil); code != http.StatusUnprocessableEntity {
+			t.Errorf("max_age=%s: %d", bad, code)
+		}
+	}
+}

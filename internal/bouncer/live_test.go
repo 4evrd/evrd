@@ -829,3 +829,32 @@ func TestChannelMember(t *testing.T) {
 		t.Fatalf("a channel nobody here is in: %+v", m)
 	}
 }
+
+// NetworkSize asks a connected connection for LUSERS when its count is
+// older than maxAge, and answers from the count it has otherwise.
+func TestNetworkSize(t *testing.T) {
+	r := newLiveRig(t)
+	if l := r.b.NetworkSize(r.ctx, time.Minute); l.Users != -1 || l.Channels != -1 {
+		t.Fatalf("no connections: %+v", l)
+	}
+	alice := r.user("alice", nil)
+	n := r.network(alice, "boson", true)
+	if err := r.b.Start(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	r.connected(n.ID)
+	ctx, cancel := context.WithTimeout(r.ctx, 3*time.Second)
+	defer cancel()
+	l := r.b.NetworkSize(ctx, time.Minute)
+	if l.Users != 11 || l.Channels != 1 || l.At.IsZero() {
+		t.Fatalf("first ask: %+v", l)
+	}
+	// fresh: not asked again
+	if l2 := r.b.NetworkSize(ctx, time.Minute); l2 != l {
+		t.Fatalf("asked again while fresh: %+v", l2)
+	}
+	// stale: asked again
+	if l3 := r.b.NetworkSize(ctx, 0); l3.Users != 12 || l3.Channels != 2 {
+		t.Fatalf("stale count not refreshed: %+v", l3)
+	}
+}
